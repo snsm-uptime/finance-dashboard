@@ -2,7 +2,7 @@
 title: '1.1 Scaffold Compose app with health checks'
 type: 'feature'
 created: '2026-08-03'
-status: 'in-review'
+status: 'done'
 review_loop_iteration: 0
 baseline_commit: '04073f8d35fcc7a35bb29e9729bcde565f7a254e'
 context:
@@ -103,3 +103,52 @@ context:
 **Manual checks:**
 - Volume directory resolves outside repo root
 - `.env.example` has no real secrets; README run steps work from clean mental model
+
+## Suggested Review Order
+
+**Compose topology**
+
+- Require `.env`; derive `DATABASE_URL` from `POSTGRES_*`; absolute volume path
+  [`docker-compose.yml:1`](../../docker-compose.yml#L1)
+
+- Homelab overlay keeps the same three-service graph
+  [`docker-compose.prod.yml:1`](../../docker-compose.prod.yml#L1)
+
+**API seed**
+
+- Hex FastAPI factory with `/health` only
+  [`app.py:17`](../../api/api/app.py#L17)
+
+- Alembic on boot with timeout; no proxy header trust yet
+  [`entrypoint.py:14`](../../api/scripts/entrypoint.py#L14)
+
+- Non-root API image + frozen `uv` lock
+  [`Dockerfile:1`](../../api/Dockerfile#L1)
+
+- Baseline migration — zero domain tables
+  [`0001_baseline.py:16`](../../api/adapters/persistence/migrations/versions/0001_baseline.py#L16)
+
+**UI seed**
+
+- Next `output: 'standalone'` for Compose
+  [`next.config.ts:3`](../../ui/next.config.ts#L3)
+
+- UI `/health` route
+  [`route.ts:5`](../../ui/app/health/route.ts#L5)
+
+- Multi-stage standalone Docker runner
+  [`Dockerfile:1`](../../ui/Dockerfile#L1)
+
+**Gates & hygiene**
+
+- CI lint/typecheck/coverage skeleton
+  [`ci.yml:1`](../../.github/workflows/ci.yml#L1)
+
+- Ignore secrets, `bank_data/`, build artifacts
+  [`.gitignore:1`](../../.gitignore#L1)
+
+- Operator runbook
+  [`README.md:11`](../../README.md#L11)
+
+- Vitest 60% floor on `lib/`
+  [`vitest.config.mts:7`](../../ui/vitest.config.mts#L7)

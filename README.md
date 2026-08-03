@@ -6,7 +6,41 @@ Costa Rican banks aren't covered by aggregation services — neither Plaid nor B
 
 ## Status
 
-Planning. The [PRD](_bmad-output/planning-artifacts/prds/prd-finance-helper-2026-08-02/prd.md) is a draft and no application code exists yet.
+Scaffold in progress (Story 1.1). Compose services `db`, `api`, and `ui` boot with `/health` endpoints. Auth and lists land in later Epic 1 stories.
+
+## Run locally
+
+Prerequisites: Docker Compose, and enough disk for a Postgres volume **outside** this repository.
+
+```bash
+cp .env.example .env
+# Set FINANCE_HELPER_DATA to an absolute host path outside the repo, e.g.:
+#   FINANCE_HELPER_DATA=$HOME/finance-helper
+mkdir -p "${FINANCE_HELPER_DATA}/pgdata"
+docker compose up --build
+```
+
+Compose reads `.env` via `env_file` (no silent secret defaults). `DATABASE_URL` for `api` is derived from `POSTGRES_*`.
+
+Health checks:
+
+- API: http://localhost:8000/health
+- UI: http://localhost:3000/health
+
+Homelab overlay (same service graph):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
+## Layout
+
+```text
+api/     FastAPI hexagonal seed (domain | application | adapters | api)
+ui/      Next.js App Router (output: standalone)
+```
+
+Postgres data and future statement PDFs live under `FINANCE_HELPER_DATA` on the host — never commit real statements or `.env`. Operator samples may live in a local `bank_data/` folder (gitignored).
 
 ## How it works
 
