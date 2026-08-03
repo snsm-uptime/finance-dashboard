@@ -1,0 +1,101 @@
+# generated: 2026-08-03T22:46:31
+# last_updated: 2026-08-03T22:46:31
+# project: finance-dashboard
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# Action Item Status:
+#   - open: Committed during a retrospective, not yet addressed
+#   - in-progress: Actively being worked on
+#   - done: Completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+# - Retrospective appends its action items to action_items; sprint-status surfaces open ones
+
+generated: 2026-08-03T22:46:31
+last_updated: 2026-08-03T22:46:31
+project: finance-dashboard
+project_key: NOKEY
+tracking_system: file-system
+story_location: "{project-root}/_bmad-output/implementation-artifacts"
+
+development_status:
+  epic-1: backlog
+  1-1-scaffold-compose-app-with-health-checks: backlog
+  1-2-sign-up-with-email-password-and-personal-list: backlog
+  1-3-sign-in-sign-out-and-protect-routes: backlog
+  1-4-password-reset-via-email: backlog
+  1-5-config-gated-email-verification: backlog
+  1-6-account-menu-language-en-es-and-theme: backlog
+  epic-1-retrospective: optional
+
+  epic-2: backlog
+  2-1-create-and-rename-owned-lists: backlog
+  2-2-lists-homepage-membership-scoped-access: backlog
+  2-3-invite-members-by-email: backlog
+  2-4-invitee-signup-lands-on-inviting-list: backlog
+  2-5-configurable-list-default-split: backlog
+  2-6-item-and-receipt-split-overrides-domain-api: backlog
+  epic-2-retrospective: optional
+
+  epic-3: backlog
+  3-1-warm-balance-tokens-soft-ledger-primitives: backlog
+  3-2-manual-expense-with-payer-adjust-split-ui: backlog
+  3-3-shared-expenses-view-strip-receipt-list: backlog
+  3-4-settle-up-from-shares-payer-and-line-types: backlog
+  3-5-materialize-fx-to-crc-bccr-for-non-crc-lines: backlog
+  3-6-incomplete-disclosure-pattern-slot-only: backlog
+  epic-3-retrospective: optional
+
+  epic-4: backlog
+  4-1-register-and-match-cards-by-iban: backlog
+  4-2-manual-origin-card-cash-blank-no-origin-filter: backlog
+  4-3-card-routing-mode-review-default-list: backlog
+  4-4-adapter-contract-canonicalline-bac-normalize: backlog
+  4-5-bac-credit-card-acceptance-bar-promerica-stub: backlog
+  4-6-upload-pdf-detect-split-import-session: backlog
+  4-7-bulk-review-assign-commit-path: backlog
+  4-8-individual-review-swipe-desktop-buttons: backlog
+  4-9-commit-batch-dedup-summary-land-on-settle-strip: backlog
+  epic-4-retrospective: optional
+
+  epic-5: backlog
+  5-1-parse-failure-side-by-side-comparison: backlog
+  5-2-accept-with-quarantine-or-dismiss: backlog
+  5-3-hand-edit-unresolved-rows-against-pdf: backlog
+  5-4-wire-incomplete-balance-disclosure-on-strip: backlog
+  5-5-reassign-statement-to-another-list: backlog
+  5-6-roll-back-an-import-batch: backlog
+  5-7-same-price-conflict-review-manual-parsed: backlog
+  5-8-alias-on-confirm-hand-fixed-re-upload-conflict: backlog
+  5-9-settle-up-simplify-suggested-transfers: backlog
+  5-10-statement-cycle-period-selector: backlog
+  epic-5-retrospective: optional
