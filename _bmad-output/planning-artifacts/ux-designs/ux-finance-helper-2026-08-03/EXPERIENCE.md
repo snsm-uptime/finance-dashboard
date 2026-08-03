@@ -84,7 +84,7 @@ Behavioral. Visual specs live in `DESIGN.md.Components`.
 | Card registration prompt | Unknown IBAN | **Blocks** continuing review. Fields: user-chosen label + IBAN as match key. Fixed card→list routing is **after** this prompt, not inside it. |
 | Same-price conflict cards | End-of-import conflict list | Per conflict: two cards — Manual \| Parsed. Pick exactly one survivor by default. Escape: **“Not the same expense”** (harder than the cards) keeps both only after confirm warning someone may owe more. Not swipe (swipe reserved for statement review). Same UI for hand-fixed↔re-parse conflicts. |
 | Manual expense form | Add on list | **Amount**, **description**, **payer** (defaults to signed-in user); **Adjust split** disclosure for whole-line / absolute fragments / percentage (list default until opened). Save → newest-first row + settle-up updates immediately. |
-| Invite form | List | Email address → send. Unregistered path uses create-account email template. |
+| Invite form | List | Email address → send. Unregistered path uses create-account email template. Invite email language matches the **inviter’s** current Account language (EN/ES). |
 | Account menu | Global chrome | Sign out; password reset; **Language EN/ES** (remembered on account; first visit defaults from browser); **Theme Light / Dark / System** (remembered on account; defaults to System). No profile, avatars-as-settings, or preferences surface in v1. |
 | Simplify suggestion | Shared-expenses `[spine-only]` | Shows reduced transfer set. Copy must not say “paid”; must not resemble settlement recording. |
 

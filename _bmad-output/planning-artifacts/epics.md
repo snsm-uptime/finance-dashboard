@@ -196,7 +196,7 @@ UX-DR14: Same-price / hand-fixed conflict UI: Manual|Parsed cards (one survivor)
 
 UX-DR15: Manual expense form: amount, description, payer (defaults signed-in user), Adjust split disclosure (whole-line / absolute / percentage); save updates newest-first row and settle-up immediately.
 
-UX-DR16: Invite form sends by email; unregistered path uses create-account template; invitee signup lands on inviting list with settle-up context.
+UX-DR16: Invite form sends by email; unregistered path uses create-account template; invitee signup lands on inviting list with settle-up context; invite email language matches the inviter’s current Account language (EN/ES).
 
 UX-DR17: Voice/microcopy: plain direct CRC copy (“You owe Partner ₡…” / “Partner owes you ₡…”); errors what happened + what to do; Simplify never says “paid” and must not look like recording settlement; no bank jargon or peer blame.
 
@@ -417,3 +417,131 @@ So that the app matches my language and preferred look without a full settings p
 **Given** I select Light, Dark, or System
 **When** I return later on the same account
 **Then** my theme preference is remembered and the UI uses the corresponding Warm Balance token set (System continues to follow OS changes)
+
+## Epic 2: Shared lists & household membership
+
+Users create named lists, invite members by email (registered + unregistered → land on inviting list), and configure even/percentage list defaults plus item/receipt split overrides (override UI deferred to Epic 3).
+
+**FRs covered:** FR-6, FR-7, FR-8, FR-9, FR-10  
+**Demo gate:** unregistered invite → signup → lands on inviting list
+
+### Story 2.1: Create and rename owned lists
+
+As an authenticated user,
+I want to create additional named lists I own and edit their names,
+So that I can organize spending beyond my personal list.
+
+**Acceptance Criteria:**
+
+**Given** I am signed in
+**When** I create a new list with a name
+**Then** I own that list and it appears among lists I belong to
+**And** I may own more than one list (FR-6)
+
+**Given** I own a list
+**When** I edit its name
+**Then** the new name is visible to members of that list
+
+**Given** I am not a member of a list
+**When** I attempt to rename it
+**Then** the action is rejected (membership ACL / NFR-3)
+
+### Story 2.2: Lists homepage — membership-scoped access
+
+As a signed-in user,
+I want a homepage of every list I belong to,
+So that I can open the right household or personal list quickly.
+
+**Acceptance Criteria:**
+
+**Given** I am signed in and belong to one or more lists
+**When** I open the Lists homepage (or first-paint fallback when no remembered list)
+**Then** I see only lists I am a member of (FR-8, AD-19)
+**And** each row shows list name (Warm Balance / Soft-Ledger list-row pattern per UX-DR7; balance figures may be zero/placeholder until Epic 3)
+
+**Given** I am not a member of a list
+**When** I request that list’s expenses or balances via API/UI
+**Then** access is denied (NFR-3)
+
+**Given** I select a list row
+**When** navigation completes
+**Then** I open that list’s detail surface (shared-expenses shell may be empty until Epic 3)
+
+### Story 2.4: Invitee signup lands on inviting list
+
+As an invited person without an account,
+I want signup from the invite link to drop me on the household list,
+So that I see settle-up context immediately instead of a blank home.
+
+**Acceptance Criteria:**
+
+**Given** I received an unregistered-path invite email
+**When** I open the link and complete signup (email + password)
+**Then** I become a member of the inviting list and land on that list’s detail surface (FR-7, UX-DR16)
+**And** I do not land on a blank Lists homepage as the first post-signup screen
+
+**Given** I already have an account and open a registered-path join invite
+**When** I accept while signed in (or after sign-in)
+**Then** membership is created and I can open that list from Lists homepage / deep link
+
+**Given** the invite token is invalid or expired
+**When** I try to complete the flow
+**Then** I see a clear error and am not added to the list
+
+### Story 2.5: Configurable list default split
+
+As a list owner,
+I want to set the list’s standing split to even or custom percentages,
+So that new items inherit our household arrangement without per-item edits.
+
+**Acceptance Criteria:**
+
+**Given** a new list with members
+**When** no custom default has been set
+**Then** the default split is even among current members (FR-9)
+
+**Given** I own the list
+**When** I save a percentage default that sums to exactly 100% across members
+**Then** the standing default updates and new items inherit it until overridden
+
+**Given** I own the list
+**When** I attempt to save percentages that do not sum to 100%
+**Then** the save is rejected
+
+**Given** I am a member but not the owner
+**When** I attempt to edit the standing default
+**Then** the action is rejected
+
+**Given** percentage shares are applied to a concrete amount later
+**When** floor-division leaves a leftover minor unit
+**Then** that remainder is assigned to the list creator (AD-6) — deterministic, not a user preference
+
+### Story 2.6: Item and receipt split overrides (domain + API)
+
+As a list member (via API / domain),
+I want item and receipt split overrides — whole-line, absolute amounts, or percentages —
+So that Epic 3 settle-up and the Adjust-split UI can consume a stable share-allocation model.
+
+**Acceptance Criteria:**
+
+**Given** an item or receipt with no override
+**When** share allocations are computed
+**Then** the list default split is used (FR-10)
+
+**Given** a member sets a whole-line (or whole-receipt) override to one member via API
+**When** allocations are computed
+**Then** that member receives 100% of the line/receipt
+
+**Given** absolute amounts per member are submitted
+**When** they sum to the line/receipt total
+**Then** those amounts become the share allocations
+**And** amounts that do not sum to the total are rejected
+
+**Given** a percentage override is submitted
+**When** percentages sum to exactly 100%
+**Then** allocations follow those percentages (AD-6 remainder → list creator)
+**And** percentages that do not sum to 100% are rejected
+
+**Given** this story is complete
+**When** product UI is considered
+**Then** no Adjust-split UI is required yet — Epic 3 manual expense ships the disclosure UI against this API

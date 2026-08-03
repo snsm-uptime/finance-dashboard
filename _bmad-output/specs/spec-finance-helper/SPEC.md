@@ -30,7 +30,7 @@ sources:
 
 - **CAP-3**
   - **intent:** A list owner can invite someone by email; registered users get a join invite; unregistered addresses get signup guidance and land on the inviting list after signup.
-  - **success:** Invite delivery uses transactional email; post-signup redirect opens the inviting list with settle-up context (not a blank home).
+  - **success:** Invite delivery uses transactional email in the **inviter’s** Account language (EN/ES); post-signup redirect opens the inviting list with settle-up context (not a blank home).
 
 - **CAP-4**
   - **intent:** Lists default to an even split among members (configurable to standing percentages); creating or editing an item/receipt can override via whole-line assignment, absolute amounts per member, or a percentage split.
