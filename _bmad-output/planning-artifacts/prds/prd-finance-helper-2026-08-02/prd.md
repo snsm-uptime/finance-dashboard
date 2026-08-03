@@ -2,7 +2,7 @@
 title: "PRD: finance-helper"
 status: draft
 created: 2026-08-02
-updated: 2026-08-02
+updated: 2026-08-03
 ---
 
 # PRD: finance-helper
@@ -53,9 +53,21 @@ It is also a deliberate design position worth stating. Among comparable tools, o
 
 A list's owner invites others **by email address**. If the address already belongs to a registered user, they receive an invitation to join the list. If it does not, they receive a different message that guides them through creating an account, and on completing signup they land directly on the list they were invited to.
 
-Splits are defined **per member** rather than as a single list-wide ratio, so a list can be divided unevenly and can hold more than two people. Two members at equal shares is the ordinary case, not the only one.
+**List default split.** New lists start **even** among members — two people at 50/50, three at equal thirds. That default is **configurable**: a standing percentage split (for example 60/40) can be set on the list when even is not the arrangement. Every item inherits the list default until someone changes that item.
 
-`[OPEN]` Whether shares are expressed as percentages, ratios, or weights, and what happens when they don't sum cleanly.
+Real household splitting is not only percentages. When members bought very different things, they look at the receipt and assign cost by **what each person bought**. Percentage splits still matter and must be **easy to configure** both as a list default and as an item override.
+
+**Item overrides.** Not every item needs special treatment. The override sits on the item: available **while creating it** and again **when interacting with an existing item**. Until the user opens that option, the item stays on the list default. An override may:
+
+- Assign the **whole line to one member**, or
+- Split **one line's amount across members by sub-amounts** (for example ₡3 000 / ₡2 000 on the same purchase line), or
+- Apply a **percentage split** for that item alone.
+
+Splits are therefore **per member, at list default and per item**. A list can hold more than two people. Overrides produce the per-transaction share allocations that balances (and later settlement) draw from.
+
+**Percentage validation.** Any percentage configuration — list default or item override — must sum to **exactly 100%** across members. The product does not accept an under- or over-allocated percentage split.
+
+`[OPEN]` Even when percentages sum to 100%, applying them to a concrete CRC or USD amount can leave a one-subunit remainder (for example three equal shares of ₡100). How that subunit is assigned must be deterministic so every member sees the same balance. Architecture can propose a rule; it is not a product preference surfaced in the UI.
 
 ### Cardinality
 
@@ -63,22 +75,61 @@ A card's transactions feed exactly one list in v1. The design must not foreclose
 
 `[ASSUMPTION]` Uploads target a list: the user chooses which list a statement's transactions land in, rather than sharing being derived from a fixed global account-to-list mapping.
 
-`[OPEN]` Whether the split ratio lives on the list or can vary within it.
-`[OPEN]` Whether transaction-level exceptions to a list's split are needed.
-
 ## Balances and settlement
 
 Shared lists exist to simplify paying each other back. That splits into two capabilities, and only the first is in v1.
 
-**v1 shows balances.** For a given period, each member of a shared list sees their share of what was spent. Settling up happens outside the application — a bank transfer, cash, whatever the members already do.
+**v1 shows balances — who owes what, in colones, to whom.** Settling up (actually transferring money) still happens outside the application. **v2** records those payments as a running ledger: balances accumulate across months, payments reduce them, and history is visible. It is explicitly not a per-month closeout.
 
-**v2 settles.** Settlement is a running ledger in the Splitwise sense: balances accumulate across months, recorded payments reduce them, and members can see the history of what was owed and paid over time. It is explicitly not a per-month closeout where each month produces an independent bill.
+### Receipt-shaped practice
 
-**A balance must disclose when it is incomplete.** If a statement was accepted with quarantined rows, any list balance computed over it is understated — a purchase that failed to parse is a purchase nobody gets billed for. Silently showing a confident number over incomplete data is the fastest way to lose trust in the tool, and worse here than elsewhere because the consequence is under-billing a person who trusts the figure. Balances derived from statements with unresolved rows must say so.
+Everyday use matches a receipt, not a spreadsheet of percentages:
 
-That choice constrains v1 even though settlement isn't built. A running ledger reduces a balance by applying payments against accumulated shares, so v1 must compute balances from per-transaction share allocations that a future payments table can draw down — not from a month-scoped aggregate. Computing v1 balances as a monthly sum would produce correct numbers today and require rebuilding the model when settlement arrives.
+- **Usually** an entire receipt belongs to the shared expense and is divided by the list default (or an item override).
+- **Sometimes** — one item only, or a receipt mixed with other people's purchases — each person totals **only the items they bought** and returns that sum to **whoever paid**.
 
-`[OPEN]` How a settlement payment that also appears in a statement avoids being counted twice. If a member transfers their share, that transfer may land in a statement as a transaction *and* represent settlement of a balance. Counting both corrupts the balance in a way that compounds monthly. Deferred with settlement, but the v1 line-type taxonomy should be able to distinguish an inter-member transfer when it arrives.
+The product must support both. That is why list defaults, item attribution (whole-line or sub-amounts), and percentage overrides all exist — and why **who paid** is a first-class field, not inferred forever from the card.
+
+### Who paid
+
+Every shared expense has an **explicit payer** — the person others should reimburse. The payer is not always the cardholder on a statement (cash, someone else's card, a friend on the list). Members set or correct the payer on the expense.
+
+`[ASSUMPTION]` On statement import, payer defaults to the member associated with the card or upload, and remains editable.
+
+### Currency and exchange rate
+
+**Colones (CRC) are the settlement currency.** Shared balances and "what to return" figures are expressed in CRC.
+
+Expenses not in colones (USD on a dólares card or foreign currency on a statement) are **converted to CRC using an exchange rate for the purchase or statement date**, looked up automatically. Original amounts remain stored; the converted CRC amount is what feeds share allocation and the shared-expenses view.
+
+This **supersedes** the earlier decision to keep CRC and USD as separate non-converted figures with no FX in v1.
+
+`[OPEN]` Which rate source is authoritative (e.g. BCCR or another feed), what happens when that feed has no rate for a given date, and whether the rate is eventually overridable. Mechanism belongs in architecture/addendum; the requirement is purchase/statement-date conversion into CRC.
+
+### Incomplete data
+
+**A balance must disclose when it is incomplete.** If a statement was accepted with quarantined rows, any list balance computed over it is understated. Balances derived from statements with unresolved rows must say so.
+
+### Shape for v2
+
+v1 must compute balances from **per-transaction share allocations** (and per-expense payer) that a future payments table can draw down — not from a month-scoped aggregate.
+
+`[OPEN]` How a settlement payment that also appears in a statement avoids being counted twice. Deferred with settlement, but the v1 line-type taxonomy should be able to distinguish an inter-member transfer when it arrives.
+
+### Shared-expenses view
+
+Each shared list has a view whose job is to answer: **given what was imported and how it was attributed, what should each member return to each payer, in CRC?**
+
+**Period.** The view is aligned to **statement / billing cycles**, not a plain calendar month — so the numbers match the documents people just imported.
+
+**Layout.**
+
+1. **Top — settle up.** How much each person needs to pay (in CRC) so the period is even. Includes an option to **simplify** the settlement: recompute who should pay whom so the group makes fewer transfers, without recording that anyone has paid yet. Actual payment recording remains v2; simplify is a suggested transfer plan only.
+2. **Below — receipt list.** Items for the period, **most recent first**, in a receipt-like format so members can verify "my items vs yours" the way they already do on paper. Foreign-currency lines show enough original amount + converted CRC to audit the FX step. Incomplete/quarantined data for the period is disclosed on this screen.
+
+`[ASSUMPTION]` "Simplify" minimizes the number of person-to-person transfers while preserving net balances; it does not invent debt or change item splits.
+
+`[OPEN]` How statement-cycle boundaries are chosen when a list holds cards with different billing cycles (pick one cycle, union of cycles, or user-selected statement).
 
 ## Statement ingestion
 
@@ -132,7 +183,7 @@ Because rows can now originate from a person rather than the parser, every row c
 
 `[ASSUMPTION]` Quarantine also resolves by re-upload: once the parser is fixed, re-uploading lets dedup absorb rows already stored while previously unresolved rows parse and land. This holds only if canonical identity is stable across the fix, which makes dedup correctness load-bearing for recovery rather than merely convenient.
 
-`[OPEN]` **Hand-fixed rows collide with re-upload recovery.** If a user types a row in and the parser is later fixed, re-uploading produces a parsed row that may not match the hand-typed row's canonical identity — a normalized description or a rounded amount is enough to differ — and the result is a silent duplicate inside a balance. Manual rows need a policy: either they claim their identity slot against future imports, or a parsed row supersedes them.
+**Hand-fixed rows vs later parse.** When a user has typed a row by hand and a later re-upload produces a parsed row that is the same line or a near match, the system **does not resolve it silently**. It surfaces a conflict and the user chooses: **keep the manual row**, **take the parsed row**, or **keep both**. Ordinary duplicates among fully parsed rows remain automatic ("imported N, skipped M"); only the manual-vs-parsed collision requires this prompt.
 
 ### Duplicates
 
@@ -166,8 +217,10 @@ Streamlit is a preference, not a commitment. It reruns its script on every inter
 - PostgreSQL persistence in its own container, with a data volume outside the repository
 - Email-and-password authentication, with users, personal lists created on signup, user-created lists, and per-member splits
 - Email invitations to lists, handling both registered and unregistered addresses, with post-signup redirect to the inviting list
-- Manual resolution of quarantined rows against the rendered PDF, with provenance recorded per row
-- One shared-expenses view per list, reporting the period total and each member's share, with separate CRC and USD figures and no FX conversion
+- Manual resolution of quarantined rows against the rendered PDF, with provenance recorded per row; on re-upload, conflicts between a hand-fixed row and a new parse prompt the user (keep manual / take parsed / keep both)
+- Explicit payer on shared expenses, editable; statement import may default payer then allow correction
+- Purchase/statement-date FX: non-CRC amounts converted into CRC for shared balances; original currency retained
+- One shared-expenses view per list: statement-cycle period; top settle-up summary in CRC with optional transfer simplification; below that a receipt-style item list newest-first; FX originals auditable; incomplete-data disclosure
 - A Promerica stub or contract-test adapter proving extension without modifying core import, dedup, or list logic
 - Anonymized or synthetic fixtures committed to the repository, since real statements live outside it
 
@@ -177,7 +230,6 @@ Streamlit is a preference, not a commitment. It reruns its script on every inter
 - Machine-learning categorization. Deferred, but the schema reserves `category`, `category_confidence`, and `category_source`, and categorization must never block import. Model direction is recorded in the brief addendum
 - Trends and analytics dashboards, and personal-spending dashboards beyond the single shared-expenses view
 - Promerica statement parsing itself, pending sample collection
-- FX conversion between CRC and USD
 - CSV and HTML statement formats. The adapter contract must accommodate them as format parsers; v1 implements PDF only
 - Open-source release. The product is built generic from day one with no personal data committed, but contributor documentation, CI, licensing, and a support policy are post-v1
 - A command-line interface
@@ -200,9 +252,9 @@ Consolidated from the sections above, plus items the brief assigned to the PRD.
 
 | Question | Origin |
 |---|---|
-| How per-member shares are expressed and validated | Lists |
-| Whether transaction-level sharing exceptions are needed | Lists |
-| Whether hand-fixed rows are superseded by, or protected from, a later parsed row | Statement ingestion |
+| Deterministic assignment of a one-subunit remainder after a 100%-valid percentage split | Lists; architecture may propose |
+| Authoritative FX rate source, missing-date behavior, and whether rate is overridable | Balances; architecture/addendum |
+| How statement-cycle boundaries work when a list has cards with different billing cycles | Balances / shared-expenses view |
 | How a settlement payment visible in a statement avoids double-counting | Balances and settlement; deferred to v2 |
 | Whether the literal swipe survives implementation | Statement ingestion |
 | Which front end delivers gestures, PDF rendering, and mobile layout | Form factor; architecture |
