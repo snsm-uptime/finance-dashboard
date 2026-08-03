@@ -21,8 +21,8 @@ sources:
 ## Capabilities
 
 - **CAP-1**
-  - **intent:** A peer can create an account with email and password, sign in and out, reset a forgotten password via email, and choose UI language (EN/ES) from the Account menu.
-  - **success:** Duplicate emails rejected; passwords stored hashed only; after signup the user is authenticated with a personal list (CAP-2); reset proves email control and invalidates the prior password; invalid credentials get a generic failure; language defaults from browser/`Accept-Language` on first visit then is remembered on the account; no Settings/profile product beyond Account chrome.
+  - **intent:** A peer can create an account with email and password, sign in and out, reset a forgotten password via email, and from the Account menu choose UI language (EN/ES) and appearance theme (Light / Dark / System).
+  - **success:** Duplicate emails rejected; passwords stored hashed only; after signup the user is authenticated with a personal list (CAP-2); reset proves email control and invalidates the prior password; invalid credentials get a generic failure; language defaults from browser/`Accept-Language` on first visit then is remembered on the account; theme defaults to System on first visit then is remembered on the account (Light/Dark pin Warm Balance token sets); no Settings/profile product beyond Account chrome.
 
 - **CAP-2**
   - **intent:** Every new account gets a personal list; an authenticated user can create and rename additional lists they own; list data is visible only to members.
@@ -78,7 +78,7 @@ sources:
 - Auth session: httpOnly Secure cookie on same-origin (or BFF); no Bearer tokens in `localStorage`.
 - Posted dates and cycle boundaries use `America/Costa_Rica` after ISO-8601 normalization.
 - UI binding: `EXPERIENCE.md` + `DESIGN.md` (Warm Balance / Soft-Ledger); component kits may supply unstyled primitives only — template defaults are not brand.
-- Accessibility floor WCAG 2.2 AA; UI strings EN + ES from v1; language preference remembered on the account (Account menu), defaulting from browser on first visit — not a Settings product.
+- Accessibility floor WCAG 2.2 AA; UI strings EN + ES from v1; language preference remembered on the account (Account menu), defaulting from browser on first visit; appearance theme Light / Dark / System remembered on the account, defaulting to System — not a Settings product.
 - CI release gate uses synthetic PDFs with known geometry + golden rows; operator real-PDF tests are optional parallel tier.
 - Parsers/domain developed red→green; merge to `main` requires lint + api pytest (incl. goldens) + ui typecheck/lint + critical ui tests.
 - SMTP (or equivalent) required for invites and password reset.
@@ -88,7 +88,7 @@ sources:
 ## Non-goals
 
 - Recording settlement payments, drawing down debt, or settlement history (v2).
-- Account profile/settings product (display name, notification prefs, session UI, FX overrides) — Account menu may hold sign-out, password reset, and language only.
+- Account profile/settings product (display name, notification prefs, session UI, FX overrides) — Account menu may hold sign-out, password reset, language, and theme only.
 - ML categorization, trends/analytics, and personal-spending dashboards beyond the single shared-expenses view.
 - Real Promerica parsing (stub/contract only until samples exist).
 - CSV/HTML statement formats in v1 (contract must allow later; PDF only now).

@@ -27,7 +27,7 @@ The tradeoff cuts both ways for the eventual open-source release: it removes the
 
 ### Account surface (v1)
 
-v1 account tooling stays **minimal**: sign up, sign in, password reset, and **UI language (EN/ES)** in the Account menu (remembered on the account; defaults from browser on first visit). Email verification is included only if it is required for invitation delivery or secure account recovery — not as a profile product. There is no settings area for display name, notification preferences, FX overrides, or session management beyond what authentication itself needs.
+v1 account tooling stays **minimal**: sign up, sign in, password reset, **UI language (EN/ES)**, and **appearance theme (Light / Dark / System)** in the Account menu. Language is remembered on the account and defaults from the browser on first visit. Theme is remembered on the account and defaults to **System** (follow OS/browser) on first visit. Email verification is included only if it is required for invitation delivery or secure account recovery — not as a profile product. There is no settings area for display name, notification preferences, FX overrides, or session management beyond what authentication itself needs.
 
 Invitation emails and password-reset emails are the only transactional mail in v1.
 
@@ -328,7 +328,7 @@ Email verification is performed when it is required for invitation delivery or s
 
 **Out of Scope:**
 
-- Display name, notification preferences, session-management UI, and FX rate overrides (see Scope — Out for v1). Language (EN/ES) lives in Account menu only — not a Settings product.
+- Display name, notification preferences, session-management UI, and FX rate overrides (see Scope — Out for v1). Language (EN/ES) and appearance theme (Light / Dark / System) live in Account menu only — not a Settings product.
 
 ### Lists, membership, and splits
 
@@ -846,7 +846,7 @@ PostgreSQL schema evolution is supported via migrations as the data model change
 - A Promerica stub or contract-test adapter proving extension without modifying core import, dedup, or list logic
 - Register cards keyed by IBAN (user-chosen label); matching IBAN reuses that card and its label as the import identifier
 - Anonymized or synthetic fixtures committed to the repository, since real statements live outside it
-- Account-menu UI language EN/ES (remembered; browser default on first visit) — not a Settings product
+- Account-menu UI language EN/ES (remembered; browser default on first visit) and appearance theme Light / Dark / System (remembered; defaults to System) — not a Settings product
 - Phone Individual review swipe mapping: right → chosen list, left → default list, down → skip (desktop buttons mirror)
 
 ### Out for v1
@@ -881,5 +881,5 @@ Deferred with owner. Not silent gaps.
 | Double-counting settlement payments that also appear on statements | Product (v2) | Settlement design |
 | BAC debit and eco section maps (owner-labeled sample cards) | Implementation | Fixture review against real statements |
 
-~~Closed into architecture/spec (2026-08-03):~~ remainder → list creator; BCCR FX + nearest-prior + no override; phone swipe mandatory with R/L/D mapping; same-price ±3 day default window; synthetic CI fixtures; conflict UI = Manual|Parsed + confirmed “Not the same expense” (no peer keep-both); manual create = amount+description+payer+Adjust split; locale in Account menu.
+~~Closed into architecture/spec (2026-08-03):~~ remainder → list creator; BCCR FX + nearest-prior + no override; phone swipe mandatory with R/L/D mapping; same-price ±3 day default window; synthetic CI fixtures; conflict UI = Manual|Parsed + confirmed “Not the same expense” (no peer keep-both); manual create = amount+description+payer+Adjust split; locale in Account menu; appearance theme Light/Dark/System in Account menu (default System).
 

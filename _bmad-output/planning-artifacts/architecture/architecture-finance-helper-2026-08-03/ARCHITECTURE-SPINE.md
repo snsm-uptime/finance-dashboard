@@ -218,6 +218,7 @@ flowchart LR
 | Config | Secrets/SMTP/paths outside repo |
 | Auth cookies | Same-site first-party; Secure in HTTPS |
 | i18n | EN + ES from v1; keys in `ui`; preference remembered on account (Account menu); first visit from browser |
+| Appearance | Light / Dark / System from Account menu; remembered on account; default System (OS/browser); Warm Balance token sets from DESIGN.md |
 | Logging | No raw statement PII at info; correlate by session/statement/batch ids |
 | Branches | `<type>/<epic>/<us-id>` — AD-13 |
 | Versioning | Single app SemVer tag — AD-14 |
