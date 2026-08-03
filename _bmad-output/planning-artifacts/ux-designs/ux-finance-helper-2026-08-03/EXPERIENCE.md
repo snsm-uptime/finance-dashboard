@@ -32,11 +32,11 @@ Appearance: follow system (light and dark both in scope). Product name: finance-
 | Bulk review | Upload (mode = Bulk) | Assign/commit statements; list-context upload may pre-select destination for Bulk only |
 | Parse comparison | Mid-review on parse failure | PDF evidence vs extracted rows → quarantine accept or dismiss |
 | Card registration | Upload/detect unknown IBAN | Blocks review until user label + IBAN saved |
-| Same-price conflict review | End of import when manual↔parsed matches | Card picker: Manual **or** Parsed (no keep-both) |
+| Same-price conflict review | End of import when manual↔parsed matches | Card picker: Manual **or** Parsed; escape **“Not the same expense”** only after double-count confirm |
 | Manual expense | Shared-expenses → add | Amount + description; payer defaults to signed-in user; list default split |
 | Invite | Shared-expenses (list) | Invite member by email |
 | Invitee signup | Invite email link | Email + password; lands on inviting list |
-| Account menu | Chrome (minimal) | Sign out + password reset only — **no** profile/settings surface |
+| Account menu | Chrome (minimal) | Sign out + password reset + **Language (EN/ES)** — **no** profile/settings surface |
 
 **Not v1:** Distribution dashboard tab (desired post-v1).
 
@@ -82,10 +82,10 @@ Behavioral. Visual specs live in `DESIGN.md.Components`.
 | Parse comparison pane | Failure mid-review | PDF in lower half; extracted items above. Actions: accept with quarantine, or dismiss statement/file. |
 | Quarantine disclosure | Shared-expenses (strip and/or period) | When incomplete data affects balances, disclose that balances may understate — do not silent-green the number. |
 | Card registration prompt | Unknown IBAN | **Blocks** continuing review. Fields: user-chosen label + IBAN as match key. Fixed card→list routing is **after** this prompt, not inside it. |
-| Same-price conflict cards | End-of-import conflict list | Per conflict: two cards — Manual \| Parsed. Pick exactly one. **No keep-both.** Not swipe (swipe reserved for statement review). |
-| Manual expense form | Add on list | Amount, description `[ASSUMPTION: minimum fields per J5]`; payer defaults to signed-in user; split = list default unless override UI opened (override = spine-only). Save → newest-first row + settle-up updates immediately. |
+| Same-price conflict cards | End-of-import conflict list | Per conflict: two cards — Manual \| Parsed. Pick exactly one survivor by default. Escape: **“Not the same expense”** (harder than the cards) keeps both only after confirm warning someone may owe more. Not swipe (swipe reserved for statement review). Same UI for hand-fixed↔re-parse conflicts. |
+| Manual expense form | Add on list | **Amount**, **description**, **payer** (defaults to signed-in user); **Adjust split** disclosure for whole-line / absolute fragments / percentage (list default until opened). Save → newest-first row + settle-up updates immediately. |
 | Invite form | List | Email address → send. Unregistered path uses create-account email template. |
-| Account menu | Global chrome | Sign out; password reset. No profile, avatars-as-settings, or preferences surface in v1. |
+| Account menu | Global chrome | Sign out; password reset; **Language EN/ES** (remembered on account; first visit defaults from browser). No profile, avatars-as-settings, or preferences surface in v1. |
 | Simplify suggestion | Shared-expenses `[spine-only]` | Shows reduced transfer set. Copy must not say “paid”; must not resemble settlement recording. |
 
 ## State Patterns
@@ -110,22 +110,22 @@ Behavioral. Visual specs live in `DESIGN.md.Components`.
 
 **Phone (primary journey surface)**
 
-- **Individual review:** swipe primary for accept/default/skip outcomes (exact directions Architecture may implement; pattern = directional commit).
+- **Individual review:** swipe primary — **right** → chosen list (list picker first), **left** → configurable default list, **down** → skip.
 - **High-intent accept:** open **list picker before** the accept swipe; swipe commits to the picked list.
-- **Same-price (J7):** conflict list → card picker (Manual \| Parsed). **Not swipe** — avoids confusion with statement review.
+- **Same-price / hand-fix re-parse:** conflict list → Manual \| Parsed cards; optional harder escape **“Not the same expense”** with double-count confirm. **Not swipe.**
 - Tap to open lists, add expense, invite, Upload.
 
 **Desktop**
 
-- Same IA and outcomes; **buttons primary** for review (not swipe).
+- Same IA and outcomes; **buttons primary** for review (not swipe), labels mirror R/L/D outcomes.
 - List picker still precedes high-intent Accept.
 - Wider Soft-Ledger hybrid layout (see Responsive).
 
 **Banned / constrained**
 
-- No keep-both on same-price conflicts in this UI (PRD triad narrowed; see Spine-only backlog).
+- No equal-status keep-both peer button on conflicts (confirmed “Not the same expense” escape only).
 - No settlement-recording CTA in v1 (ignore mock “Mark settled” affordances).
-- No profile/settings surface; account chrome stays minimal.
+- No profile/settings surface; account chrome stays minimal (language allowed).
 - Modal/sheet stacks stay shallow (registration and pickers are blocking interrupts, not nested labyrinths).
 
 ## Accessibility Floor
@@ -159,7 +159,7 @@ EN + ES from v1.
 - Voice rules apply in both locales: plain + direct; no bank jargon; no peer blame; Simplify never uses a “paid” framing in either language.
 - Currency display remains CRC-first for settle-up (`₡…`); locale affects copy and date formatting in UI, not the settle-up currency model.
 - Card **user labels** are free text (whatever the user typed) — not translated by the product.
-- `[ASSUMPTION]` Default locale detection / switching control lives in account or browser — exact switcher UI not journeyed; must not require a full settings surface.
+- Language control lives in **Account menu** (EN/ES); preference is **remembered on the account**. First visit defaults from browser/`Accept-Language`. Must not require a full settings surface.
 
 ## Key Flows
 
@@ -169,7 +169,7 @@ EN + ES from v1.
 2. Starts Upload via global Upload (Individual tonight; not list-Bulk shortcut).
 3. Picks a multi-statement BAC PDF from phone files.
 4. Chooses Individual review (not Bulk).
-5. Reviews statements one-at-a-time: list picker then swipe-right/accept to chosen list; low-effort accept → configurable default (household shared); or skip / dismiss file.
+5. Reviews statements one-at-a-time: list picker then swipe-right to chosen list; swipe-left → configurable default; swipe-down → skip / dismiss file.
 6. Clean parses skip comparison; failures → PDF lower half vs extracted → quarantine accept or dismiss (see J3).
 7. Commit summary (imported N / skipped M duplicates); same-price conflicts if any (see J7).
 8. Lands on shared-expenses for the list he mostly fed.
@@ -217,11 +217,10 @@ Failure: statement parse fail → J3 branch; unknown IBAN → J6 blocks before r
 ### J5 — Sebas adds manual expense (phone)
 
 1. On household shared list → add manual expense.
-2. Enters amount / description.
-3. Payer defaults to Sebas; left as-is.
-4. Split = list default (even); no override UI this session.
-5. Saves → item appears newest-first under balances.
-6. **Climax:** settle-up numbers update immediately.
+2. Enters amount / description; payer defaults to Sebas (editable — e.g. when Monse paid).
+3. Optionally opens **Adjust split** for friends-style fragments; otherwise list default.
+4. Saves → item appears newest-first under balances.
+5. **Climax:** settle-up numbers update immediately.
 
 ### J6 — Unknown IBAN card registration (phone · mid-import)
 
@@ -234,9 +233,9 @@ Failure: statement parse fail → J3 branch; unknown IBAN → J6 blocks before r
 ### J7 — Same-price manual vs parsed (phone · end of import)
 
 1. End of import lists same-price conflicts (no silent merge).
-2. For each conflict: Manual and Parsed shown as cards; Sebas picks which stays.
-3. Outcomes: Manual **or** Parsed only — **no keep-both** (conflicts with PRD triad; UX narrows here).
-4. **Climax:** confident the list will not double-count before settle-up.
+2. For each conflict: Manual and Parsed shown as cards; Sebas picks which stays (one survivor).
+3. Escape: **“Not the same expense”** — harder than the cards — keeps both only after confirm warning someone may owe more. Same rule applies to hand-fixed↔re-parse conflicts.
+4. **Climax:** confident the list will not double-count by accident before settle-up.
 
 Interaction note: card picker only — swipe reserved for statement review.
 
@@ -251,15 +250,12 @@ Captured product behavior **without** a named journey / mock commitment yet. Bui
 | Reassign statement / rollback import batch | Correction after misfile or bad batch |
 | Bulk assign upload | Mode exists in J1 choice; full session not narrated |
 | Desktop upload button-parity | Buttons primary (decided); desktop session not separately journeyed |
-| Item-level split override + payer edit | PRD-capable; J5 left defaults only |
 | Standalone auth | Signup / sign-in / password reset outside invite (J4 covers invitee signup only) |
-| Keep-both (same-price) | **Dropped from J7 UI**; reinstatement requires product decision |
 
 ## Open gaps
 
-- Exact review swipe directions (left/right/up) → Architecture/implementation; outcomes locked.
-- Manual expense full field set beyond amount + description.
 - Empty-state copy for Lists homepage / empty receipts.
-- Locale switcher placement without a settings surface.
 - Card→list fixed-routing UI after J6 (after registration; not journeyed as its own flow).
 - Simplify surface placement and microcopy strings (EN/ES).
+
+~~Closed 2026-08-03:~~ swipe R/L/D pinned; manual create fields (amount+description+payer+Adjust split); conflict C2 (survivor + confirmed not-same); locale in Account menu remembered.

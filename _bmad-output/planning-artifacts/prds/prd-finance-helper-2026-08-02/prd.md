@@ -27,7 +27,7 @@ The tradeoff cuts both ways for the eventual open-source release: it removes the
 
 ### Account surface (v1)
 
-v1 account tooling stays **minimal**: sign up, sign in, and password reset. Email verification is included only if it is required for invitation delivery or secure account recovery — not as a profile product. There is no settings area for display name, notification preferences, FX overrides, or session management beyond what authentication itself needs.
+v1 account tooling stays **minimal**: sign up, sign in, password reset, and **UI language (EN/ES)** in the Account menu (remembered on the account; defaults from browser on first visit). Email verification is included only if it is required for invitation delivery or secure account recovery — not as a profile product. There is no settings area for display name, notification preferences, FX overrides, or session management beyond what authentication itself needs.
 
 Invitation emails and password-reset emails are the only transactional mail in v1.
 
@@ -167,14 +167,12 @@ Before review begins, the user chooses one of two modes with a checkbox.
 
 | Gesture | Result                               |
 | ------- | ------------------------------------ |
-| Right   | Accept into a chosen list            |
-| Left    | Accept into the user's personal list |
+| Right   | Accept into a chosen list (list picker first) |
+| Left    | Accept into the user's configurable default list |
 | Down    | Skip — the statement is never stored |
 
 
-Left is the low-effort default for a user's own spending; down exists so that a statement the user does not want tracked at all has somewhere to go.
-
-`[OPEN — UX/architecture]` Whether the literal swipe survives implementation. The review-one-at-a-time *pattern* is the requirement; swipe is preferred presentation where the client supports it.
+Left is the low-effort default destination path; down exists so that a statement the user does not want tracked at all has somewhere to go. Phone implements true swipes; desktop uses labeled buttons for the same three outcomes. Accessible non-gesture equivalents are required.
 
 ### Failure handling
 
@@ -202,7 +200,7 @@ Because rows can now originate from a person rather than the parser, every row c
 
 Quarantine may also resolve by re-upload: once the parser is fixed, re-uploading lets dedup absorb rows already stored while previously unresolved rows parse and land — only if canonical identity is stable across the fix.
 
-**Hand-fixed rows vs later parse.** When a user has typed a row by hand and a later re-upload produces a parsed row that is the same line or a near match, the system **does not resolve it silently**. It surfaces a conflict and the user chooses: **keep the manual row**, **take the parsed row**, or **keep both**. Ordinary duplicates among fully parsed rows remain automatic ("imported N, skipped M"); only the manual-vs-parsed collision requires this prompt.
+**Hand-fixed rows vs later parse.** When a user has typed a row by hand and a later re-upload produces a parsed row that is the same line or a near match, the system **does not resolve it silently**. It uses the same conflict UI as same-price matches (FR-22): default **pick Manual or Parsed** (one survivor); escape **“Not the same expense”** keeps both only after a confirm that warns of double-count / overpay risk. Ordinary duplicates among fully parsed rows remain automatic ("imported N, skipped M"); only manual-vs-parsed (and same-price) collisions require this prompt.
 
 ### Duplicates
 
@@ -330,7 +328,7 @@ Email verification is performed when it is required for invitation delivery or s
 
 **Out of Scope:**
 
-- Display name, notification preferences, session-management UI, and FX rate overrides (see Scope — Out for v1).
+- Display name, notification preferences, session-management UI, and FX rate overrides (see Scope — Out for v1). Language (EN/ES) lives in Account menu only — not a Settings product.
 
 ### Lists, membership, and splits
 
@@ -473,7 +471,7 @@ Before commit under review routing, the user chooses bulk or individual review.
 
 - **Bulk:** the whole upload is assigned to one list chosen from lists the user belongs to.
 - **Individual:** statements are reviewed one at a time.
-- The review-one-at-a-time *pattern* is required; literal swipe gestures are preferred where the client supports them (`[OPEN — UX/architecture]`).
+- Phone Individual review uses true swipes: right → chosen list (after picker), left → configurable default, down → skip; desktop uses labeled buttons for the same outcomes.
 
 #### FR-18: Individual review outcomes
 
@@ -510,7 +508,9 @@ A user can add individual expense items to a list during the day without waiting
 
 **Consequences (testable):**
 
-- Manual items support the same split overrides as imported items (FR-10).
+- Create requires **amount**, **description**, and **payer** (defaults to the current user).
+- **Adjust split** disclosure on create offers whole-line, absolute amounts per member, or percentage; until opened, the item uses the list default.
+- Manual items support the same split overrides as imported items when editing later (FR-10).
 - Payer selection follows FR-19 (default current user, editable).
 - Manual items carry provenance distinguishing them from parser-derived rows.
 - Manual items appear in the shared-expenses receipt list and settle-up figures for that list.
@@ -522,10 +522,11 @@ When a statement import produces a parsed line whose amount matches an existing 
 **Consequences (testable):**
 
 - Same-price collisions are collected and shown at end of import — they do not silently create duplicates or silently drop the parsed line.
-- The comparison view lets the user decide priority / linkage before the import is considered fully resolved.
+- Default resolution: pick **Manual** or **Parsed** (one survivor).
+- Escape: **“Not the same expense”** keeps both only after a confirm that warns the choice can make someone owe more (double-count risk); the escape is harder than the survivor pick (not an equal peer third action).
 - Ordinary exact canonical-identity duplicates among parsed rows still use automatic dedup (FR-20).
 
-**Same price** means equal amount and currency against an unresolved manual entry on a list related to the import; date-window tightness is left to architecture unless product tightens it later.
+**Same price** means equal amount and currency against an unresolved manual entry on a list related to the import; date window is list-configurable with product default ±3 calendar days (architecture AD-10).
 
 #### FR-23: Remember manual label as bank-description alias (seed for later ML)
 
@@ -579,12 +580,12 @@ Unresolved rows can be edited by hand against the rendered PDF (values typed by 
 
 #### FR-28: Manual-vs-parsed conflict on re-upload
 
-When a re-upload produces a parsed row that matches or near-matches a hand-fixed row, the system prompts: keep manual, take parsed, or keep both — never silently duplicates.
+When a re-upload produces a parsed row that matches or near-matches a hand-fixed row, the system prompts using the **same resolution UI as FR-22**: pick Manual or Parsed by default; **“Not the same expense”** keeps both only after double-count/overpay confirm — never silently duplicates.
 
 **Consequences (testable):**
 
 - Ordinary parsed-vs-parsed duplicates remain automatic (FR-20).
-- Manual-vs-parsed collisions always require a user choice.
+- Manual-vs-parsed collisions always require a user choice under the FR-22 resolution rules (no equal-status keep-both triad).
 
 #### FR-29: Reassign statement to another list
 
@@ -836,8 +837,8 @@ PostgreSQL schema evolution is supported via migrations as the data model change
 - PostgreSQL persistence in its own container, with a data volume outside the repository
 - Email-and-password authentication (sign up, sign in, password reset; email verification only if required for invites or recovery) — no profile or settings surface beyond auth
 - Personal lists created on signup, user-created lists, per-member splits (list default + item overrides), and email invitations to lists (registered and unregistered addresses, with post-signup redirect to the inviting list)
-- Manual resolution of quarantined rows against the rendered PDF, with provenance recorded per row; on re-upload, conflicts between a hand-fixed row and a new parse prompt the user (keep manual / take parsed / keep both)
-- Explicit payer on shared expenses, editable; defaults to the current user on import and manual entry
+- Manual resolution of quarantined rows against the rendered PDF, with provenance recorded per row; on re-upload, conflicts between a hand-fixed row and a new parse use the same Manual|Parsed (+ confirmed “Not the same expense”) UI as same-price conflicts
+- Explicit payer on shared expenses, editable; defaults to the current user on import and manual entry; manual create also requires description and offers Adjust split disclosure
 - Manual item entry to a list without waiting for statement import
 - Same-price manual/import comparison review at end of upload; confirmed matches store manual label as alias of bank description (ML use is post-v1)
 - Purchase/statement-date FX: non-CRC amounts converted into CRC for shared balances; original currency retained
@@ -845,6 +846,8 @@ PostgreSQL schema evolution is supported via migrations as the data model change
 - A Promerica stub or contract-test adapter proving extension without modifying core import, dedup, or list logic
 - Register cards keyed by IBAN (user-chosen label); matching IBAN reuses that card and its label as the import identifier
 - Anonymized or synthetic fixtures committed to the repository, since real statements live outside it
+- Account-menu UI language EN/ES (remembered; browser default on first visit) — not a Settings product
+- Phone Individual review swipe mapping: right → chosen list, left → default list, down → skip (desktop buttons mirror)
 
 ### Out for v1
 
@@ -875,11 +878,8 @@ Deferred with owner. Not silent gaps.
 
 | Question | Owner | Revisit when |
 |---|---|---|
-| Deterministic one-subunit remainder after a 100%-valid percentage split | Architecture | Implementing share allocation |
-| Authoritative FX rate source, missing-date behavior, optional override | Architecture | Implementing CRC conversion |
-| Whether literal swipe is mandatory vs review-one-at-a-time pattern only | UX / Architecture | Choosing front end |
-| Which front end delivers gestures, PDF rendering, and mobile layout | Architecture | Solution design |
-| How repo fixtures preserve positional PDF layout fidelity | Architecture | Building golden fixtures |
 | Double-counting settlement payments that also appear on statements | Product (v2) | Settlement design |
 | BAC debit and eco section maps (owner-labeled sample cards) | Implementation | Fixture review against real statements |
+
+~~Closed into architecture/spec (2026-08-03):~~ remainder → list creator; BCCR FX + nearest-prior + no override; phone swipe mandatory with R/L/D mapping; same-price ±3 day default window; synthetic CI fixtures; conflict UI = Manual|Parsed + confirmed “Not the same expense” (no peer keep-both); manual create = amount+description+payer+Adjust split; locale in Account menu.
 

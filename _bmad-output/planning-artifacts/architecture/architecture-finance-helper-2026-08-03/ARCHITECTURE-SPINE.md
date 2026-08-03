@@ -121,14 +121,14 @@ flowchart LR
 ### AD-9 — Individual review gestures [ADOPTED]
 
 - **Binds:** FR-17–18; EXPERIENCE J1 (supersedes soft PRD swipe OPEN)
-- **Prevents:** Desktop-only button apps that skip phone swipe; swipe theatre on desktop
-- **Rule:** Phone Individual review **must** implement true swipe commits; desktop **must** use buttons as primary. Same three outcomes (chosen list / default / skip). List picker precedes high-intent accept. Accessible non-gesture equivalents required (WCAG 2.2 AA product floor).
+- **Prevents:** Desktop-only button apps that skip phone swipe; swipe theatre on desktop; divergent L/R/D mappings across stories
+- **Rule:** Phone Individual review **must** implement true swipe commits; desktop **must** use buttons as primary. Vectors: **right → chosen list** (after list picker), **left → configurable default list**, **down → skip**. Same three outcomes on desktop as labeled buttons. List picker precedes high-intent accept. Accessible non-gesture equivalents required (WCAG 2.2 AA product floor).
 
-### AD-10 — Same-price match window [ADOPTED]
+### AD-10 — Conflict match window and resolution [ADOPTED]
 
-- **Binds:** FR-22 same-price conflicts
-- **Prevents:** UI inventing match candidates; inconsistent windows
-- **Rule:** Server computes candidates against **durable unresolved manual ledger entries** (not session-only buffers). Equal amount+currency on related lists. Window is **list-configurable**; product default **±3 calendar days** from the parsed row’s posted date.
+- **Binds:** FR-22 same-price; FR-28 hand-fixed↔re-parse
+- **Prevents:** UI inventing match candidates; inconsistent windows; easy double-count via peer keep-both; divergent rules between conflict kinds
+- **Rule:** Server computes candidates against **durable unresolved manual ledger entries** (not session-only buffers). Equal amount+currency on related lists. Window is **list-configurable**; product default **±3 calendar days** from the parsed row’s posted date. Resolution UI is shared: default **pick Manual or Parsed** (one survivor); escape **“Not the same expense”** keeps both only after confirm that warns of double-count / overpay risk; escape must be harder than the survivor pick (not an equal third peer action).
 
 ### AD-11 — CI fixtures [ADOPTED]
 
@@ -217,7 +217,7 @@ flowchart LR
 | Errors | Fail-loud on unknown/ambiguous detect and must-parse failure; structured JSON API errors; generic auth failures |
 | Config | Secrets/SMTP/paths outside repo |
 | Auth cookies | Same-site first-party; Secure in HTTPS |
-| i18n | EN + ES from v1; keys in `ui` |
+| i18n | EN + ES from v1; keys in `ui`; preference remembered on account (Account menu); first visit from browser |
 | Logging | No raw statement PII at info; correlate by session/statement/batch ids |
 | Branches | `<type>/<epic>/<us-id>` — AD-13 |
 | Versioning | Single app SemVer tag — AD-14 |
@@ -328,7 +328,6 @@ erDiagram
 | fastapi-users vs custom cookie sessions | Both satisfy AD-8 |
 | Redis / background worker | Only if in-process parse misses NFR-12 |
 | Traefik vs Caddy vs other proxy | Same-origin cookie contract matters; brand does not |
-| Exact swipe vectors (L/R/down) | EXPERIENCE outcomes locked; vectors are implementation |
 | Operator real-PDF harness UX | Policy locked (AD-11) |
 | Settlement payment recording / double-count flows | AD-21: out of v1; taxonomy stub only |
 | User FX override | Out of v1 (AD-7) |
