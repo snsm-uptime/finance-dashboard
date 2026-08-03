@@ -1,13 +1,13 @@
 ---
 title: "PRD: finance-helper"
-status: draft
+status: final
 created: 2026-08-02
 updated: 2026-08-03
 ---
 
 # PRD: finance-helper
 
-> **Draft in progress.** Vision and Scope are settled. Features, Requirements, and NFRs are still to be written. `[OPEN]` marks a decision not yet made; `[ASSUMPTION]` marks something inferred and awaiting confirmation.
+> Final PRD for v1. `[OPEN]` items below are deferred to architecture, UX, or later phases with an owner — they are not silent gaps. `[ASSUMPTION]` tags are confirmed product defaults unless noted.
 
 ## Overview
 
@@ -24,6 +24,12 @@ At its full extent, the product is a personal finance hub: statements are droppe
 **Authentication is email and password.** Google sign-in was considered and dropped. This trades a delegated identity provider for credentials the application owns, which means password hashing, reset, and probably email verification become the product's responsibility. It also makes transactional email a v1 dependency, since invitations are delivered by mail.
 
 The tradeoff cuts both ways for the eventual open-source release: it removes the requirement that every self-hoster create their own Google Cloud project and navigate an unverified-app consent screen, and replaces it with configuring an SMTP server — a smaller burden, but not zero.
+
+### Account surface (v1)
+
+v1 account tooling stays **minimal**: sign up, sign in, and password reset. Email verification is included only if it is required for invitation delivery or secure account recovery — not as a profile product. There is no settings area for display name, notification preferences, FX overrides, or session management beyond what authentication itself needs.
+
+Invitation emails and password-reset emails are the only transactional mail in v1.
 
 **Operator (Sebas).** Not a product role but a deployment one — runs the containers, configures which bank adapters are installed, holds the database volume. Distinguished here so that adapter and infrastructure concerns are not mistaken for user-facing features.
 
@@ -67,13 +73,13 @@ Splits are therefore **per member, at list default and per item**. A list can ho
 
 **Percentage validation.** Any percentage configuration — list default or item override — must sum to **exactly 100%** across members. The product does not accept an under- or over-allocated percentage split.
 
-`[OPEN]` Even when percentages sum to 100%, applying them to a concrete CRC or USD amount can leave a one-subunit remainder (for example three equal shares of ₡100). How that subunit is assigned must be deterministic so every member sees the same balance. Architecture can propose a rule; it is not a product preference surfaced in the UI.
+`[OPEN — architecture]` Even when percentages sum to 100%, applying them to a concrete CRC or USD amount can leave a one-subunit remainder (for example three equal shares of ₡100). Assignment must be deterministic; architecture proposes the rule (not a user preference).
 
 ### Cardinality
 
 A card's transactions feed exactly one list in v1. The design must not foreclose feeding several later, which means the association is modelled as a relation between cards and lists with a v1 uniqueness constraint, rather than as a list reference stored on the card.
 
-`[ASSUMPTION]` Uploads target a list: the user chooses which list a statement's transactions land in, rather than sharing being derived from a fixed global account-to-list mapping.
+Uploads target a list via fixed card-to-list association or review routing (FR-11), not a global account-to-list map derived from the brief’s per-product shared flag.
 
 ## Balances and settlement
 
@@ -94,7 +100,7 @@ The product must support both. That is why list defaults, item attribution (whol
 
 Every shared expense has an **explicit payer** — the person others should reimburse. The payer is not always the cardholder on a statement (cash, someone else's card, a friend on the list). Members set or correct the payer on the expense.
 
-`[ASSUMPTION]` On statement import, payer defaults to the member associated with the card or upload, and remains editable.
+**Payer default.** On statement import and on manual item entry, payer defaults to the **current user** and remains editable.
 
 ### Currency and exchange rate
 
@@ -104,7 +110,7 @@ Expenses not in colones (USD on a dólares card or foreign currency on a stateme
 
 This **supersedes** the earlier decision to keep CRC and USD as separate non-converted figures with no FX in v1.
 
-`[OPEN]` Which rate source is authoritative (e.g. BCCR or another feed), what happens when that feed has no rate for a given date, and whether the rate is eventually overridable. Mechanism belongs in architecture/addendum; the requirement is purchase/statement-date conversion into CRC.
+`[OPEN — architecture]` Authoritative FX rate source (e.g. BCCR), missing-date behavior, and whether override is allowed. Requirement remains: purchase/statement-date conversion into CRC.
 
 ### Incomplete data
 
@@ -114,7 +120,18 @@ This **supersedes** the earlier decision to keep CRC and USD as separate non-con
 
 v1 must compute balances from **per-transaction share allocations** (and per-expense payer) that a future payments table can draw down — not from a month-scoped aggregate.
 
-`[OPEN]` How a settlement payment that also appears in a statement avoids being counted twice. Deferred with settlement, but the v1 line-type taxonomy should be able to distinguish an inter-member transfer when it arrives.
+`[OPEN — v2 settlement]` How a settlement payment that also appears in a statement avoids being counted twice. v1 taxonomy should allow distinguishing an inter-member transfer when it arrives.
+
+### What counts toward settle-up
+
+Shared settle-up and receipt-list **splittable** items follow the brief’s line-type rules, restated for lists:
+
+- **Include:** `purchase` lines, and purchase reversals/refunds once a `credit_note` (or equivalent) is explicitly classified as a purchase reversal.
+- **Exclude:** `payment`, `interest`, `fee`, `voluntary_service`, `credit_note` (until classified as a purchase reversal), `installment_schedule`, `balance_forward`, and `other` unless explicitly classified into an included type.
+
+Non-included line types may still be imported and stored for a complete ledger; they do not feed member share allocations or settle-up totals.
+
+**Timezone.** Posted dates and statement-cycle boundaries are interpreted in `America/Costa_Rica` after adapter normalization to ISO-8601 calendar dates.
 
 ### Shared-expenses view
 
@@ -127,9 +144,9 @@ Each shared list has a view whose job is to answer: **given what was imported an
 1. **Top — settle up.** How much each person needs to pay (in CRC) so the period is even. Includes an option to **simplify** the settlement: recompute who should pay whom so the group makes fewer transfers, without recording that anyone has paid yet. Actual payment recording remains v2; simplify is a suggested transfer plan only.
 2. **Below — receipt list.** Items for the period, **most recent first**, in a receipt-like format so members can verify "my items vs yours" the way they already do on paper. Foreign-currency lines show enough original amount + converted CRC to audit the FX step. Incomplete/quarantined data for the period is disclosed on this screen.
 
-`[ASSUMPTION]` "Simplify" minimizes the number of person-to-person transfers while preserving net balances; it does not invent debt or change item splits.
+**Simplify** minimizes the number of person-to-person transfers while preserving net balances; it does not invent debt or change item splits.
 
-`[OPEN]` How statement-cycle boundaries are chosen when a list holds cards with different billing cycles (pick one cycle, union of cycles, or user-selected statement).
+When a list holds cards with different billing cycles, the user **selects which statement/cycle** the shared-expenses view shows.
 
 ## Statement ingestion
 
@@ -147,15 +164,17 @@ Before review begins, the user chooses one of two modes with a checkbox.
 
 **Individual.** Statements are reviewed one at a time, each assigned by a directional gesture:
 
-| Gesture | Result |
-|---|---|
-| Right | Accept into a chosen list |
-| Left | Accept into the user's personal list |
-| Down | Skip — the statement is never stored |
+
+| Gesture | Result                               |
+| ------- | ------------------------------------ |
+| Right   | Accept into a chosen list            |
+| Left    | Accept into the user's personal list |
+| Down    | Skip — the statement is never stored |
+
 
 Left is the low-effort default for a user's own spending; down exists so that a statement the user does not want tracked at all has somewhere to go.
 
-`[OPEN]` Whether the literal swipe interaction survives implementation. The review-one-at-a-time *pattern* is the requirement; the swipe is the proposed presentation of it. See **Form factor** below.
+`[OPEN — UX/architecture]` Whether the literal swipe survives implementation. The review-one-at-a-time *pattern* is the requirement; swipe is preferred presentation where the client supports it.
 
 ### Failure handling
 
@@ -181,7 +200,7 @@ Unresolved rows can be **resolved by hand**: the user reads the correct values o
 
 Because rows can now originate from a person rather than the parser, every row carries its **provenance**. Trust, debugging, and any later audit all depend on being able to tell which is which.
 
-`[ASSUMPTION]` Quarantine also resolves by re-upload: once the parser is fixed, re-uploading lets dedup absorb rows already stored while previously unresolved rows parse and land. This holds only if canonical identity is stable across the fix, which makes dedup correctness load-bearing for recovery rather than merely convenient.
+Quarantine may also resolve by re-upload: once the parser is fixed, re-uploading lets dedup absorb rows already stored while previously unresolved rows parse and land — only if canonical identity is stable across the fix.
 
 **Hand-fixed rows vs later parse.** When a user has typed a row by hand and a later re-upload produces a parsed row that is the same line or a near match, the system **does not resolve it silently**. It surfaces a conflict and the user chooses: **keep the manual row**, **take the parsed row**, or **keep both**. Ordinary duplicates among fully parsed rows remain automatic ("imported N, skipped M"); only the manual-vs-parsed collision requires this prompt.
 
@@ -201,13 +220,613 @@ The product is used from both a desktop browser and a phone. Mobile is not a lat
 
 Streamlit is a preference, not a commitment. It reruns its script on every interaction and offers no native gesture handling, no first-class PDF viewer, and a weak responsive story — and v1's review flow needs all three. Architecture selects whatever actually delivers the flow described here; this document specifies the experience, not the framework.
 
+## Parsing and adapter requirements
+
+This section restates the brief's adapter substance as PRD requirements, plus the multi-statement and human-quarantine extensions already decided above. Mechanism (PDF library, schema tables, rate feed) belongs in architecture.
+
+### Contract
+
+Bank support is pluggable. Each adapter declares `{bank, product_id, account_kind}` where `account_kind` is `credit`, `debit`, or `other`. Section must-parse lists may differ by kind — debit products are not assumed to mirror credit maps.
+
+Pipeline: **detect → split → parse → normalize → import batch**.
+
+**Detect.** Ordered strategies: override → filename → content signatures. First confident match wins. Unknown or ambiguous statements **fail the import** with a clear error — no silent mis-association.
+
+**Split.** One uploaded PDF may contain several statements. Detection identifies the bank; splitting produces N statements, each with its own product identity and destination. The Promerica stub and contract tests must exercise the multi-statement case.
+
+**Parse / normalize.** Adapters own locale date parsing and multi-column amount collapse. The store never sees bank-local date strings or parallel CRC/USD columns on one row. BAC adapters parse Spanish `DD-MMM-YY` into ISO-8601 and collapse dual amount columns into a single `(currency, amount)`.
+
+**Format extensibility.** A new bank or file format is a new adapter (plus fixtures), not a parallel import path. CSV and HTML are format parsers behind the same contract; **v1 implements PDF only**.
+
+### Canonical lines
+
+Must-parse ledger lines carry at least: `posted_date` (ISO-8601), signed `amount`, ISO 4217 `currency`, `product_id`, `line_type`, and `external_ref` when the statement provides one. Every stored row also carries **provenance** (parser vs hand-entered).
+
+**Line-type taxonomy** (minimum): `purchase`, `payment`, `interest`, `fee`, `voluntary_service`, `credit_note`, `installment_schedule`, `balance_forward`, `other`.
+
+Each bank section maps to that taxonomy with policy `must_parse`, `best_effort`, or `ignore`. Unmapped sections default to **best-effort quarantine**, not silent drop.
+
+**Installment schedules** are a distinct record type, excluded from shared totals. Adapters must not double-emit the same spend as both a counted purchase and installment principal without an explicit link. Prefer the purchase/principal ledger posting and attach schedule metadata by reference when the bank shows both.
+
+### BAC credit baseline (walmart reviewed)
+
+
+| Bank section                                 | Taxonomy             | v1 policy                    |
+| -------------------------------------------- | -------------------- | ---------------------------- |
+| Detalle de compras                           | purchase             | must_parse                   |
+| Detalle de pago                              | payment              | must_parse                   |
+| Detalle de intereses                         | interest             | must_parse                   |
+| Otros cargos                                 | fee                  | must_parse                   |
+| Productos y servicios de elección voluntaria | voluntary_service    | best_effort                  |
+| Collection / credit notes                    | credit_note / fee    | best_effort until classified |
+| Otras líneas de financiamiento               | installment_schedule | must_parse on credit         |
+| Saldo Anterior                               | balance_forward      | ignore or metadata-only      |
+
+
+Additional sample card layouts (owner labels: eco, dolares, colones) remain **provisional until fixture review** against real statements — then the same acceptance bar applies before calling those layouts supported. Labels are the owner's names for IBAN/card accounts, not a closed product enum.
+
+### Identity and dedup
+
+**Primary identity:** `(product_id, posted_date, currency, amount, external_ref)` after normalization.
+
+**Fallback** when a ref is missing or unstable: `(product_id, posted_date, currency, amount, normalized_description, line_type, statement_period_id)` — must remain idempotent.
+
+Adapters expose ref quality as `stable`, `derived`, or `absent`. For BAC compras, `N. Referencia` is the primary stable external ref when present. Refs are not assumed unique across products without `product_id`.
+
+Dual-column CRC/USD amounts normalize to a single `(currency, amount)` **before** identity. Prefer the nonzero column. If **both** columns are nonzero, **prefer CRC**.
+
+Re-import of the same or overlapping statement never duplicates ledger lines for the same identity. Parsed duplicates are absorbed automatically with a post-import summary. Manual-vs-parsed near-matches prompt the user (see Statement ingestion). Every import is a **journaled batch** that can be rolled back.
+
+### Acceptance and extension
+
+- **Walmart fixture** is the v1 parsing acceptance bar: for a supported product, fixture import persists every must-parse line with required canonical fields and **zero manual edits**.
+- **Promerica** in v1 is a stub or contract-test adapter only — real parsing waits on samples. The stub proves extension without modifying core import, dedup, or list logic, and covers multi-statement.
+- Committed fixtures are anonymized or synthetic; real statements stay outside the repo. Positional layout fidelity of regenerated PDFs remains an open test-strategy risk (see Constraints).
+
+## Features
+
+Functional requirements are numbered globally (FR-1 …). Narrative sections above remain the behavioral source; this section is the testable contract for UX, architecture, and stories.
+
+### Accounts and authentication
+
+**Description:** Peers create accounts with email and password so they can own lists, accept invitations, and upload statements. v1 has no profile or settings product beyond authentication itself.
+
+#### FR-1: Sign up with email and password
+
+A new user can create an account with email and password.
+
+**Consequences (testable):**
+
+- Duplicate email addresses are rejected.
+- Passwords are stored hashed, never in plaintext.
+- On success the user is authenticated and receives a personal list (FR-5).
+
+#### FR-2: Sign in and sign out
+
+A registered user can sign in with email and password and can sign out.
+
+**Consequences (testable):**
+
+- Invalid credentials are rejected without revealing whether the email exists beyond a generic failure message appropriate to the security posture architecture chooses.
+- After sign-out, protected list and upload actions require authentication again.
+
+#### FR-3: Password reset
+
+A user can reset a forgotten password via email.
+
+**Consequences (testable):**
+
+- Reset requires proving control of the account email.
+- A completed reset invalidates the prior password for subsequent sign-in.
+
+#### FR-4: Email verification when required
+
+Email verification is performed when it is required for invitation delivery or secure account recovery; it is not a standalone profile feature.
+
+**Consequences (testable):**
+
+- If verification is required for an invite flow, an unverified address cannot complete that flow until verified.
+- If verification is not required for a given deployment path, signup still succeeds under FR-1.
+
+**Out of Scope:**
+
+- Display name, notification preferences, session-management UI, and FX rate overrides (see Scope — Out for v1).
+
+### Lists, membership, and splits
+
+**Description:** Lists are the organizing container for spending. Every user gets a personal list; they create more as needed and share any list by inviting others. Default split is even (configurable to percentages). Items and whole receipts can override that default — including percentage splits and absolute amounts per member (the dinner-with-friends case). When a card statement is imported, the user chooses whether that card always feeds one list or uses the review flow with an explicit destination list and a configurable default list.
+
+#### FR-5: Personal list on signup
+
+On successful signup, the system creates a personal list owned by the new user.
+
+**Consequences (testable):**
+
+- Every new account has exactly one personal list immediately after signup.
+- The personal list is available as a destination during review; it is not hardwired as the only default destination (see FR-12).
+
+#### FR-6: Create and name lists
+
+An authenticated user can create additional named lists they own.
+
+**Consequences (testable):**
+
+- A user may own more than one list.
+- List names are user-visible and editable by the owner.
+
+#### FR-7: Invite members by email
+
+A list owner can invite another person to a list by email address.
+
+**Consequences (testable):**
+
+- If the address belongs to a registered user, they receive an invitation to join the list.
+- If the address is unregistered, they receive a signup-oriented invitation; after completing signup they land on the inviting list.
+- Invitation delivery uses transactional email.
+
+#### FR-8: Peer access via membership
+
+Once a member of a list, a user can see that list's shared-expenses view and participate in splits according to membership — there is no owner-vs-viewer product role among members.
+
+**Consequences (testable):**
+
+- List visibility is determined by membership, not by a global admin role.
+- Non-members cannot read the list's expenses or balances.
+
+#### FR-9: Configurable list default split
+
+New lists default to an **even** split among members. The list default can be changed to a standing **percentage** split.
+
+**Consequences (testable):**
+
+- Even split divides equally across current members.
+- Percentage defaults must sum to exactly 100% across members or the save is rejected.
+- New items inherit the current list default until overridden.
+
+**Owner-only default split.** Only the list owner may edit the list’s standing default split.
+
+#### FR-10: Item and receipt split overrides
+
+When creating or interacting with an item — or when attributing a whole receipt — a user can override the list default by any of:
+
+- Assigning the **whole line** (or whole receipt) to one member
+- Setting an **absolute amount per member** that sums to the line/receipt total (e.g. friends each write what they ordered from a shared dinner the payer covered)
+- Applying a **percentage split** for that item or receipt
+
+**Consequences (testable):**
+
+- Until an override is set, the item or receipt uses the list default.
+- Percentage overrides must sum to exactly 100% or the save is rejected.
+- Absolute amounts per member must sum to the line/receipt total or the save is rejected.
+- Overrides produce per-transaction share allocations used by balances.
+
+#### FR-11: Card-to-list association chosen at import
+
+When a card's statement is imported, the user chooses how destinations work for that card:
+
+1. **Fixed list** — this card's transactions feed one chosen list, or
+2. **Review routing** — each statement (or bulk upload) is assigned during review to a chosen destination list, with a **configurable default list** for the low-effort accept path (not hardwired to the personal list).
+
+**Consequences (testable):**
+
+- Import does not silently assume "always personal list."
+- v1 still enforces at most one active **fixed** list per card when mode (1) is chosen; mode (2) assigns per statement/upload during review.
+- The design must not foreclose multiple fixed lists per card later.
+- Reassignment of a misfiled statement remains available via correction.
+
+#### FR-12: Configurable review default destination
+
+Under review routing, the user sets which list is the default low-effort destination (the former "left" / personal accept path). That default may be the personal list or any other list the user belongs to.
+
+**Consequences (testable):**
+
+- Changing the default destination changes where low-effort accepts land for subsequent reviews.
+- Explicit destination choice (chosen list) and skip remain available regardless of the default.
+
+---
+
+### Statement upload and review
+
+**Description:** Authenticated users upload bank-statement PDFs through the web UI, and can also add individual items manually without waiting for month-end. Uploads detect bank/product, split multi-statement files, and assign destinations before commit — fixed card-to-list or bulk/individual review with a configurable default. Payer is always selectable and defaults to the current user. Same-price collisions between imported lines and prior manual entries are reviewed at end of import; confirmed links seed description aliases for later ML.
+
+#### FR-13: Upload statement PDF
+
+An authenticated user can upload a bank statement PDF through the web UI (including on a phone-sized viewport).
+
+**Consequences (testable):**
+
+- Upload requires authentication.
+- The system accepts PDF for v1; unsupported formats are rejected with a clear error.
+
+#### FR-14: Detect bank and product
+
+On upload, the system detects bank and product via the adapter contract (override → filename → content).
+
+**Consequences (testable):**
+
+- Unknown or ambiguous statements fail the import with a clear error — no silent mis-association.
+- A confident match produces a product identity used for parsing and identity keys.
+
+#### FR-15: Split multi-statement files
+
+A single upload may decompose into N statements, each with its own product identity and destination.
+
+**Consequences (testable):**
+
+- Failure or skip of one statement does not automatically discard the others in the same upload.
+- Multi-statement behavior is covered by adapter contract tests (including the Promerica stub).
+
+#### FR-16: Choose card routing mode
+
+When importing for a card, the user chooses fixed-list mode or review-routing mode (FR-11).
+
+**Consequences (testable):**
+
+- Fixed-list mode commits statements for that card to the chosen list (subject to parse success and any failure handling).
+- Review-routing mode proceeds to bulk or individual review before commit.
+
+#### FR-17: Bulk or individual review
+
+Before commit under review routing, the user chooses bulk or individual review.
+
+**Consequences (testable):**
+
+- **Bulk:** the whole upload is assigned to one list chosen from lists the user belongs to.
+- **Individual:** statements are reviewed one at a time.
+- The review-one-at-a-time *pattern* is required; literal swipe gestures are preferred where the client supports them (`[OPEN — UX/architecture]`).
+
+#### FR-18: Individual review outcomes
+
+In individual review, each statement can be: accepted into a chosen list; accepted into the configurable default destination (FR-12); or skipped (never stored). The user can also dismiss an entire file.
+
+**Consequences (testable):**
+
+- Skip means no ledger rows for that statement.
+- Dismissing the file abandons remaining uncommitted statements from that upload.
+- Accept commits only after parse success (or after an explicit accept-with-quarantine under failure handling).
+
+#### FR-19: Explicit payer (default: current user)
+
+Every shared expense has an explicit payer the user can select. On statement import and on manual item entry, payer **defaults to the current user** and remains editable before or after commit.
+
+**Consequences (testable):**
+
+- A committed shared expense always has a payer set.
+- Default payer is the signed-in user, not silently assumed from cardholder alone.
+- Changing the payer updates who others should reimburse in the settle-up view.
+
+#### FR-20: Post-import dedup summary
+
+After a successful import (or re-import), the user is told how many new rows were imported and how many duplicates were skipped.
+
+**Consequences (testable):**
+
+- Re-uploading overlapping parsed data does not duplicate ledger lines for the same canonical identity.
+- Ordinary parsed-vs-parsed duplicates never interrupt the user mid-import.
+
+#### FR-21: Manual item entry
+
+A user can add individual expense items to a list during the day without waiting for a statement import (e.g. logging a shared dinner the same evening).
+
+**Consequences (testable):**
+
+- Manual items support the same split overrides as imported items (FR-10).
+- Payer selection follows FR-19 (default current user, editable).
+- Manual items carry provenance distinguishing them from parser-derived rows.
+- Manual items appear in the shared-expenses receipt list and settle-up figures for that list.
+
+#### FR-22: Same-price manual match review at import end
+
+When a statement import produces a parsed line whose amount matches an existing manual entry (same price), the system does **not** auto-merge. It marks the pair for review and, after the rest of the upload finishes, presents a **comparison view** so the user can validate whether the manual entry takes priority (or otherwise how to resolve).
+
+**Consequences (testable):**
+
+- Same-price collisions are collected and shown at end of import — they do not silently create duplicates or silently drop the parsed line.
+- The comparison view lets the user decide priority / linkage before the import is considered fully resolved.
+- Ordinary exact canonical-identity duplicates among parsed rows still use automatic dedup (FR-20).
+
+**Same price** means equal amount and currency against an unresolved manual entry on a list related to the import; date-window tightness is left to architecture unless product tightens it later.
+
+#### FR-23: Remember manual label as bank-description alias (seed for later ML)
+
+When the user confirms that a manual entry and a bank line represent the same expense — including when descriptions differ — the system stores the **manual label as an alias** for that bank description.
+
+**Consequences (testable):**
+
+- Confirmed matches persist an alias mapping (manual label ↔ bank description) for future use.
+- v1 does **not** use aliases for automatic ML categorization; that interpretation is post-v1. Schema/storage of the alias is in v1 so later models can learn from it.
+
+
+### Parse failure, quarantine, and correction
+
+**Description:** When parsing fails, the system alerts and does not silently commit bad data. Failure is statement-scoped. Users see the PDF beside extracted items, may accept with quarantine or dismiss, can hand-fix unresolved rows, and resolve manual-vs-parsed conflicts on re-upload. Misfiled imports can be reassigned; bad batches can be rolled back.
+
+#### FR-24: Statement-scoped parse failure
+
+If a statement cannot be parsed correctly on the automatic path, the system alerts the user and does not process that statement into the ledger on its own.
+
+**Consequences (testable):**
+
+- Failure of one statement in a multi-statement upload does not reject the other statements by default.
+- Required data is never silently dropped.
+
+#### FR-25: Side-by-side comparison on failure
+
+On parse failure, the system shows the original PDF beside the items that were extracted (on phone, PDF in the lower half).
+
+**Consequences (testable):**
+
+- The comparison view appears only on failure for that statement — clean parses skip it.
+- The view is usable on a mobile viewport.
+
+#### FR-26: Accept with quarantine or dismiss
+
+From the comparison view the user may **accept with quarantine** (parsed rows import; unparsed stored as unresolved; statement marked incomplete) or **dismiss** the statement or entire file.
+
+**Consequences (testable):**
+
+- Nothing partial enters the ledger without an explicit human decision in front of the evidence.
+- Accept-with-quarantine marks the statement incomplete for balance disclosure.
+
+#### FR-27: Manual resolution of quarantined rows
+
+Unresolved rows can be edited by hand against the rendered PDF (values typed by the user) without waiting for a parser fix.
+
+**Consequences (testable):**
+
+- Hand-entered values are stored with provenance distinguishing them from parser-derived rows.
+- Editing works on a phone-sized viewport.
+
+#### FR-28: Manual-vs-parsed conflict on re-upload
+
+When a re-upload produces a parsed row that matches or near-matches a hand-fixed row, the system prompts: keep manual, take parsed, or keep both — never silently duplicates.
+
+**Consequences (testable):**
+
+- Ordinary parsed-vs-parsed duplicates remain automatic (FR-20).
+- Manual-vs-parsed collisions always require a user choice.
+
+#### FR-29: Reassign statement to another list
+
+A user can move a statement that was filed to the wrong list to another list they belong to.
+
+**Consequences (testable):**
+
+- After reassignment, balances on both lists reflect the move.
+- Share allocations follow the destination list's rules unless item overrides exist.
+
+#### FR-30: Roll back an import batch
+
+A user can remove a whole import batch as an escape hatch (journaled-batch model).
+
+**Consequences (testable):**
+
+- Batch removal undoes that import's ledger effect.
+- The user can re-run import afterward without leftover duplicates from the rolled-back batch.
+
+---
+
+### Adapters, identity, and acceptance
+
+**Description:** Bank support is pluggable through detect → split → parse → normalize → import batch. Canonical fields, line types, identity/dedup, BAC walmart acceptance, and a Promerica stub define the parsing contract. Dual-column amounts prefer the nonzero column; if both nonzero, prefer CRC. Parsed IBANs match existing user cards and use the card’s label as the import identifier; unknown IBANs prompt registration with a user-chosen label.
+
+#### FR-31: Pluggable adapter contract
+
+New banks/products are added as adapters declaring `{bank, product_id, account_kind}` without rewriting core import, dedup, or list logic.
+
+**Consequences (testable):**
+
+- Detection uses override → filename → content; ambiguous/unknown fails loudly.
+- Section policies may differ by `account_kind` (credit/debit/other).
+
+#### FR-32: Canonical line fields and taxonomy
+
+Must-parse ledger lines carry posted_date (ISO-8601), signed amount, ISO 4217 currency, product_id, line_type, and external_ref when provided, plus provenance.
+
+**Consequences (testable):**
+
+- Line types include at least: purchase, payment, interest, fee, voluntary_service, credit_note, installment_schedule, balance_forward, other.
+- Section policies are must_parse, best_effort, or ignore; unmapped sections quarantine, not silent drop.
+- Installment schedules are distinct records excluded from shared totals and must not double-count with purchases.
+
+#### FR-33: Dual-column amount normalization
+
+Adapters collapse dual CRC/USD columns to a single (currency, amount) before identity.
+
+**Consequences (testable):**
+
+- Prefer the nonzero column when only one is set.
+- If both columns are nonzero, prefer CRC.
+
+#### FR-34: Canonical identity and idempotent re-import
+
+Primary identity is (product_id, posted_date, currency, amount, external_ref). Fallback identity when refs are missing/unstable remains idempotent.
+
+**Consequences (testable):**
+
+- Re-import never duplicates rows for the same canonical identity.
+- Ref quality is exposed as stable, derived, or absent.
+- Every import is a journaled batch (supports FR-30).
+
+#### FR-35: Walmart acceptance bar
+
+For a supported product, the walmart fixture import persists every must-parse line with required canonical fields and zero manual edits.
+
+**Consequences (testable):**
+
+- Walmart is the v1 parsing exit bar.
+- Eco and debit products remain provisional until fixture review, then the same bar applies.
+
+#### FR-36: Promerica stub
+
+v1 includes a Promerica stub or contract-test adapter proving extension without modifying core import, dedup, or list logic, including the multi-statement case. Real Promerica parsing is out of scope until samples exist.
+
+**Consequences (testable):**
+
+- Stub compiles/runs against the contract in CI or contract tests.
+- Multi-statement paths are exercised by stub tests.
+
+#### FR-37: Register and match cards by IBAN
+
+Cards are registered to a user with a **user-chosen label** and a stable bank identity — primarily the **IBAN** (or equivalent account/card identifier extracted from the statement).
+
+When a statement is parsed:
+
+1. If the extracted IBAN **matches an existing card** assigned to the user, the system uses that card — and its **label as the human identifier for the import** — without asking to create a new card.
+2. If the IBAN is **not** yet registered, the system **asks the user to add that card**, prefilled from the statement, and the user sets the label.
+
+**Consequences (testable):**
+
+- Matching is by IBAN (or extracted account identity), not by product nickname strings in code.
+- On IBAN match, import UI and records identify the card by the user’s existing label (e.g. a user-facing name like “walmart”), not by re-prompting registration.
+- First sighting of a new IBAN prompts registration before (or as part of) destination routing — not a silent anonymous import with no card record.
+- Card registry is user-scoped generic vocabulary (no hardcoded personal card names in code); labels are user-assigned.
+- Fixed-list vs review-routing (FR-11) attaches to the registered card.
+
+`[NOTE]` Names like walmart, eco, dolares, and colones in fixtures are **example personal labels for specific IBAN/card accounts** used as sample data — not bank product types and not hardcoded user-facing vocabulary.
+
+---
+
+### Shared expenses, FX, and settle-up
+
+**Description:** Shared lists show who should pay whom in CRC for a statement-cycle period. Non-CRC amounts convert using a purchase/statement-date rate. The top of the view is settle-up (with optional transfer simplification); below is a receipt-style item list newest-first. Incomplete/quarantined data is disclosed. Recording actual payments is v2.
+
+#### FR-38: Shared-expenses view per list
+
+A list member can open a shared-expenses view for that list.
+
+**Consequences (testable):**
+
+- Non-members cannot open it (FR-8).
+- The view is usable on mobile and desktop viewports.
+
+#### FR-39: Statement-cycle period
+
+The view’s default period aligns to statement/billing cycles rather than only a calendar month.
+
+**Consequences (testable):**
+
+- The user can see balances for a statement cycle relevant to imported statements.
+- When cards on the list have different cycles, the user selects which statement/cycle to view.
+
+#### FR-40: Convert non-CRC to CRC for balances
+
+Shared balances and settle-up figures are expressed in CRC. Non-CRC amounts convert using an exchange rate for the purchase or statement date (looked up automatically). Original amounts are retained for audit.
+
+**Consequences (testable):**
+
+- Settle-up figures are in CRC.
+- Converted lines show enough original foreign amount + CRC equivalent to audit the FX step.
+- `[OPEN — architecture]` Authoritative rate source and missing-date behavior.
+
+#### FR-41: Settle-up summary and simplify
+
+The top of the view shows how much each person needs to pay (in CRC) to settle the period, with an option to **simplify** into fewer suggested transfers. Simplify does not record that anyone paid.
+
+**Consequences (testable):**
+
+- Suggested transfers preserve net balances.
+- No payment ledger writes occur when simplify is used (settlement recording is v2).
+
+#### FR-42: Receipt-style item list
+
+Below settle-up, the view lists items for the period newest-first in a receipt-like format.
+
+**Consequences (testable):**
+
+- Members can inspect line-level detail to verify splits.
+- Incomplete/quarantined contribution to the period is disclosed on this screen.
+
+#### FR-43: Incomplete balance disclosure
+
+If quarantined or unresolved rows affect the period, balances disclose that they are incomplete.
+
+**Consequences (testable):**
+
+- The UI does not present a confident settle-up total that silently omits unresolved purchases.
+
+#### FR-44: Balance shape ready for settlement
+
+v1 balances are computed from per-transaction share allocations and payer such that a future payments/settlement ledger can draw them down without a model rewrite.
+
+**Consequences (testable):**
+
+- Balances are not solely a disposable month aggregate with no per-transaction allocations.
+- Recording payments remains out of scope for v1.
+
+#### FR-45: Line types that feed settle-up
+
+Only included line types (purchases and classified purchase reversals) contribute to shared settle-up allocations. Excluded types are stored when imported but do not affect who owes whom.
+
+**Consequences (testable):**
+
+- A pure `payment`, `interest`, `fee`, `voluntary_service`, `installment_schedule`, or `balance_forward` line does not change member settle-up balances.
+- `credit_note` does not affect settle-up until explicitly classified as a purchase reversal.
+- Posted-date and period boundaries use `America/Costa_Rica`.
+
+---
+
+## Non-functional requirements
+
+Cross-cutting qualities for v1. Feature-specific constraints stay with their FRs where already stated (e.g. mobile comparison view).
+
+### Security and privacy
+
+#### NFR-1: Credential protection
+Passwords are hashed with a modern adaptive algorithm; plaintext passwords are never stored or logged.
+
+#### NFR-2: No personal data in the repository
+Real statements, personal names, account identifiers, and transaction data are never committed. Runtime data lives in configured external storage (DB volume outside the repo). Fixtures are anonymized or synthetic.
+
+#### NFR-3: Access control by list membership
+API and UI enforce that expense and balance data is only readable/writable by authenticated members of the relevant list (and owners where owner-only actions apply).
+
+### Reliability and data integrity
+
+#### NFR-4: Idempotent import
+Re-importing the same or overlapping statement must not corrupt balances via duplicate ledger lines (see FR-20, FR-34).
+
+#### NFR-5: Journaled imports
+Every import is an atomic journaled batch that can be rolled back (FR-30).
+
+#### NFR-6: Incomplete-data honesty
+Any settle-up or balance figure derived from incomplete/quarantined data must be disclosed as such (FR-43).
+
+### Usability and form factor
+
+#### NFR-7: Mobile and desktop
+Core flows — upload/review, failure comparison with PDF, manual item entry, shared-expenses settle-up — are usable on phone and desktop browsers.
+
+#### NFR-8: Fail loud with human override
+Automatic paths fail loudly on unknown/ambiguous detection and unparseable must-parse content; humans may override only through explicit comparison/quarantine flows.
+
+### Operations
+
+#### NFR-9: Self-hosted container deploy
+Application and PostgreSQL run in containers; the database volume is outside the repository on the operator’s machine/server.
+
+#### NFR-10: Transactional email dependency
+Invite and password-reset email require operator-configured SMTP (or equivalent). Auth-only account surface otherwise.
+
+#### NFR-11: Extensibility without core forks
+New bank/product support is an adapter (+ fixtures/stub) without modifying core import, dedup, or list logic (FR-31, FR-36).
+
+### Performance (lightweight)
+
+#### NFR-12: Interactive import review
+Upload → detect/split → review for a typical single multi-card BAC PDF completes within an interactive session on the operator’s self-hosted hardware — exact SLOs are architecture’s to set; the product requirement is that review is not an overnight batch job.
+
+#### NFR-13: Schema migrations
+PostgreSQL schema evolution is supported via migrations as the data model changes; upgrades must not require discarding the operator’s data volume.
+
+---
 ## Scope
 
 ### In for v1
 
 - Statement upload through the web UI, decomposing multi-statement files, with bulk or individual review before anything is committed
 - Bank and product auto-detection via the adapter contract, failing loudly on unknown or ambiguous statements
-- BAC PDF parsing for the four products with sample data: walmart, eco, dolares, colones. Walmart is the acceptance bar; the others are provisional until their layouts are reviewed against real statements
+- BAC PDF parsing for the card layouts represented in sample data (owner-labeled examples: walmart, eco, dolares, colones — these are personal labels for IBAN/card accounts, not product taxonomy). One labeled layout (walmart) is the acceptance bar; the others are provisional until reviewed against real statements
 - Canonical line-type taxonomy, required canonical fields, and fail-loud handling of unparseable must-parse sections
 - Idempotent re-import: re-uploading a statement, or one with an overlapping period, never duplicates ledger lines, with a post-import summary of what was added and what was skipped
 - A side-by-side view of the source PDF against extracted items when parsing fails, usable on a phone
@@ -215,18 +834,22 @@ Streamlit is a preference, not a commitment. It reruns its script on every inter
 - A usable mobile layout, not desktop-only
 - Installment schedules stored as a distinct record type, excluded from shared totals
 - PostgreSQL persistence in its own container, with a data volume outside the repository
-- Email-and-password authentication, with users, personal lists created on signup, user-created lists, and per-member splits
-- Email invitations to lists, handling both registered and unregistered addresses, with post-signup redirect to the inviting list
+- Email-and-password authentication (sign up, sign in, password reset; email verification only if required for invites or recovery) — no profile or settings surface beyond auth
+- Personal lists created on signup, user-created lists, per-member splits (list default + item overrides), and email invitations to lists (registered and unregistered addresses, with post-signup redirect to the inviting list)
 - Manual resolution of quarantined rows against the rendered PDF, with provenance recorded per row; on re-upload, conflicts between a hand-fixed row and a new parse prompt the user (keep manual / take parsed / keep both)
-- Explicit payer on shared expenses, editable; statement import may default payer then allow correction
+- Explicit payer on shared expenses, editable; defaults to the current user on import and manual entry
+- Manual item entry to a list without waiting for statement import
+- Same-price manual/import comparison review at end of upload; confirmed matches store manual label as alias of bank description (ML use is post-v1)
 - Purchase/statement-date FX: non-CRC amounts converted into CRC for shared balances; original currency retained
 - One shared-expenses view per list: statement-cycle period; top settle-up summary in CRC with optional transfer simplification; below that a receipt-style item list newest-first; FX originals auditable; incomplete-data disclosure
 - A Promerica stub or contract-test adapter proving extension without modifying core import, dedup, or list logic
+- Register cards keyed by IBAN (user-chosen label); matching IBAN reuses that card and its label as the import identifier
 - Anonymized or synthetic fixtures committed to the repository, since real statements live outside it
 
 ### Out for v1
 
 - Settlement. v1 shows balances; recording payments, drawing down debt, and settlement history are v2. v1's balance computation must be shaped so the running ledger can be built on it
+- Account profile and settings beyond authentication (display name, notification preferences, session management UI, FX rate overrides)
 - Machine-learning categorization. Deferred, but the schema reserves `category`, `category_confidence`, and `category_source`, and categorization must never block import. Model direction is recorded in the brief addendum
 - Trends and analytics dashboards, and personal-spending dashboards beyond the single shared-expenses view
 - Promerica statement parsing itself, pending sample collection
@@ -240,24 +863,23 @@ Streamlit is a preference, not a commitment. It reruns its script on every inter
 
 **Fixtures must survive anonymization.** Statement parsing at this layout complexity is positional — column identity depends on coordinates. A fixture generated by extracting text, anonymizing it, and regenerating a PDF will not reproduce the bank's original glyph positions, so it may not exercise the parsing path the real statement does.
 
-`[OPEN]` How fixtures are produced such that they meaningfully test positional parsing. This is the highest technical risk in v1's test strategy.
+`[OPEN — architecture]` How repository fixtures are produced such that they meaningfully test positional parsing (highest technical risk). Release still gates on repo fixtures (see two-tier reality).
 
 **Two-tier test reality.** Only tests running on the owner's machine can touch real statements. Anything committed can only verify against sanitized approximations.
 
-`[OPEN]` Which tier gates a release.
+**Release gate.** Anonymized or synthetic fixtures in the repository gate a v1 release. Real-statement tests on the operator’s machine are valuable and may run in parallel, but they are not the release gate.
 
 ## Open questions
 
-Consolidated from the sections above, plus items the brief assigned to the PRD.
+Deferred with owner. Not silent gaps.
 
-| Question | Origin |
-|---|---|
-| Deterministic assignment of a one-subunit remainder after a 100%-valid percentage split | Lists; architecture may propose |
-| Authoritative FX rate source, missing-date behavior, and whether rate is overridable | Balances; architecture/addendum |
-| How statement-cycle boundaries work when a list has cards with different billing cycles | Balances / shared-expenses view |
-| How a settlement payment visible in a statement avoids double-counting | Balances and settlement; deferred to v2 |
-| Whether the literal swipe survives implementation | Statement ingestion |
-| Which front end delivers gestures, PDF rendering, and mobile layout | Form factor; architecture |
-| How anonymized fixtures preserve positional layout fidelity | Constraints |
-| Which test tier gates a release | Constraints |
-| BAC debit (dolares, colones) and eco section maps | Brief; requires fixture review against real statements |
+| Question | Owner | Revisit when |
+|---|---|---|
+| Deterministic one-subunit remainder after a 100%-valid percentage split | Architecture | Implementing share allocation |
+| Authoritative FX rate source, missing-date behavior, optional override | Architecture | Implementing CRC conversion |
+| Whether literal swipe is mandatory vs review-one-at-a-time pattern only | UX / Architecture | Choosing front end |
+| Which front end delivers gestures, PDF rendering, and mobile layout | Architecture | Solution design |
+| How repo fixtures preserve positional PDF layout fidelity | Architecture | Building golden fixtures |
+| Double-counting settlement payments that also appear on statements | Product (v2) | Settlement design |
+| BAC debit and eco section maps (owner-labeled sample cards) | Implementation | Fixture review against real statements |
+
