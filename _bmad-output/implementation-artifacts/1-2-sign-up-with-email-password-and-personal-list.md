@@ -1,6 +1,10 @@
+---
+baseline_commit: c0114a76b3109b544a0b2d47cb6d39c7f077eec3
+---
+
 # Story 1.2: Sign up with email/password and personal list
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -24,52 +28,52 @@ so that I can start owning expenses without a separate setup step.
 
 ## Tasks / Subtasks
 
-- [ ] Task 0: Confirm Story 1.1 scaffold exists (prerequisite)
-  - [ ] `api/`, `ui/`, Compose `db`/`api`/`ui`, Alembic ready, `/health` on api+ui, lockfiles, CI lint — **must be present before coding 1.2**
-  - [ ] If 1.1 is not done: stop and finish `1-1-scaffold-compose-app-with-health-checks` first
+- [x] Task 0: Confirm Story 1.1 scaffold exists (prerequisite)
+  - [x] `api/`, `ui/`, Compose `db`/`api`/`ui`, Alembic ready, `/health` on api+ui, lockfiles, CI lint — **must be present before coding 1.2**
+  - [x] If 1.1 is not done: stop and finish `1-1-scaffold-compose-app-with-health-checks` first
 
-- [ ] Task 1: Close AD-8 forks and wire auth deps (AC: #1)
-  - [ ] **Choose and document in completion notes** (pick one each):
+- [x] Task 1: Close AD-8 forks and wire auth deps (AC: #1)
+  - [x] **Choose and document in completion notes** (pick one each):
     - Library: **prefer custom `argon2-cffi` 25.x + signed/opaque cookie sessions** (fastapi-users 15.x is maintenance-mode — allowed only if speed wins; document why)
     - Session shape: JWT-in-cookie **or** opaque session id stored in DB — one only
     - Delivery: Next Route Handler BFF **and/or** reverse-proxy `/api` → api — **single session issuer** (api sets the only cookie, or BFF holds opaque session — no dual independent cookies)
-  - [ ] Add deps to `api` lockfile: `argon2-cffi` (25.x line; latest verified **25.1.0**) and any cookie/signing helpers needed; do **not** add Better Auth / Prisma / NextAuth / Lucia
-  - [ ] Add env placeholders: session secret, cookie name/Secure/SameSite notes, optional `EMAIL_VERIFICATION_REQUIRED=false` (FR-4 off for this story)
-  - [ ] Never put Bearer tokens in `localStorage` or expose secrets via `NEXT_PUBLIC_*`
+  - [x] Add deps to `api` lockfile: `argon2-cffi` (25.x line; latest verified **25.1.0**) and any cookie/signing helpers needed; do **not** add Better Auth / Prisma / NextAuth / Lucia
+  - [x] Add env placeholders: session secret, cookie name/Secure/SameSite notes, optional `EMAIL_VERIFICATION_REQUIRED=false` (FR-4 off for this story)
+  - [x] Never put Bearer tokens in `localStorage` or expose secrets via `NEXT_PUBLIC_*`
 
-- [ ] Task 2: Persistence — users, lists, membership (+ session if opaque) (AC: #1)
-  - [ ] SQLAlchemy models **only** under `api/adapters/persistence/` — UUID PKs; unique email; password hash column (never plaintext)
-  - [ ] `List` = same entity for personal and shared; personal = owned list with **one** membership (not a separate type/table)
-  - [ ] `ListMembership` linking user ↔ list (owner + sole member on signup)
-  - [ ] Alembic migration(s) for these tables — **never** recreate PG volume; never auto-create domain tables outside Alembic (AD-22 / NFR-13)
-  - [ ] Wire repositories / ports so `domain` and `application` stay free of SQLAlchemy imports
+- [x] Task 2: Persistence — users, lists, membership (+ session if opaque) (AC: #1)
+  - [x] SQLAlchemy models **only** under `api/adapters/persistence/` — UUID PKs; unique email; password hash column (never plaintext)
+  - [x] `List` = same entity for personal and shared; personal = owned list with **one** membership (not a separate type/table)
+  - [x] `ListMembership` linking user ↔ list (owner + sole member on signup)
+  - [x] Alembic migration(s) for these tables — **never** recreate PG volume; never auto-create domain tables outside Alembic (AD-22 / NFR-13)
+  - [x] Wire repositories / ports so `domain` and `application` stay free of SQLAlchemy imports
 
-- [ ] Task 3: Domain + application signup use-case (AC: #1, #2) — TDD first
-  - [ ] Red→green domain/application tests: valid signup → user + exactly one owned personal list + membership; duplicate email → rejected; password never stored plaintext
-  - [ ] Atomic transaction: create user → create personal list → create membership → (session issued at API edge)
-  - [ ] Default split for new lists is even among members (FR-9 seed): 1-member personal list ⇒ 100% to creator — no split UI in this story
-  - [ ] FR-4 off path: no verification gate in the signup use-case when verification config is false/absent
-  - [ ] Generic vocabulary in fixtures — no real PII / personal names
+- [x] Task 3: Domain + application signup use-case (AC: #1, #2) — TDD first
+  - [x] Red→green domain/application tests: valid signup → user + exactly one owned personal list + membership; duplicate email → rejected; password never stored plaintext
+  - [x] Atomic transaction: create user → create personal list → create membership → (session issued at API edge)
+  - [x] Default split for new lists is even among members (FR-9 seed): 1-member personal list ⇒ 100% to creator — no split UI in this story
+  - [x] FR-4 off path: no verification gate in the signup use-case when verification config is false/absent
+  - [x] Generic vocabulary in fixtures — no real PII / personal names
 
-- [ ] Task 4: API auth cookie edge — register route (AC: #1, #2)
-  - [ ] FastAPI route under `api/api/` (e.g. register/signup) — Pydantic DTOs snake_case on the wire
-  - [ ] On success: set **httpOnly Secure** session cookie (SameSite appropriate for first-party); return success payload without password fields
-  - [ ] Duplicate email → structured JSON error (reject); do not leak internals; avoid email-enumeration patterns on auth failures where applicable
-  - [ ] Keep `/health` working; structured logs — never log plaintext passwords
-  - [ ] Domain has **no** FastAPI imports; cookie issuance stays at the API edge
+- [x] Task 4: API auth cookie edge — register route (AC: #1, #2)
+  - [x] FastAPI route under `api/api/` (e.g. register/signup) — Pydantic DTOs snake_case on the wire
+  - [x] On success: set **httpOnly Secure** session cookie (SameSite appropriate for first-party); return success payload without password fields
+  - [x] Duplicate email → structured JSON error (reject); do not leak internals; avoid email-enumeration patterns on auth failures where applicable
+  - [x] Keep `/health` working; structured logs — never log plaintext passwords
+  - [x] Domain has **no** FastAPI imports; cookie issuance stays at the API edge
 
-- [ ] Task 5: UI standalone signup surface (AC: #1, #2)
-  - [ ] Standalone signup page (email + password) — **outside** invite flows (invitee landing = Epic 2 / Story 2.4)
-  - [ ] Submit via same-origin BFF or proxied `/api` — not browser→public API with Bearer storage
-  - [ ] On success: user is authenticated (cookie set) and can use the app with no verification step when FR-4 is off
-  - [ ] Post-signup navigation: cold first paint → Lists homepage if no remembered list (EXPERIENCE); empty-state copy is **not** journeyed — minimal functional landing OK
-  - [ ] Visual: Warm Balance-compatible form chrome if feasible — Manrope for UI/buttons, moss primary CTA (`rounded.sm` 8px, not pill); strip kit purple defaults. Full Soft-Ledger tokens = Story 3.1 — do not invent locked marketing copy
-  - [ ] EN+ES keys for signup chrome/errors if i18n scaffolding exists from 1.1/1.6 prep; otherwise structure copy for later i18n — Account menu prefs = Story 1.6
+- [x] Task 5: UI standalone signup surface (AC: #1, #2)
+  - [x] Standalone signup page (email + password) — **outside** invite flows (invitee landing = Epic 2 / Story 2.4)
+  - [x] Submit via same-origin BFF or proxied `/api` — not browser→public API with Bearer storage
+  - [x] On success: user is authenticated (cookie set) and can use the app with no verification step when FR-4 is off
+  - [x] Post-signup navigation: cold first paint → Lists homepage if no remembered list (EXPERIENCE); empty-state copy is **not** journeyed — minimal functional landing OK
+  - [x] Visual: Warm Balance-compatible form chrome if feasible — Manrope for UI/buttons, moss primary CTA (`rounded.sm` 8px, not pill); strip kit purple defaults. Full Soft-Ledger tokens = Story 3.1 — do not invent locked marketing copy
+  - [x] EN+ES keys for signup chrome/errors if i18n scaffolding exists from 1.1/1.6 prep; otherwise structure copy for later i18n — Account menu prefs = Story 1.6
 
-- [ ] Task 6: Integration verification + CI (AC: #1, #2)
-  - [ ] Integration test against **Postgres 16** (Compose `db`): signup → hashed password in DB → session cookie → exactly one list + membership; duplicate email rejected; FR-4-off usable
-  - [ ] pytest green in CI; ui typecheck/lint remain green; thin ui test for signup form/submit path if practical (coverage floor from 1.1 still holds)
-  - [ ] Confirm no secrets/PII committed; `.env.example` updated with session/verification placeholders only
+- [x] Task 6: Integration verification + CI (AC: #1, #2)
+  - [x] Integration test against **Postgres 16** (Compose `db`): signup → hashed password in DB → session cookie → exactly one list + membership; duplicate email rejected; FR-4-off usable
+  - [x] pytest green in CI; ui typecheck/lint remain green; thin ui test for signup form/submit path if practical (coverage floor from 1.1 still holds)
+  - [x] Confirm no secrets/PII committed; `.env.example` updated with session/verification placeholders only
 
 ## Dev Notes
 
@@ -224,15 +228,71 @@ Follow `_bmad-output/project-context.md` entirely. Highest-risk misses for this 
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Cursor Grok 4.5 (bmad-dev-story)
 
 ### Debug Log References
 
+- Domain/unit: `uv run pytest tests/test_signup_domain.py tests/test_health.py` — green
+- Integration: Postgres 16 container + `DATABASE_URL=… uv run pytest tests/test_signup_integration.py` — 5 passed
+- Full api pytest — 12 passed; ruff check/format — green
+- UI: `npm run lint`, `typecheck`, `test:coverage` — green (statements ≥60%)
+
 ### Completion Notes List
+
+- AD-8 decisions: **custom argon2-cffi 25.1.0** (not fastapi-users); **opaque session token in Postgres `sessions` table**; **api is single cookie issuer**; ui BFF at `/api/auth/register` forwards `Set-Cookie` only (no dual cookies, no Bearer/localStorage).
+- Personal list default name: `"Personal"` (generic; not journeyed).
+- Local HTTP: `SESSION_COOKIE_SECURE=false` in `.env.example`; prod overlay defaults Secure to true.
+- FR-4 off via `EMAIL_VERIFICATION_REQUIRED=false` — no verification step on signup.
+- CI api job now runs Postgres 16 service for integration tests.
 
 ### File List
 
+- `.env.example`
+- `docker-compose.yml`
+- `docker-compose.prod.yml`
+- `.github/workflows/ci.yml`
+- `api/pyproject.toml`
+- `api/uv.lock`
+- `api/domain/errors.py`
+- `api/domain/signup.py`
+- `api/application/ports.py`
+- `api/application/signup.py`
+- `api/adapters/persistence/models.py`
+- `api/adapters/persistence/password_hasher.py`
+- `api/adapters/persistence/repositories.py`
+- `api/adapters/persistence/sessions.py`
+- `api/adapters/persistence/migrations/env.py`
+- `api/adapters/persistence/migrations/versions/0002_users_lists_sessions.py`
+- `api/api/app.py`
+- `api/api/deps.py`
+- `api/api/settings.py`
+- `api/api/routes/auth.py`
+- `api/api/schemas/__init__.py`
+- `api/api/schemas/auth.py`
+- `api/tests/test_signup_domain.py`
+- `api/tests/test_signup_integration.py`
+- `ui/vitest.config.mts`
+- `ui/app/globals.css`
+- `ui/app/layout.tsx`
+- `ui/app/page.tsx`
+- `ui/app/signup/page.tsx`
+- `ui/app/signup/SignupForm.tsx`
+- `ui/app/signup/signup.module.css`
+- `ui/app/lists/page.tsx`
+- `ui/app/lists/lists.module.css`
+- `ui/app/api/auth/register/route.ts`
+- `ui/app/api/auth/register/route.test.ts`
+- `ui/lib/api.ts`
+- `ui/lib/i18n/signup.ts`
+- `ui/lib/i18n/signup.test.ts`
+- `_bmad-output/implementation-artifacts/1-2-sign-up-with-email-password-and-personal-list.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+
+### Change Log
+
+- 2026-08-03: Implemented signup + personal list (FR-1/FR-5), opaque httpOnly sessions, BFF proxy, Alembic 0002, Postgres integration tests; status → review.
+
 ## Story completion status
 
-Status: ready-for-dev  
-Completion note: Ultimate context engine analysis completed — comprehensive developer guide created.
+Status: review  
+Completion note: All tasks complete; ACs satisfied; tests green — ready for code-review.

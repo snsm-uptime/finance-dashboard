@@ -6,7 +6,7 @@ Costa Rican banks aren't covered by aggregation services — neither Plaid nor B
 
 ## Status
 
-Scaffold in progress (Story 1.1). Compose services `db`, `api`, and `ui` boot with `/health` endpoints. Auth and lists land in later Epic 1 stories.
+Epic 1 in progress. Compose services `db`, `api`, and `ui` boot with `/health`. Signup creates an account + personal list (Story 1.2).
 
 ## Run locally
 
@@ -17,6 +17,21 @@ cp .env.example .env
 # Set FINANCE_HELPER_DATA to an absolute host path outside the repo, e.g.:
 #   FINANCE_HELPER_DATA=$HOME/finance-helper
 mkdir -p "${FINANCE_HELPER_DATA}/pgdata"
+```
+
+### Hot reload (day-to-day development)
+
+Bind-mounts source and runs `uvicorn --reload` + `next dev`:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+```
+
+Edit files under `api/` or `ui/` and refresh — no image rebuild needed for most code changes. After dependency changes (`api/pyproject.toml` / `ui/package.json`), rebuild that service.
+
+### Production-like images (no hot reload)
+
+```bash
 docker compose up --build
 ```
 
@@ -26,8 +41,9 @@ Health checks:
 
 - API: http://localhost:8000/health
 - UI: http://localhost:3000/health
+- Signup: http://localhost:3000/signup
 
-Homelab overlay (same service graph):
+Homelab overlay (same service graph, Secure cookies default on):
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build

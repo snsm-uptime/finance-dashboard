@@ -1,14 +1,22 @@
 :root {
   --background: #f7f3ec;
-  --foreground: #1c1915;
-  --muted: #5c564c;
+  --surface: #fffcf7;
+  --foreground: #2a241c;
+  --muted: #6e6456;
+  --border: #e2d8c8;
+  --accent: #3f6b45;
+  --on-accent: #fffcf7;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #17140f;
-    --foreground: #f4efe6;
-    --muted: #a39a8c;
+    --surface: #221e17;
+    --foreground: #f0e9dc;
+    --muted: #a89b88;
+    --border: #3a342a;
+    --accent: #8fbb8e;
+    --on-accent: #17140f;
   }
 }
 
@@ -23,7 +31,7 @@ body {
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  font-family: var(--font-ui), "Manrope", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

@@ -1,6 +1,7 @@
 import os
 from logging.config import fileConfig
 
+from adapters.persistence import models as _models  # noqa: F401 — register tables on metadata
 from adapters.persistence.base import Base
 from alembic import context
 from sqlalchemy import engine_from_config, pool

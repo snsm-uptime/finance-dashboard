@@ -1,4 +1,4 @@
-"""Declarative base — domain models land in later stories."""
+"""Declarative base — ORM models register on this metadata."""
 
 from sqlalchemy.orm import DeclarativeBase
 
