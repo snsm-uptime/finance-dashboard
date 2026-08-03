@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>finance-helper — type specimens</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Literata:opsz,wght@7..72,400;7..72,500;7..72,600;7..72,700&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&display=swap" rel="stylesheet" />
+  <style>
+    /*
+      Type specimens — Soft-Ledger hybrid × Warm Balance (light)
+      bg #F7F3EC | surface #FFFCF7 | text #2A241C | muted #6E6456
+      border #E2D8C8 | accent #3F6B45 | owe #A04936 | owed #2F6E48
+    */
+
+    :root {
+      --wb-bg: #F7F3EC;
+      --wb-surface: #FFFCF7;
+      --wb-text: #2A241C;
+      --wb-muted: #6E6456;
+      --wb-border: #E2D8C8;
+      --wb-accent: #3F6B45;
+      --wb-owe: #A04936;
+      --wb-owed: #2F6E48;
+      --board: #E8E2D6;
+      --board-ink: #2A241C;
+      --board-mute: #6E6456;
+      --phone-shell: #2C2720;
+      --phone-bezel: #1A1611;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 28px 18px 56px;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--board);
+      color: var(--board-ink);
+      line-height: 1.4;
+    }
+
+    .page-head {
+      max-width: 1680px;
+      margin: 0 auto 22px;
+    }
+    .page-head h1 {
+      margin: 0 0 4px;
+      font-size: 1.12rem;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+    }
+    .page-head p {
+      margin: 0;
+      color: var(--board-mute);
+      font-size: 0.88rem;
+      max-width: 72ch;
+    }
+    .page-head .lock {
+      margin: 8px 0 0;
+      font-size: 0.78rem;
+      color: var(--board-ink);
+    }
+
+    .board {
+      max-width: 1680px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(280px, 1fr));
+      gap: 16px;
+      align-items: start;
+    }
+    @media (max-width: 1400px) {
+      .board { grid-template-columns: repeat(2, minmax(280px, 1fr)); }
+    }
+    @media (max-width: 720px) {
+      .board { grid-template-columns: 1fr; }
+    }
+
+    .specimen {
+      background: #F3EEE4;
+      border: 1px solid #D4CBBA;
+      border-radius: 14px;
+      padding: 14px 12px 16px;
+      min-width: 0;
+    }
+    .specimen.no-webfont {
+      border-style: dashed;
+      background: #EFE9DF;
+    }
+
+    .specimen-meta h2 {
+      margin: 0 0 3px;
+      font-size: 0.98rem;
+      font-weight: 650;
+      letter-spacing: -0.015em;
+    }
+    .specimen-meta .badge {
+      display: inline-block;
+      margin: 0 0 6px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 0.62rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      background: #E2D8C8;
+      color: #2A241C;
+    }
+    .specimen.no-webfont .badge {
+      background: #D9CFBE;
+      color: #4A4034;
+    }
+    .specimen-meta .register {
+      margin: 0 0 14px;
+      font-size: 0.78rem;
+      color: var(--board-mute);
+      min-height: 2.4em;
+    }
+
+    /* Pairing face stacks */
+    .p-a {
+      --face-display: "Source Serif 4", "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+      --face-ui: "Source Sans 3", "Source Sans Pro", system-ui, sans-serif;
+    }
+    .p-b {
+      --face-display: "Fraunces", "Iowan Old Style", Georgia, serif;
+      --face-ui: "DM Sans", system-ui, sans-serif;
+    }
+    .p-c {
+      --face-display: "Literata", "Iowan Old Style", Georgia, serif;
+      --face-ui: "Atkinson Hyperlegible", system-ui, sans-serif;
+    }
+    .p-d {
+      --face-display: Georgia, "Times New Roman", Times, serif;
+      --face-ui: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    .phone {
+      width: 260px;
+      margin: 0 auto;
+      background: var(--phone-shell);
+      border-radius: 28px;
+      padding: 10px 9px 14px;
+      box-shadow: 0 10px 28px rgba(42, 36, 28, 0.16);
+    }
+    .notch {
+      width: 88px;
+      height: 18px;
+      background: var(--phone-bezel);
+      border-radius: 0 0 12px 12px;
+      margin: 0 auto 8px;
+    }
+    .screen {
+      background: var(--wb-bg);
+      color: var(--wb-text);
+      border-radius: 18px;
+      overflow: hidden;
+      min-height: 480px;
+      display: flex;
+      flex-direction: column;
+      font-family: var(--face-ui);
+    }
+    .status-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 14px 4px;
+      font-size: 0.62rem;
+      font-weight: 600;
+      color: var(--wb-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Soft-Ledger hybrid chrome */
+    .topnav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      border-bottom: none;
+      background: transparent;
+    }
+    .brand {
+      font-family: var(--face-display);
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: var(--wb-text);
+    }
+    .list-title {
+      font-size: 0.66rem;
+      font-weight: 500;
+      color: var(--wb-muted);
+    }
+    .strip {
+      margin: 0 10px;
+      padding: 14px 12px;
+      background: var(--wb-surface);
+      border: 1px solid var(--wb-border);
+      border-radius: 10px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 6px 10px;
+      align-items: end;
+    }
+    .who {
+      margin: 0;
+      grid-column: 1;
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      text-transform: none;
+      color: var(--wb-muted);
+    }
+    .amount {
+      margin: 0;
+      grid-column: 1;
+      font-family: var(--face-display);
+      font-size: 1.7rem;
+      font-weight: 500;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+      color: var(--wb-owe);
+      font-variant-numeric: tabular-nums;
+    }
+    .cta {
+      grid-column: 2;
+      grid-row: 1 / span 2;
+      align-self: center;
+      padding: 9px 12px;
+      border-radius: 8px;
+      background: var(--wb-accent);
+      color: #FFFCF7;
+      font-size: 0.66rem;
+      font-weight: 550;
+      text-align: center;
+      white-space: nowrap;
+    }
+    .hint {
+      margin: 0 10px;
+      padding: 8px 4px 4px;
+      font-size: 0.64rem;
+      color: var(--wb-muted);
+      background: transparent;
+    }
+    .i18n {
+      margin: 0 10px 2px;
+      padding: 0 4px;
+      font-size: 0.68rem;
+      font-weight: 500;
+      color: var(--wb-text);
+      font-variant-numeric: tabular-nums;
+    }
+    .i18n span {
+      font-family: var(--face-display);
+      font-weight: 500;
+      color: var(--wb-owe);
+    }
+    .receipts {
+      background: transparent;
+      padding: 4px 10px 10px;
+      flex: 1;
+    }
+    .section-label {
+      padding: 10px 4px 6px;
+      font-size: 0.6rem;
+      font-weight: 550;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--wb-muted);
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 2px 8px;
+      padding: 9px 4px;
+      border-bottom: 1px solid var(--wb-border);
+      font-size: 0.74rem;
+    }
+    .row .meta { color: var(--wb-text); font-weight: 400; }
+    .row .when {
+      grid-column: 1;
+      font-size: 0.62rem;
+      color: var(--wb-muted);
+    }
+    .row .amt {
+      grid-column: 2;
+      grid-row: 1 / span 2;
+      align-self: center;
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+      color: var(--wb-muted);
+    }
+    .tabbar {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      border-top: 1px solid var(--wb-border);
+      background: var(--wb-surface);
+      margin-top: auto;
+    }
+    .tab {
+      text-align: center;
+      padding: 8px 4px;
+      font-size: 0.58rem;
+      font-weight: 500;
+      color: var(--wb-muted);
+    }
+    .tab.on { color: var(--wb-accent); }
+
+    .face-chip {
+      width: 260px;
+      margin: 14px auto 0;
+      padding: 10px 12px;
+      background: var(--wb-surface);
+      border: 1px solid var(--wb-border);
+      border-radius: 10px;
+      color: var(--wb-text);
+    }
+    .face-chip .mark {
+      margin: 0 0 4px;
+      font-family: var(--face-display);
+      font-size: 1.05rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+    }
+    .face-chip .roles {
+      margin: 0;
+      font-size: 0.68rem;
+      color: var(--wb-muted);
+      font-family: var(--face-ui);
+    }
+    .face-chip .roles em {
+      font-style: normal;
+      color: var(--wb-text);
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <header class="page-head">
+    <h1>finance-helper — type specimens</h1>
+    <p>Four display + UI pairings on the locked Soft-Ledger hybrid settle-up snippet (Warm Balance light). Pick the stack that keeps ₡ amounts calm and the who-owes line readable in English and Spanish.</p>
+    <p class="lock">Layout · Soft-Ledger hybrid · Theme · Warm Balance light · Product mark in display face</p>
+  </header>
+
+  <main class="board">
+
+    <!-- A · Source Serif 4 + Source Sans 3 -->
+    <section class="specimen p-a">
+      <header class="specimen-meta">
+        <h2>A · Source Serif 4 + Source Sans 3</h2>
+        <span class="badge">Webfont · Google Fonts</span>
+        <p class="register">Quiet editorial kin — trustworthy register without costume drama.</p>
+      </header>
+
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>LTE</span></div>
+          <div class="topnav">
+            <span class="brand">finance-helper</span>
+            <span class="list-title">Household</span>
+          </div>
+          <div class="strip">
+            <p class="who">You owe Partner</p>
+            <p class="amount">₡42,500</p>
+            <span class="cta">Mark settled</span>
+          </div>
+          <p class="hint">Send outside the app when ready</p>
+          <p class="i18n">Debes a Partner <span>₡42,500</span></p>
+          <div class="receipts">
+            <div class="section-label">Receipts · newest first</div>
+            <div class="row">
+              <span class="meta">Groceries</span>
+              <span class="when">yesterday</span>
+              <span class="amt">₡18,200</span>
+            </div>
+            <div class="row">
+              <span class="meta">Pharmacy</span>
+              <span class="when">Sun</span>
+              <span class="amt">₡6,750</span>
+            </div>
+            <div class="row">
+              <span class="meta">Gas</span>
+              <span class="when">Fri</span>
+              <span class="amt">₡22,000</span>
+            </div>
+            <div class="row">
+              <span class="meta">Internet</span>
+              <span class="when">1st</span>
+              <span class="amt">₡28,500</span>
+            </div>
+          </div>
+          <div class="tabbar">
+            <span class="tab on">List</span>
+            <span class="tab">Upload</span>
+            <span class="tab">Account</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="face-chip">
+        <p class="mark">finance-helper</p>
+        <p class="roles"><em>Display</em> Source Serif 4 · <em>UI</em> Source Sans 3</p>
+      </div>
+    </section>
+
+    <!-- B · Fraunces + DM Sans -->
+    <section class="specimen p-b">
+      <header class="specimen-meta">
+        <h2>B · Fraunces + DM Sans</h2>
+        <span class="badge">Webfont · Google Fonts</span>
+        <p class="register">Warm soft-serif charmer with a clean geometric UI partner.</p>
+      </header>
+
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>LTE</span></div>
+          <div class="topnav">
+            <span class="brand">finance-helper</span>
+            <span class="list-title">Household</span>
+          </div>
+          <div class="strip">
+            <p class="who">You owe Partner</p>
+            <p class="amount">₡42,500</p>
+            <span class="cta">Mark settled</span>
+          </div>
+          <p class="hint">Send outside the app when ready</p>
+          <p class="i18n">Debes a Partner <span>₡42,500</span></p>
+          <div class="receipts">
+            <div class="section-label">Receipts · newest first</div>
+            <div class="row">
+              <span class="meta">Groceries</span>
+              <span class="when">yesterday</span>
+              <span class="amt">₡18,200</span>
+            </div>
+            <div class="row">
+              <span class="meta">Pharmacy</span>
+              <span class="when">Sun</span>
+              <span class="amt">₡6,750</span>
+            </div>
+            <div class="row">
+              <span class="meta">Gas</span>
+              <span class="when">Fri</span>
+              <span class="amt">₡22,000</span>
+            </div>
+            <div class="row">
+              <span class="meta">Internet</span>
+              <span class="when">1st</span>
+              <span class="amt">₡28,500</span>
+            </div>
+          </div>
+          <div class="tabbar">
+            <span class="tab on">List</span>
+            <span class="tab">Upload</span>
+            <span class="tab">Account</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="face-chip">
+        <p class="mark">finance-helper</p>
+        <p class="roles"><em>Display</em> Fraunces · <em>UI</em> DM Sans</p>
+      </div>
+    </section>
+
+    <!-- C · Literata + Atkinson Hyperlegible -->
+    <section class="specimen p-c">
+      <header class="specimen-meta">
+        <h2>C · Literata + Atkinson Hyperlegible</h2>
+        <span class="badge">Webfont · Google Fonts</span>
+        <p class="register">Reading-first literary serif; maximum-clarity UI for tired eyes.</p>
+      </header>
+
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>LTE</span></div>
+          <div class="topnav">
+            <span class="brand">finance-helper</span>
+            <span class="list-title">Household</span>
+          </div>
+          <div class="strip">
+            <p class="who">You owe Partner</p>
+            <p class="amount">₡42,500</p>
+            <span class="cta">Mark settled</span>
+          </div>
+          <p class="hint">Send outside the app when ready</p>
+          <p class="i18n">Debes a Partner <span>₡42,500</span></p>
+          <div class="receipts">
+            <div class="section-label">Receipts · newest first</div>
+            <div class="row">
+              <span class="meta">Groceries</span>
+              <span class="when">yesterday</span>
+              <span class="amt">₡18,200</span>
+            </div>
+            <div class="row">
+              <span class="meta">Pharmacy</span>
+              <span class="when">Sun</span>
+              <span class="amt">₡6,750</span>
+            </div>
+            <div class="row">
+              <span class="meta">Gas</span>
+              <span class="when">Fri</span>
+              <span class="amt">₡22,000</span>
+            </div>
+            <div class="row">
+              <span class="meta">Internet</span>
+              <span class="when">1st</span>
+              <span class="amt">₡28,500</span>
+            </div>
+          </div>
+          <div class="tabbar">
+            <span class="tab on">List</span>
+            <span class="tab">Upload</span>
+            <span class="tab">Account</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="face-chip">
+        <p class="mark">finance-helper</p>
+        <p class="roles"><em>Display</em> Literata · <em>UI</em> Atkinson Hyperlegible</p>
+      </div>
+    </section>
+
+    <!-- D · System UI only -->
+    <section class="specimen no-webfont p-d">
+      <header class="specimen-meta">
+        <h2>D · System UI only</h2>
+        <span class="badge">No webfont · native stack</span>
+        <p class="register">Zero font payload — system-ui body, Georgia for display wordmark &amp; amounts.</p>
+      </header>
+
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>LTE</span></div>
+          <div class="topnav">
+            <span class="brand">finance-helper</span>
+            <span class="list-title">Household</span>
+          </div>
+          <div class="strip">
+            <p class="who">You owe Partner</p>
+            <p class="amount">₡42,500</p>
+            <span class="cta">Mark settled</span>
+          </div>
+          <p class="hint">Send outside the app when ready</p>
+          <p class="i18n">Debes a Partner <span>₡42,500</span></p>
+          <div class="receipts">
+            <div class="section-label">Receipts · newest first</div>
+            <div class="row">
+              <span class="meta">Groceries</span>
+              <span class="when">yesterday</span>
+              <span class="amt">₡18,200</span>
+            </div>
+            <div class="row">
+              <span class="meta">Pharmacy</span>
+              <span class="when">Sun</span>
+              <span class="amt">₡6,750</span>
+            </div>
+            <div class="row">
+              <span class="meta">Gas</span>
+              <span class="when">Fri</span>
+              <span class="amt">₡22,000</span>
+            </div>
+            <div class="row">
+              <span class="meta">Internet</span>
+              <span class="when">1st</span>
+              <span class="amt">₡28,500</span>
+            </div>
+          </div>
+          <div class="tabbar">
+            <span class="tab on">List</span>
+            <span class="tab">Upload</span>
+            <span class="tab">Account</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="face-chip">
+        <p class="mark">finance-helper</p>
+        <p class="roles"><em>Display</em> Georgia (optional) · <em>UI</em> system-ui — no webfont</p>
+      </div>
+    </section>
+
+  </main>
+</body>
+</html>

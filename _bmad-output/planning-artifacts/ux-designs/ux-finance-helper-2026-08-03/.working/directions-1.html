@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>finance-helper — design directions (Soft Ledger)</title>
+  <style>
+    /*
+      Design directions — Soft Ledger register only
+      Feel: quiet professional clarity; cool paper and ink; calm + clear
+      Differ on: density, type weight, layout personality, hero-amount framing
+      NOT new color worlds
+
+      Soft Ledger tokens (from color-themes-1.html V1):
+      Light: bg #F4F6F8 | surface #FFFFFF | text #1C2430 | muted #5C6B7A
+             border #D5DCE3 | accent #2F5B8A | owe #9A4A3A | owed #2F6B4F
+      Dark:  bg #12171C | surface #1B222A | text #E8EEF3 | muted #9AA8B5
+             border #2E3944 | accent #7BA3C9 | owe #D0897A | owed #7BC49A
+    */
+
+    :root {
+      --sl-bg: #F4F6F8;
+      --sl-surface: #FFFFFF;
+      --sl-text: #1C2430;
+      --sl-muted: #5C6B7A;
+      --sl-border: #D5DCE3;
+      --sl-accent: #2F5B8A;
+      --sl-owe: #9A4A3A;
+      --sl-owed: #2F6B4F;
+      --board: #E6E8EA;
+      --board-ink: #1C2430;
+      --board-mute: #5C6B7A;
+      --phone-shell: #2A3138;
+      --phone-bezel: #1A1F24;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 28px 18px 56px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--board);
+      color: var(--board-ink);
+      line-height: 1.4;
+    }
+
+    .page-head {
+      max-width: 1680px;
+      margin: 0 auto 22px;
+    }
+    .page-head h1 {
+      margin: 0 0 4px;
+      font-size: 1.12rem;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+    }
+    .page-head p {
+      margin: 0;
+      color: var(--board-mute);
+      font-size: 0.88rem;
+      max-width: 64ch;
+    }
+
+    .board {
+      max-width: 1680px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(280px, 1fr));
+      gap: 16px;
+      align-items: start;
+    }
+
+    @media (max-width: 1400px) {
+      .board { grid-template-columns: repeat(2, minmax(280px, 1fr)); }
+    }
+    @media (max-width: 720px) {
+      .board { grid-template-columns: 1fr; }
+    }
+
+    .direction {
+      background: #F7F8F9;
+      border: 1px solid #C9D0D6;
+      border-radius: 14px;
+      padding: 14px 12px 16px;
+      min-width: 0;
+    }
+    .direction-meta h2 {
+      margin: 0 0 3px;
+      font-size: 0.98rem;
+      font-weight: 650;
+      letter-spacing: -0.015em;
+    }
+    .direction-meta .personality {
+      margin: 0 0 6px;
+      font-size: 0.78rem;
+      color: var(--board-mute);
+      min-height: 2.6em;
+    }
+    .direction-meta .rationale {
+      margin: 0 0 14px;
+      font-size: 0.74rem;
+      color: #4A5560;
+      line-height: 1.45;
+    }
+
+    .phone {
+      width: 260px;
+      margin: 0 auto;
+      background: var(--phone-shell);
+      border-radius: 28px;
+      padding: 10px 9px 14px;
+      box-shadow: 0 10px 28px rgba(28, 36, 48, 0.14);
+    }
+    .notch {
+      width: 88px;
+      height: 18px;
+      background: var(--phone-bezel);
+      border-radius: 0 0 12px 12px;
+      margin: 0 auto 8px;
+    }
+    .screen {
+      background: var(--sl-bg);
+      color: var(--sl-text);
+      border-radius: 18px;
+      overflow: hidden;
+      min-height: 460px;
+      display: flex;
+      flex-direction: column;
+    }
+    .status-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 14px 4px;
+      font-size: 0.62rem;
+      font-weight: 600;
+      color: var(--sl-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .glimpse-label {
+      margin: 12px auto 4px;
+      width: 260px;
+      font-size: 0.64rem;
+      font-weight: 650;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--board-mute);
+    }
+    .glimpse {
+      width: 260px;
+      margin: 0 auto;
+      background: var(--sl-surface);
+      border: 1px solid var(--sl-border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      color: var(--sl-text);
+      font-size: 0.72rem;
+    }
+
+    /* ========== D1 Open Air ==========
+       Low density · light type · centered quiet hero
+       Amount sits in open field; framing = whitespace, not chrome
+    */
+    .d1 .topnav {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 6px 18px 0;
+    }
+    .d1 .brand {
+      font-size: 0.68rem;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      color: var(--sl-muted);
+    }
+    .d1 .list-title {
+      font-size: 0.72rem;
+      font-weight: 500;
+      color: var(--sl-text);
+    }
+    .d1 .balance {
+      flex: 0 0 auto;
+      text-align: center;
+      padding: 36px 20px 28px;
+    }
+    .d1 .who {
+      margin: 0 0 10px;
+      font-size: 0.78rem;
+      font-weight: 400;
+      color: var(--sl-muted);
+    }
+    .d1 .amount {
+      margin: 0;
+      font-size: 2.35rem;
+      font-weight: 300;
+      letter-spacing: -0.04em;
+      line-height: 1.05;
+      color: var(--sl-owe);
+    }
+    .d1 .hint {
+      margin: 12px 0 0;
+      font-size: 0.68rem;
+      font-weight: 400;
+      color: var(--sl-muted);
+    }
+    .d1 .cta {
+      display: inline-block;
+      margin-top: 18px;
+      padding: 9px 18px;
+      border-radius: 8px;
+      background: var(--sl-accent);
+      color: #fff;
+      font-size: 0.74rem;
+      font-weight: 500;
+    }
+    .d1 .receipts {
+      margin-top: auto;
+      padding: 8px 18px 18px;
+    }
+    .d1 .section-label {
+      font-size: 0.62rem;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--sl-muted);
+      margin-bottom: 10px;
+    }
+    .d1 .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 0;
+      border-top: 1px solid var(--sl-border);
+      font-size: 0.76rem;
+      font-weight: 400;
+    }
+    .d1 .row .meta { color: var(--sl-muted); }
+    .d1 .row .amt {
+      color: var(--sl-text);
+      font-variant-numeric: tabular-nums;
+      font-weight: 400;
+    }
+
+    /* ========== D2 Ledger Strip ==========
+       Higher density · medium-bold labels · amount in ruled strip
+       Framing = horizontal register bar; receipts as tight ledger lines
+    */
+    .d2 .topnav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--sl-border);
+      background: var(--sl-surface);
+    }
+    .d2 .brand {
+      font-size: 0.66rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: var(--sl-text);
+    }
+    .d2 .list-title {
+      font-size: 0.66rem;
+      font-weight: 600;
+      color: var(--sl-muted);
+    }
+    .d2 .strip {
+      background: var(--sl-surface);
+      border-bottom: 1px solid var(--sl-border);
+      padding: 10px 12px 11px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 4px 10px;
+      align-items: end;
+    }
+    .d2 .who {
+      margin: 0;
+      grid-column: 1;
+      font-size: 0.66rem;
+      font-weight: 650;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--sl-muted);
+    }
+    .d2 .amount {
+      margin: 0;
+      grid-column: 1;
+      font-size: 1.55rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+      color: var(--sl-owe);
+      font-variant-numeric: tabular-nums;
+    }
+    .d2 .cta {
+      grid-column: 2;
+      grid-row: 1 / span 2;
+      align-self: center;
+      padding: 8px 10px;
+      border-radius: 6px;
+      background: var(--sl-accent);
+      color: #fff;
+      font-size: 0.66rem;
+      font-weight: 650;
+      text-align: center;
+      white-space: nowrap;
+    }
+    .d2 .hint {
+      margin: 0;
+      padding: 6px 12px;
+      font-size: 0.62rem;
+      color: var(--sl-muted);
+      background: var(--sl-bg);
+      border-bottom: 1px solid var(--sl-border);
+    }
+    .d2 .receipts {
+      padding: 0;
+      background: var(--sl-surface);
+      flex: 1;
+    }
+    .d2 .section-label {
+      padding: 8px 12px 4px;
+      font-size: 0.6rem;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--sl-muted);
+    }
+    .d2 .row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 2px 8px;
+      padding: 7px 12px;
+      border-top: 1px solid var(--sl-border);
+      font-size: 0.72rem;
+    }
+    .d2 .row .meta { color: var(--sl-text); font-weight: 500; }
+    .d2 .row .when {
+      grid-column: 1;
+      font-size: 0.62rem;
+      color: var(--sl-muted);
+    }
+    .d2 .row .amt {
+      grid-column: 2;
+      grid-row: 1 / span 2;
+      align-self: center;
+      font-weight: 650;
+      font-variant-numeric: tabular-nums;
+      color: var(--sl-text);
+    }
+    .d2 .tabbar {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      border-top: 1px solid var(--sl-border);
+      background: var(--sl-surface);
+      margin-top: auto;
+    }
+    .d2 .tab {
+      text-align: center;
+      padding: 8px 4px;
+      font-size: 0.58rem;
+      font-weight: 600;
+      color: var(--sl-muted);
+    }
+    .d2 .tab.on { color: var(--sl-accent); }
+
+    /* ========== D3 Card Anchor ==========
+       Medium density · heavy display amount · soft surface card frame
+       Incomplete disclosure badge (state variant)
+    */
+    .d3 .topnav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px 6px;
+    }
+    .d3 .brand {
+      font-size: 0.7rem;
+      font-weight: 650;
+      color: var(--sl-text);
+    }
+    .d3 .list-title {
+      font-size: 0.7rem;
+      font-weight: 500;
+      color: var(--sl-muted);
+    }
+    .d3 .disclosure {
+      margin: 4px 14px 10px;
+      padding: 7px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--sl-border);
+      background: var(--sl-surface);
+      font-size: 0.64rem;
+      color: var(--sl-muted);
+      line-height: 1.35;
+    }
+    .d3 .disclosure strong {
+      display: block;
+      color: var(--sl-text);
+      font-weight: 650;
+      margin-bottom: 1px;
+    }
+    .d3 .card {
+      margin: 0 14px;
+      background: var(--sl-surface);
+      border: 1px solid var(--sl-border);
+      border-radius: 14px;
+      padding: 18px 16px 16px;
+      text-align: center;
+    }
+    .d3 .who {
+      margin: 0 0 6px;
+      font-size: 0.74rem;
+      font-weight: 500;
+      color: var(--sl-muted);
+    }
+    .d3 .amount {
+      margin: 0;
+      font-size: 2.1rem;
+      font-weight: 750;
+      letter-spacing: -0.035em;
+      line-height: 1.05;
+      color: var(--sl-owe);
+      font-variant-numeric: tabular-nums;
+    }
+    .d3 .hint {
+      margin: 8px 0 0;
+      font-size: 0.66rem;
+      color: var(--sl-muted);
+    }
+    .d3 .cta {
+      display: block;
+      margin-top: 14px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: var(--sl-accent);
+      color: #fff;
+      font-size: 0.76rem;
+      font-weight: 650;
+    }
+    .d3 .receipts {
+      padding: 16px 14px 14px;
+    }
+    .d3 .section-label {
+      font-size: 0.64rem;
+      font-weight: 650;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--sl-muted);
+      margin-bottom: 8px;
+    }
+    .d3 .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 11px;
+      margin-bottom: 6px;
+      background: var(--sl-surface);
+      border: 1px solid var(--sl-border);
+      border-radius: 10px;
+      font-size: 0.74rem;
+    }
+    .d3 .row .meta { color: var(--sl-text); font-weight: 500; }
+    .d3 .row .sub {
+      display: block;
+      font-size: 0.62rem;
+      font-weight: 400;
+      color: var(--sl-muted);
+      margin-top: 1px;
+    }
+    .d3 .row .amt {
+      font-weight: 650;
+      font-variant-numeric: tabular-nums;
+      color: var(--sl-text);
+    }
+
+    /* ========== D4 Left Margin ==========
+       Medium-low density · restrained mid weights · left-aligned column
+       Framing = caption stacked above amount on left margin; editorial calm
+    */
+    .d4 .topnav {
+      padding: 10px 16px 2px;
+    }
+    .d4 .brand {
+      font-size: 0.66rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      color: var(--sl-muted);
+    }
+    .d4 .list-title {
+      margin-top: 14px;
+      font-size: 1.05rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: var(--sl-text);
+    }
+    .d4 .balance {
+      padding: 22px 16px 18px;
+      border-bottom: 1px solid var(--sl-border);
+    }
+    .d4 .who {
+      margin: 0 0 4px;
+      font-size: 0.7rem;
+      font-weight: 500;
+      color: var(--sl-muted);
+    }
+    .d4 .amount {
+      margin: 0;
+      font-size: 1.85rem;
+      font-weight: 550;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+      color: var(--sl-owe);
+      font-variant-numeric: tabular-nums;
+    }
+    .d4 .hint {
+      margin: 8px 0 0;
+      font-size: 0.66rem;
+      color: var(--sl-muted);
+      max-width: 22ch;
+    }
+    .d4 .actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .d4 .cta {
+      padding: 8px 12px;
+      border-radius: 7px;
+      background: var(--sl-accent);
+      color: #fff;
+      font-size: 0.7rem;
+      font-weight: 600;
+    }
+    .d4 .ghost {
+      padding: 8px 12px;
+      border-radius: 7px;
+      border: 1px solid var(--sl-border);
+      background: var(--sl-surface);
+      color: var(--sl-text);
+      font-size: 0.7rem;
+      font-weight: 500;
+    }
+    .d4 .receipts {
+      padding: 14px 16px 16px;
+    }
+    .d4 .section-label {
+      font-size: 0.62rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--sl-muted);
+      margin-bottom: 6px;
+    }
+    .d4 .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 9px 0;
+      border-bottom: 1px solid var(--sl-border);
+      font-size: 0.74rem;
+    }
+    .d4 .row:last-child { border-bottom: none; }
+    .d4 .row .meta { color: var(--sl-text); font-weight: 450; }
+    .d4 .row .amt {
+      color: var(--sl-muted);
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
+    }
+
+    /* Secondary glimpse rows shared */
+    .glimpse .g-head {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-weight: 650;
+      color: var(--sl-muted);
+      font-size: 0.64rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .glimpse .g-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 5px 0;
+      border-top: 1px solid var(--sl-border);
+      font-size: 0.72rem;
+    }
+    .glimpse .g-row .name { font-weight: 500; }
+    .glimpse .g-row .bal { color: var(--sl-owe); font-variant-numeric: tabular-nums; font-weight: 600; }
+    .glimpse .g-row .bal.ok { color: var(--sl-owed); }
+    .glimpse .upload-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .glimpse .upload-bar .file {
+      color: var(--sl-text);
+      font-weight: 500;
+      min-width: 0;
+    }
+    .glimpse .upload-bar .tag {
+      font-size: 0.64rem;
+      color: var(--sl-accent);
+      font-weight: 650;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <header class="page-head">
+    <h1>finance-helper — design directions</h1>
+    <p>Soft Ledger only. Same J2 hero: household shared-list settle-up — balances first, receipts newest-first. Personality via density, type weight, layout, and how the owe amount is framed.</p>
+  </header>
+
+  <main class="board">
+
+    <!-- ========== Direction 1 ========== -->
+    <section class="direction d1">
+      <header class="direction-meta">
+        <h2>Open Air</h2>
+        <p class="personality">Airy, light-weight type; hero amount floats in quiet space.</p>
+        <p class="rationale">Centering and large letter-spacing make ₡42,500 the only loud thing without chrome. Receipts stay soft and secondary. Best when Monse opens just to check what she owes.</p>
+      </header>
+
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>LTE</span></div>
+          <div class="topnav">
+            <span class="brand">finance-helper</span>
+            <span class="list-title">Household</span>
+          </div>
+          <div class="balance">
+            <p class="who">You owe Partner</p>
+            <p class="amount">₡42,500</p>
+            <p class="hint">Send outside the app when ready</p>
+            <span class="cta">Mark as settled</span>
+          </div>
+          <div class="receipts">
+            <div class="section-label">Recent</div>
+            <div class="row"><span class="meta">Groceries · yesterday</span><span class="amt">₡18,200</span></div>
+            <div class="row"><span class="meta">Pharmacy · Sun</span><span class="amt">₡6,750</span></div>
+            <div class="row"><span class="meta">Gas · Fri</span><span class="amt">₡22,000</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="glimpse-label">Secondary · lists homepage</div>
+      <div class="glimpse">
+        <div class="g-head"><span>Your lists</span><span>finance-helper</span></div>
+        <div class="g-row"><span class="name">Household</span><span class="bal">You owe ₡42,500</span></div>
+        <div class="g-row"><span class="name">Trip with Alex</span><span class="bal ok">Settled</span></div>
+      </div>
+    </section>
+
+    <!-- ========== Direction 2 ========== -->
+    <section class="direction d2">
+      <header class="direction-meta">
+        <h2>Ledger Strip</h2>
+        <p class="personality">Compact register rhythm; amount locked in a ruled top strip.</p>
+        <p class="rationale">Higher density and tabular figures feel like a clear household register. The strip frames who/amount/action in one scan line before receipts begin.</p>
+      </header>
+
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>LTE</span></div>
+          <div class="topnav">
+            <span class="brand">finance-helper</span>
+            <span class="list-title">Household</span>
+          </div>
+          <div class="strip">
+            <p class="who">You owe Partner</p>
+            <p class="amount">₡42,500</p>
+            <span class="cta">Mark settled</span>
+          </div>
+          <p class="hint">Send outside the app when ready</p>
+          <div class="receipts">
+            <div class="section-label">Receipts · newest first</div>
+            <div class="row">
+              <span class="meta">Groceries</span>
+              <span class="when">yesterday</span>
+              <span class="amt">₡18,200</span>
+            </div>
+            <div class="row">
+              <span class="meta">Pharmacy</span>
+              <span class="when">Sun</span>
+              <span class="amt">₡6,750</span>
+            </div>
+            <div class="row">
+              <span class="meta">Gas</span>
+              <span class="when">Fri</span>
+              <span class="amt">₡22,000</span>
+            </div>
+            <div class="row">
+              <span class="meta">Internet</span>
+              <span class="when">1st</span>
+              <span class="amt">₡28,500</span>
+            </div>
+          </div>
+          <div class="tabbar">
+            <span class="tab on">List</span>
+            <span class="tab">Upload</span>
+            <span class="tab">Account</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="glimpse-label">Secondary · upload entry</div>
+      <div class="glimpse">
+        <div class="upload-bar">
+          <span class="file">BAC_Mar_statements.pdf</span>
+          <span class="tag">Review</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== Direction 3 ========== -->
+    <section class="direction d3">
+      <header class="direction-meta">
+        <h2>Card Anchor</h2>
+        <p class="personality">Bold amount inside a soft surface card; disclosure sits above.</p>
+        <p class="rationale">Medium density with a heavy display figure. Incomplete-statement disclosure is quiet but visible — balances still lead, trust language does not bury the climax amount.</p>
+      </header>
+
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>LTE</span></div>
+          <div class="topnav">
+            <span class="brand">finance-helper</span>
+            <span class="list-title">Household</span>
+          </div>
+          <div class="disclosure">
+            <strong>Statement incomplete</strong>
+            Balances for this period may understate until the quarantine clears.
+          </div>
+          <div class="card">
+            <p class="who">You owe Partner</p>
+            <p class="amount">₡42,500</p>
+            <p class="hint">Send outside the app when ready</p>
+            <span class="cta">Mark as settled</span>
+          </div>
+          <div class="receipts">
+            <div class="section-label">Recent</div>
+            <div class="row">
+              <span class="meta">Groceries<span class="sub">yesterday</span></span>
+              <span class="amt">₡18,200</span>
+            </div>
+            <div class="row">
+              <span class="meta">Pharmacy<span class="sub">Sun</span></span>
+              <span class="amt">₡6,750</span>
+            </div>
+            <div class="row">
+              <span class="meta">Gas<span class="sub">Fri</span></span>
+              <span class="amt">₡22,000</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="glimpse-label">State variant · incomplete disclosure</div>
+      <div class="glimpse">
+        <div class="g-head"><span>On settle-up</span><span>Period Mar</span></div>
+        <div class="g-row">
+          <span class="name">Quarantined rows held back</span>
+          <span class="bal">May understate</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== Direction 4 ========== -->
+    <section class="direction d4">
+      <header class="direction-meta">
+        <h2>Left Margin</h2>
+        <p class="personality">Editorial left column; list name leads, amount stacked under a quiet caption.</p>
+        <p class="rationale">Restrained mid weights and left alignment feel less transactional than a centered hero. The amount stays unmistakable without stadium-size type — good calm for a nightly glance.</p>
+      </header>
+
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>LTE</span></div>
+          <div class="topnav">
+            <div class="brand">finance-helper</div>
+            <div class="list-title">Household</div>
+          </div>
+          <div class="balance">
+            <p class="who">You owe Partner</p>
+            <p class="amount">₡42,500</p>
+            <p class="hint">Send outside the app when ready</p>
+            <div class="actions">
+              <span class="cta">Mark as settled</span>
+              <span class="ghost">Upload</span>
+            </div>
+          </div>
+          <div class="receipts">
+            <div class="section-label">Newest first</div>
+            <div class="row"><span class="meta">Groceries · yesterday</span><span class="amt">₡18,200</span></div>
+            <div class="row"><span class="meta">Pharmacy · Sun</span><span class="amt">₡6,750</span></div>
+            <div class="row"><span class="meta">Gas · Fri</span><span class="amt">₡22,000</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="glimpse-label">Secondary · lists homepage</div>
+      <div class="glimpse">
+        <div class="g-head"><span>All lists</span><span>Last opened</span></div>
+        <div class="g-row"><span class="name">Household</span><span class="bal">₡42,500</span></div>
+        <div class="g-row"><span class="name">Trip with Alex</span><span class="bal ok">₡0</span></div>
+      </div>
+    </section>
+
+  </main>
+</body>
+</html>

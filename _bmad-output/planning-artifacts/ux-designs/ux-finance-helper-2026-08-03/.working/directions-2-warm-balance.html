@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>finance-helper — design directions (Warm Balance · Ledger Strip)</title>
+  <style>
+    /*
+      Design directions — Warm Balance + Ledger Strip family
+      Feel: grounded domestic ease; warm sand paper + moss-green action
+      Locked personality: Ledger Strip — compact register rhythm;
+      amount locked in a ruled top strip
+      Differ on: density, type weight, rule weight (mild in-family tweaks)
+      Panel 4 = Soft-Ledger hybrid alternate (looser strip), labeled
+
+      Warm Balance tokens (from color-themes-1.html V3):
+      Light: bg #F7F3EC | surface #FFFCF7 | text #2A241C | muted #6E6456
+             border #E2D8C8 | accent #3F6B45 | owe #A04936 | owed #2F6E48
+      Dark:  bg #17140F | surface #221E17 | text #F0E9DC | muted #A89B88
+             border #3A342A | accent #8FBB8E | owe #D48B78 | owed #7EC794
+    */
+
+    :root {
+      --wb-bg: #F7F3EC;
+      --wb-surface: #FFFCF7;
+      --wb-text: #2A241C;
+      --wb-muted: #6E6456;
+      --wb-border: #E2D8C8;
+      --wb-accent: #3F6B45;
+      --wb-owe: #A04936;
+      --wb-owed: #2F6E48;
+      --board: #E8E2D6;
+      --board-ink: #2A241C;
+      --board-mute: #6E6456;
+      --phone-shell: #2C2720;
+      --phone-bezel: #1A1611;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 28px 18px 56px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--board);
+      color: var(--board-ink);
+      line-height: 1.4;
+    }
+
+    .page-head {
+      max-width: 1680px;
+      margin: 0 auto 22px;
+    }
+    .page-head h1 {
+      margin: 0 0 4px;
+      font-size: 1.12rem;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+    }
+    .page-head p {
+      margin: 0;
+      color: var(--board-mute);
+      font-size: 0.88rem;
+      max-width: 68ch;
+    }
+    .page-head .lock {
+      margin: 8px 0 0;
+      font-size: 0.78rem;
+      color: var(--board-ink);
+    }
+
+    .board {
+      max-width: 1680px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(280px, 1fr));
+      gap: 16px;
+      align-items: start;
+    }
+
+    @media (max-width: 1400px) {
+      .board { grid-template-columns: repeat(2, minmax(280px, 1fr)); }
+    }
+    @media (max-width: 720px) {
+      .board { grid-template-columns: 1fr; }
+    }
+
+    .direction {
+      background: #F3EEE4;
+      border: 1px solid #D4CBBA;
+      border-radius: 14px;
+      padding: 14px 12px 16px;
+      min-width: 0;
+    }
+    .direction.alternate {
+      border-style: dashed;
+      background: #EFE9DF;
+    }
+    .direction-meta h2 {
+      margin: 0 0 3px;
+      font-size: 0.98rem;
+      font-weight: 650;
+      letter-spacing: -0.015em;
+    }
+    .direction-meta .badge {
+      display: inline-block;
+      margin: 0 0 6px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 0.62rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      background: #E2D8C8;
+      color: #2A241C;
+    }
+    .direction.alternate .badge {
+      background: #D9CFBE;
+      color: #4A4034;
+    }
+    .direction-meta .personality {
+      margin: 0 0 6px;
+      font-size: 0.78rem;
+      color: var(--board-mute);
+      min-height: 2.6em;
+    }
+    .direction-meta .rationale {
+      margin: 0 0 14px;
+      font-size: 0.74rem;
+      color: #5A5044;
+      line-height: 1.45;
+    }
+
+    .phone {
+      width: 260px;
+      margin: 0 auto;
+      background: var(--phone-shell);
+      border-radius: 28px;
+      padding: 10px 9px 14px;
+      box-shadow: 0 10px 28px rgba(42, 36, 28, 0.16);
+    }
+    .notch {
+      width: 88px;
+      height: 18px;
+      background: var(--phone-bezel);
+      border-radius: 0 0 12px 12px;
+      margin: 0 auto 8px;
+    }
+    .screen {
+      background: var(--wb-bg);
+      color: var(--wb-text);
+      border-radius: 18px;
+      overflow: hidden;
+      min-height: 460px;
+      display: flex;
+      flex-direction: column;
+    }
+    .status-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 14px 4px;
+      font-size: 0.62rem;
+      font-weight: 600;
+      color: var(--wb-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .glimpse-label {
+      margin: 12px auto 4px;
+      width: 260px;
+      font-size: 0.64rem;
+      font-weight: 650;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--board-mute);
+    }
+    .glimpse {
+      width: 260px;
+      margin: 0 auto;
+      background: var(--wb-surface);
+      border: 1px solid var(--wb-border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      color: var(--wb-text);
+      font-size: 0.72rem;
+    }
+    .glimpse .g-head {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-weight: 650;
+      color: var(--wb-muted);
+      font-size: 0.64rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .glimpse .g-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 5px 0;
+      border-top: 1px solid var(--wb-border);
+      font-size: 0.72rem;
+    }
+    .glimpse .g-row .name { font-weight: 500; }
+    .glimpse .g-row .bal {
+      color: var(--wb-owe);
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+    }
+    .glimpse .g-row .bal.ok { color: var(--wb-owed); }
+    .glimpse .upload-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .glimpse .upload-bar .file {
+      color: var(--wb-text);
+      font-weight: 500;
+      min-width: 0;
+    }
+    .glimpse .upload-bar .tag {
+      font-size: 0.64rem;
+      color: var(--wb-accent);
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    /* Shared Ledger Strip bones — all panels inherit register strip pattern */
+    .ls .topnav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--wb-border);
+      background: var(--wb-surface);
+    }
+    .ls .brand {
+      font-size: 0.66rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: var(--wb-text);
+    }
+    .ls .list-title {
+      font-size: 0.66rem;
+      font-weight: 600;
+      color: var(--wb-muted);
+    }
+    .ls .strip {
+      background: var(--wb-surface);
+      border-bottom: 1px solid var(--wb-border);
+      padding: 10px 12px 11px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 4px 10px;
+      align-items: end;
+    }
+    .ls .who {
+      margin: 0;
+      grid-column: 1;
+      font-size: 0.66rem;
+      font-weight: 650;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--wb-muted);
+    }
+    .ls .amount {
+      margin: 0;
+      grid-column: 1;
+      font-size: 1.55rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+      color: var(--wb-owe);
+      font-variant-numeric: tabular-nums;
+    }
+    .ls .cta {
+      grid-column: 2;
+      grid-row: 1 / span 2;
+      align-self: center;
+      padding: 8px 10px;
+      border-radius: 6px;
+      background: var(--wb-accent);
+      color: #FFFCF7;
+      font-size: 0.66rem;
+      font-weight: 650;
+      text-align: center;
+      white-space: nowrap;
+    }
+    .ls .hint {
+      margin: 0;
+      padding: 6px 12px;
+      font-size: 0.62rem;
+      color: var(--wb-muted);
+      background: var(--wb-bg);
+      border-bottom: 1px solid var(--wb-border);
+    }
+    .ls .receipts {
+      padding: 0;
+      background: var(--wb-surface);
+      flex: 1;
+    }
+    .ls .section-label {
+      padding: 8px 12px 4px;
+      font-size: 0.6rem;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--wb-muted);
+    }
+    .ls .row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 2px 8px;
+      padding: 7px 12px;
+      border-top: 1px solid var(--wb-border);
+      font-size: 0.72rem;
+    }
+    .ls .row .meta { color: var(--wb-text); font-weight: 500; }
+    .ls .row .when {
+      grid-column: 1;
+      font-size: 0.62rem;
+      color: var(--wb-muted);
+    }
+    .ls .row .amt {
+      grid-column: 2;
+      grid-row: 1 / span 2;
+      align-self: center;
+      font-weight: 650;
+      font-variant-numeric: tabular-nums;
+      color: var(--wb-text);
+    }
+    .ls .tabbar {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      border-top: 1px solid var(--wb-border);
+      background: var(--wb-surface);
+      margin-top: auto;
+    }
+    .ls .tab {
+      text-align: center;
+      padding: 8px 4px;
+      font-size: 0.58rem;
+      font-weight: 600;
+      color: var(--wb-muted);
+    }
+    .ls .tab.on { color: var(--wb-accent); }
+
+    /* ========== D1 Canonical Ledger Strip ==========
+       Baseline from locked pick — medium-bold, 1px rules, tight register
+    */
+
+    /* ========== D2 Dense · Heavy Rule ==========
+       Higher density · bolder type · 2px strip rules
+    */
+    .d2 .topnav {
+      padding: 6px 10px;
+      border-bottom-width: 2px;
+    }
+    .d2 .brand { font-weight: 750; font-size: 0.64rem; }
+    .d2 .list-title { font-size: 0.62rem; font-weight: 700; }
+    .d2 .strip {
+      padding: 8px 10px 9px;
+      border-bottom-width: 2px;
+      gap: 2px 8px;
+    }
+    .d2 .who {
+      font-size: 0.6rem;
+      font-weight: 750;
+      letter-spacing: 0.06em;
+    }
+    .d2 .amount {
+      font-size: 1.42rem;
+      font-weight: 800;
+      letter-spacing: -0.035em;
+    }
+    .d2 .cta {
+      padding: 7px 9px;
+      border-radius: 4px;
+      font-size: 0.62rem;
+      font-weight: 750;
+    }
+    .d2 .hint {
+      padding: 4px 10px;
+      font-size: 0.58rem;
+      border-bottom-width: 2px;
+    }
+    .d2 .section-label {
+      padding: 6px 10px 2px;
+      font-size: 0.56rem;
+      font-weight: 750;
+    }
+    .d2 .row {
+      padding: 5px 10px;
+      border-top-width: 1px;
+      font-size: 0.68rem;
+    }
+    .d2 .row .when { font-size: 0.56rem; }
+    .d2 .row .amt { font-weight: 750; }
+    .d2 .tabbar { border-top-width: 2px; }
+    .d2 .tab { padding: 6px 4px; font-size: 0.56rem; }
+
+    /* ========== D3 Soft Type · Disclosure ==========
+       Slightly softer labels · lighter amount · incomplete disclosure under strip
+    */
+    .d3 .topnav {
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--wb-border);
+    }
+    .d3 .brand { font-weight: 600; }
+    .d3 .list-title { font-weight: 500; }
+    .d3 .strip {
+      padding: 11px 12px 12px;
+      border-bottom: 1px solid var(--wb-border);
+    }
+    .d3 .who {
+      font-weight: 550;
+      letter-spacing: 0.03em;
+      text-transform: none;
+      font-size: 0.7rem;
+    }
+    .d3 .amount {
+      font-size: 1.48rem;
+      font-weight: 600;
+      letter-spacing: -0.025em;
+    }
+    .d3 .cta {
+      font-weight: 600;
+      border-radius: 7px;
+      padding: 9px 11px;
+    }
+    .d3 .disclosure {
+      margin: 0;
+      padding: 8px 12px;
+      font-size: 0.62rem;
+      line-height: 1.35;
+      color: var(--wb-muted);
+      background: var(--wb-bg);
+      border-bottom: 1px solid var(--wb-border);
+    }
+    .d3 .disclosure strong {
+      display: block;
+      color: var(--wb-text);
+      font-weight: 650;
+      margin-bottom: 1px;
+      font-size: 0.64rem;
+    }
+    .d3 .hint {
+      display: none;
+    }
+    .d3 .section-label { font-weight: 600; }
+    .d3 .row {
+      padding: 8px 12px;
+      font-size: 0.74rem;
+    }
+    .d3 .row .meta { font-weight: 450; }
+    .d3 .row .amt { font-weight: 550; }
+
+    /* ========== D4 Alternate · Soft-Ledger hybrid ==========
+       Looser strip · airier rows · lighter register chrome (still Warm Balance)
+    */
+    .d4 .topnav {
+      padding: 10px 14px;
+      border-bottom: none;
+      background: transparent;
+    }
+    .d4 .brand {
+      font-weight: 500;
+      letter-spacing: 0.03em;
+      color: var(--wb-muted);
+    }
+    .d4 .list-title {
+      font-weight: 500;
+      color: var(--wb-text);
+    }
+    .d4 .strip {
+      margin: 0 10px;
+      padding: 14px 12px 14px;
+      border: 1px solid var(--wb-border);
+      border-radius: 10px;
+      border-bottom: 1px solid var(--wb-border);
+      gap: 6px 10px;
+    }
+    .d4 .who {
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      text-transform: none;
+      font-size: 0.72rem;
+    }
+    .d4 .amount {
+      font-size: 1.7rem;
+      font-weight: 500;
+      letter-spacing: -0.03em;
+    }
+    .d4 .cta {
+      border-radius: 8px;
+      font-weight: 550;
+      padding: 9px 12px;
+    }
+    .d4 .hint {
+      margin: 0 10px;
+      padding: 8px 4px 4px;
+      background: transparent;
+      border-bottom: none;
+      font-size: 0.64rem;
+    }
+    .d4 .receipts {
+      background: transparent;
+      padding: 4px 10px 10px;
+    }
+    .d4 .section-label {
+      padding: 10px 4px 6px;
+      font-weight: 550;
+      letter-spacing: 0.05em;
+    }
+    .d4 .row {
+      padding: 9px 4px;
+      border-top: none;
+      border-bottom: 1px solid var(--wb-border);
+      font-size: 0.74rem;
+    }
+    .d4 .row .meta { font-weight: 400; }
+    .d4 .row .amt { font-weight: 500; color: var(--wb-muted); }
+    .d4 .tabbar {
+      border-top: 1px solid var(--wb-border);
+      background: var(--wb-surface);
+    }
+    .d4 .tab { font-weight: 500; }
+  </style>
+</head>
+<body>
+  <header class="page-head">
+    <h1>finance-helper — design directions (round 2)</h1>
+    <p>Warm Balance only. Locked personality: Ledger Strip. Same J2 hero: household shared-list settle-up — “You owe Partner ₡42,500”, receipts newest-first. Mild in-family tweaks on density, type, and rule weight so you can confirm or nudge the pick.</p>
+    <p class="lock">Theme · Warm Balance (sand + moss) · Direction · Ledger Strip</p>
+  </header>
+
+  <main class="board">
+
+    <!-- ========== Panel 1 · Canonical ========== -->
+    <section class="direction ls d1">
+      <header class="direction-meta">
+        <h2>Ledger Strip · Canonical</h2>
+        <span class="badge">Baseline</span>
+        <p class="personality">Compact register rhythm; amount locked in a ruled top strip.</p>
+        <p class="rationale">The locked pick, recolored into Warm Balance. Medium-bold labels, 1px rules, tight receipt lines — confirm this scan order feels right on sand + moss.</p>
+      </header>
+
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>LTE</span></div>
+          <div class="topnav">
+            <span class="brand">finance-helper</span>
+            <span class="list-title">Household</span>
+          </div>
+          <div class="strip">
+            <p class="who">You owe Partner</p>
+            <p class="amount">₡42,500</p>
+            <span class="cta">Mark settled</span>
+          </div>
+          <p class="hint">Send outside the app when ready</p>
+          <div class="receipts">
+            <div class="section-label">Receipts · newest first</div>
+            <div class="row">
+              <span class="meta">Groceries</span>
+              <span class="when">yesterday</span>
+              <span class="amt">₡18,200</span>
+            </div>
+            <div class="row">
+              <span class="meta">Pharmacy</span>
+              <span class="when">Sun</span>
+              <span class="amt">₡6,750</span>
+            </div>
+            <div class="row">
+              <span class="meta">Gas</span>
+              <span class="when">Fri</span>
+              <span class="amt">₡22,000</span>
+            </div>
+            <div class="row">
+              <span class="meta">Internet</span>
+              <span class="when">1st</span>
+              <span class="amt">₡28,500</span>
+            </div>
+          </div>
+          <div class="tabbar">
+            <span class="tab on">List</span>
+            <span class="tab">Upload</span>
+            <span class="tab">Account</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="glimpse-label">Secondary · upload entry</div>
+      <div class="glimpse">
+        <div class="upload-bar">
+          <span class="file">BAC_Mar_statements.pdf</span>
+          <span class="tag">Review</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== Panel 2 · Dense / Heavy Rule ========== -->
+    <section class="direction ls d2">
+      <header class="direction-meta">
+        <h2>Ledger Strip · Dense Ink</h2>
+        <span class="badge">Tighter · heavier rules</span>
+        <p class="personality">Higher density; bolder type; 2px strip and nav rules.</p>
+        <p class="rationale">Same strip architecture, more register. Heavier rules and compressed rows if Canonical feels a touch soft on warm paper.</p>
+      </header>
+
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>LTE</span></div>
+          <div class="topnav">
+            <span class="brand">finance-helper</span>
+            <span class="list-title">Household</span>
+          </div>
+          <div class="strip">
+            <p class="who">You owe Partner</p>
+            <p class="amount">₡42,500</p>
+            <span class="cta">Mark settled</span>
+          </div>
+          <p class="hint">Send outside the app when ready</p>
+          <div class="receipts">
+            <div class="section-label">Receipts · newest first</div>
+            <div class="row">
+              <span class="meta">Groceries</span>
+              <span class="when">yesterday</span>
+              <span class="amt">₡18,200</span>
+            </div>
+            <div class="row">
+              <span class="meta">Pharmacy</span>
+              <span class="when">Sun</span>
+              <span class="amt">₡6,750</span>
+            </div>
+            <div class="row">
+              <span class="meta">Gas</span>
+              <span class="when">Fri</span>
+              <span class="amt">₡22,000</span>
+            </div>
+            <div class="row">
+              <span class="meta">Internet</span>
+              <span class="when">1st</span>
+              <span class="amt">₡28,500</span>
+            </div>
+            <div class="row">
+              <span class="meta">Hardware store</span>
+              <span class="when">28th</span>
+              <span class="amt">₡4,320</span>
+            </div>
+          </div>
+          <div class="tabbar">
+            <span class="tab on">List</span>
+            <span class="tab">Upload</span>
+            <span class="tab">Account</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="glimpse-label">Secondary · lists homepage</div>
+      <div class="glimpse">
+        <div class="g-head"><span>Your lists</span><span>finance-helper</span></div>
+        <div class="g-row"><span class="name">Household</span><span class="bal">You owe ₡42,500</span></div>
+        <div class="g-row"><span class="name">Trip with Alex</span><span class="bal ok">Settled</span></div>
+      </div>
+    </section>
+
+    <!-- ========== Panel 3 · Soft type + disclosure ========== -->
+    <section class="direction ls d3">
+      <header class="direction-meta">
+        <h2>Ledger Strip · Soft Type</h2>
+        <span class="badge">Softer type · disclosure</span>
+        <p class="personality">Same ruled strip; gentler weights; incomplete state under the bar.</p>
+        <p class="rationale">In-family nudge toward quieter labels. Disclosure sits below the strip so balances still lead — trust language without leaving Ledger Strip.</p>
+      </header>
+
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>LTE</span></div>
+          <div class="topnav">
+            <span class="brand">finance-helper</span>
+            <span class="list-title">Household</span>
+          </div>
+          <div class="strip">
+            <p class="who">You owe Partner</p>
+            <p class="amount">₡42,500</p>
+            <span class="cta">Mark settled</span>
+          </div>
+          <div class="disclosure">
+            <strong>Statement incomplete</strong>
+            Balances for this period may understate until the quarantine clears.
+          </div>
+          <div class="receipts">
+            <div class="section-label">Receipts · newest first</div>
+            <div class="row">
+              <span class="meta">Groceries</span>
+              <span class="when">yesterday</span>
+              <span class="amt">₡18,200</span>
+            </div>
+            <div class="row">
+              <span class="meta">Pharmacy</span>
+              <span class="when">Sun</span>
+              <span class="amt">₡6,750</span>
+            </div>
+            <div class="row">
+              <span class="meta">Gas</span>
+              <span class="when">Fri</span>
+              <span class="amt">₡22,000</span>
+            </div>
+            <div class="row">
+              <span class="meta">Internet</span>
+              <span class="when">1st</span>
+              <span class="amt">₡28,500</span>
+            </div>
+          </div>
+          <div class="tabbar">
+            <span class="tab on">List</span>
+            <span class="tab">Upload</span>
+            <span class="tab">Account</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="glimpse-label">State variant · incomplete disclosure</div>
+      <div class="glimpse">
+        <div class="g-head"><span>On settle-up</span><span>Period Mar</span></div>
+        <div class="g-row">
+          <span class="name">Quarantined rows held back</span>
+          <span class="bal">May understate</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== Panel 4 · Soft-Ledger hybrid alternate ========== -->
+    <section class="direction ls d4 alternate">
+      <header class="direction-meta">
+        <h2>Soft-Ledger hybrid</h2>
+        <span class="badge">Alternate · not baseline</span>
+        <p class="personality">Looser strip island; airier rows; Soft-Ledger breath inside Warm Balance.</p>
+        <p class="rationale">Contrast panel only. Amount still in a ruled strip, but chrome eases toward Open Air. Use if Canonical feels too register-like on sand; otherwise keep panels 1–3.</p>
+      </header>
+
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>LTE</span></div>
+          <div class="topnav">
+            <span class="brand">finance-helper</span>
+            <span class="list-title">Household</span>
+          </div>
+          <div class="strip">
+            <p class="who">You owe Partner</p>
+            <p class="amount">₡42,500</p>
+            <span class="cta">Mark settled</span>
+          </div>
+          <p class="hint">Send outside the app when ready</p>
+          <div class="receipts">
+            <div class="section-label">Receipts · newest first</div>
+            <div class="row">
+              <span class="meta">Groceries</span>
+              <span class="when">yesterday</span>
+              <span class="amt">₡18,200</span>
+            </div>
+            <div class="row">
+              <span class="meta">Pharmacy</span>
+              <span class="when">Sun</span>
+              <span class="amt">₡6,750</span>
+            </div>
+            <div class="row">
+              <span class="meta">Gas</span>
+              <span class="when">Fri</span>
+              <span class="amt">₡22,000</span>
+            </div>
+            <div class="row">
+              <span class="meta">Internet</span>
+              <span class="when">1st</span>
+              <span class="amt">₡28,500</span>
+            </div>
+          </div>
+          <div class="tabbar">
+            <span class="tab on">List</span>
+            <span class="tab">Upload</span>
+            <span class="tab">Account</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="glimpse-label">Secondary · lists homepage</div>
+      <div class="glimpse">
+        <div class="g-head"><span>All lists</span><span>Last opened</span></div>
+        <div class="g-row"><span class="name">Household</span><span class="bal">₡42,500</span></div>
+        <div class="g-row"><span class="name">Trip with Alex</span><span class="bal ok">₡0</span></div>
+      </div>
+    </section>
+
+  </main>
+</body>
+</html>

@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>finance-helper — key screen · Individual statement review</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..600&family=Petrona:wght@500&display=swap" rel="stylesheet" />
+  <style>
+    /*
+      Key screen: Individual statement review (J1) — Soft-Ledger hybrid
+      Product: finance-helper · Warm Balance · Petrona + Manrope
+
+      Spine sections governing this mock:
+      DESIGN.md — Brand & Style; Colors; Typography; Layout & Spacing;
+                  Elevation & Depth; Shapes; Components (button-primary,
+                  section-label, top-nav, hint); Do's and Don'ts
+      EXPERIENCE.md — Foundation; Information Architecture (Individual review);
+                      Inspiration & Anti-patterns; Voice and Tone;
+                      Component Patterns (Review card / statement,
+                      Review action buttons); Interaction Primitives
+                      (phone swipe primary; list picker before accept;
+                      desktop buttons primary); Accessibility Floor
+                      (labeled outcomes); Responsive & Platform;
+                      Key Flows · J1
+
+      Interaction lock (memlog / J1):
+        · List picker visible BEFORE commit
+        · Swipe right → accept to chosen list
+        · Swipe left → low-effort default (household shared)
+        · Swipe down → skip
+      No "paid" / settlement-recording language.
+      Reference layout: Soft-Ledger hybrid · Warm Balance tokens
+    */
+
+    :root {
+      --wb-bg: #F7F3EC;
+      --wb-surface: #FFFCF7;
+      --wb-text: #2A241C;
+      --wb-muted: #6E6456;
+      --wb-border: #E2D8C8;
+      --wb-accent: #3F6B45;
+      --wb-on-accent: #FFFCF7;
+      --wb-owe: #A04936;
+      --wb-owed: #2F6E48;
+
+      --font-display: Petrona, "Times New Roman", serif;
+      --font-ui: Manrope, system-ui, sans-serif;
+
+      --board: #E8E2D6;
+      --board-ink: #2A241C;
+      --board-mute: #6E6456;
+      --phone-shell: #2C2720;
+      --phone-bezel: #1A1611;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 28px 18px 56px;
+      font-family: var(--font-ui);
+      background: var(--board);
+      color: var(--board-ink);
+      line-height: 1.4;
+    }
+
+    .page-head {
+      max-width: 920px;
+      margin: 0 auto 22px;
+    }
+    .page-head h1 {
+      margin: 0 0 4px;
+      font-size: 1.12rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+    .page-head p {
+      margin: 0;
+      color: var(--board-mute);
+      font-size: 0.88rem;
+      max-width: 72ch;
+    }
+    .page-head .meta {
+      margin: 8px 0 0;
+      font-size: 0.78rem;
+      color: var(--board-ink);
+    }
+
+    .board {
+      max-width: 920px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(280px, 1fr));
+      gap: 28px 20px;
+      align-items: start;
+    }
+
+    @media (max-width: 720px) {
+      .board { grid-template-columns: 1fr; }
+    }
+
+    .column-meta h2 {
+      margin: 0 0 3px;
+      font-size: 0.98rem;
+      font-weight: 600;
+      letter-spacing: -0.015em;
+    }
+    .column-meta .badge {
+      display: inline-block;
+      margin: 0 0 8px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 0.62rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      background: #E2D8C8;
+      color: #2A241C;
+    }
+    .column-meta .note {
+      margin: 0 0 14px;
+      font-size: 0.74rem;
+      color: #5A5044;
+      line-height: 1.45;
+      max-width: 36ch;
+    }
+
+    /* —— Phone frame —— */
+    .phone {
+      width: 280px;
+      margin: 0 auto;
+      background: var(--phone-shell);
+      border-radius: 32px;
+      padding: 11px 10px 16px;
+      box-shadow: 0 12px 32px rgba(42, 36, 28, 0.18);
+    }
+    .notch {
+      width: 96px;
+      height: 20px;
+      background: var(--phone-bezel);
+      border-radius: 0 0 14px 14px;
+      margin: 0 auto 8px;
+    }
+    .screen {
+      background: var(--wb-bg);
+      color: var(--wb-text);
+      border-radius: 20px;
+      overflow: hidden;
+      min-height: 560px;
+      display: flex;
+      flex-direction: column;
+    }
+    .status-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 14px 4px;
+      font-size: 0.62rem;
+      font-weight: 600;
+      color: var(--wb-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Soft-Ledger hybrid · Individual review */
+    .soft .topnav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      background: transparent;
+    }
+    .soft .brand {
+      font-family: var(--font-display);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.03em;
+      color: var(--wb-muted);
+    }
+    .soft .progress {
+      font-family: var(--font-ui);
+      font-size: 0.66rem;
+      font-weight: 500;
+      color: var(--wb-text);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .soft .section-label {
+      padding: 4px 14px 6px;
+      font-family: var(--font-ui);
+      font-size: 0.6rem;
+      font-weight: 550;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--wb-muted);
+    }
+
+    /* List picker FIRST — high-intent accept target */
+    .soft .picker {
+      margin: 0 10px 8px;
+      padding: 10px;
+      background: var(--wb-surface);
+      border: 1px solid var(--wb-border);
+      border-radius: 10px;
+    }
+    .soft .picker-hint {
+      margin: 0 0 8px;
+      font-family: var(--font-ui);
+      font-size: 0.62rem;
+      font-weight: 400;
+      color: var(--wb-muted);
+      line-height: 1.35;
+    }
+    .soft .picker-hint .es {
+      display: block;
+      font-size: 0.56rem;
+      opacity: 0.85;
+    }
+    .soft .list-options {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .soft .list-opt {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border: 1px solid var(--wb-border);
+      border-radius: 8px;
+      background: var(--wb-bg);
+      font-family: var(--font-ui);
+      font-size: 0.7rem;
+      font-weight: 500;
+      color: var(--wb-text);
+    }
+    .soft .list-opt.selected {
+      border-color: var(--wb-accent);
+      background: var(--wb-surface);
+      box-shadow: inset 0 0 0 1px var(--wb-accent);
+    }
+    .soft .list-opt .radio {
+      width: 14px;
+      height: 14px;
+      border-radius: 9999px;
+      border: 1.5px solid var(--wb-border);
+      flex-shrink: 0;
+      position: relative;
+    }
+    .soft .list-opt.selected .radio {
+      border-color: var(--wb-accent);
+    }
+    .soft .list-opt.selected .radio::after {
+      content: "";
+      position: absolute;
+      inset: 3px;
+      border-radius: 9999px;
+      background: var(--wb-accent);
+    }
+    .soft .list-opt .meta {
+      margin-left: auto;
+      font-size: 0.58rem;
+      font-weight: 400;
+      color: var(--wb-muted);
+    }
+
+    /* Gesture stage + statement card */
+    .soft .stage {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 4px 10px 10px;
+      min-height: 0;
+    }
+
+    .soft .gestures {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      grid-template-rows: auto auto auto;
+      align-items: center;
+      gap: 6px 4px;
+      margin-top: 4px;
+    }
+
+    .soft .g-hint {
+      font-family: var(--font-ui);
+      font-size: 0.56rem;
+      font-weight: 500;
+      color: var(--wb-muted);
+      line-height: 1.25;
+      text-align: center;
+    }
+    .soft .g-hint .arrow {
+      display: block;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      margin-bottom: 2px;
+      color: var(--wb-text);
+    }
+    .soft .g-hint strong {
+      display: block;
+      font-weight: 550;
+      color: var(--wb-text);
+      font-size: 0.58rem;
+    }
+    .soft .g-left { grid-column: 1; grid-row: 2; text-align: left; padding-right: 2px; }
+    .soft .g-right { grid-column: 3; grid-row: 2; text-align: right; padding-left: 2px; }
+    .soft .g-down { grid-column: 1 / -1; grid-row: 3; padding-top: 2px; }
+    .soft .g-down .arrow { color: var(--wb-muted); }
+
+    .soft .card-wrap {
+      grid-column: 2;
+      grid-row: 2;
+      width: 148px;
+    }
+
+    /* Review card — Soft-Ledger paper island */
+    .soft .stmt-card {
+      background: var(--wb-surface);
+      border: 1px solid var(--wb-border);
+      border-radius: 10px;
+      padding: 14px 12px;
+      text-align: left;
+    }
+    .soft .stmt-card .card-label {
+      margin: 0 0 2px;
+      font-family: var(--font-ui);
+      font-size: 0.62rem;
+      font-weight: 550;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--wb-accent);
+    }
+    .soft .stmt-card .merchant {
+      margin: 0 0 2px;
+      font-family: var(--font-ui);
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: var(--wb-text);
+      line-height: 1.25;
+    }
+    .soft .stmt-card .when {
+      margin: 0 0 10px;
+      font-family: var(--font-ui);
+      font-size: 0.62rem;
+      font-weight: 400;
+      color: var(--wb-muted);
+    }
+    .soft .stmt-card .amount {
+      margin: 0;
+      font-family: var(--font-display);
+      font-size: 1.35rem;
+      font-weight: 500;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+      color: var(--wb-text);
+      font-variant-numeric: tabular-nums;
+    }
+    .soft .stmt-card .amount-meta {
+      margin: 4px 0 0;
+      font-family: var(--font-ui);
+      font-size: 0.56rem;
+      font-weight: 400;
+      color: var(--wb-muted);
+    }
+
+    .soft .footer-hint {
+      margin: 8px 10px 12px;
+      padding: 0 4px;
+      font-family: var(--font-ui);
+      font-size: 0.58rem;
+      font-weight: 400;
+      color: var(--wb-muted);
+      text-align: center;
+      line-height: 1.35;
+    }
+
+    /* —— Desktop column (buttons primary) —— */
+    .desk {
+      width: 100%;
+      max-width: 360px;
+      margin: 0 auto;
+      background: var(--wb-bg);
+      color: var(--wb-text);
+      border: 1px solid var(--wb-border);
+      border-radius: 12px;
+      overflow: hidden;
+      min-height: 420px;
+      display: flex;
+      flex-direction: column;
+    }
+    .desk .topnav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 18px 8px;
+      background: transparent;
+    }
+    .desk .brand {
+      font-family: var(--font-display);
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.03em;
+      color: var(--wb-muted);
+    }
+    .desk .progress {
+      font-family: var(--font-ui);
+      font-size: 0.72rem;
+      font-weight: 500;
+      color: var(--wb-text);
+      font-variant-numeric: tabular-nums;
+    }
+    .desk .section-label {
+      padding: 6px 18px 6px;
+      font-family: var(--font-ui);
+      font-size: 0.6rem;
+      font-weight: 550;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--wb-muted);
+    }
+    .desk .picker {
+      margin: 0 14px 12px;
+      padding: 12px;
+      background: var(--wb-surface);
+      border: 1px solid var(--wb-border);
+      border-radius: 10px;
+    }
+    .desk .picker-hint {
+      margin: 0 0 8px;
+      font-size: 0.66rem;
+      color: var(--wb-muted);
+    }
+    .desk .list-options {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .desk .list-opt {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 11px;
+      border: 1px solid var(--wb-border);
+      border-radius: 8px;
+      background: var(--wb-bg);
+      font-size: 0.74rem;
+      font-weight: 500;
+      color: var(--wb-text);
+    }
+    .desk .list-opt.selected {
+      border-color: var(--wb-accent);
+      background: var(--wb-surface);
+      box-shadow: inset 0 0 0 1px var(--wb-accent);
+    }
+    .desk .list-opt .radio {
+      width: 14px;
+      height: 14px;
+      border-radius: 9999px;
+      border: 1.5px solid var(--wb-border);
+      flex-shrink: 0;
+      position: relative;
+    }
+    .desk .list-opt.selected .radio {
+      border-color: var(--wb-accent);
+    }
+    .desk .list-opt.selected .radio::after {
+      content: "";
+      position: absolute;
+      inset: 3px;
+      border-radius: 9999px;
+      background: var(--wb-accent);
+    }
+    .desk .list-opt .meta {
+      margin-left: auto;
+      font-size: 0.6rem;
+      font-weight: 400;
+      color: var(--wb-muted);
+    }
+
+    .desk .stmt-card {
+      margin: 0 14px;
+      background: var(--wb-surface);
+      border: 1px solid var(--wb-border);
+      border-radius: 10px;
+      padding: 16px 14px;
+    }
+    .desk .stmt-card .card-label {
+      margin: 0 0 2px;
+      font-size: 0.62rem;
+      font-weight: 550;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--wb-accent);
+    }
+    .desk .stmt-card .merchant {
+      margin: 0 0 2px;
+      font-size: 0.88rem;
+      font-weight: 500;
+      color: var(--wb-text);
+    }
+    .desk .stmt-card .when {
+      margin: 0 0 10px;
+      font-size: 0.66rem;
+      color: var(--wb-muted);
+    }
+    .desk .stmt-card .amount {
+      margin: 0;
+      font-family: var(--font-display);
+      font-size: 1.55rem;
+      font-weight: 500;
+      letter-spacing: -0.03em;
+      color: var(--wb-text);
+      font-variant-numeric: tabular-nums;
+    }
+    .desk .stmt-card .amount-meta {
+      margin: 4px 0 0;
+      font-size: 0.6rem;
+      color: var(--wb-muted);
+    }
+
+    .desk .actions {
+      margin: 14px 14px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .desk .btn {
+      font-family: var(--font-ui);
+      font-size: 0.72rem;
+      font-weight: 550;
+      border-radius: 8px;
+      padding: 11px 14px;
+      text-align: center;
+      border: 1px solid transparent;
+    }
+    .desk .btn-primary {
+      background: var(--wb-accent);
+      color: var(--wb-on-accent);
+    }
+    .desk .btn-secondary {
+      background: var(--wb-surface);
+      color: var(--wb-text);
+      border-color: var(--wb-border);
+    }
+    .desk .btn-ghost {
+      background: transparent;
+      color: var(--wb-muted);
+      border-color: var(--wb-border);
+    }
+    .desk .btn .sub {
+      display: block;
+      margin-top: 2px;
+      font-size: 0.58rem;
+      font-weight: 400;
+      opacity: 0.85;
+    }
+  </style>
+</head>
+<body>
+  <header class="page-head">
+    <h1>finance-helper — key screen · Individual statement review</h1>
+    <p>J1 mid-flow: list picker first, then commit. Phone uses swipe as primary; desktop uses the same three outcomes as buttons.</p>
+    <p class="meta">Warm Balance · Soft-Ledger hybrid · Petrona + Manrope · no settlement language</p>
+  </header>
+
+  <main class="board">
+
+    <!-- ========== Phone · swipe primary ========== -->
+    <section>
+      <header class="column-meta">
+        <h2>Phone · Individual review</h2>
+        <span class="badge">Primary · J1</span>
+        <p class="note">Pick the list, then swipe. Right commits the selection; left is the household default; down skips.</p>
+      </header>
+
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen soft">
+          <div class="status-bar"><span>9:41</span><span>LTE</span></div>
+
+          <div class="topnav">
+            <span class="brand">finance-helper</span>
+            <span class="progress">2 of 5</span>
+          </div>
+
+          <div class="section-label">Send to list</div>
+          <div class="picker">
+            <p class="picker-hint">
+              Choose a list, then swipe right.
+              <span class="es">Elige una lista, luego desliza a la derecha.</span>
+            </p>
+            <div class="list-options" role="listbox" aria-label="Destination list">
+              <div class="list-opt selected" role="option" aria-selected="true">
+                <span class="radio" aria-hidden="true"></span>
+                <span>Trip to Manuel</span>
+              </div>
+              <div class="list-opt" role="option" aria-selected="false">
+                <span class="radio" aria-hidden="true"></span>
+                <span>Household</span>
+                <span class="meta">Default</span>
+              </div>
+              <div class="list-opt" role="option" aria-selected="false">
+                <span class="radio" aria-hidden="true"></span>
+                <span>Personal</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="stage">
+            <div class="section-label">Statement</div>
+            <div class="gestures">
+              <div class="g-hint g-left">
+                <span class="arrow" aria-hidden="true">←</span>
+                <strong>Household</strong>
+                Default
+              </div>
+
+              <div class="card-wrap">
+                <article class="stmt-card" aria-label="Statement from Travel card">
+                  <p class="card-label">Travel card</p>
+                  <p class="merchant">Restaurante Silvestre</p>
+                  <p class="when">Aug 2 · Dinner</p>
+                  <p class="amount">₡48,200</p>
+                  <p class="amount-meta">Period · Jul 15 – Aug 2</p>
+                </article>
+              </div>
+
+              <div class="g-hint g-right">
+                <span class="arrow" aria-hidden="true">→</span>
+                <strong>Trip to Manuel</strong>
+                Accept
+              </div>
+
+              <div class="g-hint g-down">
+                <span class="arrow" aria-hidden="true">↓</span>
+                <strong>Skip</strong>
+                Leave this one out
+              </div>
+            </div>
+          </div>
+
+          <p class="footer-hint">Swipe · three ways. Money settles outside the app.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== Desktop · buttons primary ========== -->
+    <section>
+      <header class="column-meta">
+        <h2>Desktop · same outcomes</h2>
+        <span class="badge">Buttons primary</span>
+        <p class="note">Same IA: picker still precedes Accept. Buttons are the primary commit — not swipe theatre on wide screens.</p>
+      </header>
+
+      <div class="desk soft">
+        <div class="topnav">
+          <span class="brand">finance-helper</span>
+          <span class="progress">2 of 5</span>
+        </div>
+
+        <div class="section-label">Send to list</div>
+        <div class="picker">
+          <p class="picker-hint">Choose a list, then Accept.</p>
+          <div class="list-options" role="listbox" aria-label="Destination list">
+            <div class="list-opt selected" role="option" aria-selected="true">
+              <span class="radio" aria-hidden="true"></span>
+              <span>Trip to Manuel</span>
+            </div>
+            <div class="list-opt" role="option" aria-selected="false">
+              <span class="radio" aria-hidden="true"></span>
+              <span>Household</span>
+              <span class="meta">Default</span>
+            </div>
+            <div class="list-opt" role="option" aria-selected="false">
+              <span class="radio" aria-hidden="true"></span>
+              <span>Personal</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-label">Statement</div>
+        <article class="stmt-card" aria-label="Statement from Travel card">
+          <p class="card-label">Travel card</p>
+          <p class="merchant">Restaurante Silvestre</p>
+          <p class="when">Aug 2 · Dinner</p>
+          <p class="amount">₡48,200</p>
+          <p class="amount-meta">Period · Jul 15 – Aug 2</p>
+        </article>
+
+        <div class="actions">
+          <div class="btn btn-primary">
+            Accept to Trip to Manuel
+            <span class="sub">Adds this statement to the list you picked</span>
+          </div>
+          <div class="btn btn-secondary">
+            Add to Household
+            <span class="sub">Your usual shared list</span>
+          </div>
+          <div class="btn btn-ghost">
+            Skip
+            <span class="sub">Leave this one out</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</body>
+</html>

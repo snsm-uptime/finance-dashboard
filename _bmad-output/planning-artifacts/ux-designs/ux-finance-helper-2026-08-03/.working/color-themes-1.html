@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>finance-helper — color themes</title>
+  <style>
+    /*
+      finance-helper color theme board
+      Feel target: calm + clear, money without stress theatre
+      Modes: light + dark side-by-side (system appearance in scope)
+      Semantic roles: bg, surface, text, muted, border, accent, owe, owed
+    */
+
+    /* ========== V1 Soft Ledger ==========
+       Light: bg #F4F6F8 | surface #FFFFFF | text #1C2430 | muted #5C6B7A
+              border #D5DCE3 | accent #2F5B8A | owe #9A4A3A | owed #2F6B4F
+       Dark:  bg #12171C | surface #1B222A | text #E8EEF3 | muted #9AA8B5
+              border #2E3944 | accent #7BA3C9 | owe #D0897A | owed #7BC49A
+    */
+    .v1.mode-light {
+      --bg: #F4F6F8; --surface: #FFFFFF; --text: #1C2430; --muted: #5C6B7A;
+      --border: #D5DCE3; --accent: #2F5B8A; --owe: #9A4A3A; --owed: #2F6B4F;
+    }
+    .v1.mode-dark {
+      --bg: #12171C; --surface: #1B222A; --text: #E8EEF3; --muted: #9AA8B5;
+      --border: #2E3944; --accent: #7BA3C9; --owe: #D0897A; --owed: #7BC49A;
+    }
+
+    /* ========== V2 Harbor Mist ==========
+       Light: bg #EEF5F4 | surface #FFFFFF | text #163028 | muted #4E6A62
+              border #C7DBD6 | accent #1F6F63 | owe #A35A3C | owed #1E7A55
+       Dark:  bg #0E1816 | surface #162420 | text #E4F0EC | muted #91ADA4
+              border #2A3D37 | accent #5EB8A8 | owe #D49A7E | owed #6BC99A
+    */
+    .v2.mode-light {
+      --bg: #EEF5F4; --surface: #FFFFFF; --text: #163028; --muted: #4E6A62;
+      --border: #C7DBD6; --accent: #1F6F63; --owe: #A35A3C; --owed: #1E7A55;
+    }
+    .v2.mode-dark {
+      --bg: #0E1816; --surface: #162420; --text: #E4F0EC; --muted: #91ADA4;
+      --border: #2A3D37; --accent: #5EB8A8; --owe: #D49A7E; --owed: #6BC99A;
+    }
+
+    /* ========== V3 Warm Balance ==========
+       Light: bg #F7F3EC | surface #FFFCF7 | text #2A241C | muted #6E6456
+              border #E2D8C8 | accent #3F6B45 | owe #A04936 | owed #2F6E48
+       Dark:  bg #17140F | surface #221E17 | text #F0E9DC | muted #A89B88
+              border #3A342A | accent #8FBB8E | owe #D48B78 | owed #7EC794
+    */
+    .v3.mode-light {
+      --bg: #F7F3EC; --surface: #FFFCF7; --text: #2A241C; --muted: #6E6456;
+      --border: #E2D8C8; --accent: #3F6B45; --owe: #A04936; --owed: #2F6E48;
+    }
+    .v3.mode-dark {
+      --bg: #17140F; --surface: #221E17; --text: #F0E9DC; --muted: #A89B88;
+      --border: #3A342A; --accent: #8FBB8E; --owe: #D48B78; --owed: #7EC794;
+    }
+
+    /* ========== V4 Ink Clear ==========
+       Light: bg #F7F7F5 | surface #FFFFFF | text #111111 | muted #626262
+              border #DCDCD8 | accent #0B6E99 | owe #B03A2E | owed #1F7A4C
+       Dark:  bg #0C0C0C | surface #171717 | text #F2F2F0 | muted #A0A0A0
+              border #2C2C2C | accent #4EB3E0 | owe #E08A80 | owed #63C98E
+    */
+    .v4.mode-light {
+      --bg: #F7F7F5; --surface: #FFFFFF; --text: #111111; --muted: #626262;
+      --border: #DCDCD8; --accent: #0B6E99; --owe: #B03A2E; --owed: #1F7A4C;
+    }
+    .v4.mode-dark {
+      --bg: #0C0C0C; --surface: #171717; --text: #F2F2F0; --muted: #A0A0A0;
+      --border: #2C2C2C; --accent: #4EB3E0; --owe: #E08A80; --owed: #63C98E;
+    }
+
+    /* ========== V5 Linen Sky ==========
+       Light: bg #F3F6FA | surface #FFFFFF | text #1A2740 | muted #5A6B84
+              border #D3DCEC | accent #3A6EA8 | owe #9C4E42 | owed #2D7358
+       Dark:  bg #10151F | surface #1A2230 | text #E9EEF7 | muted #98A6BE
+              border #2C374B | accent #89B0DE | owe #D2958A | owed #78C4A3
+    */
+    .v5.mode-light {
+      --bg: #F3F6FA; --surface: #FFFFFF; --text: #1A2740; --muted: #5A6B84;
+      --border: #D3DCEC; --accent: #3A6EA8; --owe: #9C4E42; --owed: #2D7358;
+    }
+    .v5.mode-dark {
+      --bg: #10151F; --surface: #1A2230; --text: #E9EEF7; --muted: #98A6BE;
+      --border: #2C374B; --accent: #89B0DE; --owe: #D2958A; --owed: #78C4A3;
+    }
+
+    /* ========== V6 Walnut Desk ==========
+       Light: bg #F5EFE7 | surface #FFFAF4 | text #2B2118 | muted #6F5E4C
+              border #E0D2C0 | accent #6B4E2E | owe #9B4034 | owed #3A6B3F
+       Dark:  bg #120E0A | surface #1C1611 | text #F2E8DA | muted #B0A08E
+              border #3A2F24 | accent #C4A279 | owe #D28B7F | owed #85C08D
+    */
+    .v6.mode-light {
+      --bg: #F5EFE7; --surface: #FFFAF4; --text: #2B2118; --muted: #6F5E4C;
+      --border: #E0D2C0; --accent: #6B4E2E; --owe: #9B4034; --owed: #3A6B3F;
+    }
+    .v6.mode-dark {
+      --bg: #120E0A; --surface: #1C1611; --text: #F2E8DA; --muted: #B0A08E;
+      --border: #3A2F24; --accent: #C4A279; --owe: #D28B7F; --owed: #85C08D;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 28px 20px 48px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #E8E8E6;
+      color: #1A1A1A;
+      line-height: 1.4;
+    }
+    .page-head {
+      max-width: 1480px;
+      margin: 0 auto 22px;
+    }
+    .page-head h1 {
+      margin: 0 0 4px;
+      font-size: 1.15rem;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+    }
+    .page-head p {
+      margin: 0;
+      color: #555;
+      font-size: 0.9rem;
+    }
+    .board {
+      max-width: 1480px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+      gap: 18px;
+    }
+    .variation {
+      background: #F7F7F5;
+      border: 1px solid #CFCFCA;
+      border-radius: 14px;
+      padding: 14px;
+    }
+    .variation-head h2 {
+      margin: 0 0 2px;
+      font-size: 1rem;
+      font-weight: 650;
+      letter-spacing: -0.01em;
+    }
+    .variation-head .register {
+      margin: 0 0 12px;
+      font-size: 0.82rem;
+      color: #555;
+    }
+    .modes {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .mode {
+      border-radius: 12px;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 10px;
+      min-width: 0;
+    }
+    .mode-label {
+      font-size: 0.68rem;
+      font-weight: 650;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-bottom: 10px;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.68rem;
+      padding: 3px 7px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .swatch {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      border: 1px solid color-mix(in srgb, var(--text) 18%, transparent);
+      flex: 0 0 auto;
+    }
+    .chip[data-role="bg"] .swatch { background: var(--bg); }
+    .chip[data-role="surface"] .swatch { background: var(--surface); }
+    .chip[data-role="text"] .swatch { background: var(--text); }
+    .chip[data-role="muted"] .swatch { background: var(--muted); }
+    .chip[data-role="border"] .swatch { background: var(--border); }
+    .chip[data-role="accent"] .swatch { background: var(--accent); }
+    .chip[data-role="owe"] .swatch { background: var(--owe); }
+    .chip[data-role="owed"] .swatch { background: var(--owed); }
+
+    /* Realistic settle-up snippet */
+    .snippet {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 12px 10px;
+    }
+    .snippet-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .product {
+      font-size: 0.72rem;
+      font-weight: 650;
+      letter-spacing: 0.02em;
+      color: var(--muted);
+    }
+    .list-name {
+      font-size: 0.78rem;
+      color: var(--text);
+      font-weight: 550;
+    }
+    .balance {
+      text-align: center;
+      padding: 4px 0 12px;
+    }
+    .direction {
+      margin: 0 0 4px;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .hero-amount {
+      margin: 0;
+      font-size: 1.85rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+      color: var(--owe);
+    }
+    .mode.owed-variant .hero-amount { color: var(--owed); }
+    .hint {
+      margin: 6px 0 0;
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+    .cta {
+      display: block;
+      width: 100%;
+      margin-top: 12px;
+      border: none;
+      border-radius: 9px;
+      background: var(--accent);
+      color: #fff;
+      font: inherit;
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 9px 12px;
+      text-align: center;
+    }
+    .v3.mode-dark .cta,
+    .v6.mode-dark .cta { color: #1A120A; }
+    .receipts {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+    }
+    .receipts-label {
+      font-size: 0.68rem;
+      font-weight: 650;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 0.78rem;
+      padding: 5px 0;
+    }
+    .row .meta { color: var(--muted); min-width: 0; }
+    .row .amt { color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+    @media (max-width: 460px) {
+      .board { grid-template-columns: 1fr; }
+      .modes { grid-template-columns: 1fr; }
+      .hero-amount { font-size: 1.6rem; }
+    }
+  </style>
+</head>
+<body>
+  <header class="page-head">
+    <h1>finance-helper — color themes</h1>
+    <p>Calm + clear settle-up. Light and dark for each variation. Amount is the hero.</p>
+  </header>
+
+  <main class="board">
+
+    <!-- V1 -->
+    <section class="variation">
+      <header class="variation-head">
+        <h2>Soft Ledger</h2>
+        <p class="register">Quiet professional clarity — cool paper and ink, no drama.</p>
+      </header>
+      <div class="modes">
+        <div class="mode v1 mode-light">
+          <div class="mode-label">Light</div>
+          <div class="chips">
+            <span class="chip" data-role="bg"><i class="swatch"></i>bg</span>
+            <span class="chip" data-role="surface"><i class="swatch"></i>surface</span>
+            <span class="chip" data-role="text"><i class="swatch"></i>text</span>
+            <span class="chip" data-role="muted"><i class="swatch"></i>muted</span>
+            <span class="chip" data-role="border"><i class="swatch"></i>border</span>
+            <span class="chip" data-role="accent"><i class="swatch"></i>accent</span>
+            <span class="chip" data-role="owe"><i class="swatch"></i>owe</span>
+            <span class="chip" data-role="owed"><i class="swatch"></i>owed</span>
+          </div>
+          <article class="snippet">
+            <div class="snippet-top">
+              <span class="product">finance-helper</span>
+              <span class="list-name">Household</span>
+            </div>
+            <div class="balance">
+              <p class="direction">You owe Partner</p>
+              <p class="hero-amount">₡42,500</p>
+              <p class="hint">Send outside the app when ready</p>
+              <span class="cta">Mark as settled</span>
+            </div>
+            <div class="receipts">
+              <div class="receipts-label">Recent</div>
+              <div class="row"><span class="meta">Groceries · yesterday</span><span class="amt">₡18,200</span></div>
+              <div class="row"><span class="meta">Pharmacy · Sun</span><span class="amt">₡6,750</span></div>
+            </div>
+          </article>
+        </div>
+        <div class="mode v1 mode-dark">
+          <div class="mode-label">Dark</div>
+          <div class="chips">
+            <span class="chip" data-role="bg"><i class="swatch"></i>bg</span>
+            <span class="chip" data-role="surface"><i class="swatch"></i>surface</span>
+            <span class="chip" data-role="text"><i class="swatch"></i>text</span>
+            <span class="chip" data-role="muted"><i class="swatch"></i>muted</span>
+            <span class="chip" data-role="border"><i class="swatch"></i>border</span>
+            <span class="chip" data-role="accent"><i class="swatch"></i>accent</span>
+            <span class="chip" data-role="owe"><i class="swatch"></i>owe</span>
+            <span class="chip" data-role="owed"><i class="swatch"></i>owed</span>
+          </div>
+          <article class="snippet">
+            <div class="snippet-top">
+              <span class="product">finance-helper</span>
+              <span class="list-name">Household</span>
+            </div>
+            <div class="balance">
+              <p class="direction">You owe Partner</p>
+              <p class="hero-amount">₡42,500</p>
+              <p class="hint">Send outside the app when ready</p>
+              <span class="cta">Mark as settled</span>
+            </div>
+            <div class="receipts">
+              <div class="receipts-label">Recent</div>
+              <div class="row"><span class="meta">Groceries · yesterday</span><span class="amt">₡18,200</span></div>
+              <div class="row"><span class="meta">Pharmacy · Sun</span><span class="amt">₡6,750</span></div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- V2 -->
+    <section class="variation">
+      <header class="variation-head">
+        <h2>Harbor Mist</h2>
+        <p class="register">Restorative coastal calm — teal-anchored, soft and steady.</p>
+      </header>
+      <div class="modes">
+        <div class="mode v2 mode-light owed-variant">
+          <div class="mode-label">Light</div>
+          <div class="chips">
+            <span class="chip" data-role="bg"><i class="swatch"></i>bg</span>
+            <span class="chip" data-role="surface"><i class="swatch"></i>surface</span>
+            <span class="chip" data-role="text"><i class="swatch"></i>text</span>
+            <span class="chip" data-role="muted"><i class="swatch"></i>muted</span>
+            <span class="chip" data-role="border"><i class="swatch"></i>border</span>
+            <span class="chip" data-role="accent"><i class="swatch"></i>accent</span>
+            <span class="chip" data-role="owe"><i class="swatch"></i>owe</span>
+            <span class="chip" data-role="owed"><i class="swatch"></i>owed</span>
+          </div>
+          <article class="snippet">
+            <div class="snippet-top">
+              <span class="product">finance-helper</span>
+              <span class="list-name">Household</span>
+            </div>
+            <div class="balance">
+              <p class="direction">Partner owes You</p>
+              <p class="hero-amount">₡18,900</p>
+              <p class="hint">Waiting on their transfer</p>
+              <span class="cta">Remind Partner</span>
+            </div>
+            <div class="receipts">
+              <div class="receipts-label">Recent</div>
+              <div class="row"><span class="meta">Utilities · Mon</span><span class="amt">₡31,400</span></div>
+              <div class="row"><span class="meta">Dinner · Sat</span><span class="amt">₡12,800</span></div>
+            </div>
+          </article>
+        </div>
+        <div class="mode v2 mode-dark owed-variant">
+          <div class="mode-label">Dark</div>
+          <div class="chips">
+            <span class="chip" data-role="bg"><i class="swatch"></i>bg</span>
+            <span class="chip" data-role="surface"><i class="swatch"></i>surface</span>
+            <span class="chip" data-role="text"><i class="swatch"></i>text</span>
+            <span class="chip" data-role="muted"><i class="swatch"></i>muted</span>
+            <span class="chip" data-role="border"><i class="swatch"></i>border</span>
+            <span class="chip" data-role="accent"><i class="swatch"></i>accent</span>
+            <span class="chip" data-role="owe"><i class="swatch"></i>owe</span>
+            <span class="chip" data-role="owed"><i class="swatch"></i>owed</span>
+          </div>
+          <article class="snippet">
+            <div class="snippet-top">
+              <span class="product">finance-helper</span>
+              <span class="list-name">Household</span>
+            </div>
+            <div class="balance">
+              <p class="direction">Partner owes You</p>
+              <p class="hero-amount">₡18,900</p>
+              <p class="hint">Waiting on their transfer</p>
+              <span class="cta">Remind Partner</span>
+            </div>
+            <div class="receipts">
+              <div class="receipts-label">Recent</div>
+              <div class="row"><span class="meta">Utilities · Mon</span><span class="amt">₡31,400</span></div>
+              <div class="row"><span class="meta">Dinner · Sat</span><span class="amt">₡12,800</span></div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- V3 -->
+    <section class="variation">
+      <header class="variation-head">
+        <h2>Warm Balance</h2>
+        <p class="register">Grounded domestic ease — warm sand with moss-green action.</p>
+      </header>
+      <div class="modes">
+        <div class="mode v3 mode-light">
+          <div class="mode-label">Light</div>
+          <div class="chips">
+            <span class="chip" data-role="bg"><i class="swatch"></i>bg</span>
+            <span class="chip" data-role="surface"><i class="swatch"></i>surface</span>
+            <span class="chip" data-role="text"><i class="swatch"></i>text</span>
+            <span class="chip" data-role="muted"><i class="swatch"></i>muted</span>
+            <span class="chip" data-role="border"><i class="swatch"></i>border</span>
+            <span class="chip" data-role="accent"><i class="swatch"></i>accent</span>
+            <span class="chip" data-role="owe"><i class="swatch"></i>owe</span>
+            <span class="chip" data-role="owed"><i class="swatch"></i>owed</span>
+          </div>
+          <article class="snippet">
+            <div class="snippet-top">
+              <span class="product">finance-helper</span>
+              <span class="list-name">Household</span>
+            </div>
+            <div class="balance">
+              <p class="direction">You owe Partner</p>
+              <p class="hero-amount">₡42,500</p>
+              <p class="hint">Send outside the app when ready</p>
+              <span class="cta">Mark as settled</span>
+            </div>
+            <div class="receipts">
+              <div class="receipts-label">Recent</div>
+              <div class="row"><span class="meta">Groceries · yesterday</span><span class="amt">₡18,200</span></div>
+              <div class="row"><span class="meta">Gas · Fri</span><span class="amt">₡22,000</span></div>
+            </div>
+          </article>
+        </div>
+        <div class="mode v3 mode-dark">
+          <div class="mode-label">Dark</div>
+          <div class="chips">
+            <span class="chip" data-role="bg"><i class="swatch"></i>bg</span>
+            <span class="chip" data-role="surface"><i class="swatch"></i>surface</span>
+            <span class="chip" data-role="text"><i class="swatch"></i>text</span>
+            <span class="chip" data-role="muted"><i class="swatch"></i>muted</span>
+            <span class="chip" data-role="border"><i class="swatch"></i>border</span>
+            <span class="chip" data-role="accent"><i class="swatch"></i>accent</span>
+            <span class="chip" data-role="owe"><i class="swatch"></i>owe</span>
+            <span class="chip" data-role="owed"><i class="swatch"></i>owed</span>
+          </div>
+          <article class="snippet">
+            <div class="snippet-top">
+              <span class="product">finance-helper</span>
+              <span class="list-name">Household</span>
+            </div>
+            <div class="balance">
+              <p class="direction">You owe Partner</p>
+              <p class="hero-amount">₡42,500</p>
+              <p class="hint">Send outside the app when ready</p>
+              <span class="cta">Mark as settled</span>
+            </div>
+            <div class="receipts">
+              <div class="receipts-label">Recent</div>
+              <div class="row"><span class="meta">Groceries · yesterday</span><span class="amt">₡18,200</span></div>
+              <div class="row"><span class="meta">Gas · Fri</span><span class="amt">₡22,000</span></div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- V4 -->
+    <section class="variation">
+      <header class="variation-head">
+        <h2>Ink Clear</h2>
+        <p class="register">Surgical stillness — near-monochrome with one cool blue action.</p>
+      </header>
+      <div class="modes">
+        <div class="mode v4 mode-light">
+          <div class="mode-label">Light</div>
+          <div class="chips">
+            <span class="chip" data-role="bg"><i class="swatch"></i>bg</span>
+            <span class="chip" data-role="surface"><i class="swatch"></i>surface</span>
+            <span class="chip" data-role="text"><i class="swatch"></i>text</span>
+            <span class="chip" data-role="muted"><i class="swatch"></i>muted</span>
+            <span class="chip" data-role="border"><i class="swatch"></i>border</span>
+            <span class="chip" data-role="accent"><i class="swatch"></i>accent</span>
+            <span class="chip" data-role="owe"><i class="swatch"></i>owe</span>
+            <span class="chip" data-role="owed"><i class="swatch"></i>owed</span>
+          </div>
+          <article class="snippet">
+            <div class="snippet-top">
+              <span class="product">finance-helper</span>
+              <span class="list-name">Trip with Alex</span>
+            </div>
+            <div class="balance">
+              <p class="direction">You owe Alex</p>
+              <p class="hero-amount">₡27,300</p>
+              <p class="hint">Send outside the app when ready</p>
+              <span class="cta">Mark as settled</span>
+            </div>
+            <div class="receipts">
+              <div class="receipts-label">Recent</div>
+              <div class="row"><span class="meta">Hotel · Mar 2</span><span class="amt">₡54,600</span></div>
+              <div class="row"><span class="meta">Taxi · Mar 1</span><span class="amt">₡8,400</span></div>
+            </div>
+          </article>
+        </div>
+        <div class="mode v4 mode-dark">
+          <div class="mode-label">Dark</div>
+          <div class="chips">
+            <span class="chip" data-role="bg"><i class="swatch"></i>bg</span>
+            <span class="chip" data-role="surface"><i class="swatch"></i>surface</span>
+            <span class="chip" data-role="text"><i class="swatch"></i>text</span>
+            <span class="chip" data-role="muted"><i class="swatch"></i>muted</span>
+            <span class="chip" data-role="border"><i class="swatch"></i>border</span>
+            <span class="chip" data-role="accent"><i class="swatch"></i>accent</span>
+            <span class="chip" data-role="owe"><i class="swatch"></i>owe</span>
+            <span class="chip" data-role="owed"><i class="swatch"></i>owed</span>
+          </div>
+          <article class="snippet">
+            <div class="snippet-top">
+              <span class="product">finance-helper</span>
+              <span class="list-name">Trip with Alex</span>
+            </div>
+            <div class="balance">
+              <p class="direction">You owe Alex</p>
+              <p class="hero-amount">₡27,300</p>
+              <p class="hint">Send outside the app when ready</p>
+              <span class="cta">Mark as settled</span>
+            </div>
+            <div class="receipts">
+              <div class="receipts-label">Recent</div>
+              <div class="row"><span class="meta">Hotel · Mar 2</span><span class="amt">₡54,600</span></div>
+              <div class="row"><span class="meta">Taxi · Mar 1</span><span class="amt">₡8,400</span></div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- V5 -->
+    <section class="variation">
+      <header class="variation-head">
+        <h2>Linen Sky</h2>
+        <p class="register">Morning lightness — cool air, open space, unhurried blue.</p>
+      </header>
+      <div class="modes">
+        <div class="mode v5 mode-light owed-variant">
+          <div class="mode-label">Light</div>
+          <div class="chips">
+            <span class="chip" data-role="bg"><i class="swatch"></i>bg</span>
+            <span class="chip" data-role="surface"><i class="swatch"></i>surface</span>
+            <span class="chip" data-role="text"><i class="swatch"></i>text</span>
+            <span class="chip" data-role="muted"><i class="swatch"></i>muted</span>
+            <span class="chip" data-role="border"><i class="swatch"></i>border</span>
+            <span class="chip" data-role="accent"><i class="swatch"></i>accent</span>
+            <span class="chip" data-role="owe"><i class="swatch"></i>owe</span>
+            <span class="chip" data-role="owed"><i class="swatch"></i>owed</span>
+          </div>
+          <article class="snippet">
+            <div class="snippet-top">
+              <span class="product">finance-helper</span>
+              <span class="list-name">Household</span>
+            </div>
+            <div class="balance">
+              <p class="direction">Partner owes You</p>
+              <p class="hero-amount">₡9,750</p>
+              <p class="hint">Waiting on their transfer</p>
+              <span class="cta">Remind Partner</span>
+            </div>
+            <div class="receipts">
+              <div class="receipts-label">Recent</div>
+              <div class="row"><span class="meta">Market · today</span><span class="amt">₡9,750</span></div>
+              <div class="row"><span class="meta">Coffee · today</span><span class="amt">₡3,200</span></div>
+            </div>
+          </article>
+        </div>
+        <div class="mode v5 mode-dark owed-variant">
+          <div class="mode-label">Dark</div>
+          <div class="chips">
+            <span class="chip" data-role="bg"><i class="swatch"></i>bg</span>
+            <span class="chip" data-role="surface"><i class="swatch"></i>surface</span>
+            <span class="chip" data-role="text"><i class="swatch"></i>text</span>
+            <span class="chip" data-role="muted"><i class="swatch"></i>muted</span>
+            <span class="chip" data-role="border"><i class="swatch"></i>border</span>
+            <span class="chip" data-role="accent"><i class="swatch"></i>accent</span>
+            <span class="chip" data-role="owe"><i class="swatch"></i>owe</span>
+            <span class="chip" data-role="owed"><i class="swatch"></i>owed</span>
+          </div>
+          <article class="snippet">
+            <div class="snippet-top">
+              <span class="product">finance-helper</span>
+              <span class="list-name">Household</span>
+            </div>
+            <div class="balance">
+              <p class="direction">Partner owes You</p>
+              <p class="hero-amount">₡9,750</p>
+              <p class="hint">Waiting on their transfer</p>
+              <span class="cta">Remind Partner</span>
+            </div>
+            <div class="receipts">
+              <div class="receipts-label">Recent</div>
+              <div class="row"><span class="meta">Market · today</span><span class="amt">₡9,750</span></div>
+              <div class="row"><span class="meta">Coffee · today</span><span class="amt">₡3,200</span></div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- V6 -->
+    <section class="variation">
+      <header class="variation-head">
+        <h2>Walnut Desk</h2>
+        <p class="register">Evening focus — material warmth, desk-lamp concentration.</p>
+      </header>
+      <div class="modes">
+        <div class="mode v6 mode-light">
+          <div class="mode-label">Light</div>
+          <div class="chips">
+            <span class="chip" data-role="bg"><i class="swatch"></i>bg</span>
+            <span class="chip" data-role="surface"><i class="swatch"></i>surface</span>
+            <span class="chip" data-role="text"><i class="swatch"></i>text</span>
+            <span class="chip" data-role="muted"><i class="swatch"></i>muted</span>
+            <span class="chip" data-role="border"><i class="swatch"></i>border</span>
+            <span class="chip" data-role="accent"><i class="swatch"></i>accent</span>
+            <span class="chip" data-role="owe"><i class="swatch"></i>owe</span>
+            <span class="chip" data-role="owed"><i class="swatch"></i>owed</span>
+          </div>
+          <article class="snippet">
+            <div class="snippet-top">
+              <span class="product">finance-helper</span>
+              <span class="list-name">Household</span>
+            </div>
+            <div class="balance">
+              <p class="direction">You owe Partner</p>
+              <p class="hero-amount">₡42,500</p>
+              <p class="hint">Send outside the app when ready</p>
+              <span class="cta">Mark as settled</span>
+            </div>
+            <div class="receipts">
+              <div class="receipts-label">Recent</div>
+              <div class="row"><span class="meta">Supermarket · yesterday</span><span class="amt">₡24,100</span></div>
+              <div class="row"><span class="meta">Internet · 1st</span><span class="amt">₡28,500</span></div>
+            </div>
+          </article>
+        </div>
+        <div class="mode v6 mode-dark">
+          <div class="mode-label">Dark</div>
+          <div class="chips">
+            <span class="chip" data-role="bg"><i class="swatch"></i>bg</span>
+            <span class="chip" data-role="surface"><i class="swatch"></i>surface</span>
+            <span class="chip" data-role="text"><i class="swatch"></i>text</span>
+            <span class="chip" data-role="muted"><i class="swatch"></i>muted</span>
+            <span class="chip" data-role="border"><i class="swatch"></i>border</span>
+            <span class="chip" data-role="accent"><i class="swatch"></i>accent</span>
+            <span class="chip" data-role="owe"><i class="swatch"></i>owe</span>
+            <span class="chip" data-role="owed"><i class="swatch"></i>owed</span>
+          </div>
+          <article class="snippet">
+            <div class="snippet-top">
+              <span class="product">finance-helper</span>
+              <span class="list-name">Household</span>
+            </div>
+            <div class="balance">
+              <p class="direction">You owe Partner</p>
+              <p class="hero-amount">₡42,500</p>
+              <p class="hint">Send outside the app when ready</p>
+              <span class="cta">Mark as settled</span>
+            </div>
+            <div class="receipts">
+              <div class="receipts-label">Recent</div>
+              <div class="row"><span class="meta">Supermarket · yesterday</span><span class="amt">₡24,100</span></div>
+              <div class="row"><span class="meta">Internet · 1st</span><span class="amt">₡28,500</span></div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</body>
+</html>

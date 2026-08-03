@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>finance-helper — key screen · shared list settle-up</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..600&family=Petrona:wght@500&display=swap" rel="stylesheet" />
+  <style>
+    /*
+      Key screen: Shared list settle-up (J2 hero) — Soft-Ledger hybrid
+      Product: finance-helper · Warm Balance · Petrona + Manrope
+
+      Spine sections governing this mock:
+      DESIGN.md — Brand & Style; Colors; Typography; Layout & Spacing;
+                  Elevation & Depth; Shapes; Components (balance-strip,
+                  receipt-row, section-label, top-nav, tab-bar, hint,
+                  Incomplete disclosure); Do's and Don'ts
+      EXPERIENCE.md — Foundation; Information Architecture (Shared-expenses);
+                      Inspiration & Anti-patterns; Voice and Tone;
+                      Component Patterns (Settle-up strip, Receipt row,
+                      Quarantine disclosure); State Patterns (Incomplete
+                      balance / quarantine); Key Flows · J2; Interaction
+                      Primitives (banned settlement-recording CTA)
+
+      Reference layout: .working/directions-2-warm-balance.html · Soft-Ledger hybrid
+      Fonts: Google Fonts allowed here for locked-face fidelity (user exception to offline purity)
+    */
+
+    :root {
+      --wb-bg: #F7F3EC;
+      --wb-surface: #FFFCF7;
+      --wb-text: #2A241C;
+      --wb-muted: #6E6456;
+      --wb-border: #E2D8C8;
+      --wb-accent: #3F6B45;
+      --wb-on-accent: #FFFCF7;
+      --wb-owe: #A04936;
+      --wb-owed: #2F6E48;
+
+      --wb-bg-dark: #17140F;
+      --wb-surface-dark: #221E17;
+      --wb-text-dark: #F0E9DC;
+      --wb-muted-dark: #A89B88;
+      --wb-border-dark: #3A342A;
+      --wb-accent-dark: #8FBB8E;
+      --wb-owe-dark: #D48B78;
+      --wb-owed-dark: #7EC794;
+
+      --font-display: Petrona, "Times New Roman", serif;
+      --font-ui: Manrope, system-ui, sans-serif;
+
+      --board: #E8E2D6;
+      --board-ink: #2A241C;
+      --board-mute: #6E6456;
+      --phone-shell: #2C2720;
+      --phone-bezel: #1A1611;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 28px 18px 56px;
+      font-family: var(--font-ui);
+      background: var(--board);
+      color: var(--board-ink);
+      line-height: 1.4;
+    }
+
+    .page-head {
+      max-width: 920px;
+      margin: 0 auto 22px;
+    }
+    .page-head h1 {
+      margin: 0 0 4px;
+      font-size: 1.12rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+    .page-head p {
+      margin: 0;
+      color: var(--board-mute);
+      font-size: 0.88rem;
+      max-width: 68ch;
+    }
+    .page-head .meta {
+      margin: 8px 0 0;
+      font-size: 0.78rem;
+      color: var(--board-ink);
+    }
+
+    .board {
+      max-width: 920px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(280px, 1fr));
+      gap: 28px 20px;
+      align-items: start;
+    }
+
+    @media (max-width: 720px) {
+      .board { grid-template-columns: 1fr; }
+    }
+
+    .column-meta h2 {
+      margin: 0 0 3px;
+      font-size: 0.98rem;
+      font-weight: 600;
+      letter-spacing: -0.015em;
+    }
+    .column-meta .badge {
+      display: inline-block;
+      margin: 0 0 8px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 0.62rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      background: #E2D8C8;
+      color: #2A241C;
+    }
+    .column-meta .note {
+      margin: 0 0 14px;
+      font-size: 0.74rem;
+      color: #5A5044;
+      line-height: 1.45;
+      max-width: 34ch;
+    }
+
+    /* —— Phone frame —— */
+    .phone {
+      width: 280px;
+      margin: 0 auto;
+      background: var(--phone-shell);
+      border-radius: 32px;
+      padding: 11px 10px 16px;
+      box-shadow: 0 12px 32px rgba(42, 36, 28, 0.18);
+    }
+    .notch {
+      width: 96px;
+      height: 20px;
+      background: var(--phone-bezel);
+      border-radius: 0 0 14px 14px;
+      margin: 0 auto 8px;
+    }
+    .screen {
+      background: var(--wb-bg);
+      color: var(--wb-text);
+      border-radius: 20px;
+      overflow: hidden;
+      min-height: 520px;
+      display: flex;
+      flex-direction: column;
+    }
+    .status-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 14px 4px;
+      font-size: 0.62rem;
+      font-weight: 600;
+      color: var(--wb-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Soft-Ledger hybrid · light (from directions-2 d4 + DESIGN tokens) */
+    .soft .topnav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      background: transparent;
+    }
+    .soft .brand {
+      font-family: var(--font-display);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.03em;
+      color: var(--wb-muted);
+    }
+    .soft .list-title {
+      font-family: var(--font-ui);
+      font-size: 0.66rem;
+      font-weight: 500;
+      color: var(--wb-text);
+    }
+
+    /* Balance strip island — J2 climax; no settlement CTA (EXPERIENCE banned) */
+    .soft .strip {
+      margin: 0 10px;
+      padding: 14px 12px;
+      background: var(--wb-surface);
+      border: 1px solid var(--wb-border);
+      border-radius: 10px;
+    }
+    .soft .who {
+      margin: 0 0 6px;
+      font-family: var(--font-ui);
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      line-height: 1.3;
+      color: var(--wb-muted);
+      text-transform: none;
+    }
+    .soft .amount {
+      margin: 0;
+      font-family: var(--font-display);
+      font-size: 1.7rem;
+      font-weight: 500;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+      color: var(--wb-owe);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .soft .hint {
+      margin: 0 10px;
+      padding: 8px 4px 4px;
+      font-family: var(--font-ui);
+      font-size: 0.62rem;
+      font-weight: 400;
+      color: var(--wb-muted);
+      background: transparent;
+    }
+
+    /* Incomplete disclosure under island (DESIGN Incomplete disclosure assumption) */
+    .soft .disclosure {
+      margin: 4px 10px 0;
+      padding: 10px 12px;
+      border: 1px solid var(--wb-border);
+      border-radius: 8px;
+      background: var(--wb-surface);
+      font-family: var(--font-ui);
+      font-size: 0.62rem;
+      line-height: 1.4;
+      color: var(--wb-muted);
+    }
+    .soft .disclosure strong {
+      display: block;
+      margin-bottom: 2px;
+      font-size: 0.64rem;
+      font-weight: 550;
+      color: var(--wb-text);
+    }
+
+    .soft .receipts {
+      flex: 1;
+      background: transparent;
+      padding: 4px 10px 10px;
+    }
+    .soft .section-label {
+      padding: 10px 4px 6px;
+      font-family: var(--font-ui);
+      font-size: 0.6rem;
+      font-weight: 550;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--wb-muted);
+    }
+    .soft .row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 2px 8px;
+      padding: 9px 4px;
+      border-bottom: 1px solid var(--wb-border);
+      font-size: 0.74rem;
+    }
+    .soft .row .meta {
+      font-family: var(--font-ui);
+      font-weight: 400;
+      color: var(--wb-text);
+    }
+    .soft .row .when {
+      grid-column: 1;
+      font-family: var(--font-ui);
+      font-size: 0.62rem;
+      font-weight: 400;
+      color: var(--wb-muted);
+    }
+    .soft .row .amt {
+      grid-column: 2;
+      grid-row: 1 / span 2;
+      align-self: center;
+      font-family: var(--font-display);
+      font-size: 0.74rem;
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+      color: var(--wb-muted);
+    }
+    .soft .row.incomplete .meta::after {
+      content: " · Incomplete";
+      font-size: 0.58rem;
+      font-weight: 500;
+      color: var(--wb-muted);
+      letter-spacing: 0.01em;
+    }
+
+    .soft .tabbar {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      border-top: 1px solid var(--wb-border);
+      background: var(--wb-surface);
+      margin-top: auto;
+    }
+    .soft .tab {
+      text-align: center;
+      padding: 10px 4px;
+      font-family: var(--font-ui);
+      font-size: 0.58rem;
+      font-weight: 500;
+      color: var(--wb-muted);
+    }
+    .soft .tab.on { color: var(--wb-accent); }
+
+    /* Dark inset — optional Warm Balance dark tokens */
+    .dark-inset-label {
+      margin: 18px auto 6px;
+      width: 280px;
+      font-size: 0.64rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--board-mute);
+    }
+    .phone.dark-inset {
+      width: 220px;
+      border-radius: 26px;
+      padding: 9px 8px 12px;
+      box-shadow: 0 8px 22px rgba(42, 36, 28, 0.2);
+    }
+    .phone.dark-inset .notch {
+      width: 76px;
+      height: 16px;
+      border-radius: 0 0 11px 11px;
+    }
+    .phone.dark-inset .screen {
+      min-height: 360px;
+      border-radius: 16px;
+      background: var(--wb-bg-dark);
+      color: var(--wb-text-dark);
+    }
+    .phone.dark-inset .status-bar { color: var(--wb-muted-dark); padding: 6px 12px 2px; }
+    .phone.dark-inset .soft .brand { color: var(--wb-muted-dark); font-size: 0.58rem; }
+    .phone.dark-inset .soft .list-title { color: var(--wb-text-dark); font-size: 0.58rem; }
+    .phone.dark-inset .soft .topnav { padding: 8px 12px; }
+    .phone.dark-inset .soft .strip {
+      margin: 0 8px;
+      padding: 11px 10px;
+      background: var(--wb-surface-dark);
+      border-color: var(--wb-border-dark);
+      border-radius: 10px;
+    }
+    .phone.dark-inset .soft .who { color: var(--wb-muted-dark); font-size: 0.64rem; margin-bottom: 4px; }
+    .phone.dark-inset .soft .amount { color: var(--wb-owe-dark); font-size: 1.35rem; }
+    .phone.dark-inset .soft .hint {
+      margin: 0 8px;
+      padding: 6px 2px 2px;
+      color: var(--wb-muted-dark);
+      font-size: 0.56rem;
+    }
+    .phone.dark-inset .soft .receipts { padding: 2px 8px 8px; }
+    .phone.dark-inset .soft .section-label {
+      padding: 8px 2px 4px;
+      color: var(--wb-muted-dark);
+      font-size: 0.54rem;
+    }
+    .phone.dark-inset .soft .row {
+      padding: 7px 2px;
+      border-bottom-color: var(--wb-border-dark);
+      font-size: 0.66rem;
+    }
+    .phone.dark-inset .soft .row .meta { color: var(--wb-text-dark); }
+    .phone.dark-inset .soft .row .when { color: var(--wb-muted-dark); font-size: 0.56rem; }
+    .phone.dark-inset .soft .row .amt { color: var(--wb-muted-dark); font-size: 0.66rem; }
+    .phone.dark-inset .soft .tabbar {
+      border-top-color: var(--wb-border-dark);
+      background: var(--wb-surface-dark);
+    }
+    .phone.dark-inset .soft .tab { color: var(--wb-muted-dark); font-size: 0.52rem; padding: 8px 2px; }
+    .phone.dark-inset .soft .tab.on { color: var(--wb-accent-dark); }
+
+    .col-dark .phone { margin-left: auto; margin-right: auto; }
+  </style>
+</head>
+<body>
+  <header class="page-head">
+    <h1>Key screen · Shared list settle-up</h1>
+    <p>J2 hero — Monse opens Household and sees one clear CRC amount to send. Soft-Ledger hybrid on Warm Balance. No settlement recording.</p>
+    <p class="meta">Theme · Warm Balance · Layout · Soft-Ledger hybrid · Type · Petrona + Manrope</p>
+  </header>
+
+  <main class="board">
+
+    <!-- Column 1 · Canonical light settle (J2 climax) -->
+    <section>
+      <header class="column-meta">
+        <h2>Settle-up · clear</h2>
+        <span class="badge">J2 · light</span>
+        <p class="note">Balances lead; receipts newest-first below. Amount is the climax — no “Mark settled.”</p>
+      </header>
+
+      <div class="phone">
+        <div class="notch" aria-hidden="true"></div>
+        <div class="screen soft">
+          <div class="status-bar"><span>9:41</span><span>LTE</span></div>
+          <div class="topnav">
+            <span class="brand">finance-helper</span>
+            <span class="list-title">Household</span>
+          </div>
+          <div class="strip">
+            <p class="who">You owe Partner</p>
+            <p class="amount">₡42,500</p>
+          </div>
+          <p class="hint">Send outside the app when ready</p>
+          <div class="receipts">
+            <div class="section-label">Receipts · newest first</div>
+            <div class="row">
+              <span class="meta">Auto Mercado · Escazú</span>
+              <span class="when">yesterday</span>
+              <span class="amt">₡18,200</span>
+            </div>
+            <div class="row">
+              <span class="meta">Fischel Pharmacy</span>
+              <span class="when">Sun</span>
+              <span class="amt">₡6,750</span>
+            </div>
+            <div class="row">
+              <span class="meta">RECOPE gas</span>
+              <span class="when">Fri</span>
+              <span class="amt">₡22,000</span>
+            </div>
+            <div class="row">
+              <span class="meta">Kolbi fiber</span>
+              <span class="when">1 Mar</span>
+              <span class="amt">₡28,500</span>
+            </div>
+          </div>
+          <div class="tabbar">
+            <span class="tab on">List</span>
+            <span class="tab">Upload</span>
+            <span class="tab">Account</span>
+          </div>
+        </div>
+      </div>
+
+      <p class="dark-inset-label">Optional · dark tokens</p>
+      <div class="phone dark-inset">
+        <div class="notch" aria-hidden="true"></div>
+        <div class="screen soft">
+          <div class="status-bar"><span>9:41</span><span>LTE</span></div>
+          <div class="topnav">
+            <span class="brand">finance-helper</span>
+            <span class="list-title">Household</span>
+          </div>
+          <div class="strip">
+            <p class="who">You owe Partner</p>
+            <p class="amount">₡42,500</p>
+          </div>
+          <p class="hint">Send outside the app when ready</p>
+          <div class="receipts">
+            <div class="section-label">Receipts · newest first</div>
+            <div class="row">
+              <span class="meta">Auto Mercado</span>
+              <span class="when">yesterday</span>
+              <span class="amt">₡18,200</span>
+            </div>
+            <div class="row">
+              <span class="meta">Fischel Pharmacy</span>
+              <span class="when">Sun</span>
+              <span class="amt">₡6,750</span>
+            </div>
+          </div>
+          <div class="tabbar">
+            <span class="tab on">List</span>
+            <span class="tab">Upload</span>
+            <span class="tab">Account</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Column 2 · Incomplete / quarantine disclosure -->
+    <section>
+      <header class="column-meta">
+        <h2>Settle-up · incomplete</h2>
+        <span class="badge">Quarantine disclosure</span>
+        <p class="note">Balances still lead; disclosure under the island — may understate. Quarantined receipt marked calm, not alarmist.</p>
+      </header>
+
+      <div class="phone">
+        <div class="notch" aria-hidden="true"></div>
+        <div class="screen soft">
+          <div class="status-bar"><span>9:41</span><span>LTE</span></div>
+          <div class="topnav">
+            <span class="brand">finance-helper</span>
+            <span class="list-title">Household</span>
+          </div>
+          <div class="strip">
+            <p class="who">You owe Partner</p>
+            <p class="amount">₡42,500</p>
+          </div>
+          <p class="hint">Send outside the app when ready</p>
+          <div class="disclosure">
+            <strong>Statement incomplete</strong>
+            Balances for this period may understate until the quarantine clears.
+          </div>
+          <div class="receipts">
+            <div class="section-label">Receipts · newest first</div>
+            <div class="row">
+              <span class="meta">Auto Mercado · Escazú</span>
+              <span class="when">yesterday</span>
+              <span class="amt">₡18,200</span>
+            </div>
+            <div class="row incomplete">
+              <span class="meta">BAC statement · Mar</span>
+              <span class="when">imported today</span>
+              <span class="amt">₡—</span>
+            </div>
+            <div class="row">
+              <span class="meta">Fischel Pharmacy</span>
+              <span class="when">Sun</span>
+              <span class="amt">₡6,750</span>
+            </div>
+            <div class="row">
+              <span class="meta">RECOPE gas</span>
+              <span class="when">Fri</span>
+              <span class="amt">₡22,000</span>
+            </div>
+          </div>
+          <div class="tabbar">
+            <span class="tab on">List</span>
+            <span class="tab">Upload</span>
+            <span class="tab">Account</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</body>
+</html>
