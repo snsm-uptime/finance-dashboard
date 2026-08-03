@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>finance-helper — Architecture Walkthrough</title>
+  <style>
+    :root {
+      --bg: #1c1917;
+      --panel: #292524;
+      --ink: #fafaf9;
+      --muted: #a8a29e;
+      --accent: #d6d3d1;
+      --line: #44403c;
+      --hi: #fde68a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+      background: radial-gradient(1200px 600px at 10% -10%, #44403c 0%, transparent 50%),
+                  radial-gradient(900px 500px at 100% 0%, #3f3a36 0%, transparent 45%),
+                  var(--bg);
+      color: var(--ink);
+      min-height: 100vh;
+    }
+    header {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--line);
+      position: sticky; top: 0; background: rgba(28,25,23,.92); backdrop-filter: blur(8px); z-index: 2;
+    }
+    header h1 { font-size: 1rem; font-weight: 600; margin: 0; letter-spacing: .02em; }
+    header .meta { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .75rem; color: var(--muted); }
+    main { max-width: 980px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+    .deck { position: relative; }
+    section.slide {
+      display: none;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 2rem 2.25rem 2.5rem;
+      min-height: 520px;
+      animation: in .35s ease both;
+    }
+    section.slide.active { display: block; }
+    @keyframes in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .eyebrow { font-family: ui-monospace, Menlo, monospace; font-size: .72rem; color: var(--hi); letter-spacing: .08em; text-transform: uppercase; margin: 0 0 .75rem; }
+    h2 { font-size: clamp(1.6rem, 3vw, 2.2rem); margin: 0 0 1rem; line-height: 1.15; font-weight: 600; }
+    p, li { color: var(--accent); line-height: 1.55; font-size: 1.05rem; }
+    ul { padding-left: 1.2rem; }
+    li { margin: .35rem 0; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+    @media (max-width: 720px) { .grid2 { grid-template-columns: 1fr; } section.slide { padding: 1.25rem; min-height: 0; } }
+    svg { width: 100%; height: auto; margin-top: 1rem; }
+    .nav {
+      display: flex; gap: .75rem; align-items: center; justify-content: space-between;
+      margin-top: 1rem; font-family: ui-monospace, Menlo, monospace; font-size: .8rem; color: var(--muted);
+    }
+    button {
+      background: transparent; color: var(--ink); border: 1px solid var(--line);
+      padding: .55rem 1rem; border-radius: 4px; cursor: pointer; font: inherit;
+    }
+    button:hover { border-color: var(--hi); color: var(--hi); }
+    .dots { display: flex; gap: .35rem; flex-wrap: wrap; justify-content: center; }
+    .dots span {
+      width: 7px; height: 7px; border-radius: 50%; background: var(--line); display: inline-block; cursor: pointer;
+    }
+    .dots span.on { background: var(--hi); }
+    code { font-family: ui-monospace, Menlo, monospace; font-size: .88em; color: var(--hi); }
+    .tag { display: inline-block; border: 1px solid var(--line); padding: .15rem .45rem; border-radius: 3px; font-family: ui-monospace, Menlo, monospace; font-size: .72rem; color: var(--muted); margin-right: .35rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>finance-helper · Architecture</h1>
+    <div class="meta">build-substrate · 2026-08-03 · AD-1…22</div>
+  </header>
+  <main>
+    <div class="deck" id="deck">
+
+      <section class="slide active" data-i="0">
+        <p class="eyebrow">01 · Why this spine</p>
+        <h2>Consistency contract for a thin vertical slice</h2>
+        <p>Self-hosted web app: upload → parse → store → shared-expenses. The spine fixes only the calls two story branches could invent incompatibly — paradigm, boundaries, ownership, money, process.</p>
+        <ul>
+          <li>Sources: final PRD + EXPERIENCE/DESIGN companions</li>
+          <li>Deliverable: build substrate (+ this deck for future-you)</li>
+          <li>Status: <code>final</code></li>
+        </ul>
+      </section>
+
+      <section class="slide" data-i="1">
+        <p class="eyebrow">02 · Paradigm</p>
+        <h2>Hexagonal — ingest is a pipeline inside the ring</h2>
+        <div class="grid2">
+          <div>
+            <p>Domain owns lists, cards, dedup, commit, settle math. Bank PDF libs and Next.js never enter domain.</p>
+            <ul>
+              <li>Detect → split → parse → normalize → stage → review → commit</li>
+              <li>Not pipes-and-filters-first (lists would become afterthoughts)</li>
+            </ul>
+          </div>
+          <svg viewBox="0 0 360 220" role="img" aria-label="Hexagonal dependency diagram">
+            <rect x="10" y="20" width="90" height="40" rx="4" fill="#57534e"/><text x="55" y="45" text-anchor="middle" fill="#fafaf9" font-size="12" font-family="monospace">Next ui</text>
+            <rect x="130" y="20" width="100" height="40" rx="4" fill="#78716c"/><text x="180" y="45" text-anchor="middle" fill="#fafaf9" font-size="12" font-family="monospace">FastAPI</text>
+            <rect x="130" y="90" width="100" height="50" rx="4" fill="#fde68a"/><text x="180" y="120" text-anchor="middle" fill="#1c1917" font-size="13" font-family="monospace" font-weight="700">domain</text>
+            <rect x="10" y="160" width="100" height="40" rx="4" fill="#57534e"/><text x="60" y="185" text-anchor="middle" fill="#fafaf9" font-size="11" font-family="monospace">bank adapters</text>
+            <rect x="250" y="160" width="100" height="40" rx="4" fill="#57534e"/><text x="300" y="185" text-anchor="middle" fill="#fafaf9" font-size="12" font-family="monospace">Postgres</text>
+            <line x1="100" y1="40" x2="130" y2="40" stroke="#a8a29e" stroke-width="2"/>
+            <line x1="180" y1="60" x2="180" y2="90" stroke="#a8a29e" stroke-width="2"/>
+            <line x1="180" y1="140" x2="60" y2="160" stroke="#a8a29e" stroke-width="2"/>
+            <line x1="180" y1="140" x2="300" y2="160" stroke="#a8a29e" stroke-width="2"/>
+          </svg>
+        </div>
+      </section>
+
+      <section class="slide" data-i="2">
+        <p class="eyebrow">03 · Stack</p>
+        <h2>Compose: <code>db</code> + FastAPI <code>api</code> + Next.js <code>ui</code></h2>
+        <ul>
+          <li><span class="tag">api</span> Python 3.12 · FastAPI · SQLAlchemy 2 · Alembic · pdfplumber</li>
+          <li><span class="tag">ui</span> Next.js 16.2 standalone · react-pdf · @use-gesture · Warm Balance</li>
+          <li><span class="tag">db</span> PostgreSQL 16 · volume outside repo</li>
+          <li>Streamlit / Node-primary API rejected for BAC parse + gesture review</li>
+          <li>In-process parse on <code>api</code> — no Redis worker in v1</li>
+        </ul>
+      </section>
+
+      <section class="slide" data-i="3">
+        <p class="eyebrow">04 · Hard boundaries</p>
+        <h2>Dependency shortlist (AD-1)</h2>
+        <div class="grid2">
+          <div>
+            <p><strong style="color:#fafaf9">Allowed</strong></p>
+            <ul>
+              <li>Next → HTTP API only</li>
+              <li>Adapters return CanonicalLine</li>
+              <li>Repos persist Postgres</li>
+            </ul>
+          </div>
+          <div>
+            <p><strong style="color:#fafaf9">Forbidden</strong></p>
+            <ul>
+              <li>Next → SQLAlchemy / parsers</li>
+              <li>Bank adapter → commit/lists</li>
+              <li>Domain → frameworks / pdfplumber</li>
+            </ul>
+          </div>
+        </div>
+        <p style="margin-top:1.25rem">Auth: httpOnly Secure cookie, same-origin via proxy/BFF — never Bearer in <code>localStorage</code> (AD-8).</p>
+      </section>
+
+      <section class="slide" data-i="4">
+        <p class="eyebrow">05 · Data lifecycle</p>
+        <h2>Session stages · Batch commits · Quarantine survives</h2>
+        <svg viewBox="0 0 640 180" role="img" aria-label="Import session lifecycle">
+          <defs>
+            <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#a8a29e"/></marker>
+          </defs>
+          <rect x="10" y="50" width="110" height="60" rx="4" fill="#57534e"/><text x="65" y="85" text-anchor="middle" fill="#fafaf9" font-size="12" font-family="monospace">Upload</text>
+          <rect x="150" y="50" width="130" height="60" rx="4" fill="#78716c"/><text x="215" y="78" text-anchor="middle" fill="#fafaf9" font-size="11" font-family="monospace">Import Session</text><text x="215" y="96" text-anchor="middle" fill="#d6d3d1" font-size="10" font-family="monospace">candidates</text>
+          <rect x="310" y="50" width="130" height="60" rx="4" fill="#a8a29e"/><text x="375" y="78" text-anchor="middle" fill="#1c1917" font-size="11" font-family="monospace">Import Batch</text><text x="375" y="96" text-anchor="middle" fill="#1c1917" font-size="10" font-family="monospace">per Statement</text>
+          <rect x="470" y="20" width="150" height="50" rx="4" fill="#fde68a"/><text x="545" y="50" text-anchor="middle" fill="#1c1917" font-size="12" font-family="monospace">Ledger</text>
+          <rect x="470" y="100" width="150" height="50" rx="4" fill="#57534e"/><text x="545" y="130" text-anchor="middle" fill="#fafaf9" font-size="11" font-family="monospace">Quarantine</text>
+          <line x1="120" y1="80" x2="148" y2="80" stroke="#a8a29e" stroke-width="2" marker-end="url(#arrow)"/>
+          <line x1="280" y1="80" x2="308" y2="80" stroke="#a8a29e" stroke-width="2" marker-end="url(#arrow)"/>
+          <line x1="440" y1="70" x2="468" y2="45" stroke="#a8a29e" stroke-width="2" marker-end="url(#arrow)"/>
+          <line x1="440" y1="90" x2="468" y2="120" stroke="#a8a29e" stroke-width="2" marker-end="url(#arrow)"/>
+        </svg>
+        <ul>
+          <li>CanonicalLine shared staging↔ledger (AD-16)</li>
+          <li>Domain owns dedup identity (AD-18)</li>
+          <li>FX CRC materialized at commit from BCCR (AD-7)</li>
+        </ul>
+      </section>
+
+      <section class="slide" data-i="5">
+        <p class="eyebrow">06 · Product rules that stop fights</p>
+        <h2>Money, splits, FX, same-price, settle</h2>
+        <ul>
+          <li><code>NUMERIC</code> / <code>Decimal</code> only — never float</li>
+          <li>Split remainder → list creator</li>
+          <li>BCCR + nearest-prior fallback + flag; no override; CRC stored at commit</li>
+          <li>Same-price window list-configurable, default ±3 days; server-side candidates</li>
+          <li>v1 settle = computed shares only; inter-member transfer line type reserved (no payment ledger)</li>
+          <li>List ACL = membership; cards are first-class for IBAN registration</li>
+        </ul>
+      </section>
+
+      <section class="slide" data-i="6">
+        <p class="eyebrow">07 · How we build</p>
+        <h2>Branches · SemVer · TDD · CI</h2>
+        <ul>
+          <li>Branch per story: <code>&lt;type&gt;/&lt;epic&gt;/&lt;us-id&gt;</code></li>
+          <li>One app SemVer: <code>vMAJOR.MINOR.PATCH</code></li>
+          <li>Hard red→green for parsers/domain; UI test-after with coverage floor</li>
+          <li>Merge to <code>main</code> only when CI green: lint · api pytest+goldens · ui typecheck/lint · critical ui tests</li>
+          <li>CI fixtures = synthetic geometry PDFs; real statements outside repo</li>
+        </ul>
+      </section>
+
+      <section class="slide" data-i="7">
+        <p class="eyebrow">08 · Operate</p>
+        <h2>Homelab Compose envelope</h2>
+        <ul>
+          <li>local + prod overlays; same <code>db</code>/<code>api</code>/<code>ui</code> graph</li>
+          <li>Alembic on api start; never recreate PG volume for schema</li>
+          <li><code>/health</code> on api + ui; operator volume snapshots for PG + PDFs</li>
+          <li>Phone swipe required; desktop buttons; EXPERIENCE/DESIGN bind IA/visual</li>
+        </ul>
+        <p style="margin-top:1.5rem">Next recommended: adopt this spine as a <code>bmad-spec</code> companion, then <code>bmad-create-epics-and-stories</code>.</p>
+      </section>
+
+    </div>
+    <div class="nav">
+      <button type="button" id="prev" aria-label="Previous slide">← Prev</button>
+      <div class="dots" id="dots"></div>
+      <button type="button" id="next" aria-label="Next slide">Next →</button>
+    </div>
+  </main>
+  <script>
+    const slides = [...document.querySelectorAll('.slide')];
+    const dots = document.getElementById('dots');
+    let i = 0;
+    slides.forEach((_, idx) => {
+      const d = document.createElement('span');
+      d.addEventListener('click', () => show(idx));
+      dots.appendChild(d);
+    });
+    function show(n) {
+      i = (n + slides.length) % slides.length;
+      slides.forEach((s, idx) => s.classList.toggle('active', idx === i));
+      [...dots.children].forEach((d, idx) => d.classList.toggle('on', idx === i));
+    }
+    document.getElementById('prev').onclick = () => show(i - 1);
+    document.getElementById('next').onclick = () => show(i + 1);
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); show(i + 1); }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); show(i - 1); }
+    });
+    show(0);
+  </script>
+</body>
+</html>
