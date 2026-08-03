@@ -545,3 +545,165 @@ So that Epic 3 settle-up and the Adjust-split UI can consume a stable share-allo
 **Given** this story is complete
 **When** product UI is considered
 **Then** no Adjust-split UI is required yet — Epic 3 manual expense ships the disclosure UI against this API
+
+## Epic 3: Manual expenses & settle-up
+
+Users log shared expenses and see who owes whom in CRC on Soft-Ledger (Warm Balance tokens). Balances from per-transaction shares + payer + FR-45 line-type rules; CanonicalLine-compatible money fields; FX; incomplete-disclosure pattern ready (shows incomplete only when data says so).
+
+**FRs covered:** FR-19 (define), FR-21, FR-38, FR-40, FR-42, FR-43 (pattern), FR-44, FR-45  
+**Demo gate:** J5 + J2
+
+### Story 3.1: Warm Balance tokens + Soft-Ledger primitives
+
+As a user of the shared-list UI,
+I want Warm Balance light/dark tokens and Soft-Ledger primitives in place,
+So that settle-up and receipts look like finance-helper—not kit defaults.
+
+**Acceptance Criteria:**
+
+**Given** the `ui` app
+**When** design tokens are applied
+**Then** Warm Balance CSS variables exist for light and dark (background, surface, text, muted, border, accent, on-accent, owe, owed) per DESIGN.md (UX-DR1)
+**And** Petrona + Manrope are loaded with Soft-Ledger type roles; tabular nums for money; no Inter/Roboto as brand (UX-DR2)
+**And** spacing/shape tokens match Soft-Ledger (strip-inset, rounded sm/md; no pill primary CTAs) (UX-DR3)
+
+**Given** these primitives
+**When** list chrome is rendered
+**Then** Balance strip, Receipt row, Section label, Top nav, Tab bar (List / Upload / Account), Hint, and Primary button match DESIGN component anatomy (structure may be empty of live data) (UX-DR4–6)
+**And** depth uses canvas vs surface tonal layering without drop-shadow hierarchy (UX-DR21)
+**And** theme Light / Dark / System from Story 1.6 drives which token set is active
+
+### Story 3.2: Manual expense with payer + Adjust split UI
+
+As a list member,
+I want to add a manual expense with amount, description, payer, and optional Adjust split,
+So that shared spending is logged the same day without waiting for a statement.
+
+**Acceptance Criteria:**
+
+**Given** I am a member of a list
+**When** I open add manual expense
+**Then** the form requires amount, description, and payer (FR-21, UX-DR15)
+**And** payer defaults to me and remains editable (FR-19)
+
+**Given** I do not open Adjust split
+**When** I save
+**Then** the item uses the list default split (Story 2.5 / 2.6)
+**And** the row carries `hand` provenance
+
+**Given** I open Adjust split
+**When** I choose whole-line, absolute amounts per member, or percentage
+**Then** validation matches Story 2.6 rules (100% / sum-to-total) before save
+
+**Given** save succeeds
+**When** I view the list
+**Then** the item appears newest-first and settle-up figures update once Story 3.3–3.4 are in place (this story may show the new receipt row immediately; strip totals wire when settle math lands)
+
+**Given** I am not a member
+**When** I attempt to create an expense on that list
+**Then** the action is rejected (NFR-3)
+
+### Story 3.3: Shared-expenses view — strip + receipt list
+
+As a list member,
+I want the shared-expenses surface to lead with a Soft-Ledger settle strip and newest-first receipts,
+So that I can see who owes whom at a glance (J2).
+
+**Acceptance Criteria:**
+
+**Given** I am a member of a list
+**When** I open shared-expenses for that list
+**Then** I see the Soft-Ledger balance strip island first (who-line + hero amount polarity owe/owed when totals exist) and receipts below newest-first (FR-38, FR-42, UX-DR4/5)
+**And** non-members cannot open it (FR-8)
+
+**Given** there are no receipt items yet
+**When** I open the view
+**Then** the settle strip remains primary and the receipts area can be empty without celebration chrome (UX-DR24)
+
+**Given** nets are zero / settled
+**When** the strip renders
+**Then** it shows a clear even/zero state without celebration (UX-DR24)
+
+**Given** phone or desktop viewport
+**When** I use the view
+**Then** IA is the same; desktop is wider Soft-Ledger, not a separate dashboard (UX-DR20, NFR-7)
+**And** copy stays plain/direct CRC voice (UX-DR17); no settlement-recording CTA
+
+**Given** totals are not yet computed (before Story 3.4)
+**When** the strip renders
+**Then** layout and empty/zero states still work; live who-owes-whom numbers wire in 3.4
+
+### Story 3.4: Settle-up from shares, payer, and line types
+
+As a list member,
+I want settle-up computed from per-transaction shares, payer, and included line types,
+So that the strip shows who should return what in CRC and stays ready for v2 payments.
+
+**Acceptance Criteria:**
+
+**Given** committed expenses with share allocations and an explicit payer
+**When** settle-up is computed for the list period
+**Then** suggested balances preserve net positions from those allocations (FR-44)
+**And** Soft-Ledger strip shows plain who-owes-whom in CRC with owe/owed polarity (UX-DR17)
+
+**Given** lines with excluded types (payment, interest, fee, voluntary_service, installment_schedule, balance_forward, unclassified credit_note, etc.)
+**When** settle-up runs
+**Then** those lines do not change member settle balances (FR-45)
+**And** included types are purchases and classified purchase reversals only
+
+**Given** percentage splits leave a leftover minor unit after floor-division
+**When** allocations are applied
+**Then** remainder goes to the list creator (AD-6)
+
+**Given** a manual expense is added (Story 3.2)
+**When** I return to shared-expenses
+**Then** strip totals update to reflect the new shares (J5 → J2 demo path)
+
+**And** no payment ledger writes occur — settle-up is computed shares only (AD-21)
+
+### Story 3.5: Materialize FX to CRC (BCCR) for non-CRC lines
+
+As a list member,
+I want non-CRC amounts converted to CRC using BCCR rates at commit,
+So that settle-up stays in colones while originals remain auditable.
+
+**Acceptance Criteria:**
+
+**Given** a non-CRC expense is committed (manual in this epic; imports later reuse the same path)
+**When** the domain materializes FX
+**Then** it stores `amount_crc`, `fx_rate`, `fx_rate_date`, and `fx_fallback` beside the original `(amount, currency)` (FR-40, AD-7)
+**And** the rate is BCCR for the purchase/statement date; if missing, nearest prior BCCR date with `fx_fallback` set
+**And** there is no user FX override in v1
+
+**Given** settle-up runs
+**When** balances are computed
+**Then** they use materialized CRC — they do not re-call BCCR per view
+
+**Given** a foreign-currency receipt row
+**When** it is shown in the receipt list
+**Then** enough original amount + converted CRC is visible to audit the FX step
+
+**Given** money fields in domain/persistence
+**When** amounts are stored or computed
+**Then** Postgres NUMERIC + Python Decimal are used — never float (AD-5)
+
+### Story 3.6: Incomplete-disclosure pattern (slot only)
+
+As a list member,
+I want an incomplete-balance disclosure pattern under the settle strip,
+So that when Epic 5 wires quarantine data, understated totals are never silent.
+
+**Acceptance Criteria:**
+
+**Given** the shared-expenses Soft-Ledger strip
+**When** no statement in the period is marked incomplete / quarantined
+**Then** no incomplete disclosure is shown — strip is not falsely marked incomplete (FR-43 pattern)
+
+**Given** the disclosure UI component
+**When** it is implemented
+**Then** it sits calm/muted below the island strip (same inset), not over the hero amount (UX-DR8)
+**And** it is announcable to assistive tech (not color-only) when later wired (UX-DR19)
+
+**Given** this story alone
+**When** product behavior is tested
+**Then** there is no requirement to fabricate incomplete data — Epic 5 wires FR-43 for real quarantine
