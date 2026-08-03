@@ -49,8 +49,8 @@ sources:
   - **success:** Phone Individual review uses true swipe commits mapped **right → chosen list** (after list picker), **left → configurable default list**, **down → skip**; desktop uses labeled buttons for the same three outcomes; list picker precedes high-intent accept; accessible non-gesture equivalents exist; skip stores nothing for that statement.
 
 - **CAP-8**
-  - **intent:** Users can add a manual expense to a list without waiting for a statement; every shared expense has an explicit editable payer defaulting to the current user.
-  - **success:** Create sheet requires **amount**, **description**, and **payer** (default current user); **Adjust split** disclosure offers whole-line / absolute fragments / percentage (list default until opened); items carry `hand` provenance, appear in the receipt list and settle-up immediately, and always have a payer set when committed.
+  - **intent:** Users can add a manual expense to a list without waiting for a statement; every shared expense has an explicit editable payer defaulting to the current user; optional origin is an existing card, Cash, or blank.
+  - **success:** Create sheet requires **amount**, **description**, and **payer** (default current user); **origin** may be a registered card, Cash, or left blank; a filter lists items with no origin for later assignment; **Adjust split** disclosure offers whole-line / absolute fragments / percentage (list default until opened); items carry `hand` provenance, appear in the receipt list and settle-up immediately, and always have a payer set when committed.
 
 - **CAP-9**
   - **intent:** When automatic parse fails for a statement, the user sees the PDF beside extracted rows and may accept with quarantine or dismiss; unresolved rows can be hand-fixed; balances disclose incompleteness.
@@ -66,13 +66,13 @@ sources:
 
 - **CAP-12**
   - **intent:** Bank support is pluggable via detect → split → parse → normalize → stage → review → commit without rewriting core import, dedup, or list logic.
-  - **success:** Adapters emit CanonicalLine fields; domain alone computes dedup identity at commit; BAC **walmart** fixture persists every must-parse line with required fields and zero manual edits; Promerica stub (or contract tests) exercises multi-statement extension; dual-column amounts prefer nonzero, then CRC if both nonzero; installment schedules are distinct and excluded from settle-up without double-counting purchases.
+  - **success:** Adapters emit CanonicalLine fields; domain alone computes dedup identity at commit; synthetic **BAC credit-card** fixture persists every must-parse line with required fields and zero manual edits; Promerica stub (or contract tests) exercises multi-statement extension; dual-column amounts prefer nonzero, then CRC if both nonzero; installment schedules are distinct and excluded from settle-up without double-counting purchases.
 
 ## Constraints
 
 - Self-hosted Compose deploy: `db` + `api` + `ui` (+ host reverse proxy); Postgres volume and PDF volume outside the repo; no real statements/PII in git.
 - Hexagonal dependency rule (AD-1): UI → HTTP API only; domain has no framework/PDF imports; bank adapters return normalized rows only — they do not commit or own lists.
-- Durable app state in PostgreSQL only; PDF bytes on disk with path references (not `bytea`, not object storage in v1).
+- Durable app state in PostgreSQL only. PDF bytes may sit temporarily on an operator volume with path references (not `bytea`, not object storage in v1). **After a correct parse and successful commit with no unresolved quarantine, delete the PDF and clear the path** — SQL is the source of truth. Keep the file only while review/comparison or unresolved quarantine still needs it; clear on dismiss and when quarantine is fully resolved.
 - Import Session stages an upload; Import Batch commits **per Statement**; settle math reads committed batches only.
 - Money: Postgres `NUMERIC` + ISO 4217; domain `Decimal`; never float.
 - Auth session: httpOnly Secure cookie on same-origin (or BFF); no Bearer tokens in `localStorage`.
@@ -98,7 +98,7 @@ sources:
 
 ## Success signal
 
-A supported BAC **walmart** fixture import persists every must-parse line with required CanonicalLine fields and zero manual edits in CI; on the running app, after uploading a multi-statement PDF into a shared list, a second member can open shared-expenses and see CRC settle-up that matches attributed purchases for the statement cycle — with incomplete disclosure whenever quarantine contributed — without any payment being recorded in-app.
+A supported synthetic **BAC credit-card** fixture import persists every must-parse line with required CanonicalLine fields and zero manual edits in CI; on the running app, after uploading a multi-statement PDF into a shared list, a second member can open shared-expenses and see CRC settle-up that matches attributed purchases for the statement cycle — with incomplete disclosure whenever quarantine contributed — without any payment being recorded in-app.
 
 ## Assumptions
 

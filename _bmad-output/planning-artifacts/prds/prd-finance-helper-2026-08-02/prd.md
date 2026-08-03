@@ -41,7 +41,7 @@ The [product brief](../../briefs/brief-finance-helper-2026-08-01/brief.md) descr
 
 **Superseded.** The CLI surface (`import`, `shared-total`, `detect`); the packaging criterion of installing via pip/pipx/uv tool and running as a real CLI end to end; the local single-file database and its filesystem-copy backup model; the exclusion of multi-user access; the per-product boolean shared flag.
 
-**Retained.** The adapter contract and its detect → parse → normalize pipeline; the import contract and required canonical fields; fail-loud behavior when a must-parse section cannot be parsed; canonical identity dedup and idempotent re-import; the canonical line-type taxonomy; walmart fixture acceptance as the parsing bar; a Promerica stub proving the contract extends without core redesign.
+**Retained.** The adapter contract and its detect → parse → normalize pipeline; the import contract and required canonical fields; fail-loud behavior when a must-parse section cannot be parsed; canonical identity dedup and idempotent re-import; the canonical line-type taxonomy; BAC credit-card fixture acceptance as the parsing bar; a Promerica stub proving the contract extends without core redesign.
 
 The brief's addendum remains valid as evidence and mapping reference — the BAC credit section map, locale and dual-currency adapter requirements, and identity/dedup detail all carry forward unchanged.
 
@@ -246,7 +246,7 @@ Each bank section maps to that taxonomy with policy `must_parse`, `best_effort`,
 
 **Installment schedules** are a distinct record type, excluded from shared totals. Adapters must not double-emit the same spend as both a counted purchase and installment principal without an explicit link. Prefer the purchase/principal ledger posting and attach schedule metadata by reference when the bank shows both.
 
-### BAC credit baseline (walmart reviewed)
+### BAC credit baseline
 
 
 | Bank section                                 | Taxonomy             | v1 policy                    |
@@ -277,7 +277,7 @@ Re-import of the same or overlapping statement never duplicates ledger lines for
 
 ### Acceptance and extension
 
-- **Walmart fixture** is the v1 parsing acceptance bar: for a supported product, fixture import persists every must-parse line with required canonical fields and **zero manual edits**.
+- **BAC credit-card fixture** is the v1 parsing acceptance bar: for a supported BAC credit product, synthetic fixture import persists every must-parse line with required canonical fields and **zero manual edits**.
 - **Promerica** in v1 is a stub or contract-test adapter only — real parsing waits on samples. The stub proves extension without modifying core import, dedup, or list logic, and covers multi-statement.
 - Committed fixtures are anonymized or synthetic; real statements stay outside the repo. Positional layout fidelity of regenerated PDFs remains an open test-strategy risk (see Constraints).
 
@@ -435,6 +435,7 @@ An authenticated user can upload a bank statement PDF through the web UI (includ
 
 - Upload requires authentication.
 - The system accepts PDF for v1; unsupported formats are rejected with a clear error.
+- After a statement is parsed correctly and committed with no unresolved quarantine, the uploaded PDF and its stored path reference are cleared — durable data lives in PostgreSQL.
 
 #### FR-14: Detect bank and product
 
@@ -509,6 +510,8 @@ A user can add individual expense items to a list during the day without waiting
 **Consequences (testable):**
 
 - Create requires **amount**, **description**, and **payer** (defaults to the current user).
+- **Origin (optional):** on create (and later edit), the user may set origin to an **existing card** (dropdown of the user’s registered cards), **Cash**, or leave **blank** (no origin). Blank is allowed when the expense is neither card nor cash.
+- The product provides a **filter for items with no origin** so the user can later assign origin in bulk or individually to blank-origin transactions.
 - **Adjust split** disclosure on create offers whole-line, absolute amounts per member, or percentage; until opened, the item uses the list default.
 - Manual items support the same split overrides as imported items when editing later (FR-10).
 - Payer selection follows FR-19 (default current user, editable).
@@ -609,7 +612,7 @@ A user can remove a whole import batch as an escape hatch (journaled-batch model
 
 ### Adapters, identity, and acceptance
 
-**Description:** Bank support is pluggable through detect → split → parse → normalize → import batch. Canonical fields, line types, identity/dedup, BAC walmart acceptance, and a Promerica stub define the parsing contract. Dual-column amounts prefer the nonzero column; if both nonzero, prefer CRC. Parsed IBANs match existing user cards and use the card’s label as the import identifier; unknown IBANs prompt registration with a user-chosen label.
+**Description:** Bank support is pluggable through detect → split → parse → normalize → import batch. Canonical fields, line types, identity/dedup, BAC credit-card acceptance, and a Promerica stub define the parsing contract. Dual-column amounts prefer the nonzero column; if both nonzero, prefer CRC. Parsed IBANs match existing user cards and use the card’s label as the import identifier; unknown IBANs prompt registration with a user-chosen label.
 
 #### FR-31: Pluggable adapter contract
 
@@ -649,14 +652,14 @@ Primary identity is (product_id, posted_date, currency, amount, external_ref). F
 - Ref quality is exposed as stable, derived, or absent.
 - Every import is a journaled batch (supports FR-30).
 
-#### FR-35: Walmart acceptance bar
+#### FR-35: BAC credit-card acceptance bar
 
-For a supported product, the walmart fixture import persists every must-parse line with required canonical fields and zero manual edits.
+For a supported BAC credit product, the synthetic BAC credit-card fixture import persists every must-parse line with required canonical fields and zero manual edits.
 
 **Consequences (testable):**
 
-- Walmart is the v1 parsing exit bar.
-- Eco and debit products remain provisional until fixture review, then the same bar applies.
+- The BAC credit-card fixture is the v1 parsing exit bar.
+- Additional BAC layouts remain provisional until fixture review, then the same bar applies.
 
 #### FR-36: Promerica stub
 
@@ -827,7 +830,7 @@ PostgreSQL schema evolution is supported via migrations as the data model change
 
 - Statement upload through the web UI, decomposing multi-statement files, with bulk or individual review before anything is committed
 - Bank and product auto-detection via the adapter contract, failing loudly on unknown or ambiguous statements
-- BAC PDF parsing for the card layouts represented in sample data (owner-labeled examples: walmart, eco, dolares, colones — these are personal labels for IBAN/card accounts, not product taxonomy). One labeled layout (walmart) is the acceptance bar; the others are provisional until reviewed against real statements
+- BAC PDF parsing for credit-card layouts represented in sample data. The synthetic **BAC credit-card** fixture is the acceptance bar; other layouts (including debit) are provisional until reviewed against real statements. Owner-chosen card labels in samples are personal labels for IBAN/card accounts — not product taxonomy and not hardcoded UI vocabulary.
 - Canonical line-type taxonomy, required canonical fields, and fail-loud handling of unparseable must-parse sections
 - Idempotent re-import: re-uploading a statement, or one with an overlapping period, never duplicates ledger lines, with a post-import summary of what was added and what was skipped
 - A side-by-side view of the source PDF against extracted items when parsing fails, usable on a phone

@@ -57,7 +57,7 @@ FR-19: Every shared expense has an explicit editable payer; on statement import 
 
 FR-20: After a successful import (or re-import), the user is told how many new rows were imported and how many duplicates were skipped; overlapping parsed re-uploads do not duplicate canonical identities; ordinary parsed-vs-parsed duplicates never interrupt mid-import.
 
-FR-21: A user can add individual expense items to a list without waiting for statement import; create requires amount, description, and payer (defaults to current user); Adjust split disclosure offers whole-line / absolute per member / percentage (list default until opened); provenance distinguishes manual from parser rows; items appear in receipt list and settle-up.
+FR-21: A user can add individual expense items to a list without waiting for statement import; create requires amount, description, and payer (defaults to current user); optional origin is an existing card, Cash, or blank; a filter supports later assignment of no-origin items; Adjust split disclosure offers whole-line / absolute per member / percentage (list default until opened); provenance distinguishes manual from parser rows; items appear in receipt list and settle-up.
 
 FR-22: Same-price collisions between a parsed line and an existing unresolved manual entry are not auto-merged; collected and shown at end of import; default resolution pick Manual or Parsed (one survivor); escape “Not the same expense” keeps both only after double-count/overpay confirm (harder than survivor pick); same price = equal amount+currency on related lists; date window list-configurable with product default ±3 calendar days (AD-10).
 
@@ -85,7 +85,7 @@ FR-33: Adapters collapse dual CRC/USD columns to a single (currency, amount) bef
 
 FR-34: Primary identity is (product_id, posted_date, currency, amount, external_ref); fallback when refs missing/unstable remains idempotent; re-import never duplicates; ref quality exposed as stable/derived/absent; every import is a journaled batch.
 
-FR-35: For a supported product, the walmart fixture import persists every must-parse line with required canonical fields and zero manual edits (v1 parsing exit bar).
+FR-35: For a supported BAC credit product, the synthetic BAC credit-card fixture import persists every must-parse line with required canonical fields and zero manual edits (v1 parsing exit bar).
 
 FR-36: v1 includes a Promerica stub or contract-test adapter proving extension without modifying core import/dedup/list logic, including multi-statement; real Promerica parsing is out of scope until samples exist.
 
@@ -194,7 +194,7 @@ UX-DR13: Card registration prompt blocks review until user-chosen label + IBAN s
 
 UX-DR14: Same-price / hand-fixed conflict UI: Manual|Parsed cards (one survivor); escape “Not the same expense” harder than cards, keeps both only after double-count confirm; not swipe; resolve before confident settle-up.
 
-UX-DR15: Manual expense form: amount, description, payer (defaults signed-in user), Adjust split disclosure (whole-line / absolute / percentage); save updates newest-first row and settle-up immediately.
+UX-DR15: Manual expense form: amount, description, payer (defaults signed-in user), optional origin (existing card dropdown / Cash / blank), Adjust split disclosure (whole-line / absolute / percentage); save updates newest-first row and settle-up immediately; filter for no-origin items supports later assignment.
 
 UX-DR16: Invite form sends by email; unregistered path uses create-account template; invitee signup lands on inviting list with settle-up context; invite email language matches the inviter’s current Account language (EN/ES).
 
@@ -236,7 +236,7 @@ FR-17: Epic 4 — Bulk or individual review
 FR-18: Epic 4 — Individual review outcomes
 FR-19: Epic 3 (define) / Epic 4 (import default) — Explicit payer
 FR-20: Epic 4 — Post-import dedup summary
-FR-21: Epic 3 — Manual item entry
+FR-21: Epic 3 (manual create) / Epic 4 (origin card|cash|blank + no-origin filter) — Manual item entry
 FR-22: Epic 5 — Same-price manual match review
 FR-23: Epic 5 — Manual label as bank-description alias
 FR-24: Epic 5 — Statement-scoped parse failure
@@ -250,7 +250,7 @@ FR-31: Epic 4 — Pluggable adapter contract
 FR-32: Epic 4 — Canonical line fields and taxonomy
 FR-33: Epic 4 — Dual-column amount normalization
 FR-34: Epic 4 — Canonical identity and idempotent re-import
-FR-35: Epic 4 — Walmart acceptance bar
+FR-35: Epic 4 — BAC credit-card acceptance bar
 FR-36: Epic 4 — Promerica stub
 FR-37: Epic 4 — Register and match cards by IBAN
 FR-38: Epic 3 — Shared-expenses view per list
@@ -280,8 +280,8 @@ Users log shared expenses and see who owes whom in CRC on Soft-Ledger (Warm Bala
 **Demo gate:** J5 + J2
 
 ### Epic 4: Statement upload & review
-Users register cards by IBAN, upload PDFs, detect/split/parse via adapters (BAC walmart + Promerica stub), choose routing/review modes, commit with dedup summary. Reuses Epic 3 payer + Soft-Ledger strip — exit = commit updates same settle strip.
-**FRs covered:** FR-11, FR-12, FR-13, FR-14, FR-15, FR-16, FR-17, FR-18, FR-19 (import), FR-20, FR-31, FR-32, FR-33, FR-34, FR-35, FR-36, FR-37
+Users register cards by IBAN, set optional manual-expense origin (card / Cash / blank) with a no-origin filter, upload PDFs, detect/split/parse via adapters (BAC credit-card acceptance + Promerica stub), choose routing/review modes, commit with dedup summary. Reuses Epic 3 payer + Soft-Ledger strip — exit = commit updates same settle strip.
+**FRs covered:** FR-11, FR-12, FR-13, FR-14, FR-15, FR-16, FR-17, FR-18, FR-19 (import), FR-20, FR-21 (origin + no-origin filter), FR-31, FR-32, FR-33, FR-34, FR-35, FR-36, FR-37
 **Demo gate:** J1 climax on Soft-Ledger strip
 
 ### Epic 5: Import resilience (then settle polish)
@@ -599,6 +599,10 @@ So that shared spending is logged the same day without waiting for a statement.
 **When** I view the list
 **Then** the item appears newest-first and settle-up figures update once Story 3.3–3.4 are in place (this story may show the new receipt row immediately; strip totals wire when settle math lands)
 
+**Given** expense origin (card / Cash / blank)
+**When** this story is implemented
+**Then** origin UI is **not** required yet — Story 4.2 adds origin after cards exist (FR-21)
+
 **Given** I am not a member
 **When** I attempt to create an expense on that list
 **Then** the action is rejected (NFR-3)
@@ -707,3 +711,245 @@ So that when Epic 5 wires quarantine data, understated totals are never silent.
 **Given** this story alone
 **When** product behavior is tested
 **Then** there is no requirement to fabricate incomplete data — Epic 5 wires FR-43 for real quarantine
+
+## Epic 4: Statement upload & review
+
+Users register cards by IBAN, set optional manual-expense origin (card / Cash / blank) with a no-origin filter, upload PDFs, detect/split/parse via adapters (BAC credit-card acceptance + Promerica stub), choose routing/review modes, commit with dedup summary. Reuses Epic 3 payer + Soft-Ledger strip — exit = commit updates same settle strip.
+
+**FRs covered:** FR-11, FR-12, FR-13, FR-14, FR-15, FR-16, FR-17, FR-18, FR-19 (import), FR-20, FR-21 (origin + no-origin filter), FR-31, FR-32, FR-33, FR-34, FR-35, FR-36, FR-37  
+**Demo gate:** J1 climax on Soft-Ledger strip
+
+### Story 4.1: Register and match cards by IBAN
+
+As a signed-in user,
+I want cards keyed by IBAN with my own labels,
+So that imports recognize my cards and show my names—not bank product codes.
+
+**Acceptance Criteria:**
+
+**Given** a statement yields an IBAN that matches a card I already registered
+**When** import proceeds
+**Then** the system uses that card and its label as the human import identifier — no re-registration prompt (FR-37, UX-DR13)
+
+**Given** a statement yields an IBAN I have not registered
+**When** import reaches card identity
+**Then** a registration prompt blocks review until I save a user-chosen label + IBAN
+**And** fixed card→list routing is configured after this prompt, not inside it
+
+**Given** card registry data
+**When** stored or displayed
+**Then** vocabulary is user-scoped and generic — no hardcoded personal card names in code (NFR-2)
+
+### Story 4.2: Manual origin — card / Cash / blank + no-origin filter
+
+As a list member,
+I want to set an optional origin on manual expenses (existing card, Cash, or blank) and filter items with no origin,
+So that I can tag how money was spent and catch up on unassigned rows later.
+
+**Acceptance Criteria:**
+
+**Given** I am adding or editing a manual expense and I have registered cards
+**When** I open the origin control
+**Then** I can choose an existing card from a dropdown, choose Cash, or leave origin blank (FR-21, UX-DR15)
+
+**Given** the expense is neither card nor cash
+**When** I leave origin blank and save
+**Then** the item is stored with no origin and remains valid
+
+**Given** items exist with blank origin
+**When** I apply the no-origin filter
+**Then** I see those items and can assign origin (card or Cash) individually or in a batch assign flow
+
+**Given** I have no registered cards yet
+**When** I open origin
+**Then** Cash and blank remain available; the card dropdown is empty or omitted without blocking save
+
+### Story 4.3: Card routing mode + review default list
+
+As a card owner,
+I want to choose fixed-list vs review-routing for each card and set my low-effort default list,
+So that imports land where I expect without assuming “always personal list.”
+
+**Acceptance Criteria:**
+
+**Given** a registered card
+**When** I choose fixed-list mode and pick a list I belong to
+**Then** that card’s statements feed that list (subject to parse/failure handling) (FR-11, FR-16)
+**And** v1 allows at most one active fixed list per card
+
+**Given** a registered card
+**When** I choose review-routing mode
+**Then** each statement/upload is assigned during review before commit
+
+**Given** review-routing is active
+**When** I set my configurable default destination list
+**Then** low-effort accepts (Individual “left” / default path) land on that list (FR-12)
+**And** the default may be my personal list or any list I belong to
+
+**Given** routing is configured
+**When** import runs
+**Then** the product does not silently assume always-personal-list
+
+### Story 4.4: Adapter contract + CanonicalLine + BAC normalize
+
+As a developer extending bank support,
+I want a pluggable detect → split → parse → normalize contract emitting CanonicalLine,
+So that new banks don’t rewrite core import, dedup, or list logic.
+
+**Acceptance Criteria:**
+
+**Given** an adapter package
+**When** it is registered
+**Then** it declares `{bank, product_id, account_kind}` and plugs into detect → split → parse → normalize without modifying core import/dedup/list (FR-31)
+
+**Given** detection
+**When** override → filename → content strategies run
+**Then** the first confident match wins; unknown or ambiguous detection fails loudly with a clear error (FR-14, NFR-8)
+
+**Given** must-parse ledger lines
+**When** an adapter emits rows
+**Then** each row is a CanonicalLine: posted_date (ISO-8601), signed amount, ISO 4217 currency, product_id, line_type, external_ref when provided, normalized_description, provenance (FR-32, AD-16)
+**And** line-type taxonomy includes at least the PRD set; section policies are must_parse / best_effort / ignore; unmapped sections quarantine rather than silent drop
+
+**Given** dual CRC/USD columns
+**When** amounts are normalized
+**Then** a single `(currency, amount)` results — prefer nonzero; if both nonzero, prefer CRC (FR-33)
+
+**Given** commit time
+**When** identity is computed
+**Then** domain alone computes canonical identity (primary external_ref when stable; else fallback tuple) — adapters do not emit authoritative dedup keys (FR-34, AD-18)
+
+### Story 4.5: BAC credit-card acceptance bar + Promerica stub
+
+As an operator shipping v1 parsing,
+I want a synthetic BAC credit-card fixture as the exit bar and a Promerica stub proving extension,
+So that CI gates real parsing quality without core forks.
+
+**Acceptance Criteria:**
+
+**Given** the synthetic BAC credit-card fixture (known geometry) and golden expected rows
+**When** the supported BAC credit product import runs in CI
+**Then** every must-parse line persists with required CanonicalLine fields and zero manual edits (FR-35, AD-11)
+
+**Given** the Promerica stub (or contract-test adapter)
+**When** contract tests run
+**Then** it exercises multi-statement extension without modifying core import, dedup, or list logic (FR-36)
+**And** real Promerica parsing remains out of scope
+
+**Given** repository fixtures
+**When** committed
+**Then** they are synthetic/anonymized only — no real statements or PII (NFR-2)
+
+### Story 4.6: Upload PDF → detect/split → Import Session
+
+As an authenticated user,
+I want to upload a bank-statement PDF and have it staged as an Import Session,
+So that multi-statement files are detected and split before I commit anything.
+
+**Acceptance Criteria:**
+
+**Given** I am signed in
+**When** I upload a PDF through the web UI (phone or desktop)
+**Then** the file is accepted and stored temporarily on the operator PDF volume with a path reference in Postgres — not in git (FR-13, AD-3)
+**And** non-PDF formats are rejected with a clear error
+**And** the path is ephemeral: cleared with the file after successful clean commit (Story 4.9) or when no longer needed for quarantine/review
+
+**Given** a valid upload
+**When** detect and split run in-process on `api`
+**Then** an Import Session stages N statements each with product identity (FR-14, FR-15, AD-4)
+**And** unknown/ambiguous detection fails loudly without silent mis-association
+
+**Given** a multi-statement PDF
+**When** one statement later fails or is skipped
+**Then** siblings in the same session are not automatically discarded (FR-15)
+
+**Given** review has not committed
+**When** I discard the session
+**Then** only uncommitted session state is dropped — no ledger writes (AD-4)
+
+### Story 4.7: Bulk review assign & commit path
+
+As a user importing under review routing,
+I want Bulk mode to send the whole upload to one list I choose,
+So that I can finish a multi-statement file in one assignment when I’m not reviewing card-by-card.
+
+**Acceptance Criteria:**
+
+**Given** review routing and I choose Bulk
+**When** I pick a destination list I belong to
+**Then** the whole upload is assigned to that list before commit (FR-17)
+
+**Given** I started Upload from inside a list
+**When** Bulk mode is selected
+**Then** that list may be pre-selected as destination — Individual default destination is unchanged (UX-DR23)
+
+**Given** statements parse cleanly
+**When** I confirm Bulk commit
+**Then** each statement commits as its own Import Batch under the session (AD-4)
+**And** payer on imported expenses defaults to me and remains editable (FR-19)
+
+**Given** parse failure on a statement
+**When** Bulk is in progress
+**Then** failure handling for that statement is deferred to Epic 5 — this story’s happy path is clean parses only
+
+### Story 4.8: Individual review (swipe / desktop buttons)
+
+As a user reviewing statements one at a time,
+I want phone swipes and desktop buttons for chosen list / default / skip,
+So that I can route each statement deliberately (J1).
+
+**Acceptance Criteria:**
+
+**Given** Individual review on phone
+**When** I act on a statement
+**Then** true swipe commits: right → chosen list (list picker first), left → configurable default list, down → skip (FR-17, FR-18, AD-9, UX-DR11)
+
+**Given** Individual review on desktop
+**When** I act on a statement
+**Then** labeled buttons are primary for the same three outcomes — not swipe theatre
+
+**Given** high-intent accept (chosen list)
+**When** I proceed
+**Then** the list picker opens before the commit gesture/button
+
+**Given** accessible / Reduce Motion needs
+**When** review is used
+**Then** non-gesture equivalents exist so outcomes are operable without swipe (UX-DR19)
+
+**Given** skip or dismiss file
+**When** I confirm
+**Then** skip stores nothing for that statement; dismiss abandons remaining uncommitted statements from the upload (FR-18)
+
+**Given** clean parse
+**When** I accept
+**Then** comparison UI does not appear — failures are Epic 5
+
+### Story 4.9: Commit batch, dedup summary, land on settle strip
+
+As a user finishing an import,
+I want commits to dedupe silently, summarize imported/skipped counts, and land on the Soft-Ledger settle strip,
+So that I see the number I came to update (J1 climax).
+
+**Acceptance Criteria:**
+
+**Given** I accept a cleanly parsed statement
+**When** commit runs
+**Then** an Import Batch is journaled for that statement and ledger rows are written with domain identity dedup (FR-20, FR-34, AD-4)
+**And** payer defaults to me and remains editable (FR-19)
+**And** FX materialization from Epic 3 applies to non-CRC lines
+
+**Given** overlapping re-import of parsed rows
+**When** commit finishes
+**Then** duplicates are skipped without mid-import interruption
+**And** I see a summary: imported N new / skipped M duplicates (FR-20, UX-DR22)
+
+**Given** the session completes (no Epic 5 conflicts yet)
+**When** I finish review
+**Then** I land on shared-expenses for the list I mostly fed
+**And** the Soft-Ledger settle strip reflects the new committed purchases — same strip as Epic 3, no parallel settle UI
+
+**Given** a statement parsed correctly and committed with no unresolved quarantine
+**When** the Import Batch commit succeeds
+**Then** the statement PDF file is deleted from the operator volume and its Postgres path reference is cleared (AD-3) — ledger rows in SQL are the durable record
+
+**And** same-price / quarantine flows are out of scope for this story (Epic 5); Epic 5 retains the PDF while quarantine needs it, then clears when resolved

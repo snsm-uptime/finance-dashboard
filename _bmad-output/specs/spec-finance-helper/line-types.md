@@ -39,7 +39,7 @@ Staging and ledger share: `posted_date` (ISO-8601), signed `amount`, ISO 4217 `c
 - **Fallback:** `(product_id, posted_date, currency, amount, normalized_description, line_type, statement_period_id)`.
 - Domain alone computes identity at commit. Adapters may hint `ref_quality` only.
 
-## BAC credit baseline (walmart reviewed)
+## BAC credit baseline
 
 | Bank section | Taxonomy | v1 policy |
 | --- | --- | --- |
