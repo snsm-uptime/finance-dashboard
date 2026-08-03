@@ -134,7 +134,7 @@ Visual identity spine. Binding reference for Soft-Ledger hybrid layout: [`.worki
 
 Product name: **finance-helper**. Logo / wordmark assets: **TBD** (name-only for now).
 
-Appearance: **follow system** — both light and dark Warm Balance tokens ship; UI tracks OS preference.
+Appearance: **Light / Dark / System** — both light and dark Warm Balance tokens ship. Default is **System** (track OS/browser). Users can pin Light or Dark from the Account menu; preference is remembered on the account.
 
 UI system: **unspecified**. Architecture chooses the component stack later. This spine owns Warm Balance tokens and Soft-Ledger hybrid behavior — do **not** inherit shadcn (or any kit) defaults as brand.
 
@@ -300,7 +300,7 @@ Not redrawn on Soft-Ledger hybrid panel; Soft Type panel showed disclosure under
 | Lead every list surface with the settle amount in the Soft-Ledger strip island | Hide the number behind dense tables, charts, or long receipt scrolls |
 | Use `{colors.owe}` / `{colors.owed}` for polarity | Color-code money with unsemantic rainbow badges |
 | Keep Soft-Ledger air: inset island, transparent receipts, 1px borders | Canonical full-bleed heavy rules or Dense Ink 2px chrome as default |
-| Follow system appearance with both token sets | Ship light-only or invent a third “brand” mode |
+| Ship both token sets; honor Account theme Light / Dark / System (default System) | Ship light-only, invent a third “brand” mode, or ignore the user’s theme choice |
 | Plain type hierarchy; tabular amounts | Inter/Roboto-as-brand theatre; emoji celebration chrome |
 | Accent for actions and active tabs only | Moss washes behind body copy; purple/gradient finance clichés |
 | Same IA on desktop, wider Soft-Ledger | Separate desktop “dashboard” visual language for v1 |

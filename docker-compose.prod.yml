@@ -1,0 +1,19 @@
+# Homelab / prod overlay — same service graph as docker-compose.yml (AD-22).
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Expect a real `.env` with strong SESSION_SECRET and unique POSTGRES_PASSWORD.
+# Do not commit real .env values. Host reverse proxy / TLS is operator-owned.
+
+services:
+  db:
+    restart: unless-stopped
+
+  api:
+    restart: unless-stopped
+    environment:
+      ENVIRONMENT: production
+
+  ui:
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production

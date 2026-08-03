@@ -1,0 +1,35 @@
+[project]
+name = "finance-helper-api"
+version = "0.1.0"
+description = "finance-helper FastAPI service"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi==0.141.1",
+  "uvicorn[standard]==0.52.1",
+  "pydantic==2.13.4",
+  "sqlalchemy==2.0.51",
+  "alembic==1.18.5",
+  "psycopg[binary]==3.3.4",
+]
+
+[dependency-groups]
+dev = [
+  "pytest==9.1.1",
+  "ruff==0.14.7",
+  "httpx==0.28.1",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["domain", "application", "adapters", "api", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

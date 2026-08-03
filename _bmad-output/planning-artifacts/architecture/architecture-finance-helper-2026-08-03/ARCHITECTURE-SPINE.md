@@ -82,8 +82,8 @@ flowchart LR
 ### AD-3 — Durable state ownership [ADOPTED]
 
 - **Binds:** persistence, uploads, quarantine, import sessions
-- **Prevents:** Split brains (S3 + DB + files with unclear owners); PDF bytes in git
-- **Rule:** PostgreSQL is the only durable store for users, lists, cards, import sessions/batches, candidate/committed rows, quarantine, FX snapshots/flags, aliases. Statement PDF bytes live on an **operator volume outside the repo**; Postgres stores path references only (not `bytea`, not object storage in v1).
+- **Prevents:** Split brains (S3 + DB + files with unclear owners); PDF bytes in git; retaining statement PDFs after SQL already holds the ledger
+- **Rule:** PostgreSQL is the only durable store for users, lists, cards, import sessions/batches, candidate/committed rows, quarantine, FX snapshots/flags, aliases. Statement PDF bytes may live temporarily on an **operator volume outside the repo**; Postgres stores path references only while the file is needed (not `bytea`, not object storage in v1). **After a statement is parsed correctly and its Import Batch commits successfully with no unresolved quarantine, delete the PDF file and clear its path reference** — the ledger in SQL is the source of truth. Retain the PDF (and path) only while review/comparison or unresolved quarantine still needs the source document; clear on dismiss and when quarantine is fully resolved.
 
 ### AD-4 — Import Session and Batch [ADOPTED]
 
@@ -218,6 +218,7 @@ flowchart LR
 | Config | Secrets/SMTP/paths outside repo |
 | Auth cookies | Same-site first-party; Secure in HTTPS |
 | i18n | EN + ES from v1; keys in `ui`; preference remembered on account (Account menu); first visit from browser |
+| Appearance | Light / Dark / System from Account menu; remembered on account; default System (OS/browser); Warm Balance token sets from DESIGN.md |
 | Logging | No raw statement PII at info; correlate by session/statement/batch ids |
 | Branches | `<type>/<epic>/<us-id>` — AD-13 |
 | Versioning | Single app SemVer tag — AD-14 |

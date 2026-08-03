@@ -16,7 +16,7 @@ Multi-surface self-hosted **web** app: phone viewport + desktop browser. Not a n
 
 UI system **unspecified** — Architecture chooses the stack. These spines own Warm Balance visual identity (`DESIGN.md`) and behavioral rules only.
 
-Appearance: follow system (light and dark both in scope). Product name: finance-helper (mark TBD in `DESIGN.md`).
+Appearance: Light / Dark / System (both token sets in scope; default System). Product name: finance-helper (mark TBD in `DESIGN.md`).
 
 **Out of v1 UI:** settlement recording, profile/settings product surface, expense-distribution dashboard tab, ML, trends.
 
@@ -33,10 +33,10 @@ Appearance: follow system (light and dark both in scope). Product name: finance-
 | Parse comparison | Mid-review on parse failure | PDF evidence vs extracted rows → quarantine accept or dismiss |
 | Card registration | Upload/detect unknown IBAN | Blocks review until user label + IBAN saved |
 | Same-price conflict review | End of import when manual↔parsed matches | Card picker: Manual **or** Parsed; escape **“Not the same expense”** only after double-count confirm |
-| Manual expense | Shared-expenses → add | Amount + description; payer defaults to signed-in user; list default split |
+| Manual expense | Shared-expenses → add | Amount + description; payer defaults to signed-in user; optional origin (existing card / Cash / blank); list default split |
 | Invite | Shared-expenses (list) | Invite member by email |
 | Invitee signup | Invite email link | Email + password; lands on inviting list |
-| Account menu | Chrome (minimal) | Sign out + password reset + **Language (EN/ES)** — **no** profile/settings surface |
+| Account menu | Chrome (minimal) | Sign out + password reset + **Language (EN/ES)** + **Theme (Light / Dark / System)** — **no** profile/settings surface |
 
 **Not v1:** Distribution dashboard tab (desired post-v1).
 
@@ -83,9 +83,9 @@ Behavioral. Visual specs live in `DESIGN.md.Components`.
 | Quarantine disclosure | Shared-expenses (strip and/or period) | When incomplete data affects balances, disclose that balances may understate — do not silent-green the number. |
 | Card registration prompt | Unknown IBAN | **Blocks** continuing review. Fields: user-chosen label + IBAN as match key. Fixed card→list routing is **after** this prompt, not inside it. |
 | Same-price conflict cards | End-of-import conflict list | Per conflict: two cards — Manual \| Parsed. Pick exactly one survivor by default. Escape: **“Not the same expense”** (harder than the cards) keeps both only after confirm warning someone may owe more. Not swipe (swipe reserved for statement review). Same UI for hand-fixed↔re-parse conflicts. |
-| Manual expense form | Add on list | **Amount**, **description**, **payer** (defaults to signed-in user); **Adjust split** disclosure for whole-line / absolute fragments / percentage (list default until opened). Save → newest-first row + settle-up updates immediately. |
-| Invite form | List | Email address → send. Unregistered path uses create-account email template. |
-| Account menu | Global chrome | Sign out; password reset; **Language EN/ES** (remembered on account; first visit defaults from browser). No profile, avatars-as-settings, or preferences surface in v1. |
+| Manual expense form | Add on list | **Amount**, **description**, **payer** (defaults to signed-in user); **origin** optional — dropdown of user’s existing cards, **Cash**, or leave blank; **Adjust split** disclosure for whole-line / absolute fragments / percentage (list default until opened). Save → newest-first row + settle-up updates immediately. Filter exists later to find/assign items with no origin. |
+| Invite form | List | Email address → send. Unregistered path uses create-account email template. Invite email language matches the **inviter’s** current Account language (EN/ES). |
+| Account menu | Global chrome | Sign out; password reset; **Language EN/ES** (remembered on account; first visit defaults from browser); **Theme Light / Dark / System** (remembered on account; defaults to System). No profile, avatars-as-settings, or preferences surface in v1. |
 | Simplify suggestion | Shared-expenses `[spine-only]` | Shows reduced transfer set. Copy must not say “paid”; must not resemble settlement recording. |
 
 ## State Patterns
@@ -125,7 +125,7 @@ Behavioral. Visual specs live in `DESIGN.md.Components`.
 
 - No equal-status keep-both peer button on conflicts (confirmed “Not the same expense” escape only).
 - No settlement-recording CTA in v1 (ignore mock “Mark settled” affordances).
-- No profile/settings surface; account chrome stays minimal (language allowed).
+- No profile/settings surface; account chrome stays minimal (language and theme allowed).
 - Modal/sheet stacks stay shallow (registration and pickers are blocking interrupts, not nested labyrinths).
 
 ## Accessibility Floor
@@ -147,7 +147,7 @@ Self-hosted responsive web — not native shells.
 |---|---|
 | Phone viewport | Soft-Ledger hybrid: looser settle-up strip island, airier rows. Swipe-primary Individual review. Journeys J1–J7 narrated here. |
 | Desktop browser | Same IA and flows; wider layout. Individual review uses **buttons** as primary. Not a separate product journey. |
-| Appearance | Follow OS/browser light/dark preference. |
+| Appearance | Theme control: Light / Dark / System. System follows OS/browser; Light and Dark pin the Warm Balance token set. Preference remembered on account; default System. |
 
 Distribution dashboard tab is post-v1 — do not reserve a primary nav tab for it in v1 chrome.
 
@@ -160,6 +160,7 @@ EN + ES from v1.
 - Currency display remains CRC-first for settle-up (`₡…`); locale affects copy and date formatting in UI, not the settle-up currency model.
 - Card **user labels** are free text (whatever the user typed) — not translated by the product.
 - Language control lives in **Account menu** (EN/ES); preference is **remembered on the account**. First visit defaults from browser/`Accept-Language`. Must not require a full settings surface.
+- Theme control lives in **Account menu** (Light / Dark / System); preference is **remembered on the account**. First visit defaults to **System**. Must not require a full settings surface.
 
 ## Key Flows
 
@@ -217,7 +218,7 @@ Failure: statement parse fail → J3 branch; unknown IBAN → J6 blocks before r
 ### J5 — Sebas adds manual expense (phone)
 
 1. On household shared list → add manual expense.
-2. Enters amount / description; payer defaults to Sebas (editable — e.g. when Monse paid).
+2. Enters amount / description; payer defaults to Sebas (editable — e.g. when Monse paid); optionally sets origin (card / Cash / blank).
 3. Optionally opens **Adjust split** for friends-style fragments; otherwise list default.
 4. Saves → item appears newest-first under balances.
 5. **Climax:** settle-up numbers update immediately.
@@ -258,4 +259,4 @@ Captured product behavior **without** a named journey / mock commitment yet. Bui
 - Card→list fixed-routing UI after J6 (after registration; not journeyed as its own flow).
 - Simplify surface placement and microcopy strings (EN/ES).
 
-~~Closed 2026-08-03:~~ swipe R/L/D pinned; manual create fields (amount+description+payer+Adjust split); conflict C2 (survivor + confirmed not-same); locale in Account menu remembered.
+~~Closed 2026-08-03:~~ swipe R/L/D pinned; manual create fields (amount+description+payer+Adjust split); optional origin card/Cash/blank + no-origin filter; conflict C2 (survivor + confirmed not-same); locale in Account menu remembered; **theme Light/Dark/System in Account menu (default System)**.

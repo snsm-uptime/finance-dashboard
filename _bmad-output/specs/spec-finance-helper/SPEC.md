@@ -21,8 +21,8 @@ sources:
 ## Capabilities
 
 - **CAP-1**
-  - **intent:** A peer can create an account with email and password, sign in and out, reset a forgotten password via email, and choose UI language (EN/ES) from the Account menu.
-  - **success:** Duplicate emails rejected; passwords stored hashed only; after signup the user is authenticated with a personal list (CAP-2); reset proves email control and invalidates the prior password; invalid credentials get a generic failure; language defaults from browser/`Accept-Language` on first visit then is remembered on the account; no Settings/profile product beyond Account chrome.
+  - **intent:** A peer can create an account with email and password, sign in and out, reset a forgotten password via email, and from the Account menu choose UI language (EN/ES) and appearance theme (Light / Dark / System).
+  - **success:** Duplicate emails rejected; passwords stored hashed only; after signup the user is authenticated with a personal list (CAP-2); reset proves email control and invalidates the prior password; invalid credentials get a generic failure; language defaults from browser/`Accept-Language` on first visit then is remembered on the account; theme defaults to System on first visit then is remembered on the account (Light/Dark pin Warm Balance token sets); no Settings/profile product beyond Account chrome.
 
 - **CAP-2**
   - **intent:** Every new account gets a personal list; an authenticated user can create and rename additional lists they own; list data is visible only to members.
@@ -30,7 +30,7 @@ sources:
 
 - **CAP-3**
   - **intent:** A list owner can invite someone by email; registered users get a join invite; unregistered addresses get signup guidance and land on the inviting list after signup.
-  - **success:** Invite delivery uses transactional email; post-signup redirect opens the inviting list with settle-up context (not a blank home).
+  - **success:** Invite delivery uses transactional email in the **inviter’s** Account language (EN/ES); post-signup redirect opens the inviting list with settle-up context (not a blank home).
 
 - **CAP-4**
   - **intent:** Lists default to an even split among members (configurable to standing percentages); creating or editing an item/receipt can override via whole-line assignment, absolute amounts per member, or a percentage split.
@@ -49,8 +49,8 @@ sources:
   - **success:** Phone Individual review uses true swipe commits mapped **right → chosen list** (after list picker), **left → configurable default list**, **down → skip**; desktop uses labeled buttons for the same three outcomes; list picker precedes high-intent accept; accessible non-gesture equivalents exist; skip stores nothing for that statement.
 
 - **CAP-8**
-  - **intent:** Users can add a manual expense to a list without waiting for a statement; every shared expense has an explicit editable payer defaulting to the current user.
-  - **success:** Create sheet requires **amount**, **description**, and **payer** (default current user); **Adjust split** disclosure offers whole-line / absolute fragments / percentage (list default until opened); items carry `hand` provenance, appear in the receipt list and settle-up immediately, and always have a payer set when committed.
+  - **intent:** Users can add a manual expense to a list without waiting for a statement; every shared expense has an explicit editable payer defaulting to the current user; optional origin is an existing card, Cash, or blank.
+  - **success:** Create sheet requires **amount**, **description**, and **payer** (default current user); **origin** may be a registered card, Cash, or left blank; a filter lists items with no origin for later assignment; **Adjust split** disclosure offers whole-line / absolute fragments / percentage (list default until opened); items carry `hand` provenance, appear in the receipt list and settle-up immediately, and always have a payer set when committed.
 
 - **CAP-9**
   - **intent:** When automatic parse fails for a statement, the user sees the PDF beside extracted rows and may accept with quarantine or dismiss; unresolved rows can be hand-fixed; balances disclose incompleteness.
@@ -66,19 +66,19 @@ sources:
 
 - **CAP-12**
   - **intent:** Bank support is pluggable via detect → split → parse → normalize → stage → review → commit without rewriting core import, dedup, or list logic.
-  - **success:** Adapters emit CanonicalLine fields; domain alone computes dedup identity at commit; BAC **walmart** fixture persists every must-parse line with required fields and zero manual edits; Promerica stub (or contract tests) exercises multi-statement extension; dual-column amounts prefer nonzero, then CRC if both nonzero; installment schedules are distinct and excluded from settle-up without double-counting purchases.
+  - **success:** Adapters emit CanonicalLine fields; domain alone computes dedup identity at commit; synthetic **BAC credit-card** fixture persists every must-parse line with required fields and zero manual edits; Promerica stub (or contract tests) exercises multi-statement extension; dual-column amounts prefer nonzero, then CRC if both nonzero; installment schedules are distinct and excluded from settle-up without double-counting purchases.
 
 ## Constraints
 
 - Self-hosted Compose deploy: `db` + `api` + `ui` (+ host reverse proxy); Postgres volume and PDF volume outside the repo; no real statements/PII in git.
 - Hexagonal dependency rule (AD-1): UI → HTTP API only; domain has no framework/PDF imports; bank adapters return normalized rows only — they do not commit or own lists.
-- Durable app state in PostgreSQL only; PDF bytes on disk with path references (not `bytea`, not object storage in v1).
+- Durable app state in PostgreSQL only. PDF bytes may sit temporarily on an operator volume with path references (not `bytea`, not object storage in v1). **After a correct parse and successful commit with no unresolved quarantine, delete the PDF and clear the path** — SQL is the source of truth. Keep the file only while review/comparison or unresolved quarantine still needs it; clear on dismiss and when quarantine is fully resolved.
 - Import Session stages an upload; Import Batch commits **per Statement**; settle math reads committed batches only.
 - Money: Postgres `NUMERIC` + ISO 4217; domain `Decimal`; never float.
 - Auth session: httpOnly Secure cookie on same-origin (or BFF); no Bearer tokens in `localStorage`.
 - Posted dates and cycle boundaries use `America/Costa_Rica` after ISO-8601 normalization.
 - UI binding: `EXPERIENCE.md` + `DESIGN.md` (Warm Balance / Soft-Ledger); component kits may supply unstyled primitives only — template defaults are not brand.
-- Accessibility floor WCAG 2.2 AA; UI strings EN + ES from v1; language preference remembered on the account (Account menu), defaulting from browser on first visit — not a Settings product.
+- Accessibility floor WCAG 2.2 AA; UI strings EN + ES from v1; language preference remembered on the account (Account menu), defaulting from browser on first visit; appearance theme Light / Dark / System remembered on the account, defaulting to System — not a Settings product.
 - CI release gate uses synthetic PDFs with known geometry + golden rows; operator real-PDF tests are optional parallel tier.
 - Parsers/domain developed red→green; merge to `main` requires lint + api pytest (incl. goldens) + ui typecheck/lint + critical ui tests.
 - SMTP (or equivalent) required for invites and password reset.
@@ -88,7 +88,7 @@ sources:
 ## Non-goals
 
 - Recording settlement payments, drawing down debt, or settlement history (v2).
-- Account profile/settings product (display name, notification prefs, session UI, FX overrides) — Account menu may hold sign-out, password reset, and language only.
+- Account profile/settings product (display name, notification prefs, session UI, FX overrides) — Account menu may hold sign-out, password reset, language, and theme only.
 - ML categorization, trends/analytics, and personal-spending dashboards beyond the single shared-expenses view.
 - Real Promerica parsing (stub/contract only until samples exist).
 - CSV/HTML statement formats in v1 (contract must allow later; PDF only now).
@@ -98,7 +98,7 @@ sources:
 
 ## Success signal
 
-A supported BAC **walmart** fixture import persists every must-parse line with required CanonicalLine fields and zero manual edits in CI; on the running app, after uploading a multi-statement PDF into a shared list, a second member can open shared-expenses and see CRC settle-up that matches attributed purchases for the statement cycle — with incomplete disclosure whenever quarantine contributed — without any payment being recorded in-app.
+A supported synthetic **BAC credit-card** fixture import persists every must-parse line with required CanonicalLine fields and zero manual edits in CI; on the running app, after uploading a multi-statement PDF into a shared list, a second member can open shared-expenses and see CRC settle-up that matches attributed purchases for the statement cycle — with incomplete disclosure whenever quarantine contributed — without any payment being recorded in-app.
 
 ## Assumptions
 
