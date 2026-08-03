@@ -53,7 +53,7 @@ development_status:
   1-2-sign-up-with-email-password-and-personal-list: backlog
   1-3-sign-in-sign-out-and-protect-routes: backlog
   1-4-password-reset-via-email: backlog
-  1-5-config-gated-email-verification: backlog
+  1-5-config-gated-email-verification: ready-for-dev
   1-6-account-menu-language-en-es-and-theme: ready-for-dev
   epic-1-retrospective: optional
 
