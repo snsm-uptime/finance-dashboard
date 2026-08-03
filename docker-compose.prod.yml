@@ -12,6 +12,8 @@ services:
     restart: unless-stopped
     environment:
       ENVIRONMENT: production
+      # HTTPS / reverse-proxy: require Secure cookies in prod.
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
 
   ui:
     restart: unless-stopped

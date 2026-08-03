@@ -1,0 +1,46 @@
+# Dev overlay — hot reload for api + ui (not for production).
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+#
+# Source is bind-mounted from the host. Production images remain the default
+# `docker compose up` / prod overlay path.
+
+services:
+  api:
+    environment:
+      DEV_RELOAD: "true"
+    volumes:
+      - ./api/domain:/app/domain
+      - ./api/application:/app/application
+      - ./api/adapters:/app/adapters
+      - ./api/api:/app/api
+      - ./api/scripts:/app/scripts
+      - ./api/tests:/app/tests
+      - ./api/alembic.ini:/app/alembic.ini
+    # Watchdog needs write for reload child processes
+    user: "0:0"
+
+  ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile.dev
+    environment:
+      API_INTERNAL_URL: ${API_INTERNAL_URL}
+      HOSTNAME: "0.0.0.0"
+      PORT: "3000"
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ./ui:/app
+      - ui_node_modules:/app/node_modules
+      - ui_next:/app/.next
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 45s
+
+volumes:
+  ui_node_modules:
+  ui_next:

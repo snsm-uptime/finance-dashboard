@@ -1,0 +1,17 @@
+# syntax=docker/dockerfile:1
+# Dev image: Next.js `next dev` with bind-mounted source (see docker-compose.dev.yml).
+
+FROM node:20-bookworm-slim
+WORKDIR /app
+
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    HOSTNAME=0.0.0.0 \
+    PORT=3000
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY . .
+
+EXPOSE 3000
+CMD ["npm", "run", "dev", "--", "-H", "0.0.0.0", "-p", "3000"]

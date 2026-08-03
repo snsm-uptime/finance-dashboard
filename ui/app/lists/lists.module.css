@@ -1,0 +1,25 @@
+.main {
+  min-height: 100vh;
+  padding: 2.5rem 1.5rem;
+  font-family: var(--font-ui), system-ui, sans-serif;
+}
+
+.brand {
+  margin: 0 0 0.5rem;
+  font-family: var(--font-brand), Georgia, serif;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.title {
+  margin: 0 0 0.5rem;
+  font-size: 1.75rem;
+  font-weight: 650;
+}
+
+.copy {
+  margin: 0;
+  max-width: 36rem;
+  color: var(--muted);
+  line-height: 1.5;
+}

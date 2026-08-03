@@ -12,6 +12,25 @@ jobs:
     defaults:
       run:
         working-directory: api
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: finance
+          POSTGRES_PASSWORD: finance_ci
+          POSTGRES_DB: finance_helper
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U finance -d finance_helper"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://finance:finance_ci@localhost:5432/finance_helper
+      SESSION_SECRET: ci-session-secret-not-for-prod
+      SESSION_COOKIE_SECURE: "false"
+      EMAIL_VERIFICATION_REQUIRED: "false"
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6

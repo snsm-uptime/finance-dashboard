@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 import sys
 
 import uvicorn
 
 logger = logging.getLogger(__name__)
+
+
+def _env_truthy(name: str) -> bool:
+    return (os.environ.get(name) or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def main() -> None:
@@ -31,8 +36,15 @@ def main() -> None:
         logger.error("Alembic failed with code %s", result.returncode)
         raise SystemExit(result.returncode)
 
+    reload = _env_truthy("DEV_RELOAD")
     # Local/dev: do not trust arbitrary X-Forwarded-* until a reverse proxy is in front.
-    uvicorn.run("api:app", host="0.0.0.0", port=8000, proxy_headers=False)
+    uvicorn.run(
+        "api:app",
+        host="0.0.0.0",
+        port=8000,
+        proxy_headers=False,
+        reload=reload,
+    )
 
 
 if __name__ == "__main__":
