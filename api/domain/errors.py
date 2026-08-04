@@ -104,3 +104,39 @@ class InvalidPreferencesError(DomainError):
 
     def __init__(self, detail: str | None = None) -> None:
         super().__init__(detail or self.MESSAGE)
+
+
+class InvalidListNameError(DomainError):
+    """Raised when a list name is empty or whitespace-only."""
+
+    MESSAGE = "Enter a list name."
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(detail or self.MESSAGE)
+
+
+class ListNotFoundError(DomainError):
+    """Raised when a list id does not exist."""
+
+    MESSAGE = "List not found."
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
+class NotListMemberError(DomainError):
+    """Raised when the actor is not a member of the list (ACL)."""
+
+    MESSAGE = "You do not have access to this list."
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
+class NotListOwnerError(DomainError):
+    """Raised when a member who is not the owner attempts an owner-only action."""
+
+    MESSAGE = "Only the list owner can rename this list."
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(detail or self.MESSAGE)

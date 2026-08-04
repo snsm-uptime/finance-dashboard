@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from application.lists import ListMembershipSummary, ListRecord, MembershipRecord
 from application.ports import NewListRecord, NewMembershipRecord, NewUserRecord
 from application.preferences import UserPreferencesRecord
 from application.signin import AuthUserRecord
-from domain.errors import DuplicateEmailError, PrincipalNotFoundError
+from domain.errors import DuplicateEmailError, ListNotFoundError, PrincipalNotFoundError
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -108,3 +109,80 @@ class SqlAlchemyAuthUserRepository:
             language=row.language,
             theme=row.theme,
         )
+
+
+class SqlAlchemyListRepository:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def create_owned_list(
+        self,
+        *,
+        owned_list: NewListRecord,
+        membership: NewMembershipRecord,
+    ) -> None:
+        self._session.add(
+            ListModel(
+                id=owned_list.id,
+                name=owned_list.name,
+                owner_id=owned_list.owner_id,
+            )
+        )
+        self._session.flush()
+        self._session.add(
+            ListMembershipModel(
+                id=membership.id,
+                list_id=membership.list_id,
+                user_id=membership.user_id,
+                role=membership.role,
+            )
+        )
+        self._session.flush()
+
+    def get_list(self, list_id: UUID) -> ListRecord | None:
+        row = self._session.get(ListModel, list_id)
+        if row is None:
+            return None
+        return ListRecord(id=row.id, name=row.name, owner_id=row.owner_id)
+
+    def get_membership(self, list_id: UUID, user_id: UUID) -> MembershipRecord | None:
+        row = self._session.scalar(
+            select(ListMembershipModel)
+            .where(
+                ListMembershipModel.list_id == list_id,
+                ListMembershipModel.user_id == user_id,
+            )
+            .limit(1)
+        )
+        if row is None:
+            return None
+        return MembershipRecord(list_id=row.list_id, user_id=row.user_id, role=row.role)
+
+    def update_list_name(self, list_id: UUID, name: str) -> ListRecord:
+        row = self._session.get(ListModel, list_id)
+        if row is None:
+            raise ListNotFoundError()
+        row.name = name
+        self._session.flush()
+        return ListRecord(id=row.id, name=row.name, owner_id=row.owner_id)
+
+    def list_for_user(self, user_id: UUID) -> list[ListMembershipSummary]:
+        stmt = (
+            select(ListModel, ListMembershipModel.role)
+            .join(
+                ListMembershipModel,
+                ListMembershipModel.list_id == ListModel.id,
+            )
+            .where(ListMembershipModel.user_id == user_id)
+            .order_by(ListModel.created_at.asc())
+        )
+        rows = self._session.execute(stmt).all()
+        return [
+            ListMembershipSummary(
+                id=lst.id,
+                name=lst.name,
+                owner_id=lst.owner_id,
+                role=role,
+            )
+            for lst, role in rows
+        ]
