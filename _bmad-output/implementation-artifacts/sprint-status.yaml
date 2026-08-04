@@ -1,5 +1,5 @@
 # generated: 2026-08-03T22:46:31
-# last_updated: 2026-08-04T16:15:00
+# last_updated: 2026-08-04T17:12:00
 # project: finance-dashboard
 # project_key: NOKEY
 # tracking_system: file-system
@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-03T22:46:31
-last_updated: 2026-08-04T16:15:00
+last_updated: 2026-08-04T17:12:00
 project: finance-dashboard
 project_key: NOKEY
 tracking_system: file-system
@@ -58,9 +58,9 @@ development_status:
   epic-1-retrospective: done
 
   # Epic 1.5 — prep before continuing Epic 2 (from Correct Course / Epic 1 retro)
-  epic-1-5: backlog
+  epic-1-5: in-progress
   1-5-1-token-claim-rechecks-expires-at: backlog
-  1-5-2-auth-mail-interaction-map-and-story-close-overview: backlog
+  1-5-2-auth-mail-interaction-map-and-story-close-overview: done
   1-5-3-invite-verify-gate-contract: backlog
   1-5-4-membership-acl-enforcement-sketch: backlog
   1-5-5-epic-1-spine-smoke: backlog
@@ -116,11 +116,11 @@ action_items:
   - epic: 1
     action: "Story-close interaction overview (how/why map) before marking stories done"
     owner: "Amelia + Winston"
-    status: open
+    status: done
   - epic: 1
     action: "Auth/mail living interaction map (session/BFF, reset, verify, SMTP)"
     owner: "Winston"
-    status: open
+    status: done
   - epic: 1
     action: "Token claim re-checks expires_at for reset and verify tokens"
     owner: "Charlie"

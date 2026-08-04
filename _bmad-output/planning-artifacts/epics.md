@@ -267,10 +267,16 @@ Users can sign up, sign in, reset password, land with a personal list, and set E
 **FRs covered:** FR-1, FR-2, FR-3, FR-4, FR-5
 **Demo gate:** authenticated user with personal list
 
+### Epic 1.5: Auth spine hardening & Epic 2 prep
+Close Epic 1 loose ends before continuing shared lists: token claim correctness, auth/mail comprehension artifacts, verify-gate and ACL contracts, spine smoke, plus parallel rate-limit and hex/pytest ergonomics. Does not deliver invite UI or multi-member lists (those remain Epic 2).
+**FRs covered:** none new (supports FR-4, FR-7, FR-8 readiness)
+**Demo gate:** Critical path 1.5.1–1.5.5 done; Epic 1 auth/mail/personal-list smoke green; Story 2.1 may remain in review until critical path completes
+
 ### Epic 2: Shared lists & household membership
 Users create named lists, invite members by email (registered + unregistered → land on inviting list), and configure even/percentage list defaults plus item/receipt split overrides.
 **FRs covered:** FR-6, FR-7, FR-8, FR-9, FR-10
 **Demo gate:** unregistered invite → signup → lands on inviting list
+**Sequencing note:** Do not start Stories 2.2+ until Epic 1.5 critical path (1.5.1–1.5.5) is done. Story 2.1 may remain in review until that critical path completes.
 
 ### Epic 3: Manual expenses & settle-up
 Users log shared expenses and see who owes whom in CRC on Soft-Ledger (Warm Balance tokens). Balances from per-transaction shares + payer + FR-45 line-type rules; CanonicalLine-compatible money fields; FX; incomplete-disclosure pattern ready (shows incomplete only when data says so).
@@ -416,12 +422,127 @@ So that the app matches my language and preferred look without a full settings p
 **When** I return later on the same account
 **Then** my theme preference is remembered and the UI uses the corresponding Warm Balance token set (System continues to follow OS changes)
 
+## Epic 1.5: Auth spine hardening & Epic 2 prep
+
+Close Epic 1 loose ends before continuing shared lists: token claim correctness, auth/mail comprehension artifacts, verify-gate and ACL contracts, spine smoke, plus parallel rate-limit and hex/pytest ergonomics. Product FRs for lists/invites remain in Epic 2 — this epic does not deliver invite UI or multi-member lists.
+
+**FRs covered:** none new (supports FR-4, FR-7, FR-8 readiness)  
+**Demo gate:** Critical path 1.5.1–1.5.5 done; Epic 1 auth/mail/personal-list smoke green; Story 2.1 may remain in review until this epic’s critical path completes.
+
+**Sequencing:** Do not start Stories 2.2+ until Epic 1.5 critical path (1.5.1–1.5.5) is done. Stories 1.5.6–1.5.7 may run in parallel after 1.5.1 or immediately after critical path.
+
+### Story 1.5.1: Token claim re-checks expires_at
+
+As an operator,
+I want password-reset and email-verify token claims to reject expired tokens,
+So that invite tokens can copy a correct claim pattern instead of a known gap.
+
+**Acceptance Criteria:**
+
+**Given** a password-reset or email-verify token whose `expires_at` is in the past
+**When** the claim/confirm path runs
+**Then** the claim is rejected and the token is not treated as successfully consumed for a state change
+
+**Given** a still-valid token
+**When** the claim/confirm path runs
+**Then** existing successful behavior is preserved
+
+**And** the corrected claim pattern is documented so Epic 2 invite tokens can reuse it
+
+### Story 1.5.2: Auth/mail interaction map and story-close overview process
+
+As the project lead,
+I want a living auth/mail interaction map and a story-close how/why overview habit,
+So that I understand how pieces interact before a story is marked done.
+
+**Acceptance Criteria:**
+
+**Given** the Epic 1 auth and mail flows (session/BFF, reset, verify, SMTP)
+**When** the interaction map is delivered
+**Then** it shows request path, key components, and why that shape — usable without reverse-engineering diffs
+
+**And** the team agreement is recorded: before marking a story done, deliver a short how/why overview (what not to break included)
+
+### Story 1.5.3: Invite verify-gate contract
+
+As a developer,
+I want a written contract for how EnsureEmailVerifiedService gates invite acceptance,
+So that Stories 2.3/2.4 implement one agreed behavior when verification is required.
+
+**Acceptance Criteria:**
+
+**Given** `EMAIL_VERIFICATION_REQUIRED` is on or off
+**When** an invite accept (or gated invite) path is specified
+**Then** the contract states when the gate blocks, when it allows, and how the stub becomes real in 2.3/2.4
+
+**And** no invite UI is required in this story — contract/docs (and minimal stub alignment only if needed)
+
+### Story 1.5.4: Membership ACL enforcement sketch
+
+As a developer,
+I want a sketch of where membership ACL is enforced and what 2.1/2.2 must call,
+So that list access checks are consistent before homepage and invite work continues.
+
+**Acceptance Criteria:**
+
+**Given** AD-19 membership rules
+**When** the sketch is delivered
+**Then** it names the enforcement layer (application vs route), the operations that must check membership, and what Stories 2.1/2.2 are expected to call
+
+**And** full ACL product implementation remains in Epic 2 (especially 2.2) — this story is the contract sketch
+
+### Story 1.5.5: Epic 1 spine smoke (auth, mail, personal list)
+
+As QA,
+I want a smoke checklist run against the Compose stack after the claim fix,
+So that the Epic 1 spine still holds before Epic 2 resumes.
+
+**Acceptance Criteria:**
+
+**Given** Stories 1.5.1 (and any blocking map/contract deps) are done
+**When** the smoke checklist is executed on Compose (`db`/`api`/`ui`)
+**Then** signup/sign-in/sign-out, personal list presence, password-reset path, and verify path (as configured) pass
+
+**And** the checklist is saved under implementation artifacts for reuse
+
+### Story 1.5.6: Auth and SMTP rate-limit hardening
+
+As an operator,
+I want rate limits on register, sign-in, reset, and verify request paths,
+So that invite-era abuse surfaces are reduced (parallel hardening).
+
+**Acceptance Criteria:**
+
+**Given** repeated requests to register, sign-in, password-reset request, and verify request
+**When** configured limits are exceeded
+**Then** the API rejects further attempts with a clear client-safe error without breaking legitimate single-user flows
+
+**And** this story may proceed in parallel after 1.5.1 or after critical path 1.5.1–1.5.5
+
+### Story 1.5.7: Hex port polish and Compose pytest ergonomics
+
+As a developer,
+I want clearer hex ports for session/hasher/prefs and a workable Compose pytest path,
+So that Epic 2 application services do not pile onto incomplete boundaries (parallel).
+
+**Acceptance Criteria:**
+
+**Given** routes that today import concrete session/hasher/prefs adapters
+**When** this story completes
+**Then** ports/interfaces are introduced or tightened for those seams without changing product behavior
+
+**And** a documented, working way to run API pytest against the Compose Postgres (host or in-image) exists so CI/local parity is clearer
+
+**And** this story may proceed in parallel after 1.5.1 or after critical path 1.5.1–1.5.5
+
 ## Epic 2: Shared lists & household membership
 
 Users create named lists, invite members by email (registered + unregistered → land on inviting list), and configure even/percentage list defaults plus item/receipt split overrides (override UI deferred to Epic 3).
 
 **FRs covered:** FR-6, FR-7, FR-8, FR-9, FR-10  
 **Demo gate:** unregistered invite → signup → lands on inviting list
+
+**Sequencing:** Do not start Stories 2.2+ until Epic 1.5 critical path (1.5.1–1.5.5) is done. Story 2.1 may remain in `review` until that critical path completes.
 
 ### Story 2.1: Create and rename owned lists
 
