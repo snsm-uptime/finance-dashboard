@@ -146,21 +146,15 @@ def test_owner_rename_updates_name_visible_via_membership_list() -> None:
     list_id = uuid4()
     repo.create_owned_list(
         owned_list=NewListRecord(id=list_id, name="Old", owner_id=owner),
-        membership=NewMembershipRecord(
-            id=uuid4(), list_id=list_id, user_id=owner, role="owner"
-        ),
+        membership=NewMembershipRecord(id=uuid4(), list_id=list_id, user_id=owner, role="owner"),
     )
-    repo.memberships.append(
-        MembershipRecord(list_id=list_id, user_id=member, role="member")
-    )
+    repo.memberships.append(MembershipRecord(list_id=list_id, user_id=member, role="member"))
 
     RenameListService(repo).execute(
         RenameListCommand(actor_user_id=owner, list_id=list_id, name="New Name")
     )
 
-    summaries = ListMembershipsService(repo).execute(
-        ListMembershipsCommand(actor_user_id=member)
-    )
+    summaries = ListMembershipsService(repo).execute(ListMembershipsCommand(actor_user_id=member))
     assert len(summaries) == 1
     assert summaries[0].name == "New Name"
 
@@ -172,9 +166,7 @@ def test_non_member_rename_rejected() -> None:
     list_id = uuid4()
     repo.create_owned_list(
         owned_list=NewListRecord(id=list_id, name="Household", owner_id=owner),
-        membership=NewMembershipRecord(
-            id=uuid4(), list_id=list_id, user_id=owner, role="owner"
-        ),
+        membership=NewMembershipRecord(id=uuid4(), list_id=list_id, user_id=owner, role="owner"),
     )
 
     with pytest.raises(NotListMemberError):
@@ -191,13 +183,9 @@ def test_member_non_owner_rename_rejected() -> None:
     list_id = uuid4()
     repo.create_owned_list(
         owned_list=NewListRecord(id=list_id, name="Household", owner_id=owner),
-        membership=NewMembershipRecord(
-            id=uuid4(), list_id=list_id, user_id=owner, role="owner"
-        ),
+        membership=NewMembershipRecord(id=uuid4(), list_id=list_id, user_id=owner, role="owner"),
     )
-    repo.memberships.append(
-        MembershipRecord(list_id=list_id, user_id=member, role="member")
-    )
+    repo.memberships.append(MembershipRecord(list_id=list_id, user_id=member, role="member"))
 
     with pytest.raises(NotListOwnerError):
         RenameListService(repo).execute(

@@ -150,9 +150,7 @@ def test_owner_rename_persists(client: TestClient, db_session: Session) -> None:
     assert match["name"] == "Trip with Alex"
 
 
-def test_non_member_and_non_owner_rename_denied(
-    client: TestClient, db_session: Session
-) -> None:
+def test_non_member_and_non_owner_rename_denied(client: TestClient, db_session: Session) -> None:
     _register(client, "owner2@example.com")
     created = client.post("/lists", json={"name": "Household"})
     list_id = created.json()["id"]

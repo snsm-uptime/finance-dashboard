@@ -19,7 +19,5 @@ def validate_list_name(raw: str) -> str:
     if not name:
         raise InvalidListNameError()
     if len(name) > LIST_NAME_MAX_LENGTH:
-        raise InvalidListNameError(
-            f"List name must be at most {LIST_NAME_MAX_LENGTH} characters."
-        )
+        raise InvalidListNameError(f"List name must be at most {LIST_NAME_MAX_LENGTH} characters.")
     return name

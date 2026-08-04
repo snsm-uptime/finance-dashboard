@@ -79,9 +79,7 @@ def create_list(
 ) -> ListResponse | JSONResponse:
     service = CreateOwnedListService(SqlAlchemyListRepository(db))
     try:
-        result = service.execute(
-            CreateOwnedListCommand(actor_user_id=user_id, name=body.name)
-        )
+        result = service.execute(CreateOwnedListCommand(actor_user_id=user_id, name=body.name))
     except InvalidListNameError as exc:
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
