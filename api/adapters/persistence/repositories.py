@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from uuid import UUID
+
 from application.ports import NewListRecord, NewMembershipRecord, NewUserRecord
 from application.signin import AuthUserRecord
 from sqlalchemy import select
@@ -57,6 +59,12 @@ class SqlAlchemyAuthUserRepository:
 
     def get_by_email(self, email: str) -> AuthUserRecord | None:
         row = self._session.scalar(select(UserModel).where(UserModel.email == email).limit(1))
+        if row is None:
+            return None
+        return AuthUserRecord(id=row.id, email=row.email, password_hash=row.password_hash)
+
+    def get_by_id(self, user_id: UUID) -> AuthUserRecord | None:
+        row = self._session.get(UserModel, user_id)
         if row is None:
             return None
         return AuthUserRecord(id=row.id, email=row.email, password_hash=row.password_hash)

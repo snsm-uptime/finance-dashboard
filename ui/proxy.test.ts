@@ -35,6 +35,11 @@ describe("proxy auth gate", () => {
     expect(response.status).toBe(200);
   });
 
+  it("allows public /forgot-password and /reset-password without cookie", () => {
+    expect(proxy(makeRequest("/forgot-password")).status).toBe(200);
+    expect(proxy(makeRequest("/reset-password?token=abc")).status).toBe(200);
+  });
+
   it("redirects unauthenticated /upload to /sign-in", () => {
     const response = proxy(makeRequest("/upload"));
     expect(response.status).toBe(307);

@@ -152,3 +152,14 @@ context:
 
 - Vitest 60% floor on `lib/`
   [`vitest.config.mts:7`](../../ui/vitest.config.mts#L7)
+
+### Review Findings
+
+- [x] [Review][Patch] Empty `FINANCE_HELPER_DATA` binds `/pgdata` — omit empty key from `.env.example` and default Compose to `${FINANCE_HELPER_DATA:-${HOME}/finance-helper}/pgdata` [docker-compose.yml:18]
+- [x] [Review][Patch] Silent `DATABASE_URL` fallbacks in `db.py` / Alembic contradict “no silent secret defaults” — require env; pass full `DATABASE_URL` from `.env` (also avoids unencoded password in Compose-built URLs) [api/adapters/persistence/db.py:12]
+- [x] [Review][Patch] Alembic timeout 120s exceeds health `start_period` 15s — raise api healthcheck `start_period` to ≥120s [docker-compose.yml:60]
+- [x] [Review][Defer] Enforce volume path outside git root — deferred, pre-existing/operator policy [docker-compose.yml:18]
+- [x] [Review][Defer] CI Compose/image smoke not gated — deferred, pre-existing vs AC3 lint-only [`.github/workflows/ci.yml:1`]
+- [x] [Review][Defer] Floating image digests / unpinned `uv` install — deferred, pre-existing [api/Dockerfile]
+- [x] [Review][Defer] Prod overlay secret/port hardening — deferred, pre-existing [docker-compose.prod.yml]
+- [x] [Review][Defer] Real PDFs still in git history — deferred, Ask First [bank_data]

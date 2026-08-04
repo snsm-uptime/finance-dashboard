@@ -46,3 +46,6 @@ yarn-error.log*
 
 # Docker / local overlays
 docker-compose.override.yml
+
+# Accidental in-repo Postgres bind (must stay outside the repo)
+/pgdata/

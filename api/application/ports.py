@@ -45,3 +45,17 @@ class SignupRepository(Protocol):
         personal_list: NewListRecord,
         membership: NewMembershipRecord,
     ) -> None: ...
+
+
+@dataclass(frozen=True, slots=True)
+class EmailMessage:
+    to_address: str
+    subject: str
+    body_text: str
+    body_html: str | None = None
+
+
+class EmailSender(Protocol):
+    def send(self, message: EmailMessage) -> None:
+        """Send transactional email. Raises SmtpConfigurationError / SmtpSendError on failure."""
+        ...

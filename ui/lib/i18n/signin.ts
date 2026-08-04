@@ -15,6 +15,7 @@ export const signInMessages = {
     hidePassword: "Hide password",
     noAccount: "Need an account?",
     signUpLink: "Sign up",
+    forgotPassword: "Forgot password?",
   },
   es: {
     brand: "finance-helper",
@@ -30,6 +31,7 @@ export const signInMessages = {
     hidePassword: "Ocultar contraseña",
     noAccount: "¿Necesitas una cuenta?",
     signUpLink: "Registrarse",
+    forgotPassword: "¿Olvidaste tu contraseña?",
   },
 } as const;
 

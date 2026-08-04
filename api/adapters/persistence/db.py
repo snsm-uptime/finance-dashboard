@@ -1,4 +1,4 @@
-"""SQLAlchemy engine helpers (no domain tables in Story 1.1)."""
+"""SQLAlchemy engine helpers."""
 
 from __future__ import annotations
 
@@ -9,12 +9,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-_DEFAULT_URL = "postgresql+psycopg://finance:finance_dev_change_me@localhost:5432/finance_helper"
-
 
 def _database_url() -> str:
-    url = os.environ.get("DATABASE_URL") or ""
-    return url.strip() or _DEFAULT_URL
+    url = (os.environ.get("DATABASE_URL") or "").strip()
+    if not url:
+        raise RuntimeError(
+            "DATABASE_URL is required (set it in `.env`; Compose passes it to `api`)"
+        )
+    return url
 
 
 @lru_cache(maxsize=1)

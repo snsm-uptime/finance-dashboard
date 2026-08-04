@@ -7,6 +7,8 @@ const SESSION_COOKIE =
 const PUBLIC_PREFIXES = [
   "/sign-in",
   "/signup",
+  "/forgot-password",
+  "/reset-password",
   "/health",
   "/api/auth",
 ];

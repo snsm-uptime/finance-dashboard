@@ -1,0 +1,58 @@
+import { describe, expect, it, vi } from "vitest";
+
+import { attemptSignIn, safeReturnTo, signInFailureMessage } from "./signInClient";
+import { signInMessages } from "@/lib/i18n/signin";
+
+describe("safeReturnTo", () => {
+  it("defaults to /lists for empty or external targets", () => {
+    expect(safeReturnTo(undefined)).toBe("/lists");
+    expect(safeReturnTo("https://evil.example")).toBe("/lists");
+    expect(safeReturnTo("//evil.example")).toBe("/lists");
+    expect(safeReturnTo("/\\evil.example")).toBe("/lists");
+    expect(safeReturnTo("/upload")).toBe("/upload");
+  });
+});
+
+describe("sign-in form failure path", () => {
+  it("returns the generic i18n error on failed credentials", async () => {
+    const errorGeneric = signInMessages.en.errorGeneric;
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ detail: "nope", code: "invalid_credentials" }), {
+        status: 401,
+      }),
+    );
+
+    const result = await attemptSignIn({
+      email: "user@example.com",
+      password: "wrong-pass",
+      returnTo: "/upload",
+      errorGeneric,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: signInFailureMessage(errorGeneric),
+    });
+    expect(result.ok === false && result.error).toBe(errorGeneric);
+    expect(errorGeneric.toLowerCase()).toContain("invalid");
+  });
+
+  it("returns safe returnTo on success", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ user_id: "u1", email: "a@example.com" }), {
+        status: 200,
+      }),
+    );
+
+    const result = await attemptSignIn({
+      email: "a@example.com",
+      password: "password1",
+      returnTo: "/upload",
+      errorGeneric: signInMessages.en.errorGeneric,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    expect(result).toEqual({ ok: true, returnTo: "/upload" });
+  });
+});
