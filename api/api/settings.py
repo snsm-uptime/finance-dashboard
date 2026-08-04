@@ -1,4 +1,4 @@
-"""Auth / session settings from environment."""
+"""Auth / session / SMTP settings from environment."""
 
 from __future__ import annotations
 
@@ -20,6 +20,7 @@ class AuthSettings:
     session_cookie_secure: bool
     session_cookie_samesite: str
     email_verification_required: bool
+    public_app_url: str
 
 
 def load_auth_settings() -> AuthSettings:
@@ -31,6 +32,7 @@ def load_auth_settings() -> AuthSettings:
     samesite = (os.environ.get("SESSION_COOKIE_SAMESITE") or "lax").strip().lower()
     if samesite not in {"lax", "strict", "none"}:
         samesite = "lax"
+    public_app_url = (os.environ.get("PUBLIC_APP_URL") or "http://localhost:3000").strip()
     return AuthSettings(
         session_secret=secret,
         session_cookie_name=(os.environ.get("SESSION_COOKIE_NAME") or "fh_session").strip()
@@ -38,4 +40,5 @@ def load_auth_settings() -> AuthSettings:
         session_cookie_secure=_env_bool("SESSION_COOKIE_SECURE", default=False),
         session_cookie_samesite=samesite,
         email_verification_required=_env_bool("EMAIL_VERIFICATION_REQUIRED", default=False),
+        public_app_url=public_app_url or "http://localhost:3000",
     )

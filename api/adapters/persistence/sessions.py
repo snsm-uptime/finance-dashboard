@@ -55,3 +55,11 @@ def revoke_session(db: Session, token: str | None) -> bool:
         return False
     db.delete(row)
     return True
+
+
+def revoke_all_sessions_for_user(db: Session, user_id: uuid.UUID) -> int:
+    """Delete every opaque session for the user. Returns number of rows removed."""
+    rows = list(db.scalars(select(SessionModel).where(SessionModel.user_id == user_id)))
+    for row in rows:
+        db.delete(row)
+    return len(rows)

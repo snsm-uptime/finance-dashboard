@@ -1,5 +1,5 @@
 # generated: 2026-08-03T22:46:31
-# last_updated: 2026-08-04T00:15:00
+# last_updated: 2026-08-03T19:00:00
 # project: finance-dashboard
 # project_key: NOKEY
 # tracking_system: file-system
@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-03T22:46:31
-last_updated: 2026-08-04T00:15:00
+last_updated: 2026-08-03T19:00:00
 project: finance-dashboard
 project_key: NOKEY
 tracking_system: file-system
@@ -49,10 +49,10 @@ story_location: "{project-root}/_bmad-output/implementation-artifacts"
 
 development_status:
   epic-1: in-progress
-  1-1-scaffold-compose-app-with-health-checks: review
+  1-1-scaffold-compose-app-with-health-checks: done
   1-2-sign-up-with-email-password-and-personal-list: review
-  1-3-sign-in-sign-out-and-protect-routes: review
-  1-4-password-reset-via-email: ready-for-dev
+  1-3-sign-in-sign-out-and-protect-routes: done
+  1-4-password-reset-via-email: done
   1-5-config-gated-email-verification: ready-for-dev
   1-6-account-menu-language-en-es-and-theme: ready-for-dev
   epic-1-retrospective: optional

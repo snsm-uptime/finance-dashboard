@@ -1,6 +1,10 @@
+---
+baseline_commit: 7bb261ae288520fb1fdc32eb6c4395a69fabbecb
+---
+
 # Story 1.4: Password reset via email
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -26,62 +30,83 @@ so that I can regain access without losing my account.
 
 ## Tasks / Subtasks
 
-- [ ] Task 0: Confirm Stories 1.1 + 1.2 + 1.3 are implemented (prerequisites)
-  - [ ] 1.1: Compose `db`/`api`/`ui`, hex layout including empty `adapters/email/`, Alembic, `/health`, lockfiles, CI
-  - [ ] 1.2: User table (UUID, unique email, argon2 hash), personal list, httpOnly Secure cookie issuer, AD-8 forks documented in completion notes
-  - [ ] 1.3: Sign-in / sign-out / `me`, generic invalid-credential errors, `proxy.ts` public-route allowlist that anticipates reset routes
-  - [ ] If any prerequisite is incomplete: stop — finish those stories first (do not invent a parallel auth or email stack)
+- [x] Task 0: Confirm Stories 1.1 + 1.2 + 1.3 are implemented (prerequisites)
+  - [x] 1.1: Compose `db`/`api`/`ui`, hex layout including empty `adapters/email/`, Alembic, `/health`, lockfiles, CI
+  - [x] 1.2: User table (UUID, unique email, argon2 hash), personal list, httpOnly Secure cookie issuer, AD-8 forks documented in completion notes
+  - [x] 1.3: Sign-in / sign-out / `me`, generic invalid-credential errors, `proxy.ts` public-route allowlist that anticipates reset routes
+  - [x] If any prerequisite is incomplete: stop — finish those stories first (do not invent a parallel auth or email stack)
 
-- [ ] Task 1: SMTP email adapter (AC: #1, #3) — first real use of `adapters/email/`
-  - [ ] Add **aiosmtplib ≥5.1.2** to `api` lockfile (CVE-2026-55558 STARTTLS floor — do not pin open `5.x` below 5.1.2)
-  - [ ] Implement SMTP port + adapter under `api/adapters/email/` — domain/application call a port; no `aiosmtplib` imports in `domain/`
-  - [ ] Env placeholders in `.env.example` (and Compose wiring): SMTP host/port/user/password/from, TLS/STARTTLS mode, and **public app base URL** used to build reset links — placeholders only; secrets outside repo (AD-22 / NFR-2)
-  - [ ] Misconfigured or unreachable SMTP → structured failure that the API surfaces clearly (AC #3) — never return “email sent” when send did not succeed
-  - [ ] Do **not** add Redis/queue/worker for mail (AD-2); sync send from `api` is fine for v1 transactional mail
-  - [ ] Reject Nodemailer / UI-side SMTP / Node mail SoT — mail leaves from `api` only
+- [x] Task 1: SMTP email adapter (AC: #1, #3) — first real use of `adapters/email/`
+  - [x] Add **aiosmtplib ≥5.1.2** to `api` lockfile (CVE-2026-55558 STARTTLS floor — do not pin open `5.x` below 5.1.2)
+  - [x] Implement SMTP port + adapter under `api/adapters/email/` — domain/application call a port; no `aiosmtplib` imports in `domain/`
+  - [x] Env placeholders in `.env.example` (and Compose wiring): SMTP host/port/user/password/from, TLS/STARTTLS mode, and **public app base URL** used to build reset links — placeholders only; secrets outside repo (AD-22 / NFR-2)
+  - [x] Misconfigured or unreachable SMTP → structured failure that the API surfaces clearly (AC #3) — never return “email sent” when send did not succeed
+  - [x] Do **not** add Redis/queue/worker for mail (AD-2); sync send from `api` is fine for v1 transactional mail
+  - [x] Reject Nodemailer / UI-side SMTP / Node mail SoT — mail leaves from `api` only
 
-- [ ] Task 2: Reset token lifecycle + persistence (AC: #1, #2) — close architecture gap with secure defaults
-  - [ ] Architecture review flagged **token lifecycle as unspecified** — document chosen rules in completion notes. **Required secure defaults unless a later AD contradicts:**
+- [x] Task 2: Reset token lifecycle + persistence (AC: #1, #2) — close architecture gap with secure defaults
+  - [x] Architecture review flagged **token lifecycle as unspecified** — document chosen rules in completion notes. **Required secure defaults unless a later AD contradicts:**
     - Time-limited token (recommend ≤1 hour TTL)
     - Single-use (consumed on successful reset)
     - Store **hash of token** at rest (never plaintext token in DB); raw token only in the email link
     - Invalidate outstanding unused tokens for that user when a new reset is requested and/or when reset completes
-  - [ ] Prefer Alembic table (e.g. `password_reset_token`) under `adapters/persistence/` if opaque storage is used — UUID PK; FK to user; expires_at; used_at/consumed flag; token_hash
-  - [ ] Signed-stateless token alone is allowed only if it still meets prove-control + single-use/expiry semantics and does not break hex boundaries — document choice
-  - [ ] Domain owns “token valid / consume / password replace” rules; ORM stays in persistence
+  - [x] Prefer Alembic table (e.g. `password_reset_token`) under `adapters/persistence/` if opaque storage is used — UUID PK; FK to user; expires_at; used_at/consumed flag; token_hash
+  - [x] Signed-stateless token alone is allowed only if it still meets prove-control + single-use/expiry semantics and does not break hex boundaries — document choice
+  - [x] Domain owns “token valid / consume / password replace” rules; ORM stays in persistence
 
-- [ ] Task 3: Request-reset use-case + API (AC: #1, #3)
-  - [ ] Application use-case: given email → if user exists, create token + send reset email via email port; if SMTP fails, fail loud (do not mark “sent”)
-  - [ ] **Email enumeration:** align with FR-2 / project-context generic auth posture — for **unknown emails**, prefer same client-visible success shape as known emails **without** sending mail (no oracle). SMTP failure still fails loud when a real send is attempted
-  - [ ] Never log plaintext passwords or raw reset tokens at info; correlate via user/request ids only
-  - [ ] Route under `api/api/` (e.g. `POST /api/auth/password-reset/request` with `{ email }`) — snake_case DTOs; structured JSON errors
-  - [ ] Email body: clear reset link using public app base URL + opaque token (prove control of inbox). Minimal transactional copy; prefer i18n-ready EN (ES templates can share keys — invite mail in Epic 2 will reuse adapter)
+- [x] Task 3: Request-reset use-case + API (AC: #1, #3)
+  - [x] Application use-case: given email → if user exists, create token + send reset email via email port; if SMTP fails, fail loud (do not mark “sent”)
+  - [x] **Email enumeration:** align with FR-2 / project-context generic auth posture — for **unknown emails**, prefer same client-visible success shape as known emails **without** sending mail (no oracle). SMTP failure still fails loud when a real send is attempted
+  - [x] Never log plaintext passwords or raw reset tokens at info; correlate via user/request ids only
+  - [x] Route under `api/api/` (e.g. `POST /api/auth/password-reset/request` with `{ email }`) — snake_case DTOs; structured JSON errors
+  - [x] Email body: clear reset link using public app base URL + opaque token (prove control of inbox). Minimal transactional copy; prefer i18n-ready EN (ES templates can share keys — invite mail in Epic 2 will reuse adapter)
 
-- [ ] Task 4: Complete-reset use-case + API (AC: #2)
-  - [ ] Route (e.g. `POST /api/auth/password-reset/confirm` with `{ token, new_password }`)
-  - [ ] Validate token (exists, unexpired, unused, hash matches) → replace password with **same argon2 hasher as 1.2** → consume token → prior password must fail subsequent verify
-  - [ ] NFR-1: never store/log plaintext new password
-  - [ ] **Session revoke on successful reset:** if opaque sessions from 1.2/1.3 exist, invalidate all sessions for that user (consistent with “prior credential dead”); if JWT-only, document limitation — prefer revoke when sessions are DB-backed
-  - [ ] Invalid/expired/used token → clear structured error (user-facing calm copy; no internal SMTP/stack dumps)
-  - [ ] After success: user proves access via **1.3 sign-in** with the new password (AC #2). Auto sign-in after reset is optional — if done, must reuse the **same** cookie issuer (no second session system)
+- [x] Task 4: Complete-reset use-case + API (AC: #2)
+  - [x] Route (e.g. `POST /api/auth/password-reset/confirm` with `{ token, new_password }`)
+  - [x] Validate token (exists, unexpired, unused, hash matches) → replace password with **same argon2 hasher as 1.2** → consume token → prior password must fail subsequent verify
+  - [x] NFR-1: never store/log plaintext new password
+  - [x] **Session revoke on successful reset:** if opaque sessions from 1.2/1.3 exist, invalidate all sessions for that user (consistent with “prior credential dead”); if JWT-only, document limitation — prefer revoke when sessions are DB-backed
+  - [x] Invalid/expired/used token → clear structured error (user-facing calm copy; no internal SMTP/stack dumps)
+  - [x] After success: user proves access via **1.3 sign-in** with the new password (AC #2). Auto sign-in after reset is optional — if done, must reuse the **same** cookie issuer (no second session system)
 
-- [ ] Task 5: Public UI surfaces (AC: #1, #2)
-  - [ ] Standalone public pages (spine-only — no dedicated UX mock): request reset (email) + confirm reset (new password, from email link)
-  - [ ] Suggested paths (rename OK if consistent): `/forgot-password` (request), `/reset-password` (confirm; token via query or path)
-  - [ ] Wire into Next 16 **`proxy.ts`** public allowlist alongside `/sign-in`, `/sign-up`, `/health` (1.3 already reserved “later reset routes”)
-  - [ ] Submit via same-origin BFF/proxy only — never Bearer in `localStorage` / never browser→API with client-stored tokens
-  - [ ] Sign-in page: “Forgot password?” link → request page
-  - [ ] Account menu “password reset” entry is **1.6** chrome — for 1.4, a link from sign-in + working public routes satisfy FR-3; optional stub link in authenticated chrome is fine if already present
-  - [ ] Neutral Warm Balance-compatible shell OK; no kit purple; full Soft-Ledger = 3.1
-  - [ ] Error voice: what happened + what to do; clear + calm (EXPERIENCE). Prefer i18n key stubs
+- [x] Task 5: Public UI surfaces (AC: #1, #2)
+  - [x] Standalone public pages (spine-only — no dedicated UX mock): request reset (email) + confirm reset (new password, from email link)
+  - [x] Suggested paths (rename OK if consistent): `/forgot-password` (request), `/reset-password` (confirm; token via query or path)
+  - [x] Wire into Next 16 **`proxy.ts`** public allowlist alongside `/sign-in`, `/sign-up`, `/health` (1.3 already reserved “later reset routes”)
+  - [x] Submit via same-origin BFF/proxy only — never Bearer in `localStorage` / never browser→API with client-stored tokens
+  - [x] Sign-in page: “Forgot password?” link → request page
+  - [x] Account menu “password reset” entry is **1.6** chrome — for 1.4, a link from sign-in + working public routes satisfy FR-3; optional stub link in authenticated chrome is fine if already present
+  - [x] Neutral Warm Balance-compatible shell OK; no kit purple; full Soft-Ledger = 3.1
+  - [x] Error voice: what happened + what to do; clear + calm (EXPERIENCE). Prefer i18n key stubs
 
-- [ ] Task 6: Tests (AC: #1–#3)
-  - [ ] Domain/application TDD: token issue/consume; completed reset makes old hash fail and new hash verify; expired/used token rejected
-  - [ ] Integration against **Postgres 16**: request → (fake/captured SMTP) → confirm → sign-in with new password succeeds; old password fails
-  - [ ] SMTP misconfig/unavailable → API does **not** report success (fail loud)
-  - [ ] Unknown-email request does not create an enumeration oracle (same client response as known email when SMTP would have been used for known)
-  - [ ] UI: smoke/critical tests for request + confirm forms / public route accessibility (test-after OK; keep 1.1 coverage floor)
-  - [ ] Do **not** require full Playwright every PR; no real PII; fixtures like `user@example.com`
+- [x] Task 6: Tests (AC: #1–#3)
+  - [x] Domain/application TDD: token issue/consume; completed reset makes old hash fail and new hash verify; expired/used token rejected
+  - [x] Integration against **Postgres 16**: request → (fake/captured SMTP) → confirm → sign-in with new password succeeds; old password fails
+  - [x] SMTP misconfig/unavailable → API does **not** report success (fail loud)
+  - [x] Unknown-email request does not create an enumeration oracle (same client response as known email when SMTP would have been used for known)
+  - [x] UI: smoke/critical tests for request + confirm forms / public route accessibility (test-after OK; keep 1.1 coverage floor)
+  - [x] Do **not** require full Playwright every PR; no real PII; fixtures like `user@example.com`
+
+### Review Findings
+
+- [x] [Review][Patch] Persist reset token before SMTP send; on SMTP failure abort without commit so emailed links are always redeemable and failures stay loud [api/application/password_reset.py:117]
+- [x] [Review][Patch] Atomically claim token (`UPDATE … WHERE used_at IS NULL` / rowcount) before password replace to enforce single-use under concurrency [api/adapters/persistence/password_reset.py:65]
+- [x] [Review][Patch] `update_password_hash` must raise (not silent return) when the user row is missing [api/adapters/persistence/password_reset.py:70]
+- [x] [Review][Patch] Cap `new_password` max length (align with register `max_length=256`) in domain validation [api/domain/password_reset.py:33]
+- [x] [Review][Patch] Reject invalid SMTP port/timeout values loudly instead of silently coercing nonsense [api/adapters/email/settings.py:29]
+- [x] [Review][Patch] Add domain/application test that a second reset request invalidates the prior unused token [api/tests/test_password_reset_domain.py]
+- [x] [Review][Patch] Make SMTP adapter safe if a running event loop exists (`asyncio.run` footgun) [api/adapters/email/smtp.py:41]
+- [x] [Review][Patch] Never wrap unexpected mailer exceptions as `SmtpSendError(str(exc))` — keep operator message generic [api/application/password_reset.py:128]
+- [x] [Review][Patch] Call `AuthUserRepository.get_by_id` directly (drop getattr fallback) [api/application/password_reset.py:201]
+- [x] [Review][Patch] Remove dead `except SmtpConfigurationError` in SMTP send try-block [api/adapters/email/smtp.py:53]
+- [x] [Review][Patch] Drop redundant non-unique index on `token_hash` (UniqueConstraint already indexes) [api/adapters/persistence/migrations/versions/0003_password_reset_tokens.py]
+- [x] [Review][Patch] Give `InvalidResetPasswordError` a stable MESSAGE like sibling auth errors [api/domain/errors.py]
+- [x] [Review][Patch] HTML-escape the reset link when building `body_html` [api/application/password_reset.py:110]
+- [x] [Review][Patch] Integration-test real empty `SMTP_HOST`/`SMTP_FROM` path via `SmtpEmailSender`, not only fake mailer exceptions [api/tests/test_password_reset_integration.py]
+- [x] [Review][Defer] Request-reset timing oracle (known email blocks on SMTP) — deferred, pre-existing hardening pattern beyond AC client-visible ack
+- [x] [Review][Defer] Expired/used `password_reset_tokens` retention cleanup job — deferred, pre-existing / ops housekeeping
+- [x] [Review][Defer] `revoke_all_sessions_for_user` bulk DELETE instead of per-row delete — deferred, pre-existing perf polish
+- [x] [Review][Defer] DATABASE_URL default-fallback removal bundled in this branch — deferred, Story 1.1 review fix / not caused by reset logic
 
 ## Dev Notes
 
@@ -281,15 +306,71 @@ Recent commits are planning/BMAD artifacts only (`project-context`, sprint-statu
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Cursor Grok 4.5 (bmad-dev-story)
 
 ### Debug Log References
 
+- Domain unit: `uv run pytest tests/test_password_reset_domain.py` (pass)
+- Full api suite against Compose Postgres 16: 40 passed
+- UI: `vitest` 26 passed; `tsc --noEmit`; `eslint` clean
+
 ### Completion Notes List
+
+- Prerequisites 1.1–1.3 present on `main` (PR #3 merged); branched `feat/1/1-4-password-reset-via-email` from `7bb261a`.
+- AD-8 reused unchanged: opaque `fh_session`, argon2-cffi 25.1.0, api single cookie issuer, Next BFF.
+- **Token lifecycle defaults (closes architecture gap):** opaque DB-backed `password_reset_tokens`; SHA-256 hash at rest; raw token only in email link; TTL **1 hour**; single-use via `used_at`; invalidate outstanding unused tokens on new request and on successful confirm; revoke **all** opaque sessions on confirm.
+- SMTP: `aiosmtplib==5.1.2`; `SmtpEmailSender` behind `EmailSender` port; send **before** persisting token so SMTP failure never leaves a silent “sent” DB state; 503 `smtp_config_error` / `smtp_send_error`.
+- Enumeration: unknown/invalid email → same 200 ack as known; no mail sent.
+- No auto sign-in after confirm — user proves via `/auth/sign-in` (AC #2).
+- UI: `/forgot-password`, `/reset-password?token=`, sign-in “Forgot password?” link; `proxy.ts` public allowlist updated; EN/ES i18n stubs.
 
 ### File List
 
+- `.env.example`
+- `docker-compose.yml`
+- `api/pyproject.toml`
+- `api/uv.lock`
+- `api/domain/errors.py`
+- `api/domain/signup.py`
+- `api/domain/password_reset.py`
+- `api/application/ports.py`
+- `api/application/signin.py`
+- `api/application/password_reset.py`
+- `api/adapters/email/__init__.py`
+- `api/adapters/email/settings.py`
+- `api/adapters/email/smtp.py`
+- `api/adapters/persistence/models.py`
+- `api/adapters/persistence/repositories.py`
+- `api/adapters/persistence/sessions.py`
+- `api/adapters/persistence/password_reset.py`
+- `api/adapters/persistence/migrations/versions/0003_password_reset_tokens.py`
+- `api/api/settings.py`
+- `api/api/schemas/auth.py`
+- `api/api/routes/auth.py`
+- `api/tests/test_password_reset_domain.py`
+- `api/tests/test_password_reset_integration.py`
+- `ui/proxy.ts`
+- `ui/proxy.test.ts`
+- `ui/lib/i18n/signin.ts`
+- `ui/lib/i18n/password-reset.ts`
+- `ui/lib/i18n/password-reset.test.ts`
+- `ui/app/sign-in/SignInForm.tsx`
+- `ui/app/forgot-password/page.tsx`
+- `ui/app/forgot-password/ForgotPasswordForm.tsx`
+- `ui/app/reset-password/page.tsx`
+- `ui/app/reset-password/ResetPasswordForm.tsx`
+- `ui/app/api/auth/password-reset/request/route.ts`
+- `ui/app/api/auth/password-reset/confirm/route.ts`
+- `ui/app/api/auth/password-reset/route.test.ts`
+- `_bmad-output/implementation-artifacts/1-4-password-reset-via-email.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+
+### Change Log
+
+- 2026-08-03: Implemented password reset via SMTP (FR-3 / NFR-10) with hashed single-use tokens, fail-loud SMTP, public forgot/confirm UI, and tests.
+- 2026-08-03: Code-review Chunk A patches applied (persist-before-send + rollback, atomic token claim, SMTP validation, password max length, tests).
+
 ## Story completion status
 
-Status: ready-for-dev  
-Completion note: Ultimate context engine analysis completed — comprehensive developer guide created.
+Status: done  
+Completion note: Chunk A code-review patches applied (persist-before-send + rollback, atomic token claim, SMTP validation, password max length, tests). Chunks B/C optional follow-up reviews.

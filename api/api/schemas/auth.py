@@ -32,3 +32,21 @@ class SignInResponse(BaseModel):
 class SessionResponse(BaseModel):
     authenticated: bool
     user_id: UUID
+
+
+class PasswordResetRequestBody(BaseModel):
+    email: str = ""
+
+
+class PasswordResetRequestResponse(BaseModel):
+    detail: str = "If that email is registered, you will receive a reset link shortly."
+
+
+class PasswordResetConfirmBody(BaseModel):
+    token: str = ""
+    new_password: str = Field(default="", max_length=256)
+
+
+class PasswordResetConfirmResponse(BaseModel):
+    detail: str = "Password updated. You can sign in with your new password."
+    user_id: UUID | None = None

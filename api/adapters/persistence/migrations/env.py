@@ -12,17 +12,14 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-_DEFAULT_URL = "postgresql+psycopg://finance:finance_dev_change_me@localhost:5432/finance_helper"
-
 
 def get_url() -> str:
     env_url = (os.environ.get("DATABASE_URL") or "").strip()
-    if env_url:
-        return env_url
-    ini_url = (config.get_main_option("sqlalchemy.url") or "").strip()
-    if ini_url and not ini_url.startswith("driver://"):
-        return ini_url
-    return _DEFAULT_URL
+    if not env_url:
+        raise RuntimeError(
+            "DATABASE_URL is required for Alembic (set it in the environment / `.env`)"
+        )
+    return env_url
 
 
 def run_migrations_offline() -> None:

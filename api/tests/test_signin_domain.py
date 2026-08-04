@@ -12,10 +12,14 @@ from domain.signup import normalize_email
 
 
 class FakeHasher:
+    def __init__(self) -> None:
+        self.verify_calls: list[tuple[str, str]] = []
+
     def hash(self, password: str) -> str:
         return f"hashed:{password}"
 
     def verify(self, password: str, password_hash: str) -> bool:
+        self.verify_calls.append((password, password_hash))
         return password_hash == f"hashed:{password}"
 
 
@@ -25,6 +29,12 @@ class FakeAuthUserRepo:
 
     def get_by_email(self, email: str) -> AuthUserRecord | None:
         return self.users.get(email)
+
+    def get_by_id(self, user_id):  # type: ignore[no-untyped-def]
+        for user in self.users.values():
+            if user.id == user_id:
+                return user
+        return None
 
 
 def test_normalize_email_for_signin() -> None:
@@ -51,12 +61,16 @@ def test_signin_succeeds_with_valid_credentials() -> None:
 
 
 def test_signin_unknown_email_raises_generic_invalid_credentials() -> None:
-    service = SignInService(FakeAuthUserRepo(), FakeHasher())
+    hasher = FakeHasher()
+    service = SignInService(FakeAuthUserRepo(), hasher)
 
     with pytest.raises(InvalidCredentialsError) as exc_info:
         service.execute(SignInCommand(email="nobody@example.com", password="password1"))
 
     assert str(exc_info.value) == InvalidCredentialsError.MESSAGE
+    assert len(hasher.verify_calls) == 1
+    assert hasher.verify_calls[0][0] == "password1"
+    assert hasher.verify_calls[0][1].startswith("$argon2")
 
 
 def test_signin_bad_password_raises_same_generic_error() -> None:

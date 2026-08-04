@@ -176,3 +176,36 @@ def test_sign_in_password_never_logged(
 def test_me_requires_authentication(client: TestClient) -> None:
     response = client.get("/auth/me")
     assert response.status_code == 401
+
+
+def test_sign_in_malformed_body_is_generic_401(client: TestClient) -> None:
+    response = client.post(
+        "/auth/sign-in",
+        content=b"not-json",
+        headers={"Content-Type": "application/json"},
+    )
+    assert response.status_code == 401
+    assert response.json()["code"] == "invalid_credentials"
+
+
+def test_sign_in_revokes_prior_sessions(client: TestClient, db_session: Session) -> None:
+    _register(client, "single@example.com")
+    first = client.post(
+        "/auth/sign-in",
+        json={"email": "single@example.com", "password": "password1"},
+    )
+    assert first.status_code == 200
+    old_token = first.cookies["fh_session"]
+    client.cookies.clear()
+
+    second = client.post(
+        "/auth/sign-in",
+        json={"email": "single@example.com", "password": "password1"},
+    )
+    assert second.status_code == 200
+    new_token = second.cookies["fh_session"]
+    assert new_token != old_token
+    assert db_session.scalar(select(SessionModel).where(SessionModel.token == old_token)) is None
+    assert (
+        db_session.scalar(select(SessionModel).where(SessionModel.token == new_token)) is not None
+    )

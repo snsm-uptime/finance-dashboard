@@ -36,4 +36,20 @@ describe("POST /api/auth/sign-out BFF", () => {
     expect(setCookie).toContain("fh_session=");
     expect(setCookie.toLowerCase()).toMatch(/max-age=0/);
   });
+
+  it("still clears fh_session when upstream fetch throws", async () => {
+    fetchMock.mockRejectedValue(new Error("upstream down"));
+
+    const response = await POST(
+      new Request("http://localhost/api/auth/sign-out", {
+        method: "POST",
+        headers: { cookie: "fh_session=stale" },
+      }) as never,
+    );
+
+    expect(response.status).toBe(204);
+    const setCookie = response.headers.get("set-cookie") ?? "";
+    expect(setCookie).toContain("fh_session=");
+    expect(setCookie.toLowerCase()).toMatch(/max-age=0/);
+  });
 });

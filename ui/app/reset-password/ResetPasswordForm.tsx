@@ -3,13 +3,15 @@
 import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
 
-import { signInMessages, type Locale } from "@/lib/i18n/signin";
-import { attemptSignIn } from "./signInClient";
+import {
+  passwordResetMessages,
+  type Locale,
+} from "@/lib/i18n/password-reset";
 import styles from "../signup/signup.module.css";
 
 type Props = {
   locale: Locale;
-  returnTo?: string;
+  token: string;
 };
 
 function EyeIcon({ open }: { open: boolean }) {
@@ -50,17 +52,17 @@ function EyeIcon({ open }: { open: boolean }) {
   );
 }
 
-export function SignInForm({ locale, returnTo }: Props) {
-  const t = signInMessages[locale];
-  const [email, setEmail] = useState("");
+export function ResetPasswordForm({ locale, token }: Props) {
+  const t = passwordResetMessages[locale];
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
   const [pending, setPending] = useState(false);
 
   const canSubmit = useMemo(
-    () => email.trim().length > 0 && password.length > 0 && !pending,
-    [email, password, pending],
+    () => token.length > 0 && password.length >= 8 && !pending,
+    [token, password, pending],
   );
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -68,47 +70,72 @@ export function SignInForm({ locale, returnTo }: Props) {
     setError(null);
     setPending(true);
     try {
-      const result = await attemptSignIn({
-        email,
-        password,
-        returnTo,
-        errorGeneric: t.errorGeneric,
+      const response = await fetch("/api/auth/password-reset/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ token, new_password: password }),
+        credentials: "same-origin",
       });
-      if (!result.ok) {
-        setError(result.error);
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as {
+          code?: string;
+        } | null;
+        if (body?.code === "invalid_reset_token") {
+          setError(t.resetErrorToken);
+        } else if (body?.code === "invalid_reset_password") {
+          setError(t.resetErrorPassword);
+        } else {
+          setError(t.resetErrorGeneric);
+        }
         return;
       }
-      window.location.assign(result.returnTo);
+      setSuccess(true);
+    } catch {
+      setError(t.resetErrorGeneric);
     } finally {
       setPending(false);
     }
   }
 
+  if (!token) {
+    return (
+      <div className={styles.form}>
+        <p className={styles.error} role="alert">
+          {t.resetMissingToken}
+        </p>
+        <p className={styles.hint}>
+          <Link href="/forgot-password">{t.forgotTitle}</Link>
+        </p>
+      </div>
+    );
+  }
+
+  if (success) {
+    return (
+      <div className={styles.form}>
+        <p className={styles.hint} role="status">
+          {t.resetSuccess}
+        </p>
+        <p className={styles.hint}>
+          <Link href="/sign-in">{t.signInLink}</Link>
+        </p>
+      </div>
+    );
+  }
+
   return (
     <form className={styles.form} onSubmit={onSubmit} noValidate>
-      <label className={styles.label} htmlFor="email">
-        {t.email}
-        <input
-          id="email"
-          className={styles.input}
-          type="email"
-          name="email"
-          autoComplete="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-      </label>
-      <label className={styles.label} htmlFor="password">
-        {t.password}
+      <label className={styles.label} htmlFor="new_password">
+        {t.newPassword}
         <span className={styles.passwordField}>
           <input
-            id="password"
+            id="new_password"
             className={styles.passwordInput}
             type={showPassword ? "text" : "password"}
-            name="password"
-            autoComplete="current-password"
+            name="new_password"
+            autoComplete="new-password"
             required
+            minLength={8}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
@@ -129,13 +156,10 @@ export function SignInForm({ locale, returnTo }: Props) {
         </p>
       ) : null}
       <button className={styles.submit} type="submit" disabled={!canSubmit}>
-        {pending ? t.submitting : t.submit}
+        {pending ? t.resetSubmitting : t.resetSubmit}
       </button>
       <p className={styles.hint}>
-        <Link href="/forgot-password">{t.forgotPassword}</Link>
-      </p>
-      <p className={styles.hint}>
-        {t.noAccount} <Link href="/signup">{t.signUpLink}</Link>
+        <Link href="/sign-in">{t.backToSignIn}</Link>
       </p>
     </form>
   );

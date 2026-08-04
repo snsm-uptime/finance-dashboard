@@ -14,9 +14,9 @@ Prerequisites: Docker Compose, and enough disk for a Postgres volume **outside**
 
 ```bash
 cp .env.example .env
-# Set FINANCE_HELPER_DATA to an absolute host path outside the repo, e.g.:
-#   FINANCE_HELPER_DATA=$HOME/finance-helper
-mkdir -p "${FINANCE_HELPER_DATA}/pgdata"
+# Optional: set FINANCE_HELPER_DATA to an absolute path outside the repo.
+# If omitted, Compose defaults to $HOME/finance-helper.
+mkdir -p "${FINANCE_HELPER_DATA:-$HOME/finance-helper}/pgdata"
 ```
 
 ### Hot reload (day-to-day development)
@@ -35,7 +35,7 @@ Edit files under `api/` or `ui/` and refresh — no image rebuild needed for mos
 docker compose up --build
 ```
 
-Compose reads `.env` via `env_file` (no silent secret defaults). `DATABASE_URL` for `api` is derived from `POSTGRES_*`.
+Compose reads `.env` via `env_file` (no silent secret defaults). Set a full `DATABASE_URL` for `api` (URL-encode special characters in the password).
 
 Health checks:
 

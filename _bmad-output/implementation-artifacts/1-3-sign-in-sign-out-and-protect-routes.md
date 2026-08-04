@@ -4,7 +4,7 @@ baseline_commit: 62587638fec505a0f5c57db93341808693f47f1b
 
 # Story 1.3: Sign in, sign out, and protect routes
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -71,6 +71,21 @@ so that only I can access my lists and uploads while signed in.
   - [x] Integration against **Postgres 16** (Compose `db`) — not SQLite stand-in
   - [x] UI: critical test that protected route redirects when unauthenticated; sign-in form shows generic error (test-after OK; respect 1.1 coverage floor)
   - [x] Do **not** require full Playwright every PR
+
+### Review Findings
+
+- [x] [Review][Patch] Single-session on sign-in — revoke all prior opaque sessions for the user before issuing the new cookie (decision: single session) [api/api/routes/auth.py:sign_in]
+- [x] [Review][Patch] Map API malformed sign-in bodies to generic 401 `invalid_credentials` (not FastAPI 422) [api/api/routes/auth.py:sign_in]
+- [x] [Review][Patch] Harden `safeReturnTo` against backslash / scheme open-redirects [ui/app/sign-in/signInClient.ts]
+- [x] [Review][Patch] Always clear `fh_session` in sign-out BFF even when upstream `fetch` throws [ui/app/api/auth/sign-out/route.ts]
+- [x] [Review][Patch] Align sign-out BFF cookie clear `sameSite`/`secure` with session env (match issued cookie) [ui/app/api/auth/sign-out/route.ts]
+- [x] [Review][Patch] Dummy Argon2 verify on unknown email to close timing oracle [api/application/signin.py]
+- [x] [Review][Patch] Sign-in BFF: catch upstream fetch failure and return generic 401 [ui/app/api/auth/sign-in/route.ts]
+- [x] [Review][Patch] Add UI test that SignInForm shows generic error on failed credentials [ui/app/sign-in/signInClient.test.ts]
+- [x] [Review][Patch] Preserve `returnTo` when already-authenticated `/sign-in` redirects away [ui/app/sign-in/page.tsx]
+- [x] [Review][Defer] Application-layer rate limiting / lockout on sign-in [api/api/routes/auth.py] — deferred, pre-existing / out of story scope
+- [x] [Review][Defer] Delete expired session rows in `resolve_session_user_id` [api/adapters/persistence/sessions.py] — deferred, pre-existing
+- [x] [Review][Defer] Strengthen “password never logged” assertions beyond INFO caplog [api/tests/test_signin_integration.py] — deferred, pre-existing
 
 ## Dev Notes
 
@@ -285,6 +300,8 @@ Cursor Grok 4.5 (bmad-dev-story)
 - `ui/proxy.test.ts`
 - `ui/app/sign-in/page.tsx`
 - `ui/app/sign-in/SignInForm.tsx`
+- `ui/app/sign-in/signInClient.ts`
+- `ui/app/sign-in/signInClient.test.ts`
 - `ui/app/api/auth/sign-in/route.ts`
 - `ui/app/api/auth/sign-in/route.test.ts`
 - `ui/app/api/auth/sign-out/route.ts`
@@ -303,8 +320,9 @@ Cursor Grok 4.5 (bmad-dev-story)
 ### Change Log
 
 - 2026-08-04: Implemented sign-in/sign-out, route protection (`proxy.ts` + server gates), and tests — story ready for review.
+- 2026-08-03: Code-review patches applied (single active session, malformed-body 401, safeReturnTo, sign-out BFF resilience, timing pad, returnTo).
 
 ## Story completion status
 
-Status: review  
-Completion note: All ACs and tasks complete; ready for code-review.
+Status: done  
+Completion note: Code-review patches applied (single-session, generic 401 malformed body, safeReturnTo hardening, sign-out BFF cookie clear, timing-pad verify, returnTo preserve, UI error test).
