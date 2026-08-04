@@ -39,9 +39,7 @@ class PasswordResetRequestBody(BaseModel):
 
 
 class PasswordResetRequestResponse(BaseModel):
-    detail: str = (
-        "If that email is registered, you will receive a reset link shortly."
-    )
+    detail: str = "If that email is registered, you will receive a reset link shortly."
 
 
 class PasswordResetConfirmBody(BaseModel):

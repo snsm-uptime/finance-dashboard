@@ -218,9 +218,7 @@ def test_complete_reset_new_password_works_old_fails(
     assert confirm.status_code == 200, confirm.text
 
     # Old session revoked.
-    assert (
-        db_session.scalar(select(SessionModel).where(SessionModel.token == old_cookie)) is None
-    )
+    assert db_session.scalar(select(SessionModel).where(SessionModel.token == old_cookie)) is None
 
     client.cookies.clear()
     old_signin = client.post(

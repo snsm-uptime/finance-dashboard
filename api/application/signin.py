@@ -14,7 +14,8 @@ from application.ports import PasswordHasher
 # Precomputed argon2id hash (of a disposable passphrase) for equalize-verify timing.
 # Must remain a valid argon2 hash string so PasswordHasher.verify always runs work.
 _TIMING_DUMMY_HASH = (
-    "$argon2id$v=19$m=65536,t=3,p=4$IcXawhpnwQGnBhBIOpSTIA$v/F17OCXK3q9sJSIeECZ5l0daEU2q5xpSunMkV7UvyM"
+    "$argon2id$v=19$m=65536,t=3,p=4$IcXawhpnwQGnBhBIOpSTIA$"
+    "v/F17OCXK3q9sJSIeECZ5l0daEU2q5xpSunMkV7UvyM"
 )
 
 

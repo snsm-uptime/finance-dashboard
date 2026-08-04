@@ -205,9 +205,7 @@ def test_complete_reset_replaces_password_and_revokes_sessions() -> None:
     hasher = FakeHasher()
     service = CompletePasswordResetService(users, tokens, hasher)
 
-    result = service.execute(
-        CompletePasswordResetCommand(token=raw, new_password="new-password1")
-    )
+    result = service.execute(CompletePasswordResetCommand(token=raw, new_password="new-password1"))
 
     assert result.user_id == user.id
     assert tokens.password_hashes[user.id] == "hashed:new-password1"
@@ -315,6 +313,4 @@ def test_complete_reset_rejects_too_long_password() -> None:
     )
     service = CompletePasswordResetService(users, tokens, FakeHasher())
     with pytest.raises(InvalidResetPasswordError):
-        service.execute(
-            CompletePasswordResetCommand(token=raw, new_password="x" * 257)
-        )
+        service.execute(CompletePasswordResetCommand(token=raw, new_password="x" * 257))
