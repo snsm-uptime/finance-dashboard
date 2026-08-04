@@ -51,7 +51,10 @@ class PasswordResetTokenRepository(Protocol):
     def get_by_token_hash(self, token_hash: str) -> PasswordResetTokenRecord | None: ...
 
     def claim_token(self, token_id: UUID, *, used_at: datetime) -> bool:
-        """Atomically mark unused token as used. Returns False if already used/missing."""
+        """Atomically mark unused unexpired token as used.
+
+        Returns False if missing, already used, or expired.
+        """
         ...
 
     def update_password_hash(self, user_id: UUID, password_hash: str) -> None: ...

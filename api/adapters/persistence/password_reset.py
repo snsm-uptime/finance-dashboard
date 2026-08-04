@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from adapters.persistence.models import PasswordResetTokenModel, UserModel
 from adapters.persistence.sessions import revoke_all_sessions_for_user
+from adapters.persistence.token_claim import claim_single_use_email_token
 
 
 class SqlAlchemyPasswordResetTokenRepository:
@@ -64,15 +65,12 @@ class SqlAlchemyPasswordResetTokenRepository:
         )
 
     def claim_token(self, token_id: UUID, *, used_at: datetime) -> bool:
-        result = self._session.execute(
-            update(PasswordResetTokenModel)
-            .where(
-                PasswordResetTokenModel.id == token_id,
-                PasswordResetTokenModel.used_at.is_(None),
-            )
-            .values(used_at=used_at)
+        return claim_single_use_email_token(
+            self._session,
+            PasswordResetTokenModel,
+            token_id,
+            used_at=used_at,
         )
-        return bool(result.rowcount)
 
     def update_password_hash(self, user_id: UUID, password_hash: str) -> None:
         row = self._session.get(UserModel, user_id)

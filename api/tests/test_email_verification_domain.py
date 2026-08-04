@@ -89,16 +89,23 @@ class FakeVerificationRepo:
         return self.tokens.get(token_hash)
 
     def claim_token(self, token_id: UUID, *, used_at: datetime) -> bool:
+        now = datetime.now(UTC)
         for key, token in list(self.tokens.items()):
-            if token.id == token_id and token.used_at is None:
-                self.tokens[key] = EmailVerificationTokenRecord(
-                    id=token.id,
-                    user_id=token.user_id,
-                    token_hash=token.token_hash,
-                    expires_at=token.expires_at,
-                    used_at=used_at,
-                )
-                return True
+            if token.id != token_id or token.used_at is not None:
+                continue
+            expires = token.expires_at
+            if expires.tzinfo is None:
+                expires = expires.replace(tzinfo=UTC)
+            if expires <= now:
+                return False
+            self.tokens[key] = EmailVerificationTokenRecord(
+                id=token.id,
+                user_id=token.user_id,
+                token_hash=token.token_hash,
+                expires_at=token.expires_at,
+                used_at=used_at,
+            )
+            return True
         return False
 
 
@@ -297,6 +304,50 @@ def test_confirm_rejects_expired_or_unknown_token() -> None:
         )
 
 
+def test_claim_token_rejects_expired_unused_token() -> None:
+    """Claim layer must reject expiry — not only ConfirmEmailVerificationService pre-check."""
+    user_id = uuid4()
+    token_id = uuid4()
+    token_hash = hash_verification_token("expired-claim")
+    repo = FakeVerificationRepo(
+        verified_at={user_id: None},
+        tokens={
+            token_hash: EmailVerificationTokenRecord(
+                id=token_id,
+                user_id=user_id,
+                token_hash=token_hash,
+                expires_at=datetime.now(UTC) - timedelta(minutes=1),
+                used_at=None,
+            )
+        },
+    )
+    assert repo.claim_token(token_id, used_at=datetime.now(UTC)) is False
+    assert repo.get_by_token_hash(token_hash) is not None
+    assert repo.get_by_token_hash(token_hash).used_at is None  # type: ignore[union-attr]
+    assert repo.get_user_verified_at(user_id) is None
+
+
+def test_claim_token_succeeds_for_valid_unused_token() -> None:
+    user_id = uuid4()
+    token_id = uuid4()
+    token_hash = hash_verification_token("valid-claim")
+    repo = FakeVerificationRepo(
+        verified_at={user_id: None},
+        tokens={
+            token_hash: EmailVerificationTokenRecord(
+                id=token_id,
+                user_id=user_id,
+                token_hash=token_hash,
+                expires_at=datetime.now(UTC) + timedelta(hours=1),
+                used_at=None,
+            )
+        },
+    )
+    used_at = datetime.now(UTC)
+    assert repo.claim_token(token_id, used_at=used_at) is True
+    assert repo.get_by_token_hash(token_hash).used_at == used_at  # type: ignore[union-attr]
+
+
 def test_confirm_rejects_expired_token() -> None:
     user_id = uuid4()
     users = FakeAuthUserRepo()
@@ -320,3 +371,5 @@ def test_confirm_rejects_expired_token() -> None:
         confirm.execute(
             ConfirmEmailVerificationCommand(token=raw, email_verification_required=True)
         )
+    assert repo.get_by_token_hash(token_hash).used_at is None  # type: ignore[union-attr]
+    assert repo.get_user_verified_at(user_id) is None

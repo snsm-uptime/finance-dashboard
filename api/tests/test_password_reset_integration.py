@@ -260,3 +260,71 @@ def test_request_reset_does_not_log_token(
     raw = _extract_token(mailer)
     joined = " ".join(r.message for r in caplog.records)
     assert raw not in joined
+
+
+def test_claim_token_rejects_expired_unused_row(db_session: Session) -> None:
+    """SQL claim must re-check expires_at (Story 1.5.1) — not used_at alone."""
+    from datetime import UTC, datetime, timedelta
+    from uuid import uuid4
+
+    from adapters.persistence.password_hasher import Argon2PasswordHasher
+    from adapters.persistence.password_reset import SqlAlchemyPasswordResetTokenRepository
+
+    user_id = uuid4()
+    db_session.add(
+        UserModel(
+            id=user_id,
+            email="claim-expired-reset@example.com",
+            password_hash=Argon2PasswordHasher().hash("password1"),
+        )
+    )
+    db_session.flush()
+
+    token_id = uuid4()
+    repo = SqlAlchemyPasswordResetTokenRepository(db_session)
+    repo.create_token(
+        token_id=token_id,
+        user_id=user_id,
+        token_hash=hash_reset_token("expired-raw"),
+        expires_at=datetime.now(UTC) - timedelta(minutes=1),
+    )
+    db_session.flush()
+
+    assert repo.claim_token(token_id, used_at=datetime.now(UTC)) is False
+    row = db_session.get(PasswordResetTokenModel, token_id)
+    assert row is not None
+    assert row.used_at is None
+
+
+def test_claim_token_succeeds_for_valid_unused_row(db_session: Session) -> None:
+    from datetime import UTC, datetime, timedelta
+    from uuid import uuid4
+
+    from adapters.persistence.password_hasher import Argon2PasswordHasher
+    from adapters.persistence.password_reset import SqlAlchemyPasswordResetTokenRepository
+
+    user_id = uuid4()
+    db_session.add(
+        UserModel(
+            id=user_id,
+            email="claim-valid-reset@example.com",
+            password_hash=Argon2PasswordHasher().hash("password1"),
+        )
+    )
+    db_session.flush()
+
+    token_id = uuid4()
+    repo = SqlAlchemyPasswordResetTokenRepository(db_session)
+    repo.create_token(
+        token_id=token_id,
+        user_id=user_id,
+        token_hash=hash_reset_token("valid-raw"),
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
+    )
+    db_session.flush()
+
+    used_at = datetime.now(UTC)
+    assert repo.claim_token(token_id, used_at=used_at) is True
+    row = db_session.get(PasswordResetTokenModel, token_id)
+    assert row is not None
+    assert row.used_at is not None
