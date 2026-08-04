@@ -4,7 +4,7 @@ baseline_commit: b8c4d71c4984ea519cfcad70a3fd165b361b1ebe
 
 # Story 1.5.1: Token claim re-checks expires_at
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -233,3 +233,4 @@ Cursor Grok 4.5
 
 - 2026-08-04: Story context created (ready-for-dev)
 - 2026-08-04: Implemented shared claim helper with expires_at re-check; tests + invite pattern doc; status → review
+- 2026-08-04: Code review complete — status → done

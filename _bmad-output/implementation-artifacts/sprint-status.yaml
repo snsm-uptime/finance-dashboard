@@ -1,5 +1,5 @@
 # generated: 2026-08-03T22:46:31
-# last_updated: 2026-08-04T16:25:00
+# last_updated: 2026-08-04T16:49:49
 # project: finance-dashboard
 # project_key: NOKEY
 # tracking_system: file-system
@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-03T22:46:31
-last_updated: 2026-08-04T16:25:00
+last_updated: 2026-08-04T16:49:49
 project: finance-dashboard
 project_key: NOKEY
 tracking_system: file-system
@@ -59,7 +59,7 @@ development_status:
 
   # Epic 1.5 — prep before continuing Epic 2 (from Correct Course / Epic 1 retro)
   epic-1-5: in-progress
-  1-5-1-token-claim-rechecks-expires-at: review
+  1-5-1-token-claim-rechecks-expires-at: done
   1-5-2-auth-mail-interaction-map-and-story-close-overview: backlog
   1-5-3-invite-verify-gate-contract: backlog
   1-5-4-membership-acl-enforcement-sketch: backlog
@@ -124,7 +124,7 @@ action_items:
   - epic: 1
     action: "Token claim re-checks expires_at for reset and verify tokens"
     owner: "Charlie"
-    status: open
+    status: done
   - epic: 1
     action: "Invite verify-gate contract for EnsureEmailVerifiedService"
     owner: "Winston + Amelia"
