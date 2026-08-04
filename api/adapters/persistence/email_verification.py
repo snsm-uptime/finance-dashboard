@@ -11,6 +11,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from adapters.persistence.models import EmailVerificationTokenModel, UserModel
+from adapters.persistence.token_claim import claim_single_use_email_token
 
 
 class SqlAlchemyEmailVerificationRepository:
@@ -75,12 +76,9 @@ class SqlAlchemyEmailVerificationRepository:
         )
 
     def claim_token(self, token_id: UUID, *, used_at: datetime) -> bool:
-        result = self._session.execute(
-            update(EmailVerificationTokenModel)
-            .where(
-                EmailVerificationTokenModel.id == token_id,
-                EmailVerificationTokenModel.used_at.is_(None),
-            )
-            .values(used_at=used_at)
+        return claim_single_use_email_token(
+            self._session,
+            EmailVerificationTokenModel,
+            token_id,
+            used_at=used_at,
         )
-        return bool(result.rowcount)

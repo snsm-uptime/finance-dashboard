@@ -87,16 +87,23 @@ class FakeTokenRepo:
         return self.tokens.get(token_hash)
 
     def claim_token(self, token_id: UUID, *, used_at: datetime) -> bool:
+        now = datetime.now(UTC)
         for key, token in list(self.tokens.items()):
-            if token.id == token_id and token.used_at is None:
-                self.tokens[key] = PasswordResetTokenRecord(
-                    id=token.id,
-                    user_id=token.user_id,
-                    token_hash=token.token_hash,
-                    expires_at=token.expires_at,
-                    used_at=used_at,
-                )
-                return True
+            if token.id != token_id or token.used_at is not None:
+                continue
+            expires = token.expires_at
+            if expires.tzinfo is None:
+                expires = expires.replace(tzinfo=UTC)
+            if expires <= now:
+                return False
+            self.tokens[key] = PasswordResetTokenRecord(
+                id=token.id,
+                user_id=token.user_id,
+                token_hash=token.token_hash,
+                expires_at=token.expires_at,
+                used_at=used_at,
+            )
+            return True
         return False
 
     def update_password_hash(self, user_id: UUID, password_hash: str) -> None:
@@ -216,6 +223,38 @@ def test_complete_reset_replaces_password_and_revokes_sessions() -> None:
     assert tokens.get_by_token_hash(token_hash).used_at is not None  # type: ignore[union-attr]
 
 
+def test_claim_token_rejects_expired_unused_token() -> None:
+    """Claim layer must reject expiry — not only CompletePasswordResetService pre-check."""
+    user = _user()
+    tokens = FakeTokenRepo()
+    token_id = uuid4()
+    tokens.create_token(
+        token_id=token_id,
+        user_id=user.id,
+        token_hash=hash_reset_token("expired-claim"),
+        expires_at=datetime.now(UTC) - timedelta(minutes=1),
+    )
+    assert tokens.claim_token(token_id, used_at=datetime.now(UTC)) is False
+    record = tokens.get_by_token_hash(hash_reset_token("expired-claim"))
+    assert record is not None
+    assert record.used_at is None
+
+
+def test_claim_token_succeeds_for_valid_unused_token() -> None:
+    user = _user()
+    tokens = FakeTokenRepo()
+    token_id = uuid4()
+    tokens.create_token(
+        token_id=token_id,
+        user_id=user.id,
+        token_hash=hash_reset_token("valid-claim"),
+        expires_at=datetime.now(UTC) + RESET_TOKEN_TTL,
+    )
+    used_at = datetime.now(UTC)
+    assert tokens.claim_token(token_id, used_at=used_at) is True
+    assert tokens.get_by_token_hash(hash_reset_token("valid-claim")).used_at == used_at  # type: ignore[union-attr]
+
+
 def test_complete_reset_rejects_expired_token() -> None:
     user = _user()
     users = FakeAuthUserRepo()
@@ -231,6 +270,8 @@ def test_complete_reset_rejects_expired_token() -> None:
     service = CompletePasswordResetService(users, tokens, FakeHasher())
     with pytest.raises(InvalidResetTokenError):
         service.execute(CompletePasswordResetCommand(token=raw, new_password="new-password1"))
+    # Expired claim must not consume the row as a successful state change.
+    assert tokens.get_by_token_hash(hash_reset_token(raw)).used_at is None  # type: ignore[union-attr]
 
 
 def test_request_reset_second_request_invalidates_prior_token() -> None:

@@ -43,8 +43,11 @@
 ## Deferred from: code review of 1-5-config-gated-email-verification.md (2026-08-04)
 
 - No per-user throttle on `POST /auth/verify/request` SMTP send — same hardening class as register/reset rate limits
-- `claim_token` atomic UPDATE does not re-check `expires_at` — mirrors password-reset token claim pattern from 1.4
 - Request/send vs concurrent confirm can email a dead (already-invalidated) link — rare race; persist-then-send family shared with 1.4
+
+<!-- Resolved in Story 1.5.1: claim_token re-checks expires_at via shared helper
+     (api/adapters/persistence/token_claim.py). Pattern for Epic 2 invites:
+     _bmad-output/implementation-artifacts/auth-email-token-claim-pattern.md -->
 
 ## Deferred from: code review of 1-6-account-menu-language-en-es-and-theme.md (2026-08-03)
 
