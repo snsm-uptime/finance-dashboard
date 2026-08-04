@@ -8,7 +8,12 @@ from application.lists import ListMembershipSummary, ListRecord, MembershipRecor
 from application.ports import NewListRecord, NewMembershipRecord, NewUserRecord
 from application.preferences import UserPreferencesRecord
 from application.signin import AuthUserRecord
-from domain.errors import DuplicateEmailError, ListNotFoundError, PrincipalNotFoundError
+from domain.errors import (
+    DuplicateEmailError,
+    ListNotFoundError,
+    ListWriteError,
+    PrincipalNotFoundError,
+)
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -121,23 +126,27 @@ class SqlAlchemyListRepository:
         owned_list: NewListRecord,
         membership: NewMembershipRecord,
     ) -> None:
-        self._session.add(
-            ListModel(
-                id=owned_list.id,
-                name=owned_list.name,
-                owner_id=owned_list.owner_id,
-            )
-        )
-        self._session.flush()
-        self._session.add(
-            ListMembershipModel(
-                id=membership.id,
-                list_id=membership.list_id,
-                user_id=membership.user_id,
-                role=membership.role,
-            )
-        )
-        self._session.flush()
+        try:
+            with self._session.begin_nested():
+                self._session.add(
+                    ListModel(
+                        id=owned_list.id,
+                        name=owned_list.name,
+                        owner_id=owned_list.owner_id,
+                    )
+                )
+                self._session.flush()
+                self._session.add(
+                    ListMembershipModel(
+                        id=membership.id,
+                        list_id=membership.list_id,
+                        user_id=membership.user_id,
+                        role=membership.role,
+                    )
+                )
+                self._session.flush()
+        except IntegrityError as exc:
+            raise ListWriteError() from exc
 
     def get_list(self, list_id: UUID) -> ListRecord | None:
         row = self._session.get(ListModel, list_id)

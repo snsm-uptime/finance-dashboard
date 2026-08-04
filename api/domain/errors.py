@@ -140,3 +140,12 @@ class NotListOwnerError(DomainError):
 
     def __init__(self, detail: str | None = None) -> None:
         super().__init__(detail or self.MESSAGE)
+
+
+class ListWriteError(DomainError):
+    """Raised when list persistence fails due to a constraint / integrity error."""
+
+    MESSAGE = "Could not create the list. Try again."
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(detail or self.MESSAGE)

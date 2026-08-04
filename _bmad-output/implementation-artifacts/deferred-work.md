@@ -57,3 +57,9 @@
 - Unauthenticated `/me` 401 shape mismatch (HTTPException string detail vs JSON `code`) — pre-existing `require_authenticated_user` pattern
 - Application-layer unit tests for GetMe/UpdatePreferences services — domain + Postgres integration cover the path when DATABASE_URL is set
 - Split PreferencesRepository port from SqlAlchemyAuthUserRepository concrete — architecture polish beyond story scope
+
+## Deferred from: code review of 2-1-create-and-rename-owned-lists.md (2026-08-04)
+
+- Invisible/ZWSP-only list names accepted by strip-only `validate_list_name` — polish beyond Story 2.1 AC
+- No per-user owned-list creation cap — product limit not in v1 / FR-6 scope
+- BFF `/api/lists` Route Handlers lack Vitest coverage (client helper tested; cookie-forward hop untested)

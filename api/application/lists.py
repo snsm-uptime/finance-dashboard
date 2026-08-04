@@ -7,7 +7,6 @@ from typing import Protocol
 from uuid import UUID, uuid4
 
 from domain.errors import (
-    ListNotFoundError,
     NotListMemberError,
     NotListOwnerError,
 )
@@ -112,11 +111,10 @@ class RenameListService:
     def execute(self, command: RenameListCommand) -> ListRecord:
         name = validate_list_name(command.name)
         existing = self._repo.get_list(command.list_id)
-        if existing is None:
-            raise ListNotFoundError()
-
         membership = self._repo.get_membership(command.list_id, command.actor_user_id)
-        if membership is None:
+        # Missing list and non-membership share the same rejection so rename
+        # cannot be used as a list-existence oracle (NFR-3 / story ACL note).
+        if existing is None or membership is None:
             raise NotListMemberError()
 
         if existing.owner_id != command.actor_user_id:

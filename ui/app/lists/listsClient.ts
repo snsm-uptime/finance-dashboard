@@ -18,6 +18,12 @@ type ErrorResult = { ok: false; error: string };
 type OkCreate = { ok: true; list: { id: string; name: string; owner_id: string } };
 type OkRename = { ok: true; list: { id: string; name: string; owner_id: string } };
 
+type ListPayload = {
+  id?: string;
+  name?: string;
+  owner_id?: string;
+};
+
 function mapError(
   status: number,
   body: { detail?: unknown; code?: unknown } | null,
@@ -30,12 +36,17 @@ function mapError(
   return messages.errorGeneric;
 }
 
-async function parseJson(response: Response): Promise<{ detail?: unknown; code?: unknown } | null> {
+async function parseJson(response: Response): Promise<unknown | null> {
   try {
-    return (await response.json()) as { detail?: unknown; code?: unknown };
+    return await response.json();
   } catch {
     return null;
   }
+}
+
+function asListPayload(data: unknown): ListPayload | null {
+  if (!data || typeof data !== "object") return null;
+  return data as ListPayload;
 }
 
 export async function createList(
@@ -54,14 +65,14 @@ export async function createList(
     return { ok: false, error: messages.errorGeneric };
   }
   if (!response.ok) {
-    return { ok: false, error: mapError(response.status, await parseJson(response), messages) };
+    const body = (await parseJson(response)) as {
+      detail?: unknown;
+      code?: unknown;
+    } | null;
+    return { ok: false, error: mapError(response.status, body, messages) };
   }
-  const data = (await response.json()) as {
-    id?: string;
-    name?: string;
-    owner_id?: string;
-  };
-  if (!data.id || !data.name || !data.owner_id) {
+  const data = asListPayload(await parseJson(response));
+  if (!data?.id || !data.name || !data.owner_id) {
     return { ok: false, error: messages.errorGeneric };
   }
   return { ok: true, list: { id: data.id, name: data.name, owner_id: data.owner_id } };
@@ -84,14 +95,14 @@ export async function renameList(
     return { ok: false, error: messages.errorGeneric };
   }
   if (!response.ok) {
-    return { ok: false, error: mapError(response.status, await parseJson(response), messages) };
+    const body = (await parseJson(response)) as {
+      detail?: unknown;
+      code?: unknown;
+    } | null;
+    return { ok: false, error: mapError(response.status, body, messages) };
   }
-  const data = (await response.json()) as {
-    id?: string;
-    name?: string;
-    owner_id?: string;
-  };
-  if (!data.id || !data.name || !data.owner_id) {
+  const data = asListPayload(await parseJson(response));
+  if (!data?.id || !data.name || !data.owner_id) {
     return { ok: false, error: messages.errorGeneric };
   }
   return { ok: true, list: { id: data.id, name: data.name, owner_id: data.owner_id } };

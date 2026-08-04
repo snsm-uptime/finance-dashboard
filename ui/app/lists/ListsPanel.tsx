@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useMemo, useRef, useState } from "react";
 
 import { usePreferences } from "@/components/PreferencesProvider";
 import { listsMessages } from "@/lib/i18n/lists";
@@ -13,15 +13,17 @@ import styles from "./lists.module.css";
 
 type Props = {
   initialLists: ListItem[];
+  currentUserId: string;
 };
 
-export function ListsPanel({ initialLists }: Props) {
+export function ListsPanel({ initialLists, currentUserId }: Props) {
   const { locale } = usePreferences();
   const t = listsMessages[locale];
   const [lists, setLists] = useState<ListItem[]>(initialLists);
   const [newName, setNewName] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const creatingRef = useRef(false);
   const [renameDrafts, setRenameDrafts] = useState<Record<string, string>>({});
   const [renameErrors, setRenameErrors] = useState<Record<string, string>>({});
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -40,6 +42,8 @@ export function ListsPanel({ initialLists }: Props) {
 
   async function onCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (creatingRef.current) return;
+    creatingRef.current = true;
     setCreateError(null);
     setCreating(true);
     try {
@@ -59,12 +63,14 @@ export function ListsPanel({ initialLists }: Props) {
       ]);
       setNewName("");
     } finally {
+      creatingRef.current = false;
       setCreating(false);
     }
   }
 
   async function onRename(event: FormEvent<HTMLFormElement>, list: ListItem) {
     event.preventDefault();
+    if (renamingId === list.id) return;
     const draft = (renameDrafts[list.id] ?? list.name).trim();
     setRenameErrors((prev) => {
       const next = { ...prev };
@@ -126,7 +132,7 @@ export function ListsPanel({ initialLists }: Props) {
       ) : (
         <ul className={styles.list}>
           {lists.map((list) => {
-            const isOwner = list.role === "owner";
+            const isOwner = list.owner_id === currentUserId;
             const draft = renameDrafts[list.id] ?? list.name;
             return (
               <li key={list.id} className={styles.row}>

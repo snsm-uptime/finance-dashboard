@@ -4,7 +4,7 @@ baseline_commit: 8ba0438cdf7c0ce65224c3072690b917e6c2a975
 
 # Story 2.1: Create and rename owned lists
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -86,6 +86,20 @@ so that I can organize spending beyond my personal list.
   - [x] Postgres **16** integration (Compose `db`): signed-in create → owner + membership + even-split seed; second list allowed; owner rename persists; non-member + non-owner member rename denied; unauthenticated denied
   - [x] pytest green; ui typecheck/lint green; thin UI test for create/rename path if practical (coverage floor from 1.1)
   - [x] No secrets/PII committed; fixtures use generic vocabulary (`user@example.com`, “Household”, etc.)
+
+### Review Findings
+
+- [x] [Review][Patch] Unify rename not-found and non-member to the same 403 (existence oracle) [`api/application/lists.py:114`] — missing list currently returns 404 while existing non-member returns 403; map both to identical 403 `not_list_member` (member-non-owner may stay `not_list_owner`)
+- [x] [Review][Patch] Surface membership fetch failures instead of empty lists [`ui/app/lists/page.tsx:31`] — `fetchMembershipLists` returns `[]` on non-OK/network error, hiding real memberships
+- [x] [Review][Patch] Guard success-path JSON parse in listsClient [`ui/app/lists/listsClient.ts:59`] — 2xx with bad body throws; wrap like error-path `parseJson`
+- [x] [Review][Patch] Add `max_length=200` on create/rename DTOs [`api/api/schemas/lists.py:11`] — align wire validation with domain/DB `String(200)`
+- [x] [Review][Patch] Handle IntegrityError on create_owned_list [`api/adapters/persistence/repositories.py`] — map constraint failures to controlled API error instead of 500
+- [x] [Review][Patch] Authorize rename affordance via `owner_id`, not membership `role` [`ui/app/lists/ListsPanel.tsx`] — pass session user id and compare to `list.owner_id` to match API
+- [x] [Review][Patch] Unify blank-name 422 contract [`api/api/schemas/lists.py`] — empty string vs whitespace-only currently diverge (default Pydantic vs `invalid_list_name`)
+- [x] [Review][Patch] Prevent create double-submit race [`ui/app/lists/ListsPanel.tsx:41`] — set pending before await / ignore re-entry while creating
+- [x] [Review][Defer] Invisible/ZWSP-only list names accepted [`api/domain/lists.py`] — deferred, pre-existing polish (strip-only validation)
+- [x] [Review][Defer] No per-user owned-list creation cap [`api/application/lists.py`] — deferred, pre-existing (product limit not in v1 scope)
+- [x] [Review][Defer] BFF `/api/lists` routes lack Vitest coverage [`ui/app/api/lists/`] — deferred, pre-existing (client helper covered; BFF cookie forward untested)
 
 ## Dev Notes
 
@@ -307,8 +321,9 @@ Cursor Grok 4.5
 ### Change Log
 
 - 2026-08-04: Implemented Story 2.1 create/rename owned lists (domain → API → minimal UI + Postgres ACL tests)
+- 2026-08-04: Applied code-review patches (existence-oracle ACL, fetch fail UI, DTO max length, IntegrityError, owner_id UI, blank-name 422, double-submit)
 
 ## Story completion status
 
-Status: review  
-Completion note: All tasks complete; ACs satisfied; ready for code-review.
+Status: done  
+Completion note: Code review patches applied; ACs satisfied; story complete.

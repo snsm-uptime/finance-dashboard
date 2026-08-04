@@ -17,6 +17,7 @@ from application.lists import (
 from domain.errors import (
     InvalidListNameError,
     ListNotFoundError,
+    ListWriteError,
     NotListMemberError,
     NotListOwnerError,
 )
@@ -40,6 +41,14 @@ router = APIRouter(prefix="/lists", tags=["lists"])
 
 def _list_response(list_id: uuid.UUID, name: str, owner_id: uuid.UUID) -> ListResponse:
     return ListResponse(id=list_id, name=name, owner_id=owner_id)
+
+
+def _access_denied() -> JSONResponse:
+    """Same body for missing list and non-member — no existence oracle."""
+    return JSONResponse(
+        status_code=status.HTTP_403_FORBIDDEN,
+        content={"detail": NotListMemberError.MESSAGE, "code": "not_list_member"},
+    )
 
 
 @router.get("", response_model=ListMembershipsResponse)
@@ -78,6 +87,11 @@ def create_list(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             content={"detail": str(exc), "code": "invalid_list_name"},
         )
+    except ListWriteError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"detail": str(exc), "code": "list_write_failed"},
+        )
     logger.info("list_created list_id=%s owner_id=%s", result.id, result.owner_id)
     return _list_response(result.id, result.name, result.owner_id)
 
@@ -103,16 +117,8 @@ def rename_list(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             content={"detail": str(exc), "code": "invalid_list_name"},
         )
-    except ListNotFoundError as exc:
-        return JSONResponse(
-            status_code=status.HTTP_404_NOT_FOUND,
-            content={"detail": str(exc), "code": "list_not_found"},
-        )
-    except NotListMemberError as exc:
-        return JSONResponse(
-            status_code=status.HTTP_403_FORBIDDEN,
-            content={"detail": str(exc), "code": "not_list_member"},
-        )
+    except (ListNotFoundError, NotListMemberError):
+        return _access_denied()
     except NotListOwnerError as exc:
         return JSONResponse(
             status_code=status.HTTP_403_FORBIDDEN,

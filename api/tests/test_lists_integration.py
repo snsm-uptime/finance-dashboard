@@ -196,6 +196,15 @@ def test_non_member_and_non_owner_rename_denied(
 
 def test_blank_name_rejected(client: TestClient) -> None:
     _register(client, "blank@example.com")
-    response = client.post("/lists", json={"name": "   "})
-    assert response.status_code == 422
-    assert response.json()["code"] == "invalid_list_name"
+    for name in ("   ", ""):
+        response = client.post("/lists", json={"name": name})
+        assert response.status_code == 422, response.text
+        assert response.json()["code"] == "invalid_list_name"
+
+
+def test_rename_unknown_list_same_as_non_member(client: TestClient) -> None:
+    _register(client, "prober@example.com")
+    unknown = client.patch(f"/lists/{uuid4()}", json={"name": "Nope"})
+    assert unknown.status_code == 403
+    assert unknown.json()["code"] == "not_list_member"
+    assert unknown.json()["detail"] == "You do not have access to this list."

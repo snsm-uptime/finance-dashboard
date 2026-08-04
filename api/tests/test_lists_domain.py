@@ -20,7 +20,6 @@ from application.lists import (
 from application.ports import NewListRecord, NewMembershipRecord
 from domain.errors import (
     InvalidListNameError,
-    ListNotFoundError,
     NotListMemberError,
     NotListOwnerError,
 )
@@ -207,8 +206,8 @@ def test_member_non_owner_rename_rejected() -> None:
     assert repo.lists[list_id].name == "Household"
 
 
-def test_rename_missing_list_raises_not_found() -> None:
-    with pytest.raises(ListNotFoundError):
+def test_rename_missing_list_raises_not_member() -> None:
+    with pytest.raises(NotListMemberError):
         RenameListService(FakeListRepo()).execute(
             RenameListCommand(actor_user_id=uuid4(), list_id=uuid4(), name="X")
         )

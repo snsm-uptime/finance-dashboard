@@ -12,7 +12,11 @@ import styles from "./lists.module.css";
 
 export const dynamic = "force-dynamic";
 
-async function fetchMembershipLists(): Promise<ListItem[]> {
+type MembershipLoad =
+  | { ok: true; lists: ListItem[] }
+  | { ok: false };
+
+async function fetchMembershipLists(): Promise<MembershipLoad> {
   const jar = await cookies();
   const cookieHeader = jar
     .getAll()
@@ -28,11 +32,12 @@ async function fetchMembershipLists(): Promise<ListItem[]> {
       },
       cache: "no-store",
     });
-    if (!response.ok) return [];
+    if (!response.ok) return { ok: false };
     const data = (await response.json()) as { lists?: ListItem[] };
-    return Array.isArray(data.lists) ? data.lists : [];
+    if (!Array.isArray(data.lists)) return { ok: false };
+    return { ok: true, lists: data.lists };
   } catch {
-    return [];
+    return { ok: false };
   }
 }
 
@@ -51,7 +56,7 @@ export default async function ListsPage() {
   const jar = await cookies();
   const locale = resolvePageLocale(jar.get("fh_lang_cache")?.value);
   const t = listsMessages[locale];
-  const initialLists = await fetchMembershipLists();
+  const loaded = await fetchMembershipLists();
 
   return (
     <main className={styles.main}>
@@ -61,7 +66,16 @@ export default async function ListsPage() {
       </div>
       <h1 className={styles.title}>{t.title}</h1>
       <p className={styles.copy}>{t.subtitle}</p>
-      <ListsPanel initialLists={initialLists} />
+      {loaded.ok ? (
+        <ListsPanel
+          initialLists={loaded.lists}
+          currentUserId={session.user_id}
+        />
+      ) : (
+        <p className={styles.error} role="alert">
+          {t.loadError}
+        </p>
+      )}
       <p className={styles.copy}>
         <a className={styles.link} href="/upload">
           {t.uploadLink}

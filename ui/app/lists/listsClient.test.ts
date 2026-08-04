@@ -48,4 +48,20 @@ describe("listsClient", () => {
       list: { id: "a", name: "Household", owner_id: "u1" },
     });
   });
+
+  it("returns generic error when success body is not JSON", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 201,
+        json: async () => {
+          throw new Error("bad json");
+        },
+      }),
+    );
+
+    const result = await createList("Household", messages);
+    expect(result).toEqual({ ok: false, error: "generic" });
+  });
 });
