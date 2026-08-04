@@ -15,6 +15,9 @@ describe("account i18n", () => {
       "signOut",
       "passwordReset",
       "navAccount",
+      "loading",
+      "saveLanguageFailed",
+      "saveThemeFailed",
     ] as const;
 
     for (const key of required) {

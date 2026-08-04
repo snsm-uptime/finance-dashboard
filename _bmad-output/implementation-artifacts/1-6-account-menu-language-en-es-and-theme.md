@@ -4,7 +4,7 @@ baseline_commit: 9faaf85dddecc02425c4615b06fdfb4e45dca9df
 
 # Story 1.6: Account menu — language EN/ES and theme
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -94,6 +94,39 @@ so that the app matches my language and preferred look without a full settings p
   - [x] UI critical (test-after OK; respect 1.1 coverage floor ≥60%): Account menu shows four affordances; selecting EN/ES updates `lang` + chrome strings; theme Light/Dark/System swaps token set; System follows `prefers-color-scheme` change
   - [x] Fixtures: generic emails only (`user@example.com`); no PII
   - [x] Do **not** require full Playwright every PR (AD-15)
+
+### Review Findings
+
+- [x] [Review][Patch] Password reset from Account: sign out then navigate to `/forgot-password` [`ui/components/AccountMenu.tsx:118`]
+- [x] [Review][Patch] GET `/auth/me`: return `language`/`theme` null when unset; resolve effective defaults only in UI [`api/api/routes/auth.py:154`] [`api/api/schemas/auth.py:37`]
+- [x] [Review][Patch] Treat corrupt stored prefs as unset on GET instead of 500 [`api/domain/preferences.py:70`]
+- [x] [Review][Patch] Clear `fh_lang_cache`/`fh_theme_cache` on sign-out to avoid cross-account FOUC [`ui/components/AccountMenu.tsx:43`]
+- [x] [Review][Patch] Initialize client locale from `browserLocale()` instead of hardcoded `"en"` [`ui/components/PreferencesProvider.tsx:71`]
+- [x] [Review][Patch] Add UI tests for theme Light/Dark/System token/`html` class swap and System `prefers-color-scheme` follow [`ui/components/AccountMenu.test.tsx`]
+- [x] [Review][Patch] Move Account save-error copy into EN/ES catalogs [`ui/components/AccountMenu.tsx:25`]
+- [x] [Review][Patch] Use a distinct loading label instead of `t.saving` while `ready === false` [`ui/components/AccountMenu.tsx:67`]
+- [x] [Review][Patch] Parse Accept-Language by primary subtag (avoid `est`→`es`) and skip `q<=0`; normalize `;q=` case [`api/domain/preferences.py:45`] [`ui/lib/i18n/locale.ts:17`]
+- [x] [Review][Patch] Align `signup.ts` `detectLocale` with shared `locale.ts` implementation [`ui/lib/i18n/signup.ts:41`]
+- [x] [Review][Patch] Wrap BFF `/api/auth/me` upstream fetch in try/catch like sibling auth routes [`ui/app/api/auth/me/route.ts:12`]
+- [x] [Review][Patch] Disable language/theme controls until prefs `ready` [`ui/components/AccountMenu.tsx:77`]
+- [x] [Review][Patch] Ignore stale GET refresh after concurrent PATCH (request id / abort) [`ui/components/PreferencesProvider.tsx:75`]
+- [x] [Review][Patch] Delete unused bare `SignOutButton` after Account chrome takeover [`ui/components/SignOutButton.tsx`]
+- [x] [Review][Patch] Add `aria-pressed` on language/theme choice buttons [`ui/components/AccountMenu.tsx:74`]
+- [x] [Review][Defer] DB CHECK constraints on `users.language`/`theme` [`api/adapters/persistence/migrations/versions/0005_user_preferences.py:20`] — deferred, defense-in-depth beyond AC (API validates)
+- [x] [Review][Defer] AbortSignal timeouts on BFF/client prefs fetches — deferred, hardening beyond story scope
+
+### Review Findings (re-review — API chunk)
+
+- [x] [Review][Dismiss] PATCH clear-to-unset — keep overwrite-only; no clear-to-null API (decision 2026-08-03)
+- [x] [Review][Patch] Only log `user_preferences_updated` when a preference actually changes (not empty-body no-op) [`api/api/routes/auth.py:203`]
+- [x] [Review][Patch] Constrain `PatchMeBody` language/theme (Literal or Field pattern) for OpenAPI + early reject [`api/api/schemas/auth.py`]
+- [x] [Review][Patch] Integration: assert language-only / theme-only PATCH preserves the other field [`api/tests/test_preferences_integration.py`]
+- [x] [Review][Patch] Clamp Accept-Language q to (0,1] and strip non-q params from tag before primary subtag [`api/domain/preferences.py:71`]
+- [x] [Review][Patch] Log when coerce treats stored prefs as corrupt (vs silent unset) [`api/domain/preferences.py:33`]
+- [x] [Review][Defer] Dead API Accept-Language on HTTP path — domain helpers unused by routes after UI-owned defaults; keep for unit tests / future — deferred
+- [x] [Review][Defer] Unauthenticated `/me` 401 shape: HTTPException vs JSON `code` — deferred, pre-existing auth dependency pattern
+- [x] [Review][Defer] Application-layer unit tests for prefs services — partially addressed (`test_preferences_application.py` corrupt-coerce log); broader suite still deferred
+- [x] [Review][Defer] Split PreferencesRepository from AuthUserRepository concrete — deferred, architecture polish
 
 ## Dev Notes
 
@@ -311,10 +344,11 @@ Cursor Grok 4.5
 
 - Reused AD-8: opaque `fh_session`, api single issuer, Next BFF `/api/auth/*` — no new session stack.
 - Alembic `0005_user_preferences`: nullable `users.language` / `users.theme`.
-- Domain `parse_accept_language` + GET/PATCH `/auth/me` return effective language/theme; stored nulls remain until user chooses.
-- UI: `/account` Account menu (EN/ES, Light/Dark/System, password reset → `/forgot-password`, sign out); lists/upload use `AccountNavLink` instead of bare SignOut.
-- Custom i18n (existing pattern) + Warm Balance `--wb-*` CSS with `html.dark` / system listener; localStorage used only as FOUC cache, SoT is account API.
-- Tests: domain unit + Postgres integration prefs; UI locale/account/BFF/AccountMenu; sign-in + email-verification regressions green.
+- Domain prefs: GET/PATCH `/auth/me` return stored `language`/`theme` (null when unset); UI resolves Accept-Language / System defaults.
+- UI: `/account` Account menu (EN/ES, Light/Dark/System, password reset signs out then → `/forgot-password`, sign out); lists/upload use `AccountNavLink`; bare `SignOutButton` removed.
+- Custom i18n (existing pattern) + Warm Balance `--wb-*` CSS with `html.dark` / system listener; localStorage used only as FOUC cache (cleared on sign-out), SoT is account API.
+- Tests: domain unit + Postgres integration prefs; UI locale/account/BFF/AccountMenu (incl. theme/System); vitest includes `*.test.tsx`.
+- Code review 2026-08-03: applied 15 patches (null wire, corrupt-as-unset, Accept-Language primary subtag, password-reset path, FOUC cache clear, a11y, BFF try/catch, etc.).
 
 ### File List
 
@@ -328,6 +362,7 @@ Cursor Grok 4.5
 - api/api/routes/auth.py
 - api/tests/test_preferences_domain.py
 - api/tests/test_preferences_integration.py
+- api/tests/test_preferences_application.py
 - ui/lib/i18n/locale.ts
 - ui/lib/i18n/locale.test.ts
 - ui/lib/i18n/account.ts
@@ -346,14 +381,19 @@ Cursor Grok 4.5
 - ui/components/AccountMenu.test.tsx
 - ui/components/AccountNavLink.tsx
 - ui/components/AccountNavLink.module.css
+- ui/lib/i18n/signup.ts
+- ui/vitest.config.mts
 - _bmad-output/implementation-artifacts/1-6-account-menu-language-en-es-and-theme.md
 - _bmad-output/implementation-artifacts/sprint-status.yaml
+- _bmad-output/implementation-artifacts/deferred-work.md
 
 ### Change Log
 
 - 2026-08-04: Implemented Account menu language/theme prefs (API + UI) for Story 1.6; status → review.
+- 2026-08-03: Code review patches applied (null prefs wire, password-reset sign-out path, FOUC/cache, Accept-Language, tests); status → done.
+- 2026-08-03: API chunk re-review patches applied (PatchMeBody Literals, audit log guard, Accept-Language q clamp, corrupt-pref warning, partial PATCH test).
 
 ## Story completion status
 
-Status: review  
-Completion note: All tasks/ACs implemented and tested — ready for code-review.
+Status: done  
+Completion note: Code review complete — all patch findings applied; deferred items recorded.

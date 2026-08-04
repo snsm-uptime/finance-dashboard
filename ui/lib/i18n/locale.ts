@@ -14,17 +14,19 @@ export function detectLocale(acceptLanguage: string | null | undefined): Locale 
     if (!piece) continue;
     let tag: string;
     let q = 1;
-    if (piece.includes(";q=")) {
-      const [rawTag, rawQ] = piece.split(";q=");
-      tag = (rawTag ?? "").trim().toLowerCase();
-      const parsed = Number.parseFloat((rawQ ?? "").trim());
+    const qMatch = /;\s*q\s*=/i.exec(piece);
+    if (qMatch && qMatch.index !== undefined) {
+      tag = piece.slice(0, qMatch.index).trim().toLowerCase();
+      const parsed = Number.parseFloat(piece.slice(qMatch.index + qMatch[0].length).trim());
       q = Number.isFinite(parsed) ? parsed : 0;
     } else {
       tag = piece.toLowerCase();
     }
+    if (q <= 0) continue;
+    const primary = tag.split("-")[0] ?? "";
     let lang: Locale | null = null;
-    if (tag.startsWith("es")) lang = "es";
-    else if (tag.startsWith("en")) lang = "en";
+    if (primary === "es") lang = "es";
+    else if (primary === "en") lang = "en";
     if (!lang) continue;
     if (q > bestQ) {
       bestQ = q;

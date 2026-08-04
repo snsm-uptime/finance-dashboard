@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
 from domain.errors import PrincipalNotFoundError
 from domain.preferences import (
-    effective_language,
-    effective_theme,
+    coerce_stored_language,
+    coerce_stored_theme,
     validate_language,
     validate_theme,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,17 +41,14 @@ class PreferencesRepository(Protocol):
 @dataclass(frozen=True, slots=True)
 class GetMePreferencesCommand:
     user_id: UUID
-    accept_language: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class MePreferencesResult:
     user_id: UUID
     email: str
-    language: str
-    theme: str
-    language_stored: str | None
-    theme_stored: str | None
+    language: str | None
+    theme: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,7 +56,20 @@ class UpdatePreferencesCommand:
     user_id: UUID
     language: str | None = None
     theme: str | None = None
-    accept_language: str | None = None
+
+
+def _coerce_language(stored: str | None) -> str | None:
+    coerced = coerce_stored_language(stored)
+    if stored and coerced is None:
+        logger.warning("corrupt_user_language_preference ignored value=%r", stored)
+    return coerced
+
+
+def _coerce_theme(stored: str | None) -> str | None:
+    coerced = coerce_stored_theme(stored)
+    if stored and coerced is None:
+        logger.warning("corrupt_user_theme_preference ignored value=%r", stored)
+    return coerced
 
 
 class GetMePreferencesService:
@@ -70,10 +83,8 @@ class GetMePreferencesService:
         return MePreferencesResult(
             user_id=row.id,
             email=row.email,
-            language=effective_language(row.language, command.accept_language),
-            theme=effective_theme(row.theme),
-            language_stored=row.language,
-            theme_stored=row.theme,
+            language=_coerce_language(row.language),
+            theme=_coerce_theme(row.theme),
         )
 
 
@@ -84,10 +95,7 @@ class UpdatePreferencesService:
     def execute(self, command: UpdatePreferencesCommand) -> MePreferencesResult:
         if command.language is None and command.theme is None:
             return GetMePreferencesService(self._repo).execute(
-                GetMePreferencesCommand(
-                    user_id=command.user_id,
-                    accept_language=command.accept_language,
-                )
+                GetMePreferencesCommand(user_id=command.user_id)
             )
 
         language: str | None = None
@@ -105,8 +113,6 @@ class UpdatePreferencesService:
         return MePreferencesResult(
             user_id=row.id,
             email=row.email,
-            language=effective_language(row.language, command.accept_language),
-            theme=effective_theme(row.theme),
-            language_stored=row.language,
-            theme_stored=row.theme,
+            language=_coerce_language(row.language),
+            theme=_coerce_theme(row.theme),
         )

@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import re
+
 from domain.errors import InvalidPreferencesError
 
 ALLOWED_LANGUAGES = frozenset({"en", "es"})
 ALLOWED_THEMES = frozenset({"light", "dark", "system"})
 DEFAULT_LANGUAGE = "en"
 DEFAULT_THEME = "system"
+
+_Q_PARAM = re.compile(r";\s*q\s*=", re.IGNORECASE)
 
 
 def validate_language(value: str) -> str:
@@ -26,6 +30,26 @@ def validate_theme(value: str) -> str:
     return normalized
 
 
+def coerce_stored_language(stored: str | None) -> str | None:
+    """Return validated stored language, or None when unset/corrupt."""
+    if not stored:
+        return None
+    try:
+        return validate_language(stored)
+    except InvalidPreferencesError:
+        return None
+
+
+def coerce_stored_theme(stored: str | None) -> str | None:
+    """Return validated stored theme, or None when unset/corrupt."""
+    if not stored:
+        return None
+    try:
+        return validate_theme(stored)
+    except InvalidPreferencesError:
+        return None
+
+
 def parse_accept_language(header: str | None) -> str:
     """Resolve first-visit language from Accept-Language (EN/ES only).
 
@@ -42,18 +66,21 @@ def parse_accept_language(header: str | None) -> str:
         piece = part.strip()
         if not piece:
             continue
-        if ";q=" in piece:
-            tag, q_raw = piece.split(";q=", 1)
+        if _Q_PARAM.search(piece):
+            tag, q_raw = _Q_PARAM.split(piece, maxsplit=1)
             try:
-                q = float(q_raw.strip())
+                q = float(q_raw.strip().split(";", 1)[0].strip())
             except ValueError:
                 q = 0.0
         else:
             tag, q = piece, 1.0
-        tag = tag.strip().lower()
-        if tag.startswith("es"):
+        if q <= 0 or q > 1.0:
+            continue
+        # Drop any leftover parameters; primary subtag only (en / es).
+        primary = tag.strip().lower().split(";", 1)[0].split("-", 1)[0]
+        if primary == "es":
             lang = "es"
-        elif tag.startswith("en"):
+        elif primary == "en":
             lang = "en"
         else:
             continue
@@ -68,12 +95,14 @@ def parse_accept_language(header: str | None) -> str:
 
 
 def effective_language(stored: str | None, accept_language: str | None) -> str:
-    if stored:
-        return validate_language(stored)
+    coerced = coerce_stored_language(stored)
+    if coerced:
+        return coerced
     return parse_accept_language(accept_language)
 
 
 def effective_theme(stored: str | None) -> str:
-    if stored:
-        return validate_theme(stored)
+    coerced = coerce_stored_theme(stored)
+    if coerced:
+        return coerced
     return DEFAULT_THEME

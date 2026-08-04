@@ -98,14 +98,24 @@
 
 .resetLink {
   display: inline-block;
-  color: var(--accent);
-  font-weight: 550;
-  text-decoration: none;
+  font-family: inherit;
   font-size: 0.95rem;
+  font-weight: 550;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  text-decoration: none;
+  cursor: pointer;
 }
 
-.resetLink:hover {
+.resetLink:hover:not(:disabled) {
   text-decoration: underline;
+}
+
+.resetLink:disabled {
+  opacity: 0.65;
+  cursor: wait;
 }
 
 .signOut {

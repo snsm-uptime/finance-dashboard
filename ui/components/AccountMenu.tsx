@@ -3,7 +3,10 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import { usePreferences } from "@/components/PreferencesProvider";
+import {
+  clearPrefsCache,
+  usePreferences,
+} from "@/components/PreferencesProvider";
 import { accountCopy } from "@/lib/i18n/account";
 import type { Locale, ThemePreference } from "@/lib/i18n/locale";
 
@@ -22,7 +25,7 @@ export function AccountMenu() {
     try {
       await setLanguage(next);
     } catch {
-      setError("Could not save language. Try again.");
+      setError(t.saveLanguageFailed);
     } finally {
       setPending(false);
     }
@@ -34,7 +37,7 @@ export function AccountMenu() {
     try {
       await setTheme(next);
     } catch {
-      setError("Could not save theme. Try again.");
+      setError(t.saveThemeFailed);
     } finally {
       setPending(false);
     }
@@ -42,6 +45,7 @@ export function AccountMenu() {
 
   async function onSignOut() {
     setSigningOut(true);
+    clearPrefsCache();
     try {
       await fetch("/api/auth/sign-out", {
         method: "POST",
@@ -49,9 +53,27 @@ export function AccountMenu() {
         cache: "no-store",
       });
     } finally {
+      clearPrefsCache();
       window.location.assign("/sign-in");
     }
   }
+
+  async function onPasswordReset() {
+    setSigningOut(true);
+    clearPrefsCache();
+    try {
+      await fetch("/api/auth/sign-out", {
+        method: "POST",
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+    } finally {
+      clearPrefsCache();
+      window.location.assign("/forgot-password");
+    }
+  }
+
+  const controlsDisabled = pending || !ready || signingOut;
 
   return (
     <main className={styles.main}>
@@ -64,7 +86,7 @@ export function AccountMenu() {
       <h1 className={styles.title}>{t.title}</h1>
       <p className={styles.subtitle}>{t.subtitle}</p>
 
-      {!ready ? <p className={styles.hint}>{t.saving}</p> : null}
+      {!ready ? <p className={styles.hint}>{t.loading}</p> : null}
 
       <section className={styles.section} aria-labelledby="account-language">
         <h2 id="account-language" className={styles.sectionTitle}>
@@ -74,7 +96,8 @@ export function AccountMenu() {
           <button
             type="button"
             className={locale === "en" ? styles.choiceActive : styles.choice}
-            disabled={pending}
+            aria-pressed={locale === "en"}
+            disabled={controlsDisabled}
             onClick={() => void onLanguage("en")}
           >
             {t.en}
@@ -82,7 +105,8 @@ export function AccountMenu() {
           <button
             type="button"
             className={locale === "es" ? styles.choiceActive : styles.choice}
-            disabled={pending}
+            aria-pressed={locale === "es"}
+            disabled={controlsDisabled}
             onClick={() => void onLanguage("es")}
           >
             {t.es}
@@ -106,7 +130,8 @@ export function AccountMenu() {
               key={value}
               type="button"
               className={theme === value ? styles.choiceActive : styles.choice}
-              disabled={pending}
+              aria-pressed={theme === value}
+              disabled={controlsDisabled}
               onClick={() => void onTheme(value)}
             >
               {label}
@@ -116,9 +141,14 @@ export function AccountMenu() {
       </section>
 
       <section className={styles.section}>
-        <Link className={styles.resetLink} href="/forgot-password">
+        <button
+          type="button"
+          className={styles.resetLink}
+          disabled={signingOut}
+          onClick={() => void onPasswordReset()}
+        >
           {t.passwordReset}
-        </Link>
+        </button>
       </section>
 
       <section className={styles.section}>

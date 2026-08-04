@@ -86,15 +86,13 @@ def test_me_requires_session(client: TestClient) -> None:
     assert response.status_code == 401
 
 
-def test_me_defaults_from_accept_language(client: TestClient) -> None:
+def test_me_returns_null_prefs_when_unset(client: TestClient) -> None:
     _register(client, "prefs-default@example.com")
     response = client.get("/auth/me", headers={"Accept-Language": "es-CR,es;q=0.9"})
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["language"] == "es"
-    assert body["theme"] == "system"
-    assert body["language_stored"] is None
-    assert body["theme_stored"] is None
+    assert body["language"] is None
+    assert body["theme"] is None
     assert body["email"] == "prefs-default@example.com"
 
 
@@ -106,8 +104,6 @@ def test_patch_language_and_theme_persist(client: TestClient, db_session: Sessio
     body = patched.json()
     assert body["language"] == "es"
     assert body["theme"] == "dark"
-    assert body["language_stored"] == "es"
-    assert body["theme_stored"] == "dark"
 
     again = client.get("/auth/me", headers={"Accept-Language": "en-US"})
     assert again.status_code == 200
@@ -122,13 +118,34 @@ def test_patch_language_and_theme_persist(client: TestClient, db_session: Sessio
 
 def test_patch_rejects_invalid_preferences(client: TestClient) -> None:
     _register(client, "prefs-bad@example.com")
+    # Schema Literal rejects unknown values before domain (422).
     bad_lang = client.patch("/auth/me", json={"language": "fr"})
-    assert bad_lang.status_code == 400
-    assert bad_lang.json()["code"] == "invalid_preferences"
+    assert bad_lang.status_code == 422
 
     bad_theme = client.patch("/auth/me", json={"theme": "neon"})
-    assert bad_theme.status_code == 400
-    assert bad_theme.json()["code"] == "invalid_preferences"
+    assert bad_theme.status_code == 422
+
+
+def test_patch_partial_preserves_other_field(client: TestClient, db_session: Session) -> None:
+    _register(client, "prefs-partial@example.com")
+    assert client.patch("/auth/me", json={"language": "es", "theme": "dark"}).status_code == 200
+
+    lang_only = client.patch("/auth/me", json={"language": "en"})
+    assert lang_only.status_code == 200, lang_only.text
+    assert lang_only.json()["language"] == "en"
+    assert lang_only.json()["theme"] == "dark"
+
+    theme_only = client.patch("/auth/me", json={"theme": "light"})
+    assert theme_only.status_code == 200, theme_only.text
+    assert theme_only.json()["language"] == "en"
+    assert theme_only.json()["theme"] == "light"
+
+    row = db_session.scalar(
+        select(UserModel).where(UserModel.email == "prefs-partial@example.com")
+    )
+    assert row is not None
+    assert row.language == "en"
+    assert row.theme == "light"
 
 
 def test_patch_me_requires_session(client: TestClient) -> None:

@@ -9,15 +9,23 @@ import { getApiInternalUrl } from "@/lib/api";
 export async function GET(request: NextRequest) {
   const cookie = request.headers.get("cookie") || "";
   const accept = request.headers.get("accept-language") || "";
-  const upstream = await fetch(`${getApiInternalUrl()}/auth/me`, {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-      ...(cookie ? { Cookie: cookie } : {}),
-      ...(accept ? { "Accept-Language": accept } : {}),
-    },
-    cache: "no-store",
-  });
+  let upstream: Response;
+  try {
+    upstream = await fetch(`${getApiInternalUrl()}/auth/me`, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        ...(cookie ? { Cookie: cookie } : {}),
+        ...(accept ? { "Accept-Language": accept } : {}),
+      },
+      cache: "no-store",
+    });
+  } catch {
+    return NextResponse.json(
+      { detail: "Upstream unavailable.", code: "bad_gateway" },
+      { status: 502 },
+    );
+  }
 
   const text = await upstream.text();
   return new NextResponse(text, {
@@ -33,17 +41,25 @@ export async function PATCH(request: NextRequest) {
   const cookie = request.headers.get("cookie") || "";
   const accept = request.headers.get("accept-language") || "";
   const body = await request.text();
-  const upstream = await fetch(`${getApiInternalUrl()}/auth/me`, {
-    method: "PATCH",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      ...(cookie ? { Cookie: cookie } : {}),
-      ...(accept ? { "Accept-Language": accept } : {}),
-    },
-    body,
-    cache: "no-store",
-  });
+  let upstream: Response;
+  try {
+    upstream = await fetch(`${getApiInternalUrl()}/auth/me`, {
+      method: "PATCH",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        ...(cookie ? { Cookie: cookie } : {}),
+        ...(accept ? { "Accept-Language": accept } : {}),
+      },
+      body,
+      cache: "no-store",
+    });
+  } catch {
+    return NextResponse.json(
+      { detail: "Upstream unavailable.", code: "bad_gateway" },
+      { status: 502 },
+    );
+  }
 
   const text = await upstream.text();
   return new NextResponse(text, {

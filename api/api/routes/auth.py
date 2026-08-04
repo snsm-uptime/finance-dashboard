@@ -153,15 +153,13 @@ def session_status(
 
 @router.get("/me", response_model=MeResponse)
 def current_user(
-    request: Request,
     db: Session = Depends(get_db),
     user_id: uuid.UUID = Depends(require_authenticated_user),
 ) -> MeResponse | JSONResponse:
-    """Current account + effective language/theme (defaults when unset)."""
-    accept = request.headers.get("accept-language")
+    """Current account + stored language/theme (null when unset)."""
     try:
         result = GetMePreferencesService(SqlAlchemyAuthUserRepository(db)).execute(
-            GetMePreferencesCommand(user_id=user_id, accept_language=accept)
+            GetMePreferencesCommand(user_id=user_id)
         )
     except PrincipalNotFoundError:
         return JSONResponse(
@@ -174,27 +172,23 @@ def current_user(
         email=result.email,
         language=result.language,
         theme=result.theme,
-        language_stored=result.language_stored,
-        theme_stored=result.theme_stored,
     )
 
 
 @router.patch("/me", response_model=MeResponse)
 def patch_current_user(
     body: PatchMeBody,
-    request: Request,
     db: Session = Depends(get_db),
     user_id: uuid.UUID = Depends(require_authenticated_user),
 ) -> MeResponse | JSONResponse:
     """Persist language/theme on the account (source of truth — not device-only)."""
-    accept = request.headers.get("accept-language")
+    wrote = body.language is not None or body.theme is not None
     try:
         result = UpdatePreferencesService(SqlAlchemyAuthUserRepository(db)).execute(
             UpdatePreferencesCommand(
                 user_id=user_id,
                 language=body.language,
                 theme=body.theme,
-                accept_language=accept,
             )
         )
     except InvalidPreferencesError as exc:
@@ -207,15 +201,14 @@ def patch_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             content={"detail": "Not authenticated.", "code": "unauthenticated"},
         )
-    logger.info("user_preferences_updated user_id=%s", user_id)
+    if wrote:
+        logger.info("user_preferences_updated user_id=%s", user_id)
     return MeResponse(
         authenticated=True,
         user_id=result.user_id,
         email=result.email,
         language=result.language,
         theme=result.theme,
-        language_stored=result.language_stored,
-        theme_stored=result.theme_stored,
     )
 
 

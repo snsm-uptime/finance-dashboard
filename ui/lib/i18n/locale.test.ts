@@ -17,4 +17,10 @@ describe("detectLocale", () => {
   it("prefers es on equal q", () => {
     expect(detectLocale("en;q=0.9,es;q=0.9")).toBe("es");
   });
+
+  it("uses primary subtag (not prefix) and skips q=0", () => {
+    expect(detectLocale("est")).toBe("en");
+    expect(detectLocale("es;q=0,en;q=0.9")).toBe("en");
+    expect(detectLocale("es;Q=0.8,en;q=0.5")).toBe("es");
+  });
 });

@@ -61,8 +61,6 @@ describe("/api/auth/me BFF", () => {
           email: "user@example.com",
           language: "en",
           theme: "dark",
-          language_stored: "en",
-          theme_stored: "dark",
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       ),
@@ -98,5 +96,15 @@ describe("/api/auth/me BFF", () => {
       new Request("http://localhost/api/auth/me") as never,
     );
     expect(response.status).toBe(401);
+  });
+
+  it("GET returns 502 when upstream fetch fails", async () => {
+    fetchMock.mockRejectedValue(new Error("connection refused"));
+    const response = await GET(
+      new Request("http://localhost/api/auth/me") as never,
+    );
+    expect(response.status).toBe(502);
+    const body = await response.json();
+    expect(body.code).toBe("bad_gateway");
   });
 });
