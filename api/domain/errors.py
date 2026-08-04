@@ -34,6 +34,11 @@ class InvalidResetTokenError(DomainError):
 class InvalidResetPasswordError(DomainError):
     """Raised when the new password fails validation on reset confirm."""
 
+    MESSAGE = "Password must be at least 8 characters."
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(detail or self.MESSAGE)
+
 
 class SmtpConfigurationError(DomainError):
     """Raised when SMTP is missing or misconfigured (operator-facing)."""

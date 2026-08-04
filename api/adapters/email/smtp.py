@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import logging
 from email.message import EmailMessage as StdEmailMessage
 
@@ -13,6 +14,16 @@ from domain.errors import SmtpConfigurationError, SmtpSendError
 from adapters.email.settings import SmtpSettings
 
 logger = logging.getLogger(__name__)
+
+
+def _run_coro(coro):  # type: ignore[no-untyped-def]
+    """Run an async SMTP call from sync code, even if a loop is already running."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
 
 
 class SmtpEmailSender:
@@ -38,7 +49,7 @@ class SmtpEmailSender:
         start_tls = settings.start_tls and not use_tls
 
         try:
-            asyncio.run(
+            _run_coro(
                 aiosmtplib.send(
                     email,
                     hostname=settings.host,
@@ -50,8 +61,6 @@ class SmtpEmailSender:
                     timeout=settings.timeout_seconds,
                 )
             )
-        except SmtpConfigurationError:
-            raise
         except Exception as exc:
             logger.error("smtp_send_failed to_domain=%s", _domain(message.to_address))
             raise SmtpSendError(

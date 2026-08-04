@@ -46,7 +46,7 @@ class PasswordResetRequestResponse(BaseModel):
 
 class PasswordResetConfirmBody(BaseModel):
     token: str = ""
-    new_password: str = ""
+    new_password: str = Field(default="", max_length=256)
 
 
 class PasswordResetConfirmResponse(BaseModel):

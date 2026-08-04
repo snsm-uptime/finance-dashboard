@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from application.password_reset import PasswordResetTokenRecord
+from domain.errors import InvalidResetTokenError
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
@@ -62,15 +63,21 @@ class SqlAlchemyPasswordResetTokenRepository:
             used_at=row.used_at,
         )
 
-    def mark_used(self, token_id: UUID, *, used_at: datetime) -> None:
-        row = self._session.get(PasswordResetTokenModel, token_id)
-        if row is not None and row.used_at is None:
-            row.used_at = used_at
+    def claim_token(self, token_id: UUID, *, used_at: datetime) -> bool:
+        result = self._session.execute(
+            update(PasswordResetTokenModel)
+            .where(
+                PasswordResetTokenModel.id == token_id,
+                PasswordResetTokenModel.used_at.is_(None),
+            )
+            .values(used_at=used_at)
+        )
+        return bool(result.rowcount)
 
     def update_password_hash(self, user_id: UUID, password_hash: str) -> None:
         row = self._session.get(UserModel, user_id)
         if row is None:
-            return
+            raise InvalidResetTokenError()
         row.password_hash = password_hash
 
     def revoke_all_sessions_for_user(self, user_id: UUID) -> None:

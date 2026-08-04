@@ -170,25 +170,24 @@ def test_request_reset_known_email_sends_and_stores_hash(
 def test_request_reset_smtp_misconfig_fails_loud(
     client: TestClient, mailer: CapturingMailer, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    from adapters.email.settings import load_smtp_settings
+    from adapters.email.smtp import SmtpEmailSender
     from api.routes import auth as auth_routes
-    from domain.errors import SmtpConfigurationError
 
     _register(client, "smtpfail@example.com")
-    mailer.fail = SmtpConfigurationError()
 
-    # Also cover empty SMTP via real sender path briefly.
-    monkeypatch.setattr(
-        auth_routes,
-        "SmtpEmailSender",
-        lambda _settings: mailer,
-    )
+    # Real adapter path: empty SMTP_HOST/FROM must fail loud (not fake mailer only).
+    monkeypatch.setenv("SMTP_HOST", "")
+    monkeypatch.setenv("SMTP_FROM", "")
+    monkeypatch.setattr(auth_routes, "SmtpEmailSender", SmtpEmailSender)
+    monkeypatch.setattr(auth_routes, "load_smtp_settings", load_smtp_settings)
 
     response = client.post(
         "/auth/password-reset/request",
         json={"email": "smtpfail@example.com"},
     )
     assert response.status_code == 503
-    assert response.json()["code"] in {"smtp_config_error", "smtp_send_error"}
+    assert response.json()["code"] == "smtp_config_error"
     assert mailer.sent == []
 
 

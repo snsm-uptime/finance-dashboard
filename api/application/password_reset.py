@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from html import escape
 from typing import Protocol
 from uuid import UUID, uuid4
 
@@ -49,7 +50,9 @@ class PasswordResetTokenRepository(Protocol):
 
     def get_by_token_hash(self, token_hash: str) -> PasswordResetTokenRecord | None: ...
 
-    def mark_used(self, token_id: UUID, *, used_at: datetime) -> None: ...
+    def claim_token(self, token_id: UUID, *, used_at: datetime) -> bool:
+        """Atomically mark unused token as used. Returns False if already used/missing."""
+        ...
 
     def update_password_hash(self, user_id: UUID, password_hash: str) -> None: ...
 
@@ -100,7 +103,18 @@ class RequestPasswordResetService:
         expires_at = now + RESET_TOKEN_TTL
         token_id = uuid4()
 
+        # Persist first so any emailed link is redeemable. On SMTP failure the API
+        # layer must roll back the unit of work (no silent "sent", no orphan mail).
+        self._tokens.invalidate_outstanding_for_user(user.id)
+        self._tokens.create_token(
+            token_id=token_id,
+            user_id=user.id,
+            token_hash=token_hash,
+            expires_at=expires_at,
+        )
+
         reset_link = f"{self._public_app_url}{self._reset_path}?token={raw}"
+        safe_href = escape(reset_link, quote=True)
         subject = "Reset your finance-helper password"
         body_text = (
             "We received a request to reset your password.\n\n"
@@ -110,7 +124,7 @@ class RequestPasswordResetService:
         body_html = (
             "<p>We received a request to reset your password.</p>"
             "<p>Open this link within one hour to choose a new password:</p>"
-            f'<p><a href="{reset_link}">Reset password</a></p>'
+            f'<p><a href="{safe_href}">Reset password</a></p>'
             "<p>If you did not request this, you can ignore this email.</p>"
         )
 
@@ -126,17 +140,9 @@ class RequestPasswordResetService:
         except (SmtpConfigurationError, SmtpSendError):
             raise
         except Exception as exc:  # pragma: no cover - defensive wrap
-            raise SmtpSendError(str(exc)) from exc
-
-        # Persist only after send succeeds — no silent "sent" without a durable token,
-        # and no orphan token when SMTP fails.
-        self._tokens.invalidate_outstanding_for_user(user.id)
-        self._tokens.create_token(
-            token_id=token_id,
-            user_id=user.id,
-            token_hash=token_hash,
-            expires_at=expires_at,
-        )
+            raise SmtpSendError(
+                "Could not send email. Check SMTP connectivity and try again."
+            ) from exc
 
         return RequestPasswordResetResult()
 
@@ -185,26 +191,22 @@ class CompletePasswordResetService:
         if expires <= datetime.now(UTC):
             raise InvalidResetTokenError()
 
-        # Look up email for response (optional); password update is by user_id.
-        # AuthUserRepository is email-keyed — resolve via a lightweight path after update.
+        claimed = self._tokens.claim_token(record.id, used_at=datetime.now(UTC))
+        if not claimed:
+            raise InvalidResetTokenError()
+
         new_hash = self._hasher.hash(command.new_password)
         self._tokens.update_password_hash(record.user_id, new_hash)
-        self._tokens.mark_used(record.id, used_at=datetime.now(UTC))
         self._tokens.invalidate_outstanding_for_user(record.user_id)
         self._tokens.revoke_all_sessions_for_user(record.user_id)
 
-        # Email for confirm response — fetch by scanning is awkward; store on record path.
-        # Repository get_by_token_hash already tied to user; callers may load email separately.
         email = self._resolve_email(record.user_id)
         return CompletePasswordResetResult(user_id=record.user_id, email=email)
 
     def _resolve_email(self, user_id: UUID) -> str:
-        # Prefer optional get_by_id on repo if present; fallback empty.
-        getter = getattr(self._users, "get_by_id", None)
-        if callable(getter):
-            user: AuthUserRecord | None = getter(user_id)
-            if user is not None:
-                return user.email
+        user: AuthUserRecord | None = self._users.get_by_id(user_id)
+        if user is not None:
+            return user.email
         return ""
 
 

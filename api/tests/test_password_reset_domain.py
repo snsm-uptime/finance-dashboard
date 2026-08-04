@@ -86,9 +86,9 @@ class FakeTokenRepo:
     def get_by_token_hash(self, token_hash: str) -> PasswordResetTokenRecord | None:
         return self.tokens.get(token_hash)
 
-    def mark_used(self, token_id: UUID, *, used_at: datetime) -> None:
+    def claim_token(self, token_id: UUID, *, used_at: datetime) -> bool:
         for key, token in list(self.tokens.items()):
-            if token.id == token_id:
+            if token.id == token_id and token.used_at is None:
                 self.tokens[key] = PasswordResetTokenRecord(
                     id=token.id,
                     user_id=token.user_id,
@@ -96,6 +96,8 @@ class FakeTokenRepo:
                     expires_at=token.expires_at,
                     used_at=used_at,
                 )
+                return True
+        return False
 
     def update_password_hash(self, user_id: UUID, password_hash: str) -> None:
         self.password_hashes[user_id] = password_hash
@@ -233,6 +235,36 @@ def test_complete_reset_rejects_expired_token() -> None:
         service.execute(CompletePasswordResetCommand(token=raw, new_password="new-password1"))
 
 
+def test_request_reset_second_request_invalidates_prior_token() -> None:
+    user = _user()
+    users = FakeAuthUserRepo()
+    users.add(user)
+    tokens = FakeTokenRepo()
+    mailer = FakeMailer()
+    service = RequestPasswordResetService(
+        users, tokens, mailer, public_app_url="http://localhost:3000"
+    )
+
+    service.execute(RequestPasswordResetCommand(email=user.email))
+    first_raw = mailer.sent[0].body_text.split("token=")[1].split()[0]
+    first_hash = hash_reset_token(first_raw)
+    assert tokens.get_by_token_hash(first_hash) is not None
+    assert tokens.get_by_token_hash(first_hash).used_at is None  # type: ignore[union-attr]
+
+    service.execute(RequestPasswordResetCommand(email=user.email))
+    second_raw = mailer.sent[1].body_text.split("token=")[1].split()[0]
+    second_hash = hash_reset_token(second_raw)
+
+    assert tokens.get_by_token_hash(first_hash).used_at is not None  # type: ignore[union-attr]
+    assert tokens.get_by_token_hash(second_hash) is not None
+    assert tokens.get_by_token_hash(second_hash).used_at is None  # type: ignore[union-attr]
+
+    with pytest.raises(InvalidResetTokenError):
+        CompletePasswordResetService(users, tokens, FakeHasher()).execute(
+            CompletePasswordResetCommand(token=first_raw, new_password="new-password1")
+        )
+
+
 def test_complete_reset_rejects_used_token() -> None:
     user = _user()
     users = FakeAuthUserRepo()
@@ -246,7 +278,7 @@ def test_complete_reset_rejects_used_token() -> None:
         token_hash=hash_reset_token(raw),
         expires_at=datetime.now(UTC) + RESET_TOKEN_TTL,
     )
-    tokens.mark_used(token_id, used_at=datetime.now(UTC))
+    assert tokens.claim_token(token_id, used_at=datetime.now(UTC)) is True
     service = CompletePasswordResetService(users, tokens, FakeHasher())
     with pytest.raises(InvalidResetTokenError):
         service.execute(CompletePasswordResetCommand(token=raw, new_password="new-password1"))
@@ -267,3 +299,22 @@ def test_complete_reset_rejects_short_password() -> None:
     service = CompletePasswordResetService(users, tokens, FakeHasher())
     with pytest.raises(InvalidResetPasswordError):
         service.execute(CompletePasswordResetCommand(token=raw, new_password="short"))
+
+
+def test_complete_reset_rejects_too_long_password() -> None:
+    user = _user()
+    users = FakeAuthUserRepo()
+    users.add(user)
+    tokens = FakeTokenRepo()
+    raw = "ok-token"
+    tokens.create_token(
+        token_id=uuid4(),
+        user_id=user.id,
+        token_hash=hash_reset_token(raw),
+        expires_at=datetime.now(UTC) + RESET_TOKEN_TTL,
+    )
+    service = CompletePasswordResetService(users, tokens, FakeHasher())
+    with pytest.raises(InvalidResetPasswordError):
+        service.execute(
+            CompletePasswordResetCommand(token=raw, new_password="x" * 257)
+        )

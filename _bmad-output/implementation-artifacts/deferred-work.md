@@ -31,3 +31,10 @@
 - Incomplete hexagonal ports for session create/resolve and hasher (routes import concrete adapters) — polish later
 - `Argon2PasswordHasher.verify` only caught `VerifyMismatchError` in the 1.2 merge (unused on signup; sign-in path owns hardening)
 - CASCADE `ondelete` from users→lists/memberships/sessions untested — no user-delete API yet
+
+## Deferred from: code review of 1-4-password-reset-via-email.md (2026-08-03)
+
+- Request-reset timing oracle (known email blocks on SMTP while unknown returns immediately) — client ack is identical; full constant-time padding is hardening beyond AC
+- Expired/used `password_reset_tokens` table retention/cleanup — no AC for pruning; ops housekeeping
+- `revoke_all_sessions_for_user` loads and deletes session rows one-by-one — fine for v1 peer households; bulk DELETE later
+- DATABASE_URL default-fallback removal bundled on this branch — Story 1.1 review fix, not introduced by password-reset logic

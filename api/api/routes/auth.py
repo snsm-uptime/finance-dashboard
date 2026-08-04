@@ -247,16 +247,18 @@ def request_password_reset(
     db: Session = Depends(get_db),
     settings: AuthSettings = Depends(get_auth_settings),
 ) -> PasswordResetRequestResponse | JSONResponse:
-    mailer = SmtpEmailSender(load_smtp_settings())
-    service = RequestPasswordResetService(
-        SqlAlchemyAuthUserRepository(db),
-        SqlAlchemyPasswordResetTokenRepository(db),
-        mailer,
-        public_app_url=settings.public_app_url,
-    )
     try:
+        mailer = SmtpEmailSender(load_smtp_settings())
+        service = RequestPasswordResetService(
+            SqlAlchemyAuthUserRepository(db),
+            SqlAlchemyPasswordResetTokenRepository(db),
+            mailer,
+            public_app_url=settings.public_app_url,
+        )
         service.execute(RequestPasswordResetCommand(email=body.email))
     except (SmtpConfigurationError, SmtpSendError) as exc:
+        # Persist-before-send: roll back staged token so SMTP failure is never "sent".
+        db.rollback()
         logger.error("password_reset_request_smtp_failed code=%s", type(exc).__name__)
         return _smtp_error_response(exc)
 

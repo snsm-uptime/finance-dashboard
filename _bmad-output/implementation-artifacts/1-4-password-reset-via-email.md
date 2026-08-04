@@ -4,7 +4,7 @@ baseline_commit: 7bb261ae288520fb1fdc32eb6c4395a69fabbecb
 
 # Story 1.4: Password reset via email
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -86,6 +86,27 @@ so that I can regain access without losing my account.
   - [x] Unknown-email request does not create an enumeration oracle (same client response as known email when SMTP would have been used for known)
   - [x] UI: smoke/critical tests for request + confirm forms / public route accessibility (test-after OK; keep 1.1 coverage floor)
   - [x] Do **not** require full Playwright every PR; no real PII; fixtures like `user@example.com`
+
+### Review Findings
+
+- [x] [Review][Patch] Persist reset token before SMTP send; on SMTP failure abort without commit so emailed links are always redeemable and failures stay loud [api/application/password_reset.py:117]
+- [x] [Review][Patch] Atomically claim token (`UPDATE … WHERE used_at IS NULL` / rowcount) before password replace to enforce single-use under concurrency [api/adapters/persistence/password_reset.py:65]
+- [x] [Review][Patch] `update_password_hash` must raise (not silent return) when the user row is missing [api/adapters/persistence/password_reset.py:70]
+- [x] [Review][Patch] Cap `new_password` max length (align with register `max_length=256`) in domain validation [api/domain/password_reset.py:33]
+- [x] [Review][Patch] Reject invalid SMTP port/timeout values loudly instead of silently coercing nonsense [api/adapters/email/settings.py:29]
+- [x] [Review][Patch] Add domain/application test that a second reset request invalidates the prior unused token [api/tests/test_password_reset_domain.py]
+- [x] [Review][Patch] Make SMTP adapter safe if a running event loop exists (`asyncio.run` footgun) [api/adapters/email/smtp.py:41]
+- [x] [Review][Patch] Never wrap unexpected mailer exceptions as `SmtpSendError(str(exc))` — keep operator message generic [api/application/password_reset.py:128]
+- [x] [Review][Patch] Call `AuthUserRepository.get_by_id` directly (drop getattr fallback) [api/application/password_reset.py:201]
+- [x] [Review][Patch] Remove dead `except SmtpConfigurationError` in SMTP send try-block [api/adapters/email/smtp.py:53]
+- [x] [Review][Patch] Drop redundant non-unique index on `token_hash` (UniqueConstraint already indexes) [api/adapters/persistence/migrations/versions/0003_password_reset_tokens.py]
+- [x] [Review][Patch] Give `InvalidResetPasswordError` a stable MESSAGE like sibling auth errors [api/domain/errors.py]
+- [x] [Review][Patch] HTML-escape the reset link when building `body_html` [api/application/password_reset.py:110]
+- [x] [Review][Patch] Integration-test real empty `SMTP_HOST`/`SMTP_FROM` path via `SmtpEmailSender`, not only fake mailer exceptions [api/tests/test_password_reset_integration.py]
+- [x] [Review][Defer] Request-reset timing oracle (known email blocks on SMTP) — deferred, pre-existing hardening pattern beyond AC client-visible ack
+- [x] [Review][Defer] Expired/used `password_reset_tokens` retention cleanup job — deferred, pre-existing / ops housekeeping
+- [x] [Review][Defer] `revoke_all_sessions_for_user` bulk DELETE instead of per-row delete — deferred, pre-existing perf polish
+- [x] [Review][Defer] DATABASE_URL default-fallback removal bundled in this branch — deferred, Story 1.1 review fix / not caused by reset logic
 
 ## Dev Notes
 
@@ -347,8 +368,9 @@ Cursor Grok 4.5 (bmad-dev-story)
 ### Change Log
 
 - 2026-08-03: Implemented password reset via SMTP (FR-3 / NFR-10) with hashed single-use tokens, fail-loud SMTP, public forgot/confirm UI, and tests.
+- 2026-08-03: Code-review Chunk A patches applied (persist-before-send + rollback, atomic token claim, SMTP validation, password max length, tests).
 
 ## Story completion status
 
-Status: review  
-Completion note: All ACs and tasks satisfied — ready for code-review.
+Status: done  
+Completion note: Chunk A code-review patches applied (persist-before-send + rollback, atomic token claim, SMTP validation, password max length, tests). Chunks B/C optional follow-up reviews.

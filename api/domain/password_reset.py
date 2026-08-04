@@ -11,6 +11,7 @@ from domain.signup import MIN_PASSWORD_LEN, is_valid_email_shape, normalize_emai
 
 RESET_TOKEN_TTL = timedelta(hours=1)
 RESET_TOKEN_BYTES = 32
+MAX_PASSWORD_LEN = 256
 
 
 def hash_reset_token(raw_token: str) -> str:
@@ -32,4 +33,6 @@ def validate_reset_request_email(email: str) -> str:
 
 def validate_new_password(password: str) -> None:
     if len(password) < MIN_PASSWORD_LEN:
-        raise InvalidResetPasswordError("Password must be at least 8 characters.")
+        raise InvalidResetPasswordError(InvalidResetPasswordError.MESSAGE)
+    if len(password) > MAX_PASSWORD_LEN:
+        raise InvalidResetPasswordError("Password must be at most 256 characters.")
