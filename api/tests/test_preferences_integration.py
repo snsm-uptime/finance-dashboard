@@ -140,9 +140,7 @@ def test_patch_partial_preserves_other_field(client: TestClient, db_session: Ses
     assert theme_only.json()["language"] == "en"
     assert theme_only.json()["theme"] == "light"
 
-    row = db_session.scalar(
-        select(UserModel).where(UserModel.email == "prefs-partial@example.com")
-    )
+    row = db_session.scalar(select(UserModel).where(UserModel.email == "prefs-partial@example.com"))
     assert row is not None
     assert row.language == "en"
     assert row.theme == "light"

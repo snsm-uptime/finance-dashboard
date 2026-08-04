@@ -35,9 +35,7 @@ def test_get_me_logs_corrupt_language(caplog) -> None:  # noqa: ANN001
         )
     )
     with caplog.at_level("WARNING"):
-        result = GetMePreferencesService(repo).execute(
-            GetMePreferencesCommand(user_id=user_id)
-        )
+        result = GetMePreferencesService(repo).execute(GetMePreferencesCommand(user_id=user_id))
     assert result.language is None
     assert result.theme == "dark"
     assert any("corrupt_user_language_preference" in r.message for r in caplog.records)
