@@ -4,8 +4,16 @@
   font-family: var(--font-ui), system-ui, sans-serif;
 }
 
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
 .brand {
-  margin: 0 0 0.5rem;
+  margin: 0;
   font-family: var(--font-brand), Georgia, serif;
   font-size: 1.25rem;
   font-weight: 600;
@@ -18,8 +26,18 @@
 }
 
 .copy {
-  margin: 0;
+  margin: 0 0 1rem;
   max-width: 36rem;
   color: var(--muted);
   line-height: 1.5;
+}
+
+.link {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.link:hover {
+  text-decoration: underline;
 }

@@ -1,6 +1,10 @@
+---
+baseline_commit: 62587638fec505a0f5c57db93341808693f47f1b
+---
+
 # Story 1.3: Sign in, sign out, and protect routes
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -26,47 +30,47 @@ so that only I can access my lists and uploads while signed in.
 
 ## Tasks / Subtasks
 
-- [ ] Task 0: Confirm Stories 1.1 + 1.2 are implemented (prerequisites)
-  - [ ] 1.1: Compose + hex + health + lockfiles
-  - [ ] 1.2: users/lists/membership (+ session if opaque), argon2 hashes, signup register route, httpOnly Secure cookie, standalone signup UI, AD-8 forks documented in 1.2 completion notes
-  - [ ] If either is incomplete: stop — finish those stories first (do not invent a parallel auth stack on this branch)
+- [x] Task 0: Confirm Stories 1.1 + 1.2 are implemented (prerequisites)
+  - [x] 1.1: Compose + hex + health + lockfiles
+  - [x] 1.2: users/lists/membership (+ session if opaque), argon2 hashes, signup register route, httpOnly Secure cookie, standalone signup UI, AD-8 forks documented in 1.2 completion notes
+  - [x] If either is incomplete: stop — finish those stories first (do not invent a parallel auth stack on this branch)
 
-- [ ] Task 1: Reuse AD-8 contract from 1.2 (AC: #1, #3) — do not re-decide forks
-  - [ ] Read 1.2 completion notes for: library, JWT vs opaque, BFF vs proxy, cookie name, session secret env var
-  - [ ] Same cookie issuer, flags (`HttpOnly`, `Secure` in prod, `SameSite`, `Path=/`), and hasher — never expose session to JS
-  - [ ] **Forbidden:** Bearer in `localStorage`; Better Auth / Lucia / NextAuth; dual independent cookies; `NEXT_PUBLIC_*` secrets; second session system alongside 1.2
+- [x] Task 1: Reuse AD-8 contract from 1.2 (AC: #1, #3) — do not re-decide forks
+  - [x] Read 1.2 completion notes for: library, JWT vs opaque, BFF vs proxy, cookie name, session secret env var
+  - [x] Same cookie issuer, flags (`HttpOnly`, `Secure` in prod, `SameSite`, `Path=/`), and hasher — never expose session to JS
+  - [x] **Forbidden:** Bearer in `localStorage`; Better Auth / Lucia / NextAuth; dual independent cookies; `NEXT_PUBLIC_*` secrets; second session system alongside 1.2
 
-- [ ] Task 2: Sign-in API (AC: #1, #2)
-  - [ ] `POST` sign-in endpoint on `api` (via `/api/auth/sign-in` or equivalent under the chosen BFF/proxy mount) accepting email + password
-  - [ ] Verify against argon2 hash from 1.2 user row; on success issue/refresh session cookie (same cookie name/issuer as signup)
-  - [ ] On any failure (unknown email, bad password, malformed body): return **same generic** error shape/message — no email-existence oracle, no different status that leaks existence
-  - [ ] Never log plaintext passwords; keep structured logs free of credential material
-  - [ ] Domain/application owns credential check; ORM models stay under `adapters/persistence`; routes/DTOs/cookie edge in `api/api/` (AD-1)
+- [x] Task 2: Sign-in API (AC: #1, #2)
+  - [x] `POST` sign-in endpoint on `api` (via `/api/auth/sign-in` or equivalent under the chosen BFF/proxy mount) accepting email + password
+  - [x] Verify against argon2 hash from 1.2 user row; on success issue/refresh session cookie (same cookie name/issuer as signup)
+  - [x] On any failure (unknown email, bad password, malformed body): return **same generic** error shape/message — no email-existence oracle, no different status that leaks existence
+  - [x] Never log plaintext passwords; keep structured logs free of credential material
+  - [x] Domain/application owns credential check; ORM models stay under `adapters/persistence`; routes/DTOs/cookie edge in `api/api/` (AD-1)
 
-- [ ] Task 3: Sign-out API (AC: #3)
-  - [ ] `POST` sign-out clears the session cookie **and** revokes server session (delete/invalidate opaque session row — JWT-only clear-cookie without revoke is insufficient if opaque sessions exist)
-  - [ ] After sign-out, `GET` current-user / protected api routes return 401 Unauthorized
-  - [ ] Idempotent: signing out when already signed out is safe (200/204 with cleared cookie)
+- [x] Task 3: Sign-out API (AC: #3)
+  - [x] `POST` sign-out clears the session cookie **and** revokes server session (delete/invalidate opaque session row — JWT-only clear-cookie without revoke is insufficient if opaque sessions exist)
+  - [x] After sign-out, `GET` current-user / protected api routes return 401 Unauthorized
+  - [x] Idempotent: signing out when already signed out is safe (200/204 with cleared cookie)
 
-- [ ] Task 4: Protect API + UI routes (AC: #3)
-  - [ ] **API:** any list/upload (and other authenticated) handlers require a valid session; unauthenticated → 401. Membership ACL (AD-19) is Epic 2 — here only **authentication** gate
-  - [ ] **UI:** gate authenticated app surfaces (lists homepage / last-opened list, upload entry, Account chrome that assumes signed-in). Public: `/sign-in`, `/sign-up` (1.2), `/health`, and later reset routes (1.4)
-  - [ ] Next.js 16: use **`proxy.ts`** (middleware rename) for coarse cookie-presence redirect to `/sign-in`; **also** verify session in server layouts/route handlers/BFF — proxy alone is not auth
-  - [ ] Unauthenticated visit to protected path → redirect to sign-in (optional `returnTo` / callback query for post-login bounce)
-  - [ ] Signed-in visit to `/sign-in` → redirect to first-paint landing (remembered last-opened list if present; else lists homepage per UX-DR9) — stub lists page OK if Epic 2 not built
+- [x] Task 4: Protect API + UI routes (AC: #3)
+  - [x] **API:** any list/upload (and other authenticated) handlers require a valid session; unauthenticated → 401. Membership ACL (AD-19) is Epic 2 — here only **authentication** gate
+  - [x] **UI:** gate authenticated app surfaces (lists homepage / last-opened list, upload entry, Account chrome that assumes signed-in). Public: `/sign-in`, `/signup` (1.2), `/health`, and later reset routes (1.4)
+  - [x] Next.js 16: use **`proxy.ts`** (middleware rename) for coarse cookie-presence redirect to `/sign-in`; **also** verify session in server layouts/route handlers/BFF — proxy alone is not auth
+  - [x] Unauthenticated visit to protected path → redirect to sign-in (optional `returnTo` / callback query for post-login bounce)
+  - [x] Signed-in visit to `/sign-in` → redirect to first-paint landing (remembered last-opened list if present; else lists homepage per UX-DR9) — stub lists page OK if Epic 2 not built
 
-- [ ] Task 5: Minimal sign-in UI (AC: #1, #2)
-  - [ ] Standalone `/sign-in` page (no dedicated UX mock — spine-only): email + password + submit; clear+calm generic error on failure (EXPERIENCE error voice)
-  - [ ] Submit via same-origin BFF/proxy only — **never** `fetch` to a browser-exposed API with tokens stored client-side
-  - [ ] Neutral shell OK (Warm Balance full tokens = 3.1); no kit purple/brand defaults (AD-12)
-  - [ ] Sign-out control: minimal button/link reachable while signed in (Account menu chrome lands in 1.6 — a bare “Sign out” affordance is enough here to satisfy AC #3)
-  - [ ] Prefer i18n key stubs for chrome/errors (EN strings fine if 1.6 wires ES) — avoid hardcoding that blocks bilingual later
+- [x] Task 5: Minimal sign-in UI (AC: #1, #2)
+  - [x] Standalone `/sign-in` page (no dedicated UX mock — spine-only): email + password + submit; clear+calm generic error on failure (EXPERIENCE error voice)
+  - [x] Submit via same-origin BFF/proxy only — **never** `fetch` to a browser-exposed API with tokens stored client-side
+  - [x] Neutral shell OK (Warm Balance full tokens = 3.1); no kit purple/brand defaults (AD-12)
+  - [x] Sign-out control: minimal button/link reachable while signed in (Account menu chrome lands in 1.6 — a bare “Sign out” affordance is enough here to satisfy AC #3)
+  - [x] Prefer i18n key stubs for chrome/errors (EN strings fine if 1.6 wires ES) — avoid hardcoding that blocks bilingual later
 
-- [ ] Task 6: Tests (AC: #1–#3)
-  - [ ] API pytest: valid sign-in sets session cookie; invalid credentials → generic error (assert same message for unknown email vs bad password); sign-out clears/revokes; protected endpoint 401 after sign-out
-  - [ ] Integration against **Postgres 16** (Compose `db`) — not SQLite stand-in
-  - [ ] UI: critical test that protected route redirects when unauthenticated; sign-in form shows generic error (test-after OK; respect 1.1 coverage floor)
-  - [ ] Do **not** require full Playwright every PR
+- [x] Task 6: Tests (AC: #1–#3)
+  - [x] API pytest: valid sign-in sets session cookie; invalid credentials → generic error (assert same message for unknown email vs bad password); sign-out clears/revokes; protected endpoint 401 after sign-out
+  - [x] Integration against **Postgres 16** (Compose `db`) — not SQLite stand-in
+  - [x] UI: critical test that protected route redirects when unauthenticated; sign-in form shows generic error (test-after OK; respect 1.1 coverage floor)
+  - [x] Do **not** require full Playwright every PR
 
 ## Dev Notes
 
@@ -248,15 +252,59 @@ Recent commits are planning/BMAD artifacts only. **No application auth code on `
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Cursor Grok 4.5 (bmad-dev-story)
 
 ### Debug Log References
 
+- Domain: `uv run pytest tests/test_signin_domain.py` — green
+- Integration (Compose network → Postgres 16): 25 pytest passed incl. signup + sign-in/out
+- Ruff check/format — green
+- UI: `npm test` 21 passed; `test:coverage` statements ~94% (≥60%); typecheck + eslint green
+
 ### Completion Notes List
+
+- Reused 1.2 AD-8 contract: custom argon2-cffi, opaque `fh_session` cookie, api single issuer, Next BFF at `/api/auth/*`.
+- Added `SignInService` + `InvalidCredentialsError` (identical message for unknown email / bad password / empty body).
+- `POST /auth/sign-in`, `POST /auth/sign-out` (204 + revoke), `GET /auth/me` via `require_authenticated_user`.
+- UI: `/sign-in`, BFF sign-in/out, `proxy.ts` coarse gate, server `fetchSession` on `/lists` + `/upload`, bare `SignOutButton`.
+- No new auth libraries; no Bearer/localStorage; membership ACL deferred to Epic 2.
 
 ### File List
 
+- `api/domain/errors.py`
+- `api/application/signin.py`
+- `api/adapters/persistence/repositories.py`
+- `api/adapters/persistence/sessions.py`
+- `api/api/deps.py`
+- `api/api/routes/auth.py`
+- `api/api/schemas/auth.py`
+- `api/pyproject.toml`
+- `api/tests/test_signin_domain.py`
+- `api/tests/test_signin_integration.py`
+- `ui/proxy.ts`
+- `ui/proxy.test.ts`
+- `ui/app/sign-in/page.tsx`
+- `ui/app/sign-in/SignInForm.tsx`
+- `ui/app/api/auth/sign-in/route.ts`
+- `ui/app/api/auth/sign-in/route.test.ts`
+- `ui/app/api/auth/sign-out/route.ts`
+- `ui/app/api/auth/sign-out/route.test.ts`
+- `ui/app/lists/page.tsx`
+- `ui/app/lists/lists.module.css`
+- `ui/app/upload/page.tsx`
+- `ui/app/page.tsx`
+- `ui/components/SignOutButton.tsx`
+- `ui/components/SignOutButton.module.css`
+- `ui/lib/i18n/signin.ts`
+- `ui/lib/i18n/signin.test.ts`
+- `_bmad-output/implementation-artifacts/1-3-sign-in-sign-out-and-protect-routes.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+
+### Change Log
+
+- 2026-08-04: Implemented sign-in/sign-out, route protection (`proxy.ts` + server gates), and tests — story ready for review.
+
 ## Story completion status
 
-Status: ready-for-dev  
-Completion note: Ultimate context engine analysis completed — comprehensive developer guide created.
+Status: review  
+Completion note: All ACs and tasks complete; ready for code-review.

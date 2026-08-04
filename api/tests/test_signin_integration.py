@@ -1,0 +1,178 @@
+"""Postgres integration tests for sign-in / sign-out (Story 1.3).
+
+Requires DATABASE_URL (Compose db or CI Postgres 16). Skips when unset.
+"""
+
+from __future__ import annotations
+
+import os
+from collections.abc import Iterator
+
+import pytest
+from adapters.persistence.models import SessionModel
+from api.app import create_app
+from api.deps import get_db
+from domain.errors import InvalidCredentialsError
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, select
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session, sessionmaker
+
+
+def _database_url() -> str | None:
+    return (os.environ.get("DATABASE_URL") or "").strip() or None
+
+
+pytestmark = pytest.mark.skipif(
+    _database_url() is None,
+    reason="DATABASE_URL not set — Postgres 16 required for integration tests",
+)
+
+
+@pytest.fixture(scope="module")
+def engine() -> Iterator[Engine]:
+    url = _database_url()
+    assert url is not None
+    eng = create_engine(url, pool_pre_ping=True)
+    from alembic import command
+    from alembic.config import Config
+
+    cfg = Config("alembic.ini")
+    cfg.set_main_option("sqlalchemy.url", url)
+    command.upgrade(cfg, "head")
+    yield eng
+    eng.dispose()
+
+
+@pytest.fixture
+def db_session(engine: Engine) -> Iterator[Session]:
+    connection = engine.connect()
+    transaction = connection.begin()
+    session = sessionmaker(bind=connection, autoflush=False, autocommit=False)()
+    try:
+        yield session
+    finally:
+        session.close()
+        transaction.rollback()
+        connection.close()
+
+
+@pytest.fixture
+def client(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
+    monkeypatch.setenv("SESSION_SECRET", "test-session-secret-not-for-prod")
+    monkeypatch.setenv("SESSION_COOKIE_SECURE", "false")
+    monkeypatch.setenv("EMAIL_VERIFICATION_REQUIRED", "false")
+    monkeypatch.setenv("SESSION_COOKIE_NAME", "fh_session")
+
+    app = create_app()
+
+    def _override_db() -> Iterator[Session]:
+        try:
+            yield db_session
+            db_session.flush()
+        except Exception:
+            db_session.rollback()
+            raise
+
+    app.dependency_overrides[get_db] = _override_db
+    with TestClient(app) as test_client:
+        yield test_client
+    app.dependency_overrides.clear()
+
+
+def _register(client: TestClient, email: str, password: str = "password1") -> None:
+    response = client.post("/auth/register", json={"email": email, "password": password})
+    assert response.status_code == 201, response.text
+    # Clear jar so subsequent sign-in is a fresh session (register already set a cookie).
+    client.cookies.clear()
+
+
+def test_sign_in_sets_session_cookie(client: TestClient, db_session: Session) -> None:
+    _register(client, "signin@example.com")
+
+    response = client.post(
+        "/auth/sign-in",
+        json={"email": "SignIn@Example.com", "password": "password1"},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["email"] == "signin@example.com"
+    assert "password" not in body
+    assert "fh_session" in response.cookies
+    cookie = response.cookies["fh_session"]
+    row = db_session.scalar(select(SessionModel).where(SessionModel.token == cookie))
+    assert row is not None
+
+
+def test_sign_in_invalid_credentials_are_generic(client: TestClient) -> None:
+    _register(client, "known@example.com")
+
+    unknown = client.post(
+        "/auth/sign-in",
+        json={"email": "ghost@example.com", "password": "password1"},
+    )
+    bad = client.post(
+        "/auth/sign-in",
+        json={"email": "known@example.com", "password": "wrong-password"},
+    )
+    empty = client.post(
+        "/auth/sign-in",
+        json={"email": "", "password": ""},
+    )
+
+    assert unknown.status_code == 401
+    assert bad.status_code == 401
+    assert empty.status_code == 401
+    assert unknown.json() == bad.json() == empty.json()
+    assert unknown.json()["code"] == "invalid_credentials"
+    assert unknown.json()["detail"] == InvalidCredentialsError.MESSAGE
+    assert "fh_session" not in unknown.cookies
+
+
+def test_sign_out_revokes_session_and_protects_me(client: TestClient, db_session: Session) -> None:
+    _register(client, "logout@example.com")
+    signed_in = client.post(
+        "/auth/sign-in",
+        json={"email": "logout@example.com", "password": "password1"},
+    )
+    assert signed_in.status_code == 200
+    token = signed_in.cookies["fh_session"]
+    assert db_session.scalar(select(SessionModel).where(SessionModel.token == token)) is not None
+
+    me_before = client.get("/auth/me")
+    assert me_before.status_code == 200
+
+    signed_out = client.post("/auth/sign-out")
+    assert signed_out.status_code == 204
+
+    assert db_session.scalar(select(SessionModel).where(SessionModel.token == token)) is None
+
+    me_after = client.get("/auth/me")
+    assert me_after.status_code == 401
+    session_after = client.get("/auth/session")
+    assert session_after.status_code == 401
+
+
+def test_sign_out_is_idempotent(client: TestClient) -> None:
+    first = client.post("/auth/sign-out")
+    second = client.post("/auth/sign-out")
+    assert first.status_code == 204
+    assert second.status_code == 204
+
+
+def test_sign_in_password_never_logged(
+    client: TestClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    _register(client, "logsignin@example.com", password="super-secret-pass")
+    with caplog.at_level("INFO"):
+        client.post(
+            "/auth/sign-in",
+            json={"email": "logsignin@example.com", "password": "super-secret-pass"},
+        )
+    joined = " ".join(r.message for r in caplog.records)
+    assert "super-secret-pass" not in joined
+
+
+def test_me_requires_authentication(client: TestClient) -> None:
+    response = client.get("/auth/me")
+    assert response.status_code == 401

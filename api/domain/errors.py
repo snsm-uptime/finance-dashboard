@@ -11,3 +11,12 @@ class DuplicateEmailError(DomainError):
 
 class InvalidSignupError(DomainError):
     """Raised when signup input fails validation."""
+
+
+class InvalidCredentialsError(DomainError):
+    """Raised for any failed sign-in — never distinguish unknown email vs bad password."""
+
+    MESSAGE = "Invalid email or password."
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)

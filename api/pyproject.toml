@@ -33,6 +33,7 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.per-file-ignores]
 "api/routes/*.py" = ["B008"]
+"api/deps.py" = ["B008"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
