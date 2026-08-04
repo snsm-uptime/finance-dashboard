@@ -31,7 +31,7 @@ so that I see settle-up context immediately instead of a blank home.
   - [ ] **1.2** User + List + ListMembership; argon2; session cookie issuer; personal list at signup (FR-5)
   - [ ] **1.3** Sign-in / sign-out / `me`; protected routes; same-origin BFF/proxy; generic auth errors; public allowlist for invite deep links
   - [ ] **1.4** SMTP adapter + email port + `PUBLIC_APP_URL` + hashed single-use token discipline — **reuse patterns; do not create a second token crypto stack**
-  - [ ] **1.5 Soft couple:** when `EMAIL_VERIFICATION_REQUIRED` is on, call the 1.5 `ensure_email_verified` / gated-flow port **before** creating membership on accept; when off/absent, accept proceeds without verify
+  - [ ] **1.5 Soft couple:** when `EMAIL_VERIFICATION_REQUIRED` is on, call the 1.5 `ensure_email_verified` / gated-flow port **before** creating membership on accept; when off/absent, accept proceeds without verify — authoritative: [`invite-verify-gate-contract.md`](./invite-verify-gate-contract.md)
   - [ ] **2.1** Owned lists + durable owner/creator
   - [ ] **2.2** Lists homepage + list detail shell + membership ACL + first-paint router with **invite deep-link hook** (must not force Lists homepage after invitee signup)
   - [ ] **2.3** Invite send + `list_invite_token` persistence + join/signup email templates + documented deep-link URLs — **this story consumes those tokens; does not re-issue send**
