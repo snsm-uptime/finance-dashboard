@@ -44,3 +44,15 @@
 - No per-user throttle on `POST /auth/verify/request` SMTP send — same hardening class as register/reset rate limits
 - `claim_token` atomic UPDATE does not re-check `expires_at` — mirrors password-reset token claim pattern from 1.4
 - Request/send vs concurrent confirm can email a dead (already-invalidated) link — rare race; persist-then-send family shared with 1.4
+
+## Deferred from: code review of 1-6-account-menu-language-en-es-and-theme.md (2026-08-03)
+
+- DB CHECK constraints on `users.language`/`theme` — API validates allowed values; defense-in-depth beyond story AC
+- AbortSignal / fetch timeouts on BFF and client prefs requests — hardening beyond story scope; same class as other BFF routes
+
+## Deferred from: code review of 1-6-account-menu-language-en-es-and-theme.md API chunk re-review (2026-08-03)
+
+- Dead API Accept-Language helpers on HTTP path after UI-owned defaults — retained for domain unit tests / possible future consumers
+- Unauthenticated `/me` 401 shape mismatch (HTTPException string detail vs JSON `code`) — pre-existing `require_authenticated_user` pattern
+- Application-layer unit tests for GetMe/UpdatePreferences services — domain + Postgres integration cover the path when DATABASE_URL is set
+- Split PreferencesRepository port from SqlAlchemyAuthUserRepository concrete — architecture polish beyond story scope

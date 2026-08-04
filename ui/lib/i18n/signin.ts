@@ -1,5 +1,6 @@
 /** Sign-in copy — EN/ES keys (Account prefs = Story 1.6). */
-export type Locale = "en" | "es";
+export type { Locale } from "@/lib/i18n/locale";
+export { detectLocale } from "@/lib/i18n/locale";
 
 export const signInMessages = {
   en: {
@@ -36,9 +37,3 @@ export const signInMessages = {
 } as const;
 
 export type SignInMessageKey = keyof (typeof signInMessages)["en"];
-
-export function detectLocale(acceptLanguage: string | null): Locale {
-  if (!acceptLanguage) return "en";
-  const primary = acceptLanguage.split(",")[0]?.trim().toLowerCase() ?? "en";
-  return primary.startsWith("es") ? "es" : "en";
-}

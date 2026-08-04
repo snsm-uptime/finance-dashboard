@@ -33,12 +33,19 @@ from application.password_reset import (
     RequestPasswordResetCommand,
     RequestPasswordResetService,
 )
+from application.preferences import (
+    GetMePreferencesCommand,
+    GetMePreferencesService,
+    UpdatePreferencesCommand,
+    UpdatePreferencesService,
+)
 from application.signin import SignInCommand, SignInService
 from application.signup import SignupCommand, SignUpService
 from domain.errors import (
     DuplicateEmailError,
     EmailNotVerifiedError,
     InvalidCredentialsError,
+    InvalidPreferencesError,
     InvalidResetPasswordError,
     InvalidResetTokenError,
     InvalidSignupError,
@@ -55,10 +62,12 @@ from sqlalchemy.orm import Session
 from api.deps import get_auth_settings, get_db, get_password_hasher, require_authenticated_user
 from api.schemas.auth import (
     GatedFlowStubResponse,
+    MeResponse,
     PasswordResetConfirmBody,
     PasswordResetConfirmResponse,
     PasswordResetRequestBody,
     PasswordResetRequestResponse,
+    PatchMeBody,
     RegisterRequest,
     RegisterResponse,
     SessionResponse,
@@ -142,10 +151,65 @@ def session_status(
     return SessionResponse(authenticated=True, user_id=user_id)
 
 
-@router.get("/me", response_model=SessionResponse)
-def current_user(user_id: uuid.UUID = Depends(require_authenticated_user)) -> SessionResponse:
-    """Protected current-user probe (auth gate for list/upload APIs to reuse)."""
-    return SessionResponse(authenticated=True, user_id=user_id)
+@router.get("/me", response_model=MeResponse)
+def current_user(
+    db: Session = Depends(get_db),
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+) -> MeResponse | JSONResponse:
+    """Current account + stored language/theme (null when unset)."""
+    try:
+        result = GetMePreferencesService(SqlAlchemyAuthUserRepository(db)).execute(
+            GetMePreferencesCommand(user_id=user_id)
+        )
+    except PrincipalNotFoundError:
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"detail": "Not authenticated.", "code": "unauthenticated"},
+        )
+    return MeResponse(
+        authenticated=True,
+        user_id=result.user_id,
+        email=result.email,
+        language=result.language,
+        theme=result.theme,
+    )
+
+
+@router.patch("/me", response_model=MeResponse)
+def patch_current_user(
+    body: PatchMeBody,
+    db: Session = Depends(get_db),
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+) -> MeResponse | JSONResponse:
+    """Persist language/theme on the account (source of truth — not device-only)."""
+    wrote = body.language is not None or body.theme is not None
+    try:
+        result = UpdatePreferencesService(SqlAlchemyAuthUserRepository(db)).execute(
+            UpdatePreferencesCommand(
+                user_id=user_id,
+                language=body.language,
+                theme=body.theme,
+            )
+        )
+    except InvalidPreferencesError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"detail": str(exc), "code": "invalid_preferences"},
+        )
+    except PrincipalNotFoundError:
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"detail": "Not authenticated.", "code": "unauthenticated"},
+        )
+    if wrote:
+        logger.info("user_preferences_updated user_id=%s", user_id)
+    return MeResponse(
+        authenticated=True,
+        user_id=result.user_id,
+        email=result.email,
+        language=result.language,
+        theme=result.theme,
+    )
 
 
 @router.post(

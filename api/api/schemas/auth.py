@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -32,6 +33,19 @@ class SignInResponse(BaseModel):
 class SessionResponse(BaseModel):
     authenticated: bool
     user_id: UUID
+
+
+class MeResponse(BaseModel):
+    authenticated: bool = True
+    user_id: UUID
+    email: str
+    language: str | None = None
+    theme: str | None = None
+
+
+class PatchMeBody(BaseModel):
+    language: Literal["en", "es"] | None = None
+    theme: Literal["light", "dark", "system"] | None = None
 
 
 class PasswordResetRequestBody(BaseModel):
