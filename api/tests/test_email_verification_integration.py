@@ -286,3 +286,72 @@ def test_verify_request_requires_auth(client: TestClient) -> None:
     client.cookies.clear()
     response = client.post("/auth/verify/request")
     assert response.status_code == 401
+
+
+def test_claim_token_rejects_expired_unused_row(db_session: Session) -> None:
+    """SQL claim must re-check expires_at (Story 1.5.1) — not used_at alone."""
+    from datetime import UTC, datetime, timedelta
+    from uuid import uuid4
+
+    from adapters.persistence.email_verification import SqlAlchemyEmailVerificationRepository
+    from adapters.persistence.password_hasher import Argon2PasswordHasher
+
+    user_id = uuid4()
+    db_session.add(
+        UserModel(
+            id=user_id,
+            email="claim-expired-verify@example.com",
+            password_hash=Argon2PasswordHasher().hash("password1"),
+        )
+    )
+    db_session.flush()
+
+    token_id = uuid4()
+    repo = SqlAlchemyEmailVerificationRepository(db_session)
+    repo.create_token(
+        token_id=token_id,
+        user_id=user_id,
+        token_hash=hash_verification_token("expired-raw"),
+        expires_at=datetime.now(UTC) - timedelta(minutes=1),
+    )
+    db_session.flush()
+
+    assert repo.claim_token(token_id, used_at=datetime.now(UTC)) is False
+    row = db_session.get(EmailVerificationTokenModel, token_id)
+    assert row is not None
+    assert row.used_at is None
+    assert repo.get_user_verified_at(user_id) is None
+
+
+def test_claim_token_succeeds_for_valid_unused_row(db_session: Session) -> None:
+    from datetime import UTC, datetime, timedelta
+    from uuid import uuid4
+
+    from adapters.persistence.email_verification import SqlAlchemyEmailVerificationRepository
+    from adapters.persistence.password_hasher import Argon2PasswordHasher
+
+    user_id = uuid4()
+    db_session.add(
+        UserModel(
+            id=user_id,
+            email="claim-valid-verify@example.com",
+            password_hash=Argon2PasswordHasher().hash("password1"),
+        )
+    )
+    db_session.flush()
+
+    token_id = uuid4()
+    repo = SqlAlchemyEmailVerificationRepository(db_session)
+    repo.create_token(
+        token_id=token_id,
+        user_id=user_id,
+        token_hash=hash_verification_token("valid-raw"),
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
+    )
+    db_session.flush()
+
+    used_at = datetime.now(UTC)
+    assert repo.claim_token(token_id, used_at=used_at) is True
+    row = db_session.get(EmailVerificationTokenModel, token_id)
+    assert row is not None
+    assert row.used_at is not None
