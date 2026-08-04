@@ -50,3 +50,22 @@ class PasswordResetConfirmBody(BaseModel):
 class PasswordResetConfirmResponse(BaseModel):
     detail: str = "Password updated. You can sign in with your new password."
     user_id: UUID | None = None
+
+
+class VerifyRequestResponse(BaseModel):
+    detail: str = "Check your inbox for a verification link."
+    already_verified: bool = False
+
+
+class VerifyConfirmBody(BaseModel):
+    token: str = ""
+
+
+class VerifyConfirmResponse(BaseModel):
+    detail: str = "Email verified. You can continue with gated actions."
+    user_id: UUID | None = None
+
+
+class GatedFlowStubResponse(BaseModel):
+    detail: str = "Gated flow allowed."
+    user_id: UUID

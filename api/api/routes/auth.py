@@ -1,4 +1,4 @@
-"""Auth routes — register, sign-in/out, password-reset (AD-8 cookies)."""
+"""Auth routes — register, sign-in/out, password-reset, email verification (AD-8 cookies)."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import logging
 import uuid
 
 from adapters.email import SmtpEmailSender, load_smtp_settings
+from adapters.persistence.email_verification import SqlAlchemyEmailVerificationRepository
 from adapters.persistence.password_hasher import Argon2PasswordHasher
 from adapters.persistence.password_reset import SqlAlchemyPasswordResetTokenRepository
 from adapters.persistence.repositories import (
@@ -18,6 +19,14 @@ from adapters.persistence.sessions import (
     revoke_all_sessions_for_user,
     revoke_session,
 )
+from application.email_verification import (
+    ConfirmEmailVerificationCommand,
+    ConfirmEmailVerificationService,
+    EnsureEmailVerifiedCommand,
+    EnsureEmailVerifiedService,
+    RequestEmailVerificationCommand,
+    RequestEmailVerificationService,
+)
 from application.password_reset import (
     CompletePasswordResetCommand,
     CompletePasswordResetService,
@@ -28,12 +37,16 @@ from application.signin import SignInCommand, SignInService
 from application.signup import SignupCommand, SignUpService
 from domain.errors import (
     DuplicateEmailError,
+    EmailNotVerifiedError,
     InvalidCredentialsError,
     InvalidResetPasswordError,
     InvalidResetTokenError,
     InvalidSignupError,
+    InvalidVerificationTokenError,
+    PrincipalNotFoundError,
     SmtpConfigurationError,
     SmtpSendError,
+    VerificationNotRequiredError,
 )
 from fastapi import APIRouter, Depends, Request, Response, status
 from fastapi.responses import JSONResponse
@@ -41,6 +54,7 @@ from sqlalchemy.orm import Session
 
 from api.deps import get_auth_settings, get_db, get_password_hasher, require_authenticated_user
 from api.schemas.auth import (
+    GatedFlowStubResponse,
     PasswordResetConfirmBody,
     PasswordResetConfirmResponse,
     PasswordResetRequestBody,
@@ -50,6 +64,9 @@ from api.schemas.auth import (
     SessionResponse,
     SignInRequest,
     SignInResponse,
+    VerifyConfirmBody,
+    VerifyConfirmResponse,
+    VerifyRequestResponse,
 )
 from api.settings import AuthSettings
 
@@ -60,6 +77,9 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 _SESSION_MAX_AGE = 60 * 60 * 24 * 30
 _GENERIC_CREDENTIALS_CODE = "invalid_credentials"
 _RESET_ACK = PasswordResetRequestResponse().detail
+_VERIFY_ACK = VerifyRequestResponse().detail
+_VERIFY_ALREADY = "Email is already verified."
+_VERIFY_NOT_REQUIRED = VerificationNotRequiredError.MESSAGE
 
 
 def _set_session_cookie(response: Response, settings: AuthSettings, token: str) -> None:
@@ -169,6 +189,29 @@ def register(
                 "code": "duplicate_email",
             },
         )
+
+    if settings.email_verification_required:
+        try:
+            mailer = SmtpEmailSender(load_smtp_settings())
+            RequestEmailVerificationService(
+                SqlAlchemyAuthUserRepository(db),
+                SqlAlchemyEmailVerificationRepository(db),
+                mailer,
+                public_app_url=settings.public_app_url,
+            ).execute(
+                RequestEmailVerificationCommand(
+                    user_id=result.user_id,
+                    email_verification_required=True,
+                )
+            )
+        except (SmtpConfigurationError, SmtpSendError) as exc:
+            # Fail loud: do not leave a registered account that was promised a verify email.
+            db.rollback()
+            logger.error(
+                "register_verification_smtp_failed code=%s",
+                type(exc).__name__,
+            )
+            return _smtp_error_response(exc)
 
     revoke_all_sessions_for_user(db, result.user_id)
     token = create_session(db, user_id=result.user_id)
@@ -300,3 +343,122 @@ def confirm_password_reset(
         detail="Password updated. You can sign in with your new password.",
         user_id=result.user_id,
     )
+
+
+@router.post("/verify/request", response_model=VerifyRequestResponse)
+def request_email_verification(
+    db: Session = Depends(get_db),
+    settings: AuthSettings = Depends(get_auth_settings),
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+) -> VerifyRequestResponse | JSONResponse:
+    if not settings.email_verification_required:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": _VERIFY_NOT_REQUIRED, "code": "verification_not_required"},
+        )
+
+    try:
+        mailer = SmtpEmailSender(load_smtp_settings())
+        service = RequestEmailVerificationService(
+            SqlAlchemyAuthUserRepository(db),
+            SqlAlchemyEmailVerificationRepository(db),
+            mailer,
+            public_app_url=settings.public_app_url,
+        )
+        result = service.execute(
+            RequestEmailVerificationCommand(
+                user_id=user_id,
+                email_verification_required=settings.email_verification_required,
+            )
+        )
+    except VerificationNotRequiredError:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": _VERIFY_NOT_REQUIRED, "code": "verification_not_required"},
+        )
+    except PrincipalNotFoundError:
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"detail": "Not authenticated.", "code": "unauthenticated"},
+        )
+    except (SmtpConfigurationError, SmtpSendError) as exc:
+        db.rollback()
+        logger.error("email_verification_request_smtp_failed code=%s", type(exc).__name__)
+        return _smtp_error_response(exc)
+
+    if result.already_verified:
+        return VerifyRequestResponse(detail=_VERIFY_ALREADY, already_verified=True)
+
+    logger.info("email_verification_requested user_id=%s", user_id)
+    return VerifyRequestResponse(detail=_VERIFY_ACK, already_verified=False)
+
+
+@router.post("/verify/confirm", response_model=VerifyConfirmResponse)
+def confirm_email_verification(
+    body: VerifyConfirmBody,
+    db: Session = Depends(get_db),
+    settings: AuthSettings = Depends(get_auth_settings),
+) -> VerifyConfirmResponse | JSONResponse:
+    if not settings.email_verification_required:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": _VERIFY_NOT_REQUIRED, "code": "verification_not_required"},
+        )
+
+    service = ConfirmEmailVerificationService(
+        SqlAlchemyAuthUserRepository(db),
+        SqlAlchemyEmailVerificationRepository(db),
+    )
+    try:
+        result = service.execute(
+            ConfirmEmailVerificationCommand(
+                token=body.token,
+                email_verification_required=settings.email_verification_required,
+            )
+        )
+    except VerificationNotRequiredError:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": _VERIFY_NOT_REQUIRED, "code": "verification_not_required"},
+        )
+    except InvalidVerificationTokenError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"detail": str(exc), "code": "invalid_verification_token"},
+        )
+
+    logger.info("email_verification_completed user_id=%s", result.user_id)
+    return VerifyConfirmResponse(
+        detail="Email verified. You can continue with gated actions.",
+        user_id=result.user_id,
+    )
+
+
+@router.post(
+    "/gated-flows/invite-accept-stub",
+    response_model=GatedFlowStubResponse,
+)
+def invite_accept_stub(
+    db: Session = Depends(get_db),
+    settings: AuthSettings = Depends(get_auth_settings),
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+) -> GatedFlowStubResponse | JSONResponse:
+    """Thin gated-flow probe until Epic 2 invite acceptance exists.
+
+    Calls the same EnsureEmailVerifiedService port Epic 2 will use.
+    """
+    service = EnsureEmailVerifiedService(SqlAlchemyEmailVerificationRepository(db))
+    try:
+        service.execute(
+            EnsureEmailVerifiedCommand(
+                user_id=user_id,
+                email_verification_required=settings.email_verification_required,
+            )
+        )
+    except EmailNotVerifiedError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={"detail": str(exc), "code": "email_not_verified"},
+        )
+
+    return GatedFlowStubResponse(detail="Gated flow allowed.", user_id=user_id)

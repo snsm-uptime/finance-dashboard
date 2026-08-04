@@ -1,6 +1,10 @@
+---
+baseline_commit: 9e73b704849826a74cacc2773c12f7e17d3b8ad6
+---
+
 # Story 1.5: Config-gated email verification
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -26,63 +30,78 @@ so that deployments can stay simple unless that gate is needed.
 
 ## Tasks / Subtasks
 
-- [ ] Task 0: Confirm prerequisites (1.1–1.4) before coding
-  - [ ] **1.1** Compose `db`/`api`/`ui`, hex layout, Alembic, `/health`, lockfiles, CI
-  - [ ] **1.2** User + personal list + argon2 + httpOnly Secure cookie; `EMAIL_VERIFICATION_REQUIRED=false` stub; FR-4 **off** path already proven
-  - [ ] **1.3** Sign-in/out + route protection; same AD-8 session issuer; verification treated as orthogonal gate
-  - [ ] **1.4** SMTP email adapter under `api/adapters/email/` (`aiosmtplib` ≥5.1.2), fail-loud misconfig, public base URL for links, reset token table patterns — **hard prerequisite for verification-on send path**
-  - [ ] If any prerequisite is incomplete: stop — finish those stories first. Do **not** invent a parallel auth stack or a second SMTP client on this branch
-  - [ ] Read 1.2/1.3/1.4 completion notes for: hasher, cookie name/issuer, BFF vs proxy, session shape, email port API, SMTP env names, token TTL/hash conventions
+- [x] Task 0: Confirm prerequisites (1.1–1.4) before coding
+  - [x] **1.1** Compose `db`/`api`/`ui`, hex layout, Alembic, `/health`, lockfiles, CI
+  - [x] **1.2** User + personal list + argon2 + httpOnly Secure cookie; `EMAIL_VERIFICATION_REQUIRED=false` stub; FR-4 **off** path already proven
+  - [x] **1.3** Sign-in/out + route protection; same AD-8 session issuer; verification treated as orthogonal gate
+  - [x] **1.4** SMTP email adapter under `api/adapters/email/` (`aiosmtplib` ≥5.1.2), fail-loud misconfig, public base URL for links, reset token table patterns — **hard prerequisite for verification-on send path**
+  - [x] If any prerequisite is incomplete: stop — finish those stories first. Do **not** invent a parallel auth stack or a second SMTP client on this branch
+  - [x] Read 1.2/1.3/1.4 completion notes for: hasher, cookie name/issuer, BFF vs proxy, session shape, email port API, SMTP env names, token TTL/hash conventions
 
-- [ ] Task 1: Wire the config gate (AC: #1–#3)
-  - [ ] Single operator switch: **`EMAIL_VERIFICATION_REQUIRED`** (bool; default **`false`** / absent = off) — reuse the 1.2 stub name; do not invent parallel flags (`VERIFY_EMAIL`, `FR4_ON`, etc.)
-  - [ ] Document on/off behavior in `.env.example` (placeholders only; no real secrets)
-  - [ ] When **off/absent**: signup → authenticated + usable app with **no** verification step (preserve Story 1.2 AC #2 / this story AC #1)
-  - [ ] When **on**: verification is required only for **gated flows** (invite acceptance / secure recovery) — **not** a global “must verify to log in or use lists” wall, and **not** a profile/settings product
-  - [ ] Config read at application/domain boundary (injectable setting) — not scattered `os.getenv` in UI or domain pure rules
+- [x] Task 1: Wire the config gate (AC: #1–#3)
+  - [x] Single operator switch: **`EMAIL_VERIFICATION_REQUIRED`** (bool; default **`false`** / absent = off) — reuse the 1.2 stub name; do not invent parallel flags (`VERIFY_EMAIL`, `FR4_ON`, etc.)
+  - [x] Document on/off behavior in `.env.example` (placeholders only; no real secrets)
+  - [x] When **off/absent**: signup → authenticated + usable app with **no** verification step (preserve Story 1.2 AC #2 / this story AC #1)
+  - [x] When **on**: verification is required only for **gated flows** (invite acceptance / secure recovery) — **not** a global “must verify to log in or use lists” wall, and **not** a profile/settings product
+  - [x] Config read at application/domain boundary (injectable setting) — not scattered `os.getenv` in UI or domain pure rules
 
-- [ ] Task 2: Persistence — verified state + verification tokens (AC: #2, #3)
-  - [ ] Alembic migration: user verified state (e.g. `email_verified_at` nullable timestamp **or** `email_verified` bool + timestamp — pick one; document in completion notes)
-  - [ ] Mirror **1.4 secure token defaults** unless a later AD contradicts: time-limited (recommend ≤24h for verify, or match 1.4’s ≤1h if shared helper), single-use, **hash of token at rest**, invalidate outstanding unused tokens on new request and/or on confirm
-  - [ ] Prefer separate Alembic table (e.g. `email_verification_token`) under `adapters/persistence/` — UUID PK; FK to user; expires_at; used_at/consumed; token_hash — do not overload password-reset token rows unless 1.4 completion notes explicitly designed a shared token table
-  - [ ] Models **only** under `api/adapters/persistence/`; domain free of SQLAlchemy (AD-1)
-  - [ ] **Never** recreate PG volume; Alembic only (AD-22 / NFR-13)
-  - [ ] UUIDs for users/tokens; never store raw tokens or plaintext passwords in DB
+- [x] Task 2: Persistence — verified state + verification tokens (AC: #2, #3)
+  - [x] Alembic migration: user verified state (e.g. `email_verified_at` nullable timestamp **or** `email_verified` bool + timestamp — pick one; document in completion notes)
+  - [x] Mirror **1.4 secure token defaults** unless a later AD contradicts: time-limited (recommend ≤24h for verify, or match 1.4’s ≤1h if shared helper), single-use, **hash of token at rest**, invalidate outstanding unused tokens on new request and/or on confirm
+  - [x] Prefer separate Alembic table (e.g. `email_verification_token`) under `adapters/persistence/` — UUID PK; FK to user; expires_at; used_at/consumed; token_hash — do not overload password-reset token rows unless 1.4 completion notes explicitly designed a shared token table
+  - [x] Models **only** under `api/adapters/persistence/`; domain free of SQLAlchemy (AD-1)
+  - [x] **Never** recreate PG volume; Alembic only (AD-22 / NFR-13)
+  - [x] UUIDs for users/tokens; never store raw tokens or plaintext passwords in DB
 
-- [ ] Task 3: Domain + application verification rules (AC: #1–#3) — TDD first
-  - [ ] Red→green: flag **off** → gated-flow checks pass without verified state (or gate is no-op)
-  - [ ] Flag **on** + unverified → gated-flow check **rejects** with a clear structured error (not a silent allow)
-  - [ ] Flag **on** + request verification → create token + enqueue/send via email port (SMTP adapter from 1.4)
-  - [ ] Flag **on** + confirm valid token → mark verified + consume token → gated-flow checks pass
-  - [ ] Expired / already-consumed / unknown token → reject generically (no email-existence oracle; calm error shape)
-  - [ ] Provide a **stable application port** for “requires verified email for this action” that Epic 2 invite acceptance will call — do **not** implement full invitee landing (Story 2.4) here
+- [x] Task 3: Domain + application verification rules (AC: #1–#3) — TDD first
+  - [x] Red→green: flag **off** → gated-flow checks pass without verified state (or gate is no-op)
+  - [x] Flag **on** + unverified → gated-flow check **rejects** with a clear structured error (not a silent allow)
+  - [x] Flag **on** + request verification → create token + enqueue/send via email port (SMTP adapter from 1.4)
+  - [x] Flag **on** + confirm valid token → mark verified + consume token → gated-flow checks pass
+  - [x] Expired / already-consumed / unknown token → reject generically (no email-existence oracle; calm error shape)
+  - [x] Provide a **stable application port** for “requires verified email for this action” that Epic 2 invite acceptance will call — do **not** implement full invitee landing (Story 2.4) here
 
-- [ ] Task 4: API + SMTP send path (AC: #2, #3)
-  - [ ] Reuse **`api/adapters/email/`** from 1.4 (`aiosmtplib` ≥5.1.2 / CVE-2026-55558 floor) via the same application **email port** — verification mail is auth infrastructure, not a new product mail type; no Nodemailer / UI-side SMTP
-  - [ ] Build verify links with the same **public app base URL** env pattern 1.4 introduced for reset links
-  - [ ] Recommended routes (rename only if 1.2–1.4 already fixed auth mount names):
+- [x] Task 4: API + SMTP send path (AC: #2, #3)
+  - [x] Reuse **`api/adapters/email/`** from 1.4 (`aiosmtplib` ≥5.1.2 / CVE-2026-55558 floor) via the same application **email port** — verification mail is auth infrastructure, not a new product mail type; no Nodemailer / UI-side SMTP
+  - [x] Build verify links with the same **public app base URL** env pattern 1.4 introduced for reset links
+  - [x] Recommended routes (rename only if 1.2–1.4 already fixed auth mount names):
     - `POST /api/auth/verify/request` — send verification email when flag on (prefer authenticated user; if unauthenticated email-based request is added, apply 1.4 non-enumeration posture)
     - `POST /api/auth/verify/confirm` — consume token → mark verified
-  - [ ] Snake_case DTOs; cookie session contract **unchanged** (AD-8); verification is orthogonal to session
-  - [ ] SMTP misconfigured/unavailable when sending verify mail → **fail loudly** (same discipline as 1.4 / NFR-10) — never return “sent” when send did not succeed
-  - [ ] When flag **off**: request/confirm endpoints may 404 or return a clear “verification not required” — do not force users through a verify UI
-  - [ ] Keep `/health` public; never log raw tokens or plaintext credentials
+  - [x] Snake_case DTOs; cookie session contract **unchanged** (AD-8); verification is orthogonal to session
+  - [x] SMTP misconfigured/unavailable when sending verify mail → **fail loudly** (same discipline as 1.4 / NFR-10) — never return “sent” when send did not succeed
+  - [x] When flag **off**: request/confirm endpoints may 404 or return a clear “verification not required” — do not force users through a verify UI
+  - [x] Keep `/health` public; never log raw tokens or plaintext credentials
 
-- [ ] Task 5: Gated-flow hook + minimal UI (AC: #2, #3)
-  - [ ] **Hook now / full invite in Epic 2:** implement the gate check behind a domain/application API; prove it with a **test double or thin internal endpoint** representing “gated flow” (e.g. invite-accept stub) until Stories 2.3/2.4 exist
-  - [ ] Minimal verify UX only if needed for AC #3 (spine-only — no dedicated UX journey): e.g. `/verify` confirm page consuming link token, optional “check your email / resend” when flag on
-  - [ ] Voice: clear + calm — what happened + what to do (UX-DR17); prefer i18n key stubs (EN fine until 1.6 wires ES)
-  - [ ] **Anti-scope UI:** no Account-menu “verification settings”; no profile product; no banner forcing verify to use Lists when flag is off
-  - [ ] Public routes: confirm link path must work for signed-in or link-token flows as designed; keep `/sign-in`, `/sign-up`, reset (1.4), `/health` public patterns from 1.3
-  - [ ] Submit via same-origin BFF/proxy only — **never** Bearer in `localStorage`
+- [x] Task 5: Gated-flow hook + minimal UI (AC: #2, #3)
+  - [x] **Hook now / full invite in Epic 2:** implement the gate check behind a domain/application API; prove it with a **test double or thin internal endpoint** representing “gated flow” (e.g. invite-accept stub) until Stories 2.3/2.4 exist
+  - [x] Minimal verify UX only if needed for AC #3 (spine-only — no dedicated UX journey): e.g. `/verify` confirm page consuming link token, optional “check your email / resend” when flag on
+  - [x] Voice: clear + calm — what happened + what to do (UX-DR17); prefer i18n key stubs (EN fine until 1.6 wires ES)
+  - [x] **Anti-scope UI:** no Account-menu “verification settings”; no profile product; no banner forcing verify to use Lists when flag is off
+  - [x] Public routes: confirm link path must work for signed-in or link-token flows as designed; keep `/sign-in`, `/sign-up`, reset (1.4), `/health` public patterns from 1.3
+  - [x] Submit via same-origin BFF/proxy only — **never** Bearer in `localStorage`
 
-- [ ] Task 6: Tests (AC: #1–#3)
-  - [ ] Domain TDD: off → no gate; on → block gated flow until verified; confirm unlocks
-  - [ ] Postgres 16 integration (Compose `db`, not SQLite): signup usable when off; when on → request → token → confirm → gate opens; SMTP failure path loud (mock adapter OK)
-  - [ ] Assert session cookie from 1.2/1.3 still works regardless of verify flag
-  - [ ] Generic errors — no email enumeration via distinct status/messages on token/request failures where applicable
-  - [ ] UI critical path only if verify UI ships; maintain 1.1 coverage floor; **do not** require full Playwright every PR
-  - [ ] Fixtures: `user@example.com` style only — no real PII
+- [x] Task 6: Tests (AC: #1–#3)
+  - [x] Domain TDD: off → no gate; on → block gated flow until verified; confirm unlocks
+  - [x] Postgres 16 integration (Compose `db`, not SQLite): signup usable when off; when on → request → token → confirm → gate opens; SMTP failure path loud (mock adapter OK)
+  - [x] Assert session cookie from 1.2/1.3 still works regardless of verify flag
+  - [x] Generic errors — no email enumeration via distinct status/messages on token/request failures where applicable
+  - [x] UI critical path only if verify UI ships; maintain 1.1 coverage floor; **do not** require full Playwright every PR
+  - [x] Fixtures: `user@example.com` style only — no real PII
+
+### Review Findings
+
+- [x] [Review][Patch] Auto-send verification email on register when `EMAIL_VERIFICATION_REQUIRED=true` (fail loud if SMTP breaks) [`api/api/routes/auth.py` register + application] — decided in review: option 1
+- [x] [Review][Patch] VerifyForm mount auto-confirm burns single-use tokens (Strict Mode / scanners / remount) [`ui/app/verify/VerifyForm.tsx:22`]
+- [x] [Review][Patch] Confirm not idempotent — refresh/re-open after success shows invalid token [`api/application/email_verification.py` + `VerifyForm.tsx`]
+- [x] [Review][Patch] `EmailNotVerifiedError` copy assumes mail was already sent [`api/domain/errors.py:64`]
+- [x] [Review][Patch] `mark_email_verified` silent no-op if user row missing after claim [`api/adapters/persistence/email_verification.py:25`]
+- [x] [Review][Patch] Authenticated verify/request maps missing user to `verification_not_required` [`api/application/email_verification.py:111`]
+- [x] [Review][Patch] SMTP fail-loud test does not assert token rollback [`api/tests/test_email_verification_integration.py`]
+- [x] [Review][Patch] No UI critical-path test for shipped `/verify` UI (only proxy allowlist) [`ui/app/verify/`]
+
+- [x] [Review][Defer] No per-user throttle on verify/request SMTP send [`api/api/routes/auth.py`] — deferred, pre-existing (same class as reset/register hardening)
+- [x] [Review][Defer] `claim_token` UPDATE does not re-check `expires_at` [`api/adapters/persistence/email_verification.py:76`] — deferred, pre-existing (mirrors 1.4 reset tokens)
+- [x] [Review][Defer] Request/send vs concurrent confirm can email a dead link [`api/application/email_verification.py`] — deferred, rare race; same persist-then-send family as 1.4
 
 ## Dev Notes
 
@@ -293,15 +312,55 @@ Recent commits are planning/BMAD artifacts only (`sprint-status`, story context 
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Cursor Grok 4.5
 
 ### Debug Log References
 
+- Domain tests: `uv run pytest tests/test_email_verification_domain.py` — 12 passed
+- Full api suite (Compose Postgres): `docker compose run … uv run pytest` — 62 passed
+- UI: `vitest run proxy.test.ts`, `tsc --noEmit`, `eslint` — green
+
 ### Completion Notes List
+
+- Reused AD-8 session (`fh_session` opaque DB token, api issuer, BFF forward) — verification is orthogonal user attribute `email_verified_at`, not a second session.
+- Config gate: existing `EMAIL_VERIFICATION_REQUIRED` (default false) on `AuthSettings`; services take the flag as an injectable command field.
+- Verified state: nullable `users.email_verified_at` (chosen over bool+timestamp).
+- Tokens: separate `email_verification_tokens` table; SHA-256 hash at rest; 24h TTL; single-use `used_at`; invalidate outstanding on request/confirm — mirrors 1.4 without sharing the reset table.
+- Application ports: `EnsureEmailVerifiedService` (Epic 2 hook), `RequestEmailVerificationService`, `ConfirmEmailVerificationService`; SMTP via existing `EmailSender`/`SmtpEmailSender` with persist-then-send + route rollback on SMTP failure.
+- API: `POST /auth/verify/request` (auth required), `POST /auth/verify/confirm`, stub `POST /auth/gated-flows/invite-accept-stub`; flag off → 404 `verification_not_required`.
+- UI: public `/verify` + BFF `/api/auth/verify/*`; `proxy.ts` allowlists `/verify`.
+- Branch: `feat/1/1-5-config-gated-email-verification`.
 
 ### File List
 
+- `.env.example`
+- `_bmad-output/implementation-artifacts/1-5-config-gated-email-verification.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `api/domain/errors.py`
+- `api/domain/email_verification.py`
+- `api/application/email_verification.py`
+- `api/adapters/persistence/models.py`
+- `api/adapters/persistence/email_verification.py`
+- `api/adapters/persistence/migrations/versions/0004_email_verification.py`
+- `api/api/schemas/auth.py`
+- `api/api/routes/auth.py`
+- `api/tests/test_email_verification_domain.py`
+- `api/tests/test_email_verification_integration.py`
+- `ui/proxy.ts`
+- `ui/proxy.test.ts`
+- `ui/lib/i18n/verify.ts`
+- `ui/app/verify/page.tsx`
+- `ui/app/verify/VerifyForm.tsx`
+- `ui/app/api/auth/verify/request/route.ts`
+- `ui/app/api/auth/verify/confirm/route.ts`
+- `ui/app/api/auth/verify/route.test.ts`
+
+## Change Log
+
+- 2026-08-04: Implemented config-gated email verification (FR-4) — gate, tokens, SMTP reuse, stub gated flow, minimal `/verify` UI, domain + Postgres tests.
+- 2026-08-04: Applied code-review patches — register auto-send, idempotent confirm, explicit VerifyForm submit, error/copy/principal fixes, UI BFF tests.
+
 ## Story completion status
 
-Status: ready-for-dev  
-Completion note: Ultimate context engine analysis completed — comprehensive developer guide created.
+Status: done  
+Completion note: Code review patches applied; ACs satisfied; tests green.
