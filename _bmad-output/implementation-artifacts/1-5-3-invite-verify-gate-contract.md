@@ -4,7 +4,7 @@ baseline_commit: 24bf63c Merge pull request #8 from snsm-uptime/feat/2/2-1-creat
 
 # Story 1.5.3: Invite verify-gate contract
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -55,6 +55,21 @@ so that Stories 2.3/2.4 implement one agreed behavior when verification is requi
   - [x] Do **not** mark sibling Epic 1.5 stories done; do **not** start 2.2+; do **not** implement invite product code
   - [x] Prefer Conventional Commit on branch `docs/1/1-5-3-invite-verify-gate-contract` (use `feat/` only if stub alignment code changes)
 
+### Review Findings
+
+- [x] [Review][Patch] Lock email-bind before Ensure [`invite-verify-gate-contract.md`] — **Decision: option 1** — email-bind before Ensure; then Ensure → claim → membership
+- [x] [Review][Patch] Document SignUpWithInvite + flag-on post-block semantics [`invite-verify-gate-contract.md`] — keep user/session/personal list; 403; retry `AcceptListInvite`; 2.4 atomic = success path
+- [x] [Review][Patch] Forbid invite-token claim when Ensure blocks [`invite-verify-gate-contract.md`]
+- [x] [Review][Patch] Retain invite token across `/verify` for retry [`invite-verify-gate-contract.md`]
+- [x] [Review][Patch] Fix stub→real / 1.5.5 sequencing [`invite-verify-gate-contract.md`] — keep stub through 1.5.5 probe; delete after 2.4
+- [x] [Review][Patch] Require `email_verification_required` from AuthSettings [`invite-verify-gate-contract.md`]
+- [x] [Review][Patch] Align ordering pseudocode with Command API [`invite-verify-gate-contract.md`]
+- [x] [Review][Patch] Mark claim-pattern Related link pending [`invite-verify-gate-contract.md`]
+- [x] [Review][Patch] Clarify truth-table “false / absent” [`invite-verify-gate-contract.md`]
+- [x] [Review][Patch] UI keys off `code` for i18n [`invite-verify-gate-contract.md`]
+- [x] [Review][Patch] Correct File List labels [`1-5-3-invite-verify-gate-contract.md`]
+- [x] [Review][Patch] Add Schema row to as-built seam table [`invite-verify-gate-contract.md`]
+
 ## Dev Notes
 
 ### Epic context
@@ -87,7 +102,9 @@ Epic 1.5 = Auth spine hardening & Epic 2 prep (Correct Course / Epic 1 retro). C
 | Flag off | Ensure is **no-op**; accept proceeds; stub returns 200 |
 | Flag on + unverified | Block **before** membership; do not create membership |
 | Flag on + verified | Allow accept to continue (invite token + ACL still apply) |
-| Stub fate | Same service; 2.4 becomes the real call site; stub may remain as probe or be removed in 2.4 — document choice in contract |
+| Stub fate | Keep stub through **1.5.5** as Ensure probe; **delete after 2.4** (1.5.5 cannot cover real accept) |
+| Email-bind vs Ensure | **Email-bind first** (2.4), then Ensure — mismatch must not force a verify loop |
+| Flag source | `AuthSettings.email_verification_required` only — never caller-supplied |
 | Code changes | Prefer **none**; stub already correct |
 | Action item | Mark “Invite verify-gate contract…” `done` when this story completes |
 | FR support | FR-4 readiness + FR-7 accept path; no new FRs |
@@ -104,27 +121,17 @@ Epic 1.5 = Auth spine hardening & Epic 2 prep (Correct Course / Epic 1 retro). C
 
 ### Call-site ordering (MUST document)
 
-```text
-# Registered accept (already has account + session)
-AcceptListInvite(token):
-  require authenticated user
-  → EnsureEmailVerifiedService.execute(user_id, flag)   # when flag on: may raise EmailNotVerifiedError
-  → claim invite token (1.5.1 helper pattern; separate list_invite_token table)
-  → create ListMembership
-  → land on inviting list
+Authoritative copy lives in [`invite-verify-gate-contract.md`](./invite-verify-gate-contract.md) §3. Summary:
 
-# Signup-with-invite (unregistered path)
-SignUpWithInvite(email, password, token):
-  create user + personal list + session (FR-1 / 1.2 patterns)
-  → EnsureEmailVerifiedService.execute(new_user_id, flag)  # BEFORE inviting-list membership
-  → claim invite token
-  → create ListMembership on inviting list
-  → land on inviting list (not blank Lists home)
+```text
+AcceptListInvite / SignUpWithInvite:
+  → email-bind (2.4) before Ensure
+  → EnsureEmailVerifiedService.execute(EnsureEmailVerifiedCommand(..., settings.email_verification_required))
+  → on Ensure raise: do NOT claim token; do NOT create inviting membership
+  → claim invite token → ListMembership → land on inviting list
 ```
 
-When flag is **off**, skip or no-op the Ensure step; membership still requires valid invite token + ACL rules.
-
-**Do not** gate: invite email send, list create/rename, sign-in, `/auth/me`, or Lists homepage browse.
+**SignUpWithInvite + flag on:** keep user/session/personal list + 403; after verify retry **`AcceptListInvite`** with retained token (not re-signup).
 
 ### As-built seam inventory (MUST document — do not reinvent)
 
@@ -304,25 +311,27 @@ FR-4 flow-scoped gate at accept only (not send, not login wall). Single applicat
 
 **What not to break:**
 - Gate at **accept (2.4)** only — never invite **send (2.3)**
-- `EnsureEmailVerifiedService` is the only gate; error remains **403** `email_not_verified`
-- Flag off → Ensure no-op; verification ≠ login wall
-- Stub stays aligned until real accept lands; no second verify product
+- **Email-bind before Ensure**; do not claim token when Ensure/bind fails
+- `EnsureEmailVerifiedService` is the only gate; error remains **403** `email_not_verified`; UI keys off `code`
+- Flag off → Ensure no-op; verification ≠ login wall; flag from AuthSettings only
+- SignUpWithInvite + flag on → keep session, 403, retry `AcceptListInvite` with retained token
+- Stub stays as Ensure probe through 1.5.5; delete after 2.4
 
 ### File List
 
-- `_bmad-output/implementation-artifacts/invite-verify-gate-contract.md` (NEW)
-- `_bmad-output/implementation-artifacts/1-5-3-invite-verify-gate-contract.md` (UPDATE — status/tasks/record)
+- `_bmad-output/implementation-artifacts/invite-verify-gate-contract.md` (NEW — then UPDATED in code review)
+- `_bmad-output/implementation-artifacts/1-5-3-invite-verify-gate-contract.md` (NEW — story record; UPDATED review findings / status)
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` (UPDATE)
-- `_bmad-output/implementation-artifacts/story-close-overview-checklist.md` (NEW on branch — restored for close habit / map link)
-- `_bmad-output/planning-artifacts/architecture/architecture-finance-helper-2026-08-03/auth-mail-interaction-map.md` (NEW on branch + UPDATE links)
-- `_bmad-output/planning-artifacts/architecture/architecture-finance-helper-2026-08-03/ARCHITECTURE-SPINE.md` (UPDATE AD-8 pointers)
+- `_bmad-output/planning-artifacts/architecture/architecture-finance-helper-2026-08-03/auth-mail-interaction-map.md` (UPDATE — contract links; owned by 1.5.2)
+- `_bmad-output/planning-artifacts/architecture/architecture-finance-helper-2026-08-03/ARCHITECTURE-SPINE.md` (UPDATE AD-8 pointer)
 - `_bmad-output/implementation-artifacts/2-3-invite-members-by-email.md` (UPDATE soft-couple pointer)
 - `_bmad-output/implementation-artifacts/2-4-invitee-signup-lands-on-inviting-list.md` (UPDATE soft-couple pointer)
 
 ### Change Log
 
 - 2026-08-04: Implemented Story 1.5.3 — invite verify-gate contract + discoverability links; status → review
+- 2026-08-04: Code review patches — SignUpWithInvite post-block, email-bind-before-Ensure, stub fate, File List hygiene; status → done
 
 ## Story completion status
 
-Status: **review**
+Status: **done**
