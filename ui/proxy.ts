@@ -12,6 +12,7 @@ const PUBLIC_PREFIXES = [
   "/verify",
   "/health",
   "/api/auth",
+  "/api/lists",
 ];
 
 function isPublicPath(pathname: string): boolean {

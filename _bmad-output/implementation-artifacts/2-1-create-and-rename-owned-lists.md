@@ -1,6 +1,10 @@
+---
+baseline_commit: 8ba0438cdf7c0ce65224c3072690b917e6c2a975
+---
+
 # Story 2.1: Create and rename owned lists
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -35,53 +39,67 @@ so that I can organize spending beyond my personal list.
 
 ## Tasks / Subtasks
 
-- [ ] Task 0: Confirm Epic 1 list + auth primitives exist (prerequisite)
-  - [ ] Stories **1.2** (User / List / ListMembership + signup personal list) and **1.3** (session cookie + auth-gated routes) must be implemented
-  - [ ] If missing: **HALT** — do not invent a parallel user/list/auth stack; finish 1.2 → 1.3 first
-  - [ ] Reuse the **exact** session cookie issuer, membership schema, and hex ports from 1.2/1.3 completion notes — do not re-open AD-8 forks
+- [x] Task 0: Confirm Epic 1 list + auth primitives exist (prerequisite)
+  - [x] Stories **1.2** (User / List / ListMembership + signup personal list) and **1.3** (session cookie + auth-gated routes) must be implemented
+  - [x] If missing: **HALT** — do not invent a parallel user/list/auth stack; finish 1.2 → 1.3 first
+  - [x] Reuse the **exact** session cookie issuer, membership schema, and hex ports from 1.2/1.3 completion notes — do not re-open AD-8 forks
 
-- [ ] Task 1: Domain — create owned list + rename rules (AC: #1–#5) — TDD first
-  - [ ] Red→green domain tests before routes/UI:
+- [x] Task 1: Domain — create owned list + rename rules (AC: #1–#5) — TDD first
+  - [x] Red→green domain tests before routes/UI:
     - Authenticated create → list with non-empty name → creator is **owner** + **member**
     - User may own personal list **plus** additional lists (multi-own)
     - Owner rename updates name; members reading that list see the new name
     - Non-member rename → rejected
     - Member-but-not-owner rename → rejected (FR-6)
     - Empty / whitespace-only name → rejected with clear validation error
-  - [ ] Persist **list creator** at create time (AD-6 remainder → list creator later). Treat creator ≡ owner at creation; no ownership transfer in v1
-  - [ ] Seed **even default split** among members on create (FR-9 continuity for Story 2.5): 1-member new list ⇒ 100% to creator — same seed logic as 1.2 personal list; **no** split UI here
-  - [ ] Same `List` entity as personal lists — **never** a separate “shared list” type/table
-  - [ ] Domain free of FastAPI / SQLAlchemy imports (AD-1)
+  - [x] Persist **list creator** at create time (AD-6 remainder → list creator later). Treat creator ≡ owner at creation; no ownership transfer in v1
+  - [x] Seed **even default split** among members on create (FR-9 continuity for Story 2.5): 1-member new list ⇒ 100% to creator — same seed logic as 1.2 personal list; **no** split UI here
+  - [x] Same `List` entity as personal lists — **never** a separate “shared list” type/table
+  - [x] Domain free of FastAPI / SQLAlchemy imports (AD-1)
 
-- [ ] Task 2: Application use-cases + persistence ports (AC: #1–#5)
-  - [ ] `CreateOwnedList` / `RenameList` (names may vary) in `api/application/` — orchestrate ports only
-  - [ ] Atomic create: list row → membership (owner) → even-split seed in one transaction
-  - [ ] Rename: load list → authorize owner → update name → commit
-  - [ ] Extend 1.2 repositories; do **not** duplicate User/List/ListMembership models
-  - [ ] If 1.2 omitted durable `owner_id` / `created_by` / name column: Alembic revision **only** for the gap — never wipe PG volume (AD-22)
+- [x] Task 2: Application use-cases + persistence ports (AC: #1–#5)
+  - [x] `CreateOwnedList` / `RenameList` (names may vary) in `api/application/` — orchestrate ports only
+  - [x] Atomic create: list row → membership (owner) → even-split seed in one transaction
+  - [x] Rename: load list → authorize owner → update name → commit
+  - [x] Extend 1.2 repositories; do **not** duplicate User/List/ListMembership models
+  - [x] If 1.2 omitted durable `owner_id` / `created_by` / name column: Alembic revision **only** for the gap — never wipe PG volume (AD-22)
 
-- [ ] Task 3: API edge — auth-gated list mutations (AC: #1–#5)
-  - [ ] FastAPI routes under `api/api/` (suggested shape — not locked by spine; match Epic 1 style):
+- [x] Task 3: API edge — auth-gated list mutations (AC: #1–#5)
+  - [x] FastAPI routes under `api/api/` (suggested shape — not locked by spine; match Epic 1 style):
     - `POST /api/lists` — body `{ "name": "..." }` → created list DTO (id, name, …) + membership implies “appears among lists I belong to”
     - `PATCH /api/lists/{list_id}` — body `{ "name": "..." }` → updated list DTO
-  - [ ] Require authenticated session (reuse 1.3 dependency); unauthenticated → 401
-  - [ ] Non-member / non-owner rename → 403 (or project’s structured ACL error); do not leak existence details beyond what membership ACL already allows
-  - [ ] Pydantic DTOs **snake_case** on the wire; never return password/secrets
-  - [ ] Keep `/health` working; structured logs — no PII spam
+  - [x] Require authenticated session (reuse 1.3 dependency); unauthenticated → 401
+  - [x] Non-member / non-owner rename → 403 (or project’s structured ACL error); do not leak existence details beyond what membership ACL already allows
+  - [x] Pydantic DTOs **snake_case** on the wire; never return password/secrets
+  - [x] Keep `/health` working; structured logs — no PII spam
 
-- [ ] Task 4: Minimal UI to exercise create + rename (AC: #1–#2)
-  - [ ] Enough authenticated UI to create a named list and rename an owned list — **not** the full Lists homepage / first-paint memory contract (Story **2.2**)
-  - [ ] Submit via same-origin BFF or proxied `/api` — reuse 1.2/1.3 auth path; never Bearer in `localStorage`
-  - [ ] After create: new list visible in whatever membership-scoped list surface already exists (1.3 stub or thin list of memberships) — if none, add a **minimal** membership list + create control only
-  - [ ] Rename: affordance on an owned list (inline edit or simple form) — updated name visible after refresh/navigation
-  - [ ] Visual: Warm Balance-compatible chrome if feasible (Manrope, moss CTA `rounded.sm` 8px — not pill); strip kit purple. Full Soft-Ledger = Story 3.1
-  - [ ] EN+ES keys for create/rename chrome + validation/ACL errors (UX-DR18 / project-context). Empty-state copy remains **not journeyed** — minimal functional strings OK
-  - [ ] **Do not** invent a Settings/profile product or list-admin dashboard
+- [x] Task 4: Minimal UI to exercise create + rename (AC: #1–#2)
+  - [x] Enough authenticated UI to create a named list and rename an owned list — **not** the full Lists homepage / first-paint memory contract (Story **2.2**)
+  - [x] Submit via same-origin BFF or proxied `/api` — reuse 1.2/1.3 auth path; never Bearer in `localStorage`
+  - [x] After create: new list visible in whatever membership-scoped list surface already exists (1.3 stub or thin list of memberships) — if none, add a **minimal** membership list + create control only
+  - [x] Rename: affordance on an owned list (inline edit or simple form) — updated name visible after refresh/navigation
+  - [x] Visual: Warm Balance-compatible chrome if feasible (Manrope, moss CTA `rounded.sm` 8px — not pill); strip kit purple. Full Soft-Ledger = Story 3.1
+  - [x] EN+ES keys for create/rename chrome + validation/ACL errors (UX-DR18 / project-context). Empty-state copy remains **not journeyed** — minimal functional strings OK
+  - [x] **Do not** invent a Settings/profile product or list-admin dashboard
 
-- [ ] Task 5: Integration verification + CI (AC: #1–#5)
-  - [ ] Postgres **16** integration (Compose `db`): signed-in create → owner + membership + even-split seed; second list allowed; owner rename persists; non-member + non-owner member rename denied; unauthenticated denied
-  - [ ] pytest green; ui typecheck/lint green; thin UI test for create/rename path if practical (coverage floor from 1.1)
-  - [ ] No secrets/PII committed; fixtures use generic vocabulary (`user@example.com`, “Household”, etc.)
+- [x] Task 5: Integration verification + CI (AC: #1–#5)
+  - [x] Postgres **16** integration (Compose `db`): signed-in create → owner + membership + even-split seed; second list allowed; owner rename persists; non-member + non-owner member rename denied; unauthenticated denied
+  - [x] pytest green; ui typecheck/lint green; thin UI test for create/rename path if practical (coverage floor from 1.1)
+  - [x] No secrets/PII committed; fixtures use generic vocabulary (`user@example.com`, “Household”, etc.)
+
+### Review Findings
+
+- [x] [Review][Patch] Unify rename not-found and non-member to the same 403 (existence oracle) [`api/application/lists.py:114`] — missing list currently returns 404 while existing non-member returns 403; map both to identical 403 `not_list_member` (member-non-owner may stay `not_list_owner`)
+- [x] [Review][Patch] Surface membership fetch failures instead of empty lists [`ui/app/lists/page.tsx:31`] — `fetchMembershipLists` returns `[]` on non-OK/network error, hiding real memberships
+- [x] [Review][Patch] Guard success-path JSON parse in listsClient [`ui/app/lists/listsClient.ts:59`] — 2xx with bad body throws; wrap like error-path `parseJson`
+- [x] [Review][Patch] Add `max_length=200` on create/rename DTOs [`api/api/schemas/lists.py:11`] — align wire validation with domain/DB `String(200)`
+- [x] [Review][Patch] Handle IntegrityError on create_owned_list [`api/adapters/persistence/repositories.py`] — map constraint failures to controlled API error instead of 500
+- [x] [Review][Patch] Authorize rename affordance via `owner_id`, not membership `role` [`ui/app/lists/ListsPanel.tsx`] — pass session user id and compare to `list.owner_id` to match API
+- [x] [Review][Patch] Unify blank-name 422 contract [`api/api/schemas/lists.py`] — empty string vs whitespace-only currently diverge (default Pydantic vs `invalid_list_name`)
+- [x] [Review][Patch] Prevent create double-submit race [`ui/app/lists/ListsPanel.tsx:41`] — set pending before await / ignore re-entry while creating
+- [x] [Review][Defer] Invisible/ZWSP-only list names accepted [`api/domain/lists.py`] — deferred, pre-existing polish (strip-only validation)
+- [x] [Review][Defer] No per-user owned-list creation cap [`api/application/lists.py`] — deferred, pre-existing (product limit not in v1 scope)
+- [x] [Review][Defer] BFF `/api/lists` routes lack Vitest coverage [`ui/app/api/lists/`] — deferred, pre-existing (client helper covered; BFF cookie forward untested)
 
 ## Dev Notes
 
@@ -260,15 +278,52 @@ Follow `_bmad-output/project-context.md` entirely. Highest-risk misses for this 
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Cursor Grok 4.5
 
 ### Debug Log References
 
+- Domain TDD: `tests/test_lists_domain.py` (10 passed)
+- Integration (Compose `api` + Postgres 16): `tests/test_lists_integration.py` (5 passed)
+- Full api suite: 101 passed; ui vitest 55 passed; tsc + eslint green
+
 ### Completion Notes List
+
+- Reused Epic 1 `List` / `ListMembership` / `owner_id` (no Alembic; no `created_by` column — creator ≡ `owner_id`)
+- Even-split seed remains implicit: sole owner membership on create (same as personal list / FR-9)
+- FastAPI paths (Epic 1 style): `GET|POST /lists`, `PATCH /lists/{list_id}`; UI BFF at `/api/lists`
+- ACL: unauthenticated 401; non-member rename 403 `not_list_member`; member-non-owner 403 `not_list_owner`
+- Minimal `/lists` UI with create + owner rename; EN/ES via `ui/lib/i18n/lists.ts`; no Settings product
+- AD-8 unchanged: opaque `fh_session`, `require_authenticated_user`
 
 ### File List
 
+- `api/domain/lists.py` (new)
+- `api/domain/errors.py` (modified)
+- `api/application/lists.py` (new)
+- `api/adapters/persistence/repositories.py` (modified)
+- `api/api/schemas/lists.py` (new)
+- `api/api/routes/lists.py` (new)
+- `api/api/app.py` (modified)
+- `api/tests/test_lists_domain.py` (new)
+- `api/tests/test_lists_integration.py` (new)
+- `ui/app/lists/page.tsx` (modified)
+- `ui/app/lists/ListsPanel.tsx` (new)
+- `ui/app/lists/listsClient.ts` (new)
+- `ui/app/lists/listsClient.test.ts` (new)
+- `ui/app/lists/lists.module.css` (modified)
+- `ui/app/api/lists/route.ts` (new)
+- `ui/app/api/lists/[listId]/route.ts` (new)
+- `ui/lib/i18n/lists.ts` (new)
+- `ui/proxy.ts` (modified)
+- `_bmad-output/implementation-artifacts/2-1-create-and-rename-owned-lists.md` (modified)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (modified)
+
+### Change Log
+
+- 2026-08-04: Implemented Story 2.1 create/rename owned lists (domain → API → minimal UI + Postgres ACL tests)
+- 2026-08-04: Applied code-review patches (existence-oracle ACL, fetch fail UI, DTO max length, IntegrityError, owner_id UI, blank-name 422, double-submit)
+
 ## Story completion status
 
-Status: ready-for-dev  
-Completion note: Ultimate context engine analysis completed — comprehensive developer guide created.
+Status: done  
+Completion note: Code review patches applied; ACs satisfied; story complete.

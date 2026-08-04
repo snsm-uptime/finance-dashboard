@@ -1,5 +1,5 @@
 # generated: 2026-08-03T22:46:31
-# last_updated: 2026-08-04T05:50:00
+# last_updated: 2026-08-04T16:15:00
 # project: finance-dashboard
 # project_key: NOKEY
 # tracking_system: file-system
@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-03T22:46:31
-last_updated: 2026-08-04T05:50:00
+last_updated: 2026-08-04T16:15:00
 project: finance-dashboard
 project_key: NOKEY
 tracking_system: file-system
@@ -55,10 +55,22 @@ development_status:
   1-4-password-reset-via-email: done
   1-5-config-gated-email-verification: done
   1-6-account-menu-language-en-es-and-theme: done
-  epic-1-retrospective: optional
+  epic-1-retrospective: done
 
+  # Epic 1.5 — prep before continuing Epic 2 (from Correct Course / Epic 1 retro)
+  epic-1-5: backlog
+  1-5-1-token-claim-rechecks-expires-at: backlog
+  1-5-2-auth-mail-interaction-map-and-story-close-overview: backlog
+  1-5-3-invite-verify-gate-contract: backlog
+  1-5-4-membership-acl-enforcement-sketch: backlog
+  1-5-5-epic-1-spine-smoke: backlog
+  1-5-6-auth-smtp-rate-limit-hardening: backlog
+  1-5-7-hex-port-polish-and-compose-pytest-ergonomics: backlog
+  epic-1-5-retrospective: optional
+
+  # PAUSED: do not start 2.2+ until epic-1-5 critical path (1-5-1 … 1-5-5) is done; 2-1 done
   epic-2: in-progress
-  2-1-create-and-rename-owned-lists: ready-for-dev
+  2-1-create-and-rename-owned-lists: done
   2-2-lists-homepage-membership-scoped-access: ready-for-dev
   2-3-invite-members-by-email: ready-for-dev
   2-4-invitee-signup-lands-on-inviting-list: ready-for-dev
@@ -99,3 +111,45 @@ development_status:
   5-9-settle-up-simplify-suggested-transfers: backlog
   5-10-statement-cycle-period-selector: backlog
   epic-5-retrospective: optional
+
+action_items:
+  - epic: 1
+    action: "Story-close interaction overview (how/why map) before marking stories done"
+    owner: "Amelia + Winston"
+    status: open
+  - epic: 1
+    action: "Auth/mail living interaction map (session/BFF, reset, verify, SMTP)"
+    owner: "Winston"
+    status: open
+  - epic: 1
+    action: "Token claim re-checks expires_at for reset and verify tokens"
+    owner: "Charlie"
+    status: open
+  - epic: 1
+    action: "Invite verify-gate contract for EnsureEmailVerifiedService"
+    owner: "Winston + Amelia"
+    status: open
+  - epic: 1
+    action: "Membership ACL enforcement sketch (contract only; impl in 2.2)"
+    owner: "Winston"
+    status: open
+  - epic: 1
+    action: "Epic 1 spine smoke checklist after claim fix (auth + mail + personal list)"
+    owner: "Dana"
+    status: open
+  - epic: 1
+    action: "Auth/SMTP rate-limit hardening (register/sign-in/reset/verify) — parallel"
+    owner: "Charlie"
+    status: open
+  - epic: 1
+    action: "Hex port polish (session/hasher/prefs) — parallel"
+    owner: "Charlie"
+    status: open
+  - epic: 1
+    action: "Compose pytest ergonomics — parallel"
+    owner: "Dana + Charlie"
+    status: open
+  - epic: 1
+    action: "Later: session hashing/HMAC, token cleanup, Story 1.1 artifact hygiene"
+    owner: "Charlie"
+    status: open
