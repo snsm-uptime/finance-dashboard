@@ -117,6 +117,9 @@ flowchart LR
 - **Binds:** FR-1–4, NFR auth; `ui`↔`api` cookies
 - **Prevents:** XSS-exfiltratable Bearer tokens in `localStorage`
 - **Rule:** Email+password with password reset via SMTP. Browser session is an **httpOnly Secure** cookie (JWT or opaque session id). Traffic is **same-origin** via reverse proxy and/or Next Route Handler BFF (`/api` → `api`). Bearer-in-client-storage is forbidden. Library may be fastapi-users or custom argon2 + signed cookies.
+- **Addendum (Epic 1.5):** Single-use email tokens (password reset, email verify, and future invites) MUST hash at rest, enforce TTL, and **re-check `expires_at` on claim** — a successful claim MUST NOT succeed solely because a row matched. SMTP send is fail-loud (no silent “sent”). Prefer one shared claim helper over copy-paste per token type.
+- **Living map:** [auth-mail-interaction-map.md](./auth-mail-interaction-map.md) (session/BFF, reset, verify, SMTP — Story 1.5.2)
+- **Invite verify-gate contract:** [invite-verify-gate-contract.md](../../../implementation-artifacts/invite-verify-gate-contract.md) (Story 1.5.3 — Ensure at accept, not send)
 
 ### AD-9 — Individual review gestures [ADOPTED]
 
@@ -186,6 +189,7 @@ flowchart LR
 - **Binds:** all list-scoped reads/writes; invites
 - **Prevents:** Implicit global read; two ACL schemes
 - **Rule:** Users are peers. A user may read/write a list’s ledger and import into it only if they hold **membership** on that list (personal list auto-created at signup). Invite acceptance creates membership. No privileged product admin role in v1.
+- **Addendum (Epic 1.5):** Membership checks are enforced in **one** application-layer path (not ad-hoc per route). Epic 1.5 delivers the enforcement **sketch**; Epic 2 implements it for list reads/writes and invites. Do not invent a second ACL scheme in the UI.
 
 ### AD-20 — Card registration [ADOPTED]
 
@@ -217,6 +221,7 @@ flowchart LR
 | Errors | Fail-loud on unknown/ambiguous detect and must-parse failure; structured JSON API errors; generic auth failures |
 | Config | Secrets/SMTP/paths outside repo |
 | Auth cookies | Same-site first-party; Secure in HTTPS |
+| Auth email tokens | Hash at rest; TTL; claim re-checks `expires_at`; shared claim helper (AD-8 addendum) |
 | i18n | EN + ES from v1; keys in `ui`; preference remembered on account (Account menu); first visit from browser |
 | Appearance | Light / Dark / System from Account menu; remembered on account; default System (OS/browser); Warm Balance token sets from DESIGN.md |
 | Logging | No raw statement PII at info; correlate by session/statement/batch ids |
@@ -308,7 +313,7 @@ erDiagram
 
 | Capability / Area | Lives in | Governed by |
 | --- | --- | --- |
-| Auth signup/signin/reset | `api` auth + SMTP; `ui` account | AD-8, AD-1, AD-22 |
+| Auth signup/signin/reset | `api` auth + SMTP; `ui` account | AD-8, AD-1, AD-22 — see [auth-mail-interaction-map.md](./auth-mail-interaction-map.md) |
 | Lists, membership, splits, ACL | `domain` + persistence | AD-19, AD-5, AD-6 |
 | Cards / IBAN registration | `domain` + persistence; `ui` interrupt | AD-20, AD-12 |
 | Detect / split / parse / normalize | `adapters/bank/*` | Paradigm, AD-2, AD-11, AD-16 |

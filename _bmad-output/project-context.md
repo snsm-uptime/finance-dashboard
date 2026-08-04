@@ -218,6 +218,7 @@ Pins: match majors; re-verify patches **only when creating lockfiles** (Story 1.
 - Order & independence: follow `epics.md` (Epic N must not need Epic N+1)
 - Gates: Epic 5 **5.9/5.10 after 5.1–5.8 (J3+J7)** · **3.2–3.4** as J5→J2 slice · FR-10 done only with UI (3.2) · **FR-43 done only at 5.4** (3.6 = slot only)
 - Language/theme still required (Epic 1 / UX-DR10) even without FR ids
+- **Before `done`:** short how/why overview (request path, key components, why, what not to break) — see `_bmad-output/implementation-artifacts/story-close-overview-checklist.md`
 
 #### Git / PR / version
 

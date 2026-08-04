@@ -66,3 +66,7 @@
 - Invisible/ZWSP-only list names accepted by strip-only `validate_list_name` — polish beyond Story 2.1 AC
 - No per-user owned-list creation cap — product limit not in v1 / FR-6 scope
 - BFF `/api/lists` Route Handlers lack Vitest coverage (client helper tested; cookie-forward hop untested)
+
+## Deferred from: code review of 1-5-2-auth-mail-interaction-map-and-story-close-overview.md (2026-08-04)
+
+- Known-user SMTP failure returns 503 while unknown email returns identical 200 ack — timing/oracle class already deferred from Story 1.4; map may reference but not “fix” here
