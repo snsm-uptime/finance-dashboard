@@ -51,7 +51,7 @@ development_status:
   epic-1: in-progress
   1-1-scaffold-compose-app-with-health-checks: done
   1-2-sign-up-with-email-password-and-personal-list: review
-  1-3-sign-in-sign-out-and-protect-routes: review
+  1-3-sign-in-sign-out-and-protect-routes: done
   1-4-password-reset-via-email: review
   1-5-config-gated-email-verification: ready-for-dev
   1-6-account-menu-language-en-es-and-theme: ready-for-dev

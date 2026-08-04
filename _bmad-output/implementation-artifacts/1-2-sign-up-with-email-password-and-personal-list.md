@@ -75,6 +75,24 @@ so that I can start owning expenses without a separate setup step.
   - [x] pytest green in CI; ui typecheck/lint remain green; thin ui test for signup form/submit path if practical (coverage floor from 1.1 still holds)
   - [x] Confirm no secrets/PII committed; `.env.example` updated with session/verification placeholders only
 
+### Review Findings
+
+- [ ] [Review][Decision] SESSION_SECRET required but unused — Opaque session tokens use `secrets.token_urlsafe` and never sign/HMAC with `SESSION_SECRET`, yet register refuses empty secret. Choose: (A) HMAC/sign the cookie token with SESSION_SECRET, (B) stop requiring SESSION_SECRET for opaque-token design (rename/document), or (C) defer until a later hardening story.
+
+- [ ] [Review][Patch] Catch unique-email IntegrityError as 409 duplicate_email [api/application/signup.py:41, api/api/routes/auth.py]
+- [ ] [Review][Patch] Reject whitespace-only passwords [api/domain/signup.py:24]
+- [ ] [Review][Patch] Reject SameSite=none unless Secure=true [api/api/settings.py:32]
+- [ ] [Review][Patch] Wrap BFF upstream fetch failures in structured JSON [ui/app/api/auth/register/route.ts:28, ui/app/api/auth/session/route.ts:11]
+- [ ] [Review][Patch] Restore UI coverage floor / test auth paths [ui/vitest.config.mts:16] — branches was dropped 60→50; `lib/session.ts` excluded; no SignupForm submit-path test (Task 6)
+- [ ] [Review][Patch] Constantize session TTL for cookie max_age and DB expires_at [api/adapters/persistence/sessions.py:14, api/api/routes/auth.py]
+- [ ] [Review][Patch] Close signup timing email-enumeration side-channel [api/application/signup.py:42] — hash (or equal-cost work) before/without short-circuiting solely on email_exists
+
+- [x] [Review][Defer] No rate limiting on /auth/register — deferred, pre-existing/hardening
+- [x] [Review][Defer] Opaque session tokens stored plaintext in DB — deferred, pre-existing
+- [x] [Review][Defer] Incomplete hexagonal ports for session/hasher (route imports concrete adapters) — deferred, pre-existing
+- [x] [Review][Defer] Argon2 verify only catches VerifyMismatchError (unused on signup path) — deferred, pre-existing
+- [x] [Review][Defer] CASCADE ondelete paths untested (no user-delete API yet) — deferred, pre-existing
+
 ## Dev Notes
 
 ### Epic context

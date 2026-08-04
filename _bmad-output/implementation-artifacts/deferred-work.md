@@ -17,3 +17,17 @@
 - Pin base image digests and stop floating `pip install uv` in API Dockerfile
 - Harden `docker-compose.prod.yml` (localhost binds, reject placeholder secrets, docs off)
 - Rewrite git history to purge previously committed `bank_data/*.pdf` blobs (Ask First)
+
+## Deferred from: code review of 1-3-sign-in-sign-out-and-protect-routes.md (2026-08-03)
+
+- Application-layer rate limiting / lockout on `POST /auth/sign-in` — not in Story 1.3 scope; defer to a dedicated hardening story
+- Delete expired opaque session rows inside `resolve_session_user_id` — expired tokens already fail auth; cleanup is housekeeping
+- Strengthen “password never logged” tests beyond INFO-level `caplog` (access logs / DEBUG / exception paths)
+
+## Deferred from: code review of 1-2-sign-up-with-email-password-and-personal-list.md (2026-08-03)
+
+- No rate limiting on `POST /auth/register` — Argon2 CPU burn possible; defer to dedicated hardening story
+- Opaque session tokens stored plaintext in `sessions.token` — consider hashing at rest in a later hardening pass
+- Incomplete hexagonal ports for session create/resolve and hasher (routes import concrete adapters) — polish later
+- `Argon2PasswordHasher.verify` only caught `VerifyMismatchError` in the 1.2 merge (unused on signup; sign-in path owns hardening)
+- CASCADE `ondelete` from users→lists/memberships/sessions untested — no user-delete API yet
