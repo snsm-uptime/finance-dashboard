@@ -37,32 +37,36 @@ so that list access checks are consistent before homepage and invite work contin
   - [ ] Add a one-line pointer from `ARCHITECTURE-SPINE.md` (AD-19) to that file — do not rewrite AD-19
   - [ ] Document the **canonical enforcement flow** (single choke path):
     1. Route gets `acting_user_id` only from `require_authenticated_user` (401 if missing)
-    2. Application use-case calls **one** domain ACL port with `(acting_user_id, list_id, action)`
+    2. Application use-case calls **one** domain ACL port: `authorize_list_access(acting_user_id, list_id, action)` → opaque **`ListAccessGrant`**
     3. Port evaluates membership; for owner-only actions also evaluates owner/role
-    4. Persistence is actor-scoped **or** receives an ACL capability/token from that authorization result — **no bare `list_id`** on list-scoped reads/writes (proposed AD-24 practice)
-    5. Route maps denial to established API error policy
-  - [ ] Lock the **proposed stable interface** name: `authorize_list_access(acting_user_id, list_id, action)` (align with Story 2.2 wording — rename only if a stronger name is already in code; document either way)
-  - [ ] Include an **action matrix** with two tiers:
-    - **Member-sufficient:** `list_memberships` (homepage enum), `read_list`, `read_expenses`, `read_balances`, `write_expense`, `import_to_list`, `set_last_opened_list` (+ future peer settle participation)
+    4. Every list-scoped repository method requires that **`ListAccessGrant`** — **no bare `list_id`**, and do **not** mix an alternate “actor-scoped repo” pattern in the same use case (proposed AD-24 practice)
+    5. Route maps denial to the locked HTTP error policy below
+  - [ ] Lock port placement for 2.2: protocol in `api/application/ports.py` (or the established application port module); policy implementation isolated from FastAPI and SQLAlchemy; application services invoke it
+  - [ ] Lock the **proposed stable interface** name: `authorize_list_access(acting_user_id, list_id, action) -> ListAccessGrant` (align with Story 2.2 wording)
+  - [ ] Include an **action matrix** with two tiers (per-list port only — see enumeration rule below):
+    - **Member-sufficient:** `read_list`, `read_expenses`, `read_balances`, `read_ledger`, `write_expense`, `write_ledger`, `import_to_list`, `set_last_opened_list` (+ future peer settle participation). Note: `read_expenses` / `write_expense` are Epic 3 endpoint aliases of `read_ledger` / `write_ledger` if both names appear
     - **Owner-required:** `rename_list`, `invite_member`, `edit_default_split`
     - **Forbidden:** product-admin / global bypass; UI-only ACL as authority
+  - [ ] **Enumeration rule (not a per-list ACL action):** homepage / “lists I belong to” is an actor-scoped query `list_for_user(acting_user_id)` — it does **not** call `authorize_list_access` (no single `list_id`)
   - [ ] Map **Story callers**:
-    - **2.1 (as-built today):** create establishes owner membership (no ACL check needed to create); rename must go through owner authorization (today: ad-hoc in `RenameListService` — sketch marks this as the migration target for the shared port)
-    - **2.2 (must implement against this contract):** membership listing, list detail, expenses/balances stubs, last-opened set + first-paint revalidation
-    - **Later (name only):** 2.3 invite, 2.5 default split, 2.6 overrides, Epic 3/4 ledger + import — same port, new actions as needed
-  - [ ] Document **error / disclosure policy**:
+    - **2.1 (as-built today):** create establishes owner membership (no ACL check needed to create); rename must go through owner authorization (today: ad-hoc in `RenameListService` — sketch marks this as the migration target for the shared port + `ListAccessGrant`)
+    - **2.2 (must implement against this contract):** actor-scoped membership listing; per-list ACL for list detail, expenses/balances stubs, last-opened set + first-paint revalidation
+    - **Later (name only):** 2.3 invite, 2.5 default split, 2.6 overrides, Epic 3/4 ledger + import — same port, new actions as needed; **any story adding a list-scoped operation updates this sketch’s action matrix and caller map in the same PR**
+  - [ ] Document **error / disclosure policy** (locked):
     - Unauthenticated → **401**
-    - Authenticated non-member (and missing-list when anti-enumeration applies) → deny via `NotListMemberError` / `403` `not_list_member` (preserve 2.1 rename posture: missing list ≡ non-member for existence oracle)
-    - Authenticated member who is not owner on owner-only action → `NotListOwnerError` / owner deny code (do not collapse into not-member)
-    - If 2.2 chooses 404 for some reads: document and apply **consistently** — do not mix 403/404 per resource class without saying so
+    - **List-scoped reads** (detail, expenses, balances, ledger reads, and any membership-gated **read** of a list resource): authenticated non-member **and** missing list → **404** with the same client-safe body (anti-enumeration — do **not** use 403 for these reads)
+    - **Member-gated mutations** (including `set_last_opened_list`): missing/non-member → **403** `not_list_member` (same safe denial as 2.1 rename for non-members)
+    - Authenticated member who is not owner on owner-only action → `NotListOwnerError` / **403** owner deny code (do not collapse into not-found)
+    - Do **not** silently change 2.1 rename behavior in this docs-only story
   - [ ] Document **as-built gap** honestly: 2.1 has membership-filtered `GET /lists` + ad-hoc rename checks; `get_list` / `update_list_name` still accept bare `list_id`; `deps.require_authenticated_user` docstring still says “membership ACL = Epic 2”. Sketch = target contract; **2.2 implements** the port — do not pretend compliance already exists
   - [ ] Include one scannable mermaid (or ASCII) of the choke path — not a novel
   - [ ] Cover **what not to break** (personal list = ordinary `List` + membership; peers for reads; no second ACL in Next/`proxy.ts`; auth session ≠ Import Session)
 
 - [ ] Task 2: Hygiene + handoff (AC: #1, #2)
   - [ ] Link the sketch from this story’s Completion Notes / File List
+  - [ ] **Update Story 2.2** (`2-2-lists-homepage-membership-scoped-access.md`) in this docs PR: replace all non-member **read** `403` / “prefer 403” language with **404** for missing-or-non-member list-scoped reads (same client-safe body); keep member-gated mutation denial as 403 where applicable; add the updated 2.2 path to this story’s File List
   - [ ] Mark sprint `action_items` entry “Membership ACL enforcement sketch (contract only; impl in 2.2)” → `done` when the sketch lands
-  - [ ] Do **not** mark sibling Epic 1.5 stories done; do **not** start implementing 2.2 on this branch; do **not** edit product list/ACL code beyond optional docstring pointer if useful (prefer docs-only)
+  - [ ] Do **not** mark sibling Epic 1.5 stories done; do **not** start implementing 2.2 product code on this branch; do **not** edit product list/ACL code beyond optional docstring pointer if useful (prefer docs-only)
   - [ ] Before marking this story `done`: paste story-close how/why overview per `story-close-overview-checklist.md`
   - [ ] Prefer Conventional Commit on branch `docs/1/1-5-4-membership-acl-enforcement-sketch`
 
@@ -90,12 +94,17 @@ Epic 1.5 = Auth spine hardening & Epic 2 prep (Correct Course / Epic 1 retro). C
 |-------|----------|
 | Sketch path | Architecture companion next to spine (Winston-owned living doc) |
 | Enforcement layer | **One application → domain ACL port path** — not per-route middleware as the authority; not UI/`proxy.ts` |
-| Proposed interface | `authorize_list_access(acting_user_id, list_id, action)` |
-| Repo rule | Proposed AD-24 practice: no bare `list_id` without `acting_user_id` or ACL token |
+| Proposed interface | `authorize_list_access(acting_user_id, list_id, action) -> ListAccessGrant` |
+| Port home (2.2) | Protocol in `api/application/ports.py` (or established application port module); policy free of FastAPI/SQLAlchemy |
+| Repo rule | List-scoped repos require **`ListAccessGrant`** only — no bare `list_id`; do not mix actor-scoped alternatives in the same use case |
+| Enumeration | `list_for_user(acting_user_id)` is actor-scoped — **not** a per-list ACL action |
 | Peer vs owner | Membership = peer read/write of ledger/import; owner-only = rename, invite, standing default-split |
+| Read denial HTTP | List-scoped **reads** → **404** for missing list ≡ non-member (same body); never 403 on those reads |
+| Mutation denial HTTP | Member-gated mutations (incl. `set_last_opened_list`) + 2.1 rename non-member → **403** `not_list_member`; owner-only deny → **403** owner code |
 | Product admin | **None** in v1 |
 | Personal list | Same `List` entity + owner membership — never a separate type |
-| Implementation story | **2.2** owns code; this story owns the contract doc only |
+| Living ownership | Any story adding a list-scoped operation updates this sketch’s action matrix + caller map in the **same PR** |
+| Implementation story | **2.2** owns code; this story owns the contract doc (+ 2.2 story-file disclosure alignment) |
 | Naming | Sprint key `1-5-4-…` = Epic **1.5** story 4 — **not** Epic 1 story 5 (`1-5-config-gated-…`) |
 | Action item | Marks “Membership ACL enforcement sketch…” sprint action item `done` when sketch lands |
 
@@ -105,6 +114,7 @@ Epic 1.5 = Auth spine hardening & Epic 2 prep (Correct Course / Epic 1 retro). C
 |----------|------|---------|
 | Living ACL sketch | `…/architecture-finance-helper-2026-08-03/membership-acl-enforcement-sketch.md` | AC #1 |
 | Spine pointer | `ARCHITECTURE-SPINE.md` AD-19 (one link) | Discoverability |
+| Story 2.2 alignment | `2-2-lists-homepage-membership-scoped-access.md` | Read denial **404** (no prefer-403 drift) |
 
 **Not deliverables:** domain ACL port implementation, new list/detail/expense routes, last-opened storage, homepage UI, invite tokens, schema/migrations, rate limits, verify-gate contract (1.5.3), Playwright suites.
 
@@ -115,12 +125,15 @@ Epic 1.5 = Auth spine hardening & Epic 2 prep (Correct Course / Epic 1 retro). C
 ## Overview (mermaid choke path)
 ## Invariants (AD-19 + proposed AD-24 cheat sheet)
 ## Canonical port
-### Signature
-### Action vocabulary
+### Signature (`authorize_list_access` → `ListAccessGrant`)
+### Port home (`api/application/ports.py`)
+### Action vocabulary (incl. ledger aliases)
 ## Action matrix (member vs owner)
+## Enumeration vs per-list ACL
 ## Story caller map (2.1 as-built → 2.2 must-call → later)
-## Error / disclosure policy
+## Error / disclosure policy (reads 404 · mutations 403)
 ## As-built gap (2.1 ad-hoc rename) → target
+## Living ownership (update matrix when adding ops)
 ## What not to break / anti-patterns
 ## Related docs (spine, Story 2.2, auth-mail map)
 ```
@@ -132,9 +145,10 @@ Epic 1.5 = Auth spine hardening & Epic 2 prep (Correct Course / Epic 1 retro). C
 | Auth gate | `api/api/deps.py` `require_authenticated_user` | Session → UUID; docstring says ACL = Epic 2 | Auth only; ACL is separate next hop |
 | List routes | `api/api/routes/lists.py` | `GET /lists` membership-filtered; `POST /lists` create; `PATCH` rename owner-only | Routes must **call** services that call ACL — routes are not the ACL |
 | Application | `api/application/lists.py` | `CreateOwnedListService`, `RenameListService` (ad-hoc membership+owner), `ListMembershipsService` | Rename is the **migration exemplar**; 2.2 adds shared port + new use-cases |
-| Repo protocol | `ListRepository` in `lists.py` | `get_list(list_id)`, `get_membership`, `list_for_user`, `update_list_name(list_id, …)` | Target: list-scoped data access carries actor or ACL token |
+| Ports | `api/application/ports.py` | Existing hex ports (email, etc.) | 2.2 adds `authorize_list_access` / `ListAccessGrant` protocol here |
+| Repo protocol | `ListRepository` in `lists.py` | `get_list(list_id)`, `get_membership`, `list_for_user`, `update_list_name(list_id, …)` | Target: list-scoped methods require `ListAccessGrant`; enum stays `list_for_user(actor)` |
 | Persistence | `api/adapters/persistence/repositories.py`, `models.py` | `ListMembershipModel.role` `"owner"` \| `"member"`; `uq_list_membership` | Do not redesign roles/schema in this story |
-| Errors | `api/domain/errors.py` | `NotListMemberError`, `NotListOwnerError` | Reuse; do not invent a third “forbidden” type without cause |
+| Errors | `api/domain/errors.py` | `NotListMemberError` (2.1 → 403 on rename), `NotListOwnerError`, `ListNotFoundError` | **Reads** → **404** (`ListNotFoundError` or equivalent same body); member-gated mutations → **403** `not_list_member`; keep owner deny distinct |
 | UI / BFF | `ui/app/lists/*`, `ui/app/api/lists/*`, `ui/proxy.ts` | Lists BFF; proxy presence-only; `/api/lists` public at proxy | UI never becomes second ACL truth |
 | Story 2.2 | `_bmad-output/implementation-artifacts/2-2-lists-homepage-membership-scoped-access.md` | Already specifies domain ACL port + tests | Sketch must **align names/flow** so 2.2 does not diverge |
 
@@ -144,7 +158,7 @@ Epic 1.5 = Auth spine hardening & Epic 2 prep (Correct Course / Epic 1 retro). C
 
 - **AD-19:** Membership required for list ledger read/write + import; peers; no product admin; personal list at signup
 - **AD-19 addendum:** One application-layer enforcement path; this story = sketch; 2.x = implementation
-- **Proposed AD-24 (review guidance — encode as practice in the sketch):** domain ACL port; repos must not accept bare `list_id` without `acting_user_id` or ACL token
+- **Proposed AD-24 (review guidance — encode as practice in the sketch):** domain ACL port returns `ListAccessGrant`; list-scoped repos require that grant — do not rely on application-only checks with unscoped repos; do not mix actor-scoped alternatives in the same use case
 - **AD-1:** Domain has no FastAPI/SQLAlchemy; ORM under persistence; `ui` → HTTP only
 - **AD-8:** Auth remains httpOnly cookie / BFF — ACL is orthogonal to session resolve
 - **NFR-3 / FR-8:** Non-members cannot read expenses/balances; visibility = membership
@@ -165,8 +179,9 @@ Epic 1.5 = Auth spine hardening & Epic 2 prep (Correct Course / Epic 1 retro). C
 |-------|------|
 | NEW sketch | `…/architecture-finance-helper-2026-08-03/membership-acl-enforcement-sketch.md` |
 | UPDATE spine link | same folder `ARCHITECTURE-SPINE.md` (AD-19 pointer only) |
+| UPDATE Story 2.2 | `_bmad-output/implementation-artifacts/2-2-lists-homepage-membership-scoped-access.md` (read denial → 404) |
 | UPDATE status | `sprint-status.yaml` (story → ready-for-dev now; → done + action_item when implemented) |
-| REFERENCE only | `api/application/lists.py`, routes, errors, models, Story 2.2, auth-mail map |
+| REFERENCE only | `api/application/lists.py`, `ports.py`, routes, errors, models, auth-mail map |
 | DO NOT TOUCH | ACL port implementation, list detail/expense endpoints, invite flows, schema, UI homepage |
 
 ### Previous story intelligence
@@ -178,29 +193,34 @@ Epic 1.5 = Auth spine hardening & Epic 2 prep (Correct Course / Epic 1 retro). C
 - Docs-only: no pytest required for acceptance
 
 **From 2.1 (as-built ACL fragments):**
-- `RenameListService` already collapses missing list + non-member → `NotListMemberError` (anti-enumeration)
+- `RenameListService` already collapses missing list + non-member → `NotListMemberError` → API **403** `not_list_member` (mutation anti-enumeration)
 - Owner check uses `existing.owner_id != actor` → `NotListOwnerError`
-- `GET /lists` already membership-filtered via `list_for_user`
-- Gap: no shared `authorize_list_access`; repos still accept bare `list_id`
+- `GET /lists` already membership-filtered via `list_for_user` (actor-scoped enum — keep this pattern; do not force it through the per-list port)
+- Gap: no shared `authorize_list_access` / `ListAccessGrant`; repos still accept bare `list_id`
+- **Policy for Epic 2:** list-scoped **reads** → **404**; member-gated **mutations** (incl. last-opened) → **403** `not_list_member`
 
-**From Story 2.2 (consumer contract — do not contradict):**
-- Domain ACL port with `acting_user_id`, `list_id`, `action`
-- Application invocation; no SQLAlchemy/FastAPI in domain
-- Member reads for homepage/detail/expense/balance stubs
+**From Story 2.2 (consumer contract — align disclosure in this PR):**
+- Domain ACL port with `acting_user_id`, `list_id`, and `action` → **`ListAccessGrant`**
+- Application invocation; protocol lives under application ports; no SQLAlchemy/FastAPI in policy
+- Member reads for detail/expense/balance stubs; homepage via actor-scoped enum
 - First-paint revalidates membership for remembered list
-- 401 unauthenticated; deny non-members; Postgres isolation tests
+- 401 unauthenticated; **reads → 404**; **set_last_opened_list** missing/non-member → **403**
 - Owner-only mutations stay out of 2.2 new endpoints
 
 **Anti-patterns (prevent these):**
 - Implementing the ACL port “while sketching”
 - Per-route `if membership` copies without a shared port
+- Mixing bare-`list_id` repos with a separate application-only check (Pair 14)
+- Treating homepage enum as `authorize_list_access(..., list_id=?)`
 - UI/`proxy.ts` as the security boundary
 - Treating personal list as a separate entity type
 - Adding product-admin or owner-vs-viewer for ordinary expense reads
+- Returning **403** on list-scoped **reads** for non-members (leaks “exists but forbidden” vs not-found)
+- Returning **404** on `set_last_opened_list` / rename non-member paths without an explicit policy change story
 - Documenting 2.1 ad-hoc rename as already satisfying proposed AD-24
 - Writing invite verify-gate rules here (that is 1.5.3)
 - Confusing auth **session** with **Import Session** (AD-4)
-- Starting 2.2 implementation on the `docs/1/1-5-4-…` branch
+- Starting 2.2 product implementation on the `docs/1/1-5-4-…` branch
 
 ### Git intelligence summary
 
@@ -224,11 +244,12 @@ Branch for this story: `docs/1/1-5-4-membership-acl-enforcement-sketch` (AD-13 /
 
 - **No code tests required** for the contract sketch deliverable
 - Acceptance check = a reviewer can answer from the sketch alone:
-  1. Where is membership enforced (layer + port)?
-  2. Which actions are member vs owner?
+  1. Where is membership enforced (layer + port + grant)?
+  2. Which actions are member vs owner? Which ops are actor-scoped enum vs per-list ACL?
   3. What must Story 2.1 preserve and Story 2.2 call?
-- Sketch must state the **test contract 2.2 will own**: domain allow/deny TDD; Postgres multi-user isolation on list enum + expenses/balances deny; non-member denied on **read and write** (write paths land in later stories but pattern is reserved)
-- Optional: one cross-link from Story 2.2 Dev Notes to this sketch after it exists — do that in the 2.2 PR or a tiny docs follow-up, not by implementing 2.2 here
+  4. Reads vs mutations: which HTTP status for missing/non-member? (**404** reads · **403** member-gated mutations)
+- Sketch must state the **test contract 2.2 will own**: domain allow/deny TDD; Postgres multi-user isolation on list enum + expenses/balances deny; non-member **read** → **404**; `set_last_opened_list` non-member → **403**; write denial pattern reserved for later ledger stories
+- Cross-link Story 2.2 Dev Notes to this sketch after it exists (done in this PR’s 2.2 story-file update + optional one-liner once the sketch path is real)
 
 ### Latest tech notes
 
@@ -269,3 +290,5 @@ Follow `_bmad-output/project-context.md`: AD-19 membership ACL; non-member denie
 ## Change Log
 
 - 2026-08-04: Story context created (ready-for-dev) — Ultimate context engine analysis completed
+- 2026-08-04: Locked list-scoped **reads** → **404** for missing ≡ non-member; kept 2.1 rename 403 as as-built mutation note
+- 2026-08-04: Validate-story pass — `ListAccessGrant` repo rule; enum vs per-list ACL; mutation 403 incl. last-opened; ledger actions; port home; living-doc ownership; Task 2 aligns Story 2.2 disclosure
