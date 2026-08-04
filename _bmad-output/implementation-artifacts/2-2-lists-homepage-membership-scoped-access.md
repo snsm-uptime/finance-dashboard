@@ -19,7 +19,7 @@ so that I can open the right household or personal list quickly.
 
 2. **Given** I am not a member of a list  
    **When** I request that list’s expenses or balances via API/UI  
-   **Then** access is denied (NFR-3)
+   **Then** access is denied with **404** (same body as missing list) (NFR-3; Story 1.5.4 disclosure)
 
 3. **Given** I select a list row  
    **When** navigation completes  
@@ -41,15 +41,15 @@ so that I can open the right household or personal list quickly.
 
 - [ ] Task 1: Domain ACL port — membership authorization (AC: #1, #2) — TDD first
   - [ ] Red→green domain tests: member may read list-scoped resources; non-member denied; personal list member (sole) allowed; no product admin bypass
-  - [ ] Implement a **domain ACL port** (e.g. `authorize_list_access(acting_user_id, list_id, action)`) invoked from application services — AD-19; follow proposed AD-24 choke guidance: repos must not accept bare `list_id` without `acting_user_id` or an ACL token from that port
+  - [ ] Implement a **domain ACL port** `authorize_list_access(acting_user_id, list_id, action) -> ListAccessGrant` invoked from application services — AD-19; protocol in `api/application/ports.py`; follow proposed AD-24: list-scoped repos require the grant — no bare `list_id`
   - [ ] Peers only (FR-8): membership grants read of list homepage row + expenses/balances stubs; owner-vs-viewer is **not** a product role for these reads
   - [ ] Keep owner-only actions out of this story’s new endpoints (rename = 2.1, invite = 2.3, default split = 2.5)
   - [ ] Domain has **no** FastAPI / SQLAlchemy imports (AD-1)
 
 - [ ] Task 2: Application + persistence — “lists I belong to” + last-opened (AC: #1, #3, #4)
-  - [ ] Use-case: list memberships for current user → ordered/stable list of lists (id, name; balance placeholder fields OK as `"0"` / null until Epic 3)
-  - [ ] Use-case: open list detail / expenses|balances stub — **must** call ACL; non-member → deny (do not return empty success that leaks existence if avoidable; prefer 403; if using 404 for anti-enumeration, document and apply consistently)
-  - [ ] Use-case: set / read **last-opened list** for the authenticated user
+  - [ ] Use-case: list memberships for current user → ordered/stable list of lists (id, name; balance placeholder fields OK as `"0"` / null until Epic 3) — actor-scoped `list_for_user(acting_user_id)`; does **not** call per-list `authorize_list_access`
+  - [ ] Use-case: open list detail / expenses|balances stub — **must** call ACL; missing list ≡ non-member → **404** with the same client-safe body (anti-enumeration; do **not** use 403 on these reads)
+  - [ ] Use-case: set / read **last-opened list** for the authenticated user — set path is a member-gated mutation: missing/non-member → **403** `not_list_member`
   - [ ] **Decide and document in completion notes** where last-opened lives (pick one):
     - Preferred: account column on `User` (e.g. `last_opened_list_id` UUID nullable) via Alembic — aligns with Account-remembered language/theme pattern
     - Allowed: httpOnly cookie or same-origin client persistence — still must re-validate membership on first paint
@@ -61,11 +61,11 @@ so that I can open the right household or personal list quickly.
   - [ ] Authenticated endpoints (session cookie from 1.2/1.3) under `api/api/` — snake_case DTOs
   - [ ] Recommended shapes (rename only if 2.1 already fixed conventions):
     - `GET /api/lists` → membership-filtered rows `{ id, name, balance_crc? }` (balance may be `"0"` string placeholder; money as **string** never JSON number)
-    - `GET /api/lists/{list_id}` → list detail shell DTO for members only
-    - `GET /api/lists/{list_id}/expenses` and/or `.../balances` → stub empty collections / zero balances for members; **403/deny** for non-members (NFR-3) — required even before Epic 3 ledger exists
-    - `PUT` or `POST /api/me/last-opened-list` `{ list_id }` → set remembered list (member-only)
+    - `GET /api/lists/{list_id}` → list detail shell DTO for members only; missing/non-member → **404**
+    - `GET /api/lists/{list_id}/expenses` and/or `.../balances` → stub empty collections / zero balances for members; missing/non-member → **404** (NFR-3) — required even before Epic 3 ledger exists
+    - `PUT` or `POST /api/me/last-opened-list` `{ list_id }` → set remembered list (member-only); missing/non-member → **403** `not_list_member`
     - Extend `GET /api/auth/me` (or equivalent) to include `last_opened_list_id` when useful for first paint
-  - [ ] Unauthenticated → 401 (existing 1.3 gate); non-member → ACL deny; never leak other users’ list names via enumeration bugs
+  - [ ] Unauthenticated → 401 (existing 1.3 gate); list-scoped **reads** → **404** for non-member/missing; never leak other users’ list names via enumeration bugs
   - [ ] Register routers in `api/api/app.py`; keep `/health` public
   - [ ] Wire structured JSON errors; no PII in info logs
 
@@ -139,7 +139,8 @@ Epic 2 = Shared lists & household membership (FR-6…FR-10). Demo gate = unregis
 - **AD-1:** Hex layout; lists/membership/ACL live in `domain` + persistence; cookie/DTO edge in `api/api/`; `ui` → HTTP only
 - **AD-8:** Reuse 1.2/1.3 httpOnly Secure cookie — single session issuer; same-origin BFF/proxy
 - **AD-19:** Users are peers; read/write list ledger only with membership; personal list auto-created at signup; no product admin
-- **Proposed AD-24 (review guidance — apply as practice):** list-scoped reads/writes through domain ACL port; repos require `acting_user_id` or ACL token — do not rely on application-only checks with unscoped repos
+- **Proposed AD-24 (review guidance — apply as practice):** list-scoped reads/writes through domain ACL port → `ListAccessGrant`; repos require that grant — do not rely on application-only checks with unscoped repos
+- **Disclosure (Story 1.5.4):** list-scoped **reads** → **404** missing ≡ non-member; member-gated mutations (e.g. set last-opened) → **403** `not_list_member`; living contract: [`membership-acl-enforcement-sketch.md`](../planning-artifacts/architecture/architecture-finance-helper-2026-08-03/membership-acl-enforcement-sketch.md)
 - **AD-12:** DESIGN.md + EXPERIENCE.md win; Warm Balance / Soft-Ledger; kits unstyled only
 - **AD-5:** If any money fields appear on wire, `Decimal` / string amounts — never float / JSON numbers
 - **AD-22:** Alembic for any last-opened column; never recreate PG volume
@@ -165,9 +166,10 @@ Pins: lockfiles from Story 1.1 are truth. Do not bump majors inside this feature
 
 ```text
 api/
-  domain/…                      # NEW/UPDATE: membership ACL port + list authorization rules
+  application/ports.py          # UPDATE: authorize_list_access + ListAccessGrant protocol
+  domain/…                      # NEW/UPDATE: membership ACL policy (no FastAPI/SQLAlchemy)
   application/…                 # NEW: ListMyLists, GetList, GetExpenses/Balances stubs, SetLastOpened
-  adapters/persistence/…        # UPDATE: membership-scoped queries; optional User.last_opened_list_id + Alembic
+  adapters/persistence/…        # UPDATE: membership-scoped queries requiring ListAccessGrant; optional User.last_opened_list_id + Alembic
   api/routes/lists.py (or equiv)# NEW: membership-filtered list routes
   api/app.py                    # UPDATE: register list routers
   tests/…                       # NEW: domain ACL + Postgres membership scoping
@@ -218,10 +220,10 @@ ui/
 ### Testing requirements
 
 - **Domain (TDD):** ACL allow member / deny non-member; last-opened ignored when membership gone
-- **Integration (Postgres 16):** multi-user membership isolation on `GET /lists` and expenses/balances stubs; last-opened write + first-paint decision
+- **Integration (Postgres 16):** multi-user membership isolation on `GET /lists` and expenses/balances stubs; non-member **read** → **404**; `set_last_opened_list` non-member → **403**; last-opened write + first-paint decision
 - **UI:** homepage membership filter; navigate to detail; first-paint fallback — test-after; keep coverage floor
-- **Must-cover (project-context):** ACL non-member denied on **read and write** — for 2.2 at least **read** of expenses/balances; leave write denial pattern reusable for later stories
-- **Anti-patterns:** SQLite stand-in · PII fixtures · settle math only in browser · ACL only in Next without API enforcement
+- **Must-cover (project-context):** ACL non-member denied on **read and write** — for 2.2 at least **read** of expenses/balances as **404**; write denial is locked in the ACL sketch as **403** `not_list_member` (assert when ledger/import endpoints land)
+- **Anti-patterns:** SQLite stand-in · PII fixtures · settle math only in browser · ACL only in Next without API enforcement · **403 on list-scoped reads**
 
 ### Previous story intelligence
 
@@ -273,6 +275,7 @@ Follow `_bmad-output/project-context.md` entirely. Highest-risk misses for this 
 - [Source: `_bmad-output/planning-artifacts/epics.md` — Epic 2 / Story 2.2]
 - [Source: `ARCHITECTURE-SPINE.md` — AD-1, AD-8, AD-19, capability map]
 - [Source: `reviews/review-adversarial-divergence.md` — proposed AD-24 ACL choke]
+- [Source: `_bmad-output/planning-artifacts/architecture/architecture-finance-helper-2026-08-03/membership-acl-enforcement-sketch.md` — Story 1.5.4 contract]
 - [Source: `EXPERIENCE.md` — IA First paint / Lists homepage / List row]
 - [Source: `DESIGN.md` — Lists homepage secondary glimpse; Warm Balance tokens]
 - [Source: `prd.md` — FR-8, NFR-3]
@@ -297,4 +300,4 @@ Follow `_bmad-output/project-context.md` entirely. Highest-risk misses for this 
 
 Status: **ready-for-dev**
 
-Completion note: Ultimate context engine analysis completed — comprehensive developer guide created (2026-08-03).
+Completion note: Ultimate context engine analysis completed — comprehensive developer guide created (2026-08-03). Disclosure aligned with Story 1.5.4 (reads → 404; mutations → 403; ListAccessGrant) on 2026-08-04. Sketch path linked after Story 1.5.4 landed (2026-08-04).

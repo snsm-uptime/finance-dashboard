@@ -189,7 +189,7 @@ flowchart LR
 - **Binds:** all list-scoped reads/writes; invites
 - **Prevents:** Implicit global read; two ACL schemes
 - **Rule:** Users are peers. A user may read/write a list’s ledger and import into it only if they hold **membership** on that list (personal list auto-created at signup). Invite acceptance creates membership. No privileged product admin role in v1.
-- **Addendum (Epic 1.5):** Membership checks are enforced in **one** application-layer path (not ad-hoc per route). Epic 1.5 delivers the enforcement **sketch**; Epic 2 implements it for list reads/writes and invites. Do not invent a second ACL scheme in the UI.
+- **Addendum (Epic 1.5):** Membership checks are enforced in **one** application-layer path (not ad-hoc per route). Epic 1.5 delivers the enforcement **sketch**; Epic 2 implements it for list reads/writes and invites. Do not invent a second ACL scheme in the UI. Living contract: [membership-acl-enforcement-sketch.md](./membership-acl-enforcement-sketch.md).
 
 ### AD-20 — Card registration [ADOPTED]
 
@@ -314,7 +314,7 @@ erDiagram
 | Capability / Area | Lives in | Governed by |
 | --- | --- | --- |
 | Auth signup/signin/reset | `api` auth + SMTP; `ui` account | AD-8, AD-1, AD-22 — see [auth-mail-interaction-map.md](./auth-mail-interaction-map.md) |
-| Lists, membership, splits, ACL | `domain` + persistence | AD-19, AD-5, AD-6 |
+| Lists, membership, splits, ACL | `domain` + persistence | AD-19, AD-5, AD-6 — see [membership-acl-enforcement-sketch.md](./membership-acl-enforcement-sketch.md) |
 | Cards / IBAN registration | `domain` + persistence; `ui` interrupt | AD-20, AD-12 |
 | Detect / split / parse / normalize | `adapters/bank/*` | Paradigm, AD-2, AD-11, AD-16 |
 | Import Session review | `application` + `ui` | AD-4, AD-9, AD-12 |
