@@ -44,3 +44,14 @@ def resolve_session_user_id(db: Session, token: str | None) -> uuid.UUID | None:
     if expires <= datetime.now(UTC):
         return None
     return row.user_id
+
+
+def revoke_session(db: Session, token: str | None) -> bool:
+    """Delete the opaque session row. Returns True if a row was removed."""
+    if not token:
+        return False
+    row = db.scalar(select(SessionModel).where(SessionModel.token == token).limit(1))
+    if row is None:
+        return False
+    db.delete(row)
+    return True

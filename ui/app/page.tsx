@@ -21,7 +21,8 @@ export default async function Home() {
       <p className={styles.copy}>
         Compose services <code>db</code>, <code>api</code>, and <code>ui</code> are
         ready.{" "}
-        <Link href="/signup">Create an account</Link> to get your personal list.
+        <Link href="/signup">Create an account</Link> or{" "}
+        <Link href="/sign-in">sign in</Link> to get your personal list.
       </p>
     </main>
   );

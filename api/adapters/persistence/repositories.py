@@ -1,8 +1,9 @@
-"""SQLAlchemy signup repository."""
+"""SQLAlchemy signup / auth user repositories."""
 
 from __future__ import annotations
 
 from application.ports import NewListRecord, NewMembershipRecord, NewUserRecord
+from application.signin import AuthUserRecord
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -48,3 +49,14 @@ class SqlAlchemySignupRepository:
                 role=membership.role,
             )
         )
+
+
+class SqlAlchemyAuthUserRepository:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def get_by_email(self, email: str) -> AuthUserRecord | None:
+        row = self._session.scalar(select(UserModel).where(UserModel.email == email).limit(1))
+        if row is None:
+            return None
+        return AuthUserRecord(id=row.id, email=row.email, password_hash=row.password_hash)

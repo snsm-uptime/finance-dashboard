@@ -19,6 +19,16 @@ class RegisterResponse(BaseModel):
     list_name: str
 
 
+class SignInRequest(BaseModel):
+    email: str = ""
+    password: str = ""
+
+
+class SignInResponse(BaseModel):
+    user_id: UUID
+    email: str
+
+
 class SessionResponse(BaseModel):
     authenticated: bool
     user_id: UUID

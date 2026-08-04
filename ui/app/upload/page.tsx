@@ -2,15 +2,15 @@ import { redirect } from "next/navigation";
 
 import { SignOutButton } from "@/components/SignOutButton";
 import { fetchSession } from "@/lib/session";
-import styles from "./lists.module.css";
+import styles from "../lists/lists.module.css";
 
 export const dynamic = "force-dynamic";
 
-/** Minimal Lists homepage first-paint (EXPERIENCE). Empty-state copy not journeyed. */
-export default async function ListsPage() {
+/** Protected upload entry stub — full import pipeline is Epic 4. */
+export default async function UploadPage() {
   const session = await fetchSession();
   if (!session) {
-    redirect("/sign-in?returnTo=/lists");
+    redirect("/sign-in?returnTo=/upload");
   }
 
   return (
@@ -19,16 +19,15 @@ export default async function ListsPage() {
         <p className={styles.brand}>finance-helper</p>
         <SignOutButton />
       </div>
-      <h1 className={styles.title}>Lists</h1>
+      <h1 className={styles.title}>Upload</h1>
       <p className={styles.copy}>
-        Your personal list is ready. Shared lists and invites land in later
-        stories.
+        Statement upload lands in Epic 4. This route is auth-gated so sign-out
+        can be verified now.
       </p>
       <p className={styles.copy}>
-        <a className={styles.link} href="/upload">
-          Upload
-        </a>{" "}
-        (protected stub — statement import lands in Epic 4).
+        <a className={styles.link} href="/lists">
+          Back to lists
+        </a>
       </p>
     </main>
   );
