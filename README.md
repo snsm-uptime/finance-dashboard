@@ -35,7 +35,7 @@ Edit files under `api/` or `ui/` and refresh — no image rebuild needed for mos
 docker compose up --build
 ```
 
-Compose reads `.env` via `env_file` (no silent secret defaults). Set a full `DATABASE_URL` for `api` (URL-encode special characters in the password).
+Compose reads `.env` via `env_file` (no silent secret defaults). `DATABASE_URL` for `api` is built from `POSTGRES_*` (URL-encode special characters in the password).
 
 Health checks:
 
