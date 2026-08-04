@@ -44,7 +44,7 @@ so that household peers can share expenses with me.
   - [ ] **2.1** Create/rename owned lists — ownership model for owner-only invite ACL
   - [ ] **2.2** Lists homepage + list detail surface + membership ACL API — Invite UI lives on list detail / shared-expenses (EXPERIENCE IA)
   - [ ] Read completion notes from 1.2–1.4 and 1.6 for AD-8 forks (cookie name, BFF vs proxy, opaque vs JWT), email port method names, language column — **reuse; never re-decide**
-  - [ ] **1.5 Soft couple:** verification gate applies at **invite acceptance** (Story 2.4), not at send. Do not block send on invitee verification status
+  - [ ] **1.5 Soft couple:** verification gate applies at **invite acceptance** (Story 2.4), not at send. Do not block send on invitee verification status — see [`invite-verify-gate-contract.md`](./invite-verify-gate-contract.md)
   - [ ] If any hard prerequisite is incomplete: **stop** — finish those stories first (one story per branch)
 
 - [ ] Task 1: Invite token persistence + domain rules (AC: #1–#3) — close architecture gap with secure defaults

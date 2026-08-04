@@ -150,7 +150,7 @@ Persist-before-send + fail-loud SMTP prevents “email said sent, DB empty.” G
 | Persistence | `api/adapters/persistence/email_verification.py` (separate table) |
 | Stub | `POST /auth/gated-flows/invite-accept-stub` in `api/api/routes/auth.py` |
 
-Invite **accept contract** text = Story **1.5.3** — this map only names the stub/seam.
+Invite **accept contract** (when block / when allow / stub → real): [`invite-verify-gate-contract.md`](../../../implementation-artifacts/invite-verify-gate-contract.md) (Story **1.5.3**). This map only names the stub/seam.
 
 ### Why this shape
 
@@ -199,6 +199,7 @@ Single transactional mail path from api (AD-8). Fail-loud beats silent success t
 | Doc | Role |
 |-----|------|
 | [`ARCHITECTURE-SPINE.md`](./ARCHITECTURE-SPINE.md) AD-8 | Normative decision |
+| [`invite-verify-gate-contract.md`](../../../implementation-artifacts/invite-verify-gate-contract.md) | Invite accept Ensure gate — Story 1.5.3 |
 | `auth-email-token-claim-pattern.md` | Claim copy-paste for Epic 2 invites — **pending 1.5.1 merge** |
 | [`story-close-overview-checklist.md`](../../../implementation-artifacts/story-close-overview-checklist.md) | How/why overview before `done` |
 | Stories 1.2–1.6, 1.5.1 | As-built history / claim fix |
@@ -212,7 +213,7 @@ Single transactional mail path from api (AD-8). Fail-loud beats silent success t
 | Same BFF cookie forward + api issuer | Bearer in `localStorage` or a second session cookie |
 | `SmtpEmailSender` + persist-before-send | Silent “invite sent” on SMTP failure |
 | Shared claim helper + **new** invite token table | Overloading reset/verify rows; claim without `expires_at` |
-| `EnsureEmailVerifiedService` as the gate seam | Ad-hoc verify checks only in routes |
+| `EnsureEmailVerifiedService` as the gate seam — see [`invite-verify-gate-contract.md`](../../../implementation-artifacts/invite-verify-gate-contract.md) | Ad-hoc verify checks only in routes |
 | Generic auth errors | Email-existence oracles on invite/reset/sign-in |
 
 **Known deferred (not shipped):** rate limits (1.5.6), session HMAC / token cleanup (later), hex port polish (1.5.7), reset SMTP timing oracle (deferred-work / 1.4).
