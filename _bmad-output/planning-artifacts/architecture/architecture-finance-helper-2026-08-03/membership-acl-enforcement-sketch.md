@@ -14,14 +14,16 @@ Story-close habit: [`story-close-overview-checklist.md`](../../../implementation
 ```mermaid
 flowchart TD
   Route["FastAPI list-scoped route"]
-  Auth["require_authenticated_user\n→ acting_user_id (401 if missing)"]
+  Auth{"require_authenticated_user"}
+  Unauth["401 unauthenticated"]
   App["Application use-case"]
   Port["authorize_list_access\n(acting_user_id, list_id, action)\n→ ListAccessGrant"]
   Repo["List-scoped repository method\n(requires ListAccessGrant — no bare list_id)"]
   Deny["Route maps denial\nreads → 404 · mutations → 403"]
 
   Route --> Auth
-  Auth --> App
+  Auth -->|missing session| Unauth
+  Auth -->|acting_user_id| App
   App --> Port
   Port -->|grant| Repo
   Port -->|deny| Deny
@@ -43,8 +45,8 @@ flowchart TD
 | Product admin | **None** in v1 — no global bypass |
 | Personal list | Ordinary `List` + owner membership at signup — never a separate entity type |
 | One path | Single application → domain ACL port path — not ad-hoc per-route `if membership` |
-| Grant | Port returns opaque **`ListAccessGrant`**; list-scoped repos require that grant only |
-| Forbidden mix | Do **not** mix bare-`list_id` repos with a separate application-only check in the same use case |
+| Grant | Port returns opaque **`ListAccessGrant`** that **binds `list_id`** (and the authorized `action`); list-scoped repos require that grant only and must reject a grant whose `list_id` does not match the call |
+| Forbidden mix | Target practice: do **not** mix bare-`list_id` repos with a separate application-only check in the same use case. As-built 2.1 rename is a known gap / migration target — not compliance |
 | UI | No second ACL scheme in Next / `proxy.ts` (presence gate ≠ membership) |
 | Auth vs Import | Auth **session** (AD-8) ≠ **Import Session** (AD-4 PDF staging) |
 
@@ -60,8 +62,10 @@ Proposed AD-24 is **review guidance** (Pair 14) — required practice for Epic 2
 authorize_list_access(acting_user_id, list_id, action) -> ListAccessGrant
 ```
 
-- **Allow:** returns opaque `ListAccessGrant` (carry into every list-scoped repo call for that use case).
-- **Deny:** raises domain errors mapped by the route (see Error / disclosure policy). Never return a “soft” grant.
+- **`action`:** stable string literals from the action matrix below (an `Enum` of those same values is fine — do not invent a parallel vocabulary).
+- **Allow:** returns opaque `ListAccessGrant` that binds at least `list_id` (+ authorized `action`). Carry into every list-scoped repo call **for that use case only** — do not reuse across requests, lists, or actions.
+- **Deny:** raises domain errors mapped by the route (see Error / disclosure policy). Never return a “soft” / partial grant.
+- **Fail closed:** unknown `action` → deny (never default-allow). Internal/port errors (e.g. DB failure while checking membership) → deny / propagate as failure — never invent a grant.
 
 ### Port home (Story 2.2)
 
@@ -73,7 +77,9 @@ authorize_list_access(acting_user_id, list_id, action) -> ListAccessGrant
 
 ### Action vocabulary
 
-String (or enum) `action` values below. Ledger aliases: if both names appear in code, `read_expenses` / `write_expense` are Epic 3 endpoint aliases of `read_ledger` / `write_ledger`.
+Stable string literals (or an enum of the same names) from the matrix below.
+
+**Aliases:** `read_expenses` ≡ `read_ledger` and `write_expense` ≡ `write_ledger` at the port — both names are valid inputs and authorize the same capability. Callers may pass either; Epic 3 endpoints may expose the expense-named aliases while the port treats them as synonyms of the ledger actions.
 
 ---
 
@@ -84,12 +90,12 @@ String (or enum) `action` values below. Ledger aliases: if both names appear in 
 | Action | Notes |
 |--------|-------|
 | `read_list` | List detail shell |
-| `read_expenses` | Alias of `read_ledger` at Epic 3 endpoints |
+| `read_expenses` | Synonym of `read_ledger` |
 | `read_balances` | Balance stub / settle strip reads |
 | `read_ledger` | Canonical ledger read |
-| `write_expense` | Alias of `write_ledger` at Epic 3 endpoints |
-| `write_ledger` | Canonical ledger write |
-| `import_to_list` | Import into list (Epic 4+) |
+| `write_expense` | Synonym of `write_ledger` |
+| `write_ledger` | Canonical ledger write (member-gated **mutation**) |
+| `import_to_list` | Import into list (Epic 4+; member-gated **mutation**) |
 | `set_last_opened_list` | Remembered list preference (member-gated **mutation**) |
 | _(future)_ peer settle participation | Same port; add action when Epic 3 settle lands |
 
@@ -134,10 +140,10 @@ String (or enum) `action` values below. Ledger aliases: if both names appear in 
 | Operation | Must call |
 |-----------|-----------|
 | Homepage membership listing | `list_for_user(acting_user_id)` only |
-| List detail | `authorize_list_access(..., read_list)` → grant → repo |
-| Expenses / balances stubs | `authorize_list_access(..., read_expenses` / `read_balances)` → grant → repo |
-| Set last-opened list | `authorize_list_access(..., set_last_opened_list)` → grant; denial → **403** |
-| First-paint revalidation | Re-check membership for remembered `list_id` via the same port (read action) |
+| List detail | `authorize_list_access(..., "read_list")` → grant → repo |
+| Expenses / balances stubs | `authorize_list_access(..., "read_expenses")` or `"read_balances"` → grant → repo |
+| Set last-opened list | `authorize_list_access(..., "set_last_opened_list")` → grant; denial → **403** |
+| First-paint revalidation | `authorize_list_access(..., "read_list")` for remembered `list_id` (per-list grant path — not homepage enum) |
 
 ### Later (name only — same port, new actions as needed)
 
@@ -146,7 +152,7 @@ String (or enum) `action` values below. Ledger aliases: if both names appear in 
 | 2.3 invite | `invite_member` (owner) |
 | 2.5 default split | `edit_default_split` (owner) |
 | 2.6 overrides | list-scoped writes via grant |
-| Epic 3 ledger | `read_ledger` / `write_ledger` (+ expense aliases) |
+| Epic 3 ledger | `read_ledger` / `write_ledger` (+ expense synonyms) |
 | Epic 4 import | `import_to_list` |
 
 **Living rule:** any story adding a list-scoped operation updates this sketch’s action matrix and caller map in the **same PR**.
@@ -155,12 +161,15 @@ String (or enum) `action` values below. Ledger aliases: if both names appear in 
 
 ## Error / disclosure policy (locked)
 
-| Case | HTTP | Code / body |
-|------|------|-------------|
+| Case | HTTP | Domain error → wire |
+|------|------|---------------------|
 | Unauthenticated | **401** | Existing session gate |
-| List-scoped **reads** (detail, expenses, balances, ledger reads, any membership-gated **read** of a list resource): missing list **or** authenticated non-member | **404** | Same client-safe body (anti-enumeration). Do **not** use 403 for these reads |
-| Member-gated **mutations** (incl. `set_last_opened_list`): missing/non-member | **403** | `not_list_member` (same safe denial family as 2.1 rename for non-members) |
-| Authenticated member, not owner, on owner-only action | **403** | `NotListOwnerError` / owner deny code — do **not** collapse into not-found |
+| List-scoped **reads** (detail, expenses, balances, ledger reads, any membership-gated **read**): missing list **or** authenticated non-member | **404** | Raise/map `ListNotFoundError` (or equivalent) → `{"detail": "List not found.", "code": "list_not_found"}` — same body for missing ≡ non-member. Do **not** use 403 for these reads |
+| Member-gated **mutations** (`set_last_opened_list`, `write_ledger`, `write_expense`, `import_to_list`): missing/non-member | **403** | `NotListMemberError` → `{"detail": "You do not have access to this list.", "code": "not_list_member"}` |
+| Owner-only action (`rename_list`, `invite_member`, `edit_default_split`): missing list **or** authenticated non-member | **403** | Same as member-gated mutation → `not_list_member` (as-built rename precedent) |
+| Authenticated **member** who is not owner on owner-only action | **403** | `NotListOwnerError` → `{"detail": "<owner message>", "code": "not_list_owner"}` — do **not** collapse into not-found |
+
+**Cross-endpoint note (intentional tradeoff):** Reads hide existence (404). Mutations return 403 `not_list_member` for missing ≡ non-member. A caller who can hit both a list-scoped read and a member-gated mutation for the same `list_id` can distinguish “exists but forbidden” via the mutation status. Anti-enumeration here prioritizes **read** surfaces; do not “fix” this by returning 404 on mutations without an explicit policy-change story (that would also change 2.1 rename).
 
 **Do not** silently change 2.1 rename behavior in this docs-only story (as-built remains 403 `not_list_member` for missing/non-member on rename).
 
@@ -171,12 +180,12 @@ String (or enum) `action` values below. Ledger aliases: if both names appear in 
 | Layer | Path | Role today | Target |
 |-------|------|------------|--------|
 | Auth gate | `api/api/deps.py` `require_authenticated_user` | Session → UUID; docstring still says “membership ACL = Epic 2” | Auth only; ACL is the next hop |
-| List routes | `api/api/routes/lists.py` | Membership-filtered `GET /lists`; create; rename owner-only | Routes call services that call ACL — routes are not the ACL |
+| List routes | `api/api/routes/lists.py` | Membership-filtered `GET /lists`; create; rename owner-only (`ListNotFoundError`+`NotListMemberError` → 403; `NotListOwnerError` → `not_list_owner`) | Routes call services that call ACL — routes are not the ACL |
 | Application | `api/application/lists.py` | Create / ad-hoc rename / enum | Rename migrates to shared port; 2.2 adds use-cases |
 | Ports | `api/application/ports.py` | Email/signup ports only today | 2.2 adds `authorize_list_access` + `ListAccessGrant` |
-| Repo | `ListRepository` | `get_list(list_id)`, `update_list_name(list_id, …)` bare ids | List-scoped methods require `ListAccessGrant`; enum stays `list_for_user(actor)` |
+| Repo | `ListRepository` | `get_list(list_id)`, `update_list_name(list_id, …)` bare ids | List-scoped methods require `ListAccessGrant` (assert grant.`list_id`); enum stays `list_for_user(actor)` |
 | Persistence | `adapters/persistence/…` | `role` `"owner"` \| `"member"`; `uq_list_membership` | No role/schema redesign in sketch |
-| Errors | `api/domain/errors.py` | `NotListMemberError`, `NotListOwnerError`, `ListNotFoundError` | Reads → 404 (`ListNotFoundError` or equivalent same body); mutations → 403 `not_list_member`; owner deny distinct |
+| Errors | `api/domain/errors.py` | `NotListMemberError`, `NotListOwnerError`, `ListNotFoundError` (all exist today) | Reads → 404 via `ListNotFoundError` body; mutations → 403 `not_list_member`; owner deny → 403 `not_list_owner` |
 | UI / BFF | `ui/app/lists/*`, `ui/app/api/lists/*`, `ui/proxy.ts` | Lists BFF; proxy presence-only; `/api/lists` public at proxy | UI never becomes second ACL truth |
 
 **Honest status:** Sketch = **target contract**. 2.1 has membership-filtered listing + ad-hoc rename checks only. **2.2 implements** the port — do not pretend compliance already exists.
@@ -185,11 +194,11 @@ String (or enum) `action` values below. Ledger aliases: if both names appear in 
 
 ## Test contract (owned by Story 2.2)
 
-- Domain allow/deny TDD for the ACL port
+- Domain allow/deny TDD for the ACL port (incl. unknown action → deny; grant/`list_id` mismatch rejected at repo)
 - Postgres multi-user isolation: list enum + expenses/balances deny
-- Non-member **read** → **404**
-- `set_last_opened_list` non-member → **403**
-- Write denial pattern reserved for later ledger stories (same port)
+- Non-member **read** → **404** with `list_not_found` body
+- `set_last_opened_list` non-member → **403** `not_list_member`
+- Member-gated **writes** (`write_ledger` / `import_to_list`) non-member → **403** `not_list_member` (assert when those endpoints land; pattern locked here)
 
 ---
 
@@ -207,12 +216,13 @@ String (or enum) `action` values below. Ledger aliases: if both names appear in 
 
 - Implement the ACL port “while sketching” on the docs branch
 - Per-route membership copies without the shared port
-- Bare-`list_id` repos + application-only check (Pair 14)
+- Bare-`list_id` repos + application-only check (Pair 14) in **new** use cases
 - Homepage enum as `authorize_list_access(..., list_id=?)`
 - UI / `proxy.ts` as the security boundary
 - Product-admin or owner-vs-viewer roles for ordinary expense reads
 - **403** on list-scoped **reads** for non-members
-- **404** on `set_last_opened_list` / rename non-member without an explicit policy change story
+- **404** on `set_last_opened_list` / rename / write mutations for non-members without an explicit policy change story
+- Soft grants, grant reuse across lists/actions, or default-allow on unknown `action`
 - Confuse auth session with Import Session
 
 ---

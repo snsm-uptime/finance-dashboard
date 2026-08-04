@@ -4,7 +4,7 @@ baseline_commit: 24bf63c Merge pull request #8 from snsm-uptime/feat/2/2-1-creat
 
 # Story 1.5.4: Membership ACL enforcement sketch
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -69,6 +69,23 @@ so that list access checks are consistent before homepage and invite work contin
   - [x] Do **not** mark sibling Epic 1.5 stories done; do **not** start implementing 2.2 product code on this branch; do **not** edit product list/ACL code beyond optional docstring pointer if useful (prefer docs-only)
   - [x] Before marking this story `done`: paste story-close how/why overview per `story-close-overview-checklist.md`
   - [x] Prefer Conventional Commit on branch `docs/1/1-5-4-membership-acl-enforcement-sketch`
+
+### Review Findings
+
+- [x] [Review][Patch] Lock write denials → 403 `not_list_member` for `write_ledger` / `write_expense` / `import_to_list` (decision A) [membership-acl-enforcement-sketch.md:156-192]
+- [x] [Review][Patch] Acknowledge read-404 vs mutation-403 cross-endpoint existence oracle [membership-acl-enforcement-sketch.md:156-165]
+- [x] [Review][Patch] Lock `ListAccessGrant` minimum semantics (binds `list_id`; same use-case only; never soft-grant) [membership-acl-enforcement-sketch.md:59-64]
+- [x] [Review][Patch] Clarify domain-error → HTTP mapping for reads vs mutations (incl. as-built `not_list_owner`) [membership-acl-enforcement-sketch.md:156-179]
+- [x] [Review][Patch] Specify read-404 client-safe JSON body shape (`detail` + `code`) [membership-acl-enforcement-sketch.md:161]
+- [x] [Review][Patch] Explicit owner-only + missing/non-member → 403 `not_list_member` [membership-acl-enforcement-sketch.md:156-163]
+- [x] [Review][Patch] Port fail-closed: unknown `action` rejected; internal errors never return a grant [membership-acl-enforcement-sketch.md:59-76]
+- [x] [Review][Patch] First-paint revalidation names `read_list`; lock alias synonym rule at the port [membership-acl-enforcement-sketch.md:74-76,138-140]
+- [x] [Review][Patch] Fix malformed markdown code span on expenses/balances caller-map row [membership-acl-enforcement-sketch.md:138]
+- [x] [Review][Patch] Mermaid choke path: show unauthenticated → 401 fork [membership-acl-enforcement-sketch.md:14-28]
+- [x] [Review][Defer] Optional `require_authenticated_user` docstring still says “ACL = Epic 2” [api/api/deps.py] — deferred, pre-existing / optional docs-only fix for Story 2.2
+- [x] [Review][Defer] First-paint client must clear stale `last_opened_list_id` on deny — deferred, Story 2.2 UX
+- [x] [Review][Defer] Malformed non-UUID `list_id` FastAPI validation vs 404 anti-enumeration — deferred, pre-existing framework path
+- [x] [Review][Defer] Rename migration exit criteria / when 2.1 pays AD-24 debt — deferred, intentional grandfather until an implement story migrates it
 
 ## Dev Notes
 
@@ -293,6 +310,7 @@ Cursor Grok 4.5
 - Story 2.2 disclosure link updated to the landed sketch path; no product ACL code.
 - Sprint action item “Membership ACL enforcement sketch…” → `done`.
 - Docs-only: no pytest / no runtime deps.
+- Code review (2026-08-04): applied 10 contract patches (grant semantics, disclosure bodies, write→403, fail-closed, mermaid 401); 4 deferred; story → `done`.
 
 ## Story-close overview — 1.5.4 / membership-acl-enforcement-sketch
 
@@ -310,11 +328,12 @@ Personal list = ordinary `List` + membership; peers for ordinary reads/writes; h
 
 ### File List
 
-- `_bmad-output/planning-artifacts/architecture/architecture-finance-helper-2026-08-03/membership-acl-enforcement-sketch.md` (NEW)
+- `_bmad-output/planning-artifacts/architecture/architecture-finance-helper-2026-08-03/membership-acl-enforcement-sketch.md` (NEW → review-patched)
 - `_bmad-output/planning-artifacts/architecture/architecture-finance-helper-2026-08-03/ARCHITECTURE-SPINE.md` (UPDATE — AD-19 + capability pointer)
-- `_bmad-output/implementation-artifacts/2-2-lists-homepage-membership-scoped-access.md` (UPDATE — sketch link)
-- `_bmad-output/implementation-artifacts/1-5-4-membership-acl-enforcement-sketch.md` (UPDATE — status/tasks/record)
-- `_bmad-output/implementation-artifacts/sprint-status.yaml` (UPDATE — story → review; action item → done)
+- `_bmad-output/implementation-artifacts/2-2-lists-homepage-membership-scoped-access.md` (UPDATE — sketch link + write-denial note)
+- `_bmad-output/implementation-artifacts/1-5-4-membership-acl-enforcement-sketch.md` (UPDATE — status/tasks/record/review)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (UPDATE — story → done; action item → done)
+- `_bmad-output/implementation-artifacts/deferred-work.md` (UPDATE — review deferrals)
 
 ## Change Log
 
@@ -322,3 +341,4 @@ Personal list = ordinary `List` + membership; peers for ordinary reads/writes; h
 - 2026-08-04: Locked list-scoped **reads** → **404** for missing ≡ non-member; kept 2.1 rename 403 as as-built mutation note
 - 2026-08-04: Validate-story pass — `ListAccessGrant` repo rule; enum vs per-list ACL; mutation 403 incl. last-opened; ledger actions; port home; living-doc ownership; Task 2 aligns Story 2.2 disclosure
 - 2026-08-04: Implemented living ACL sketch + spine pointer; aligned Story 2.2 link; sprint action item done; status → review
+- 2026-08-04: Code review — 10 patches applied to sketch; write denials locked 403; status → done

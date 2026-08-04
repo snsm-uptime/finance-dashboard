@@ -222,7 +222,7 @@ ui/
 - **Domain (TDD):** ACL allow member / deny non-member; last-opened ignored when membership gone
 - **Integration (Postgres 16):** multi-user membership isolation on `GET /lists` and expenses/balances stubs; non-member **read** → **404**; `set_last_opened_list` non-member → **403**; last-opened write + first-paint decision
 - **UI:** homepage membership filter; navigate to detail; first-paint fallback — test-after; keep coverage floor
-- **Must-cover (project-context):** ACL non-member denied on **read and write** — for 2.2 at least **read** of expenses/balances as **404**; leave write denial pattern reusable for later stories
+- **Must-cover (project-context):** ACL non-member denied on **read and write** — for 2.2 at least **read** of expenses/balances as **404**; write denial is locked in the ACL sketch as **403** `not_list_member` (assert when ledger/import endpoints land)
 - **Anti-patterns:** SQLite stand-in · PII fixtures · settle math only in browser · ACL only in Next without API enforcement · **403 on list-scoped reads**
 
 ### Previous story intelligence

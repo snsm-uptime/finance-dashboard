@@ -67,3 +67,10 @@
 ## Deferred from: code review of 1-5-2-auth-mail-interaction-map-and-story-close-overview.md (2026-08-04)
 
 - Known-user SMTP failure returns 503 while unknown email returns identical 200 ack — timing/oracle class already deferred from Story 1.4; map may reference but not “fix” here
+
+## Deferred from: code review of 1-5-4-membership-acl-enforcement-sketch.md (2026-08-04)
+
+- Optional `require_authenticated_user` docstring still says “membership ACL = Epic 2” — optional docs-only; Story 2.2 can update when implementing the port
+- First-paint client clearing stale `last_opened_list_id` on membership deny — Story 2.2 UX, not contract sketch scope
+- Malformed non-UUID `list_id` FastAPI validation (422) vs forcing 404 for anti-enumeration — pre-existing framework path validation
+- Rename (`RenameListService`) migration exit criteria / when 2.1 pays AD-24 bare-`list_id` debt — intentional grandfather until an implement story migrates it
