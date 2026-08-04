@@ -1,5 +1,5 @@
 # generated: 2026-08-03T22:46:31
-# last_updated: 2026-08-04T17:20:00
+# last_updated: 2026-08-04T17:45:00
 
 # project: finance-dashboard
 # project_key: NOKEY
@@ -42,7 +42,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-03T22:46:31
-last_updated: 2026-08-04T17:20:00
+last_updated: 2026-08-04T17:45:00
 project: finance-dashboard
 project_key: NOKEY
 tracking_system: file-system
@@ -62,7 +62,7 @@ development_status:
   epic-1-5: in-progress
   1-5-1-token-claim-rechecks-expires-at: backlog
   1-5-2-auth-mail-interaction-map-and-story-close-overview: done
-  1-5-3-invite-verify-gate-contract: review
+  1-5-3-invite-verify-gate-contract: done
   1-5-4-membership-acl-enforcement-sketch: ready-for-dev
   1-5-5-epic-1-spine-smoke: backlog
   1-5-6-auth-smtp-rate-limit-hardening: backlog
