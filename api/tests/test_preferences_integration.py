@@ -63,12 +63,11 @@ def client(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> Iterator[Tes
     app = create_app()
 
     def _override_db() -> Iterator[Session]:
-        try:
-            yield db_session
-            db_session.flush()
-        except Exception:
-            db_session.rollback()
-            raise
+        # Do not rollback here: this session is the shared outer test transaction.
+        # RequestValidationError (422) is thrown into the generator and must not
+        # wipe registration/session rows for later assertions in the same test.
+        yield db_session
+        db_session.flush()
 
     app.dependency_overrides[get_db] = _override_db
     with TestClient(app) as test_client:

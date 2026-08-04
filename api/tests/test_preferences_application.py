@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from uuid import uuid4
 
 from application.preferences import (
@@ -9,6 +10,8 @@ from application.preferences import (
     GetMePreferencesService,
     UserPreferencesRecord,
 )
+
+_PREFS_LOGGER = "application.preferences"
 
 
 class _FakeRepo:
@@ -34,8 +37,11 @@ def test_get_me_logs_corrupt_language(caplog) -> None:  # noqa: ANN001
             theme="dark",
         )
     )
-    with caplog.at_level("WARNING"):
+    # Alembic fileConfig(disable_existing_loggers=True) may have disabled this
+    # logger earlier in the suite; re-enable so the warning is observable.
+    logging.getLogger(_PREFS_LOGGER).disabled = False
+    with caplog.at_level("WARNING", logger=_PREFS_LOGGER):
         result = GetMePreferencesService(repo).execute(GetMePreferencesCommand(user_id=user_id))
     assert result.language is None
     assert result.theme == "dark"
-    assert any("corrupt_user_language_preference" in r.message for r in caplog.records)
+    assert "corrupt_user_language_preference" in caplog.text
