@@ -5,7 +5,9 @@ from __future__ import annotations
 from uuid import UUID
 
 from application.ports import NewListRecord, NewMembershipRecord, NewUserRecord
+from application.preferences import UserPreferencesRecord
 from application.signin import AuthUserRecord
+from domain.errors import PrincipalNotFoundError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -68,3 +70,36 @@ class SqlAlchemyAuthUserRepository:
         if row is None:
             return None
         return AuthUserRecord(id=row.id, email=row.email, password_hash=row.password_hash)
+
+    def get_preferences(self, user_id: UUID) -> UserPreferencesRecord | None:
+        row = self._session.get(UserModel, user_id)
+        if row is None:
+            return None
+        return UserPreferencesRecord(
+            id=row.id,
+            email=row.email,
+            language=row.language,
+            theme=row.theme,
+        )
+
+    def update_preferences(
+        self,
+        user_id: UUID,
+        *,
+        language: str | None = None,
+        theme: str | None = None,
+    ) -> UserPreferencesRecord:
+        row = self._session.get(UserModel, user_id)
+        if row is None:
+            raise PrincipalNotFoundError()
+        if language is not None:
+            row.language = language
+        if theme is not None:
+            row.theme = theme
+        self._session.flush()
+        return UserPreferencesRecord(
+            id=row.id,
+            email=row.email,
+            language=row.language,
+            theme=row.theme,
+        )

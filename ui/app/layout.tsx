@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 import { Manrope, Petrona } from "next/font/google";
 
+import {
+  PreferencesProvider,
+  themeBootScript,
+} from "@/components/PreferencesProvider";
+
 import "./globals.css";
 
 const manrope = Manrope({
@@ -26,8 +31,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${manrope.variable} ${petrona.variable}`}>
-      <body>{children}</body>
+    <html
+      lang="en"
+      className={`${manrope.variable} ${petrona.variable}`}
+      suppressHydrationWarning
+    >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+      </head>
+      <body>
+        <PreferencesProvider>{children}</PreferencesProvider>
+      </body>
     </html>
   );
 }

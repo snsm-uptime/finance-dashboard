@@ -95,3 +95,12 @@ class PrincipalNotFoundError(DomainError):
 
     def __init__(self) -> None:
         super().__init__(self.MESSAGE)
+
+
+class InvalidPreferencesError(DomainError):
+    """Raised when language/theme preference values are invalid."""
+
+    MESSAGE = "Invalid preference value."
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(detail or self.MESSAGE)

@@ -34,6 +34,21 @@ class SessionResponse(BaseModel):
     user_id: UUID
 
 
+class MeResponse(BaseModel):
+    authenticated: bool = True
+    user_id: UUID
+    email: str
+    language: str
+    theme: str
+    language_stored: str | None = None
+    theme_stored: str | None = None
+
+
+class PatchMeBody(BaseModel):
+    language: str | None = None
+    theme: str | None = None
+
+
 class PasswordResetRequestBody(BaseModel):
     email: str = ""
 

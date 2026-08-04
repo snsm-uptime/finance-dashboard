@@ -1,0 +1,11 @@
+.link {
+  color: var(--accent);
+  font-weight: 550;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-family: var(--font-ui), "Manrope", system-ui, sans-serif;
+}
+
+.link:hover {
+  text-decoration: underline;
+}

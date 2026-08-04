@@ -1,6 +1,10 @@
+---
+baseline_commit: 9faaf85dddecc02425c4615b06fdfb4e45dca9df
+---
+
 # Story 1.6: Account menu — language EN/ES and theme
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -35,61 +39,61 @@ so that the app matches my language and preferred look without a full settings p
 
 ## Tasks / Subtasks
 
-- [ ] Task 0: Confirm Stories 1.1–1.3 are implemented (prerequisites)
-  - [ ] 1.1: Compose + hex + `ui/` App Router + health + lockfiles
-  - [ ] 1.2: User (UUID) + session cookie issuer + personal list
-  - [ ] 1.3: Sign-in/out, protected routes, authenticated chrome shell, bare sign-out affordance
-  - [ ] Read 1.2/1.3 completion notes for AD-8 forks (cookie name, BFF vs proxy, opaque vs JWT) — **reuse; never re-decide**
-  - [ ] If 1.1–1.3 incomplete: stop — finish those first (do not invent a parallel prefs/auth stack)
-  - [ ] **1.4 Soft couple:** password-reset **route/entry** must be reachable from Account (AC #1). Link to 1.4 public flow — prefer `/forgot-password` (request); `/reset-password` is the email confirm page. If 1.4 not merged yet, stub the same paths — do not implement SMTP here
-  - [ ] **1.5 Not required** for this story (and must not add verification settings into Account)
+- [x] Task 0: Confirm Stories 1.1–1.3 are implemented (prerequisites)
+  - [x] 1.1: Compose + hex + `ui/` App Router + health + lockfiles
+  - [x] 1.2: User (UUID) + session cookie issuer + personal list
+  - [x] 1.3: Sign-in/out, protected routes, authenticated chrome shell, bare sign-out affordance
+  - [x] Read 1.2/1.3 completion notes for AD-8 forks (cookie name, BFF vs proxy, opaque vs JWT) — **reuse; never re-decide**
+  - [x] If 1.1–1.3 incomplete: stop — finish those first (do not invent a parallel prefs/auth stack)
+  - [x] **1.4 Soft couple:** password-reset **route/entry** must be reachable from Account (AC #1). Link to 1.4 public flow — prefer `/forgot-password` (request); `/reset-password` is the email confirm page. If 1.4 not merged yet, stub the same paths — do not implement SMTP here
+  - [x] **1.5 Not required** for this story (and must not add verification settings into Account)
 
-- [ ] Task 1: Persist language + theme on the account (AC: #3, #5) — server source of truth
-  - [ ] Alembic migration: add nullable (or unset-sentinel) `language` and `theme` columns on `users` (or equivalent account prefs table) — **never** wipe PG volume
-  - [ ] Allowed values: `language ∈ {en, es}`; `theme ∈ {light, dark, system}` — reject unknowns with structured API error
-  - [ ] Domain/application owns preference rules (no FastAPI/SQLAlchemy in `domain/`); ORM only under `adapters/persistence` (AD-1)
-  - [ ] Extend authenticated `GET /api/auth/me` (or equivalent) to return `language` + `theme` (snake_case wire; null/omit = unset)
-  - [ ] Add authenticated `PATCH /api/auth/me` (or `PATCH /api/account/preferences`) accepting `{ language?, theme? }` — persist and return updated user DTO
-  - [ ] Unauthenticated → 401; never store prefs in Bearer/`localStorage` as SoT (AD-8)
-  - [ ] **Forbidden:** device-only prefs that never hit the user row (breaks Epic 2 invite-email locale UX-DR16)
+- [x] Task 1: Persist language + theme on the account (AC: #3, #5) — server source of truth
+  - [x] Alembic migration: add nullable (or unset-sentinel) `language` and `theme` columns on `users` (or equivalent account prefs table) — **never** wipe PG volume
+  - [x] Allowed values: `language ∈ {en, es}`; `theme ∈ {light, dark, system}` — reject unknowns with structured API error
+  - [x] Domain/application owns preference rules (no FastAPI/SQLAlchemy in `domain/`); ORM only under `adapters/persistence` (AD-1)
+  - [x] Extend authenticated `GET /api/auth/me` (or equivalent) to return `language` + `theme` (snake_case wire; null/omit = unset)
+  - [x] Add authenticated `PATCH /api/auth/me` (or `PATCH /api/account/preferences`) accepting `{ language?, theme? }` — persist and return updated user DTO
+  - [x] Unauthenticated → 401; never store prefs in Bearer/`localStorage` as SoT (AD-8)
+  - [x] **Forbidden:** device-only prefs that never hit the user row (breaks Epic 2 invite-email locale UX-DR16)
 
-- [ ] Task 2: First-visit defaults (AC: #2, #4)
-  - [ ] Language unset → resolve from `Accept-Language` / browser language; prefer `es` if Spanish is primary/high-q, else `en` (only EN+ES supported)
-  - [ ] Theme unset → treat as `system` (do not write until user chooses, or write `system` on first authenticated load — either OK if “return later” still yields System)
-  - [ ] Defaults apply when prefs are null; once saved on account, account wins over browser/OS for language / for Light|Dark pin
-  - [ ] Signed-out auth pages (sign-in/sign-up) may use browser language for chrome if i18n is wired — do not invent a Settings product
+- [x] Task 2: First-visit defaults (AC: #2, #4)
+  - [x] Language unset → resolve from `Accept-Language` / browser language; prefer `es` if Spanish is primary/high-q, else `en` (only EN+ES supported)
+  - [x] Theme unset → treat as `system` (do not write until user chooses, or write `system` on first authenticated load — either OK if “return later” still yields System)
+  - [x] Defaults apply when prefs are null; once saved on account, account wins over browser/OS for language / for Light|Dark pin
+  - [x] Signed-out auth pages (sign-in/sign-up) may use browser language for chrome if i18n is wired — do not invent a Settings product
 
-- [ ] Task 3: Warm Balance token CSS + theme resolution (AC: #4, #5) — minimal set for chrome
-  - [ ] Ship **both** light and dark Warm Balance role tokens as CSS variables (UX-DR1): background, surface, text, muted, border, accent, on-accent, owe, owed
-  - [ ] Hex from DESIGN.md (light `#F7F3EC`… / dark `#17140F`…); prefer `--wb-*` naming from promoted mocks
-  - [ ] Resolve `system` via `prefers-color-scheme`; when preference is `system`, **continue listening** for OS changes
-  - [ ] Apply resolved mode to `<html>` (`class` or `data-theme`) **without flash** on load (`suppressHydrationWarning` if using client theme provider)
-  - [ ] Optional helper: `next-themes` (or equivalent) for flash-free System — **must sync from/to account API**, not treat library localStorage as SoT
-  - [ ] Typography for Account chrome: **Manrope** (UX-DR2); no Inter/Roboto as brand; kits = unstyled primitives only (AD-12)
-  - [ ] **Defer to Story 3.1:** full Soft-Ledger primitives, Tab bar anatomy polish, strip/receipt components — 1.6 owns preference plumbing + token swap, not the full design system
+- [x] Task 3: Warm Balance token CSS + theme resolution (AC: #4, #5) — minimal set for chrome
+  - [x] Ship **both** light and dark Warm Balance role tokens as CSS variables (UX-DR1): background, surface, text, muted, border, accent, on-accent, owe, owed
+  - [x] Hex from DESIGN.md (light `#F7F3EC`… / dark `#17140F`…); prefer `--wb-*` naming from promoted mocks
+  - [x] Resolve `system` via `prefers-color-scheme`; when preference is `system`, **continue listening** for OS changes
+  - [x] Apply resolved mode to `<html>` (`class` or `data-theme`) **without flash** on load (`suppressHydrationWarning` if using client theme provider)
+  - [x] Optional helper: `next-themes` (or equivalent) for flash-free System — **must sync from/to account API**, not treat library localStorage as SoT
+  - [x] Typography for Account chrome: **Manrope** (UX-DR2); no Inter/Roboto as brand; kits = unstyled primitives only (AD-12)
+  - [x] **Defer to Story 3.1:** full Soft-Ledger primitives, Tab bar anatomy polish, strip/receipt components — 1.6 owns preference plumbing + token swap, not the full design system
 
-- [ ] Task 4: i18n EN+ES for Account chrome (AC: #3) — keys in `ui`
-  - [ ] Architecture leaves library **open** — recommended: **next-intl** (App Router / Next 16; works with `proxy.ts`). Lightweight custom dictionaries OK if smaller
-  - [ ] Prefer **no SEO locale URL prefixes** for this authenticated app (`localePrefix: 'never'` or cookie/account-driven locale) unless 1.1 already locked `[locale]` routing — account language is SoT, not the URL
-  - [ ] Set `lang` on `<html>` to `en` or `es` when locale changes (UX-DR18)
-  - [ ] Message catalogs: Account menu labels (Language, Theme, Light, Dark, System, Sign out, Password reset, EN, ES) in **both** locales
-  - [ ] Voice: plain + direct; no bank jargon (UX-DR17) — same rules in ES
-  - [ ] Do not translate card labels / free-text user data (N/A here but keep convention)
+- [x] Task 4: i18n EN+ES for Account chrome (AC: #3) — keys in `ui`
+  - [x] Architecture leaves library **open** — recommended: **next-intl** (App Router / Next 16; works with `proxy.ts`). Lightweight custom dictionaries OK if smaller
+  - [x] Prefer **no SEO locale URL prefixes** for this authenticated app (`localePrefix: 'never'` or cookie/account-driven locale) unless 1.1 already locked `[locale]` routing — account language is SoT, not the URL
+  - [x] Set `lang` on `<html>` to `en` or `es` when locale changes (UX-DR18)
+  - [x] Message catalogs: Account menu labels (Language, Theme, Light, Dark, System, Sign out, Password reset, EN, ES) in **both** locales
+  - [x] Voice: plain + direct; no bank jargon (UX-DR17) — same rules in ES
+  - [x] Do not translate card labels / free-text user data (N/A here but keep convention)
 
-- [ ] Task 5: Minimal Account menu UI (AC: #1) — UX-DR10 only
-  - [ ] Authenticated Account surface listing **exactly**: Sign out · Password reset (link) · Language EN/ES · Theme Light/Dark/System
-  - [ ] Placement: Account entry in chrome — Tab bar List/Upload/Account if 3.1/scaffold tab exists; otherwise a dedicated authenticated Account route/panel is OK until Soft-Ledger Tab bar lands
-  - [ ] Wire **Sign out** to 1.3 sign-out API; remove/relocate bare 1.3 sign-out so Account is the primary chrome (avoid permanent dual sign-out)
-  - [ ] Password reset: navigate to `/forgot-password` (1.4 owns SMTP + confirm at `/reset-password`)
-  - [ ] Language/Theme controls call PATCH prefs then update UI immediately; re-login / other device must load saved prefs from `me`
-  - [ ] **Forbidden UI:** profile page, avatars-as-settings, display name, notification prefs, FX overrides, session-management UI, purple kit theme, pill primary CTAs (`rounded.full`)
+- [x] Task 5: Minimal Account menu UI (AC: #1) — UX-DR10 only
+  - [x] Authenticated Account surface listing **exactly**: Sign out · Password reset (link) · Language EN/ES · Theme Light/Dark/System
+  - [x] Placement: Account entry in chrome — Tab bar List/Upload/Account if 3.1/scaffold tab exists; otherwise a dedicated authenticated Account route/panel is OK until Soft-Ledger Tab bar lands
+  - [x] Wire **Sign out** to 1.3 sign-out API; remove/relocate bare 1.3 sign-out so Account is the primary chrome (avoid permanent dual sign-out)
+  - [x] Password reset: navigate to `/forgot-password` (1.4 owns SMTP + confirm at `/reset-password`)
+  - [x] Language/Theme controls call PATCH prefs then update UI immediately; re-login / other device must load saved prefs from `me`
+  - [x] **Forbidden UI:** profile page, avatars-as-settings, display name, notification prefs, FX overrides, session-management UI, purple kit theme, pill primary CTAs (`rounded.full`)
 
-- [ ] Task 6: Tests (AC: #1–#5)
-  - [ ] API pytest (Postgres 16): PATCH language/theme persists; GET `me` returns them; invalid values rejected; 401 without session
-  - [ ] API/default: unset language → Accept-Language resolution path covered (unit or integration)
-  - [ ] UI critical (test-after OK; respect 1.1 coverage floor ≥60%): Account menu shows four affordances; selecting EN/ES updates `lang` + chrome strings; theme Light/Dark/System swaps token set; System follows `prefers-color-scheme` change
-  - [ ] Fixtures: generic emails only (`user@example.com`); no PII
-  - [ ] Do **not** require full Playwright every PR (AD-15)
+- [x] Task 6: Tests (AC: #1–#5)
+  - [x] API pytest (Postgres 16): PATCH language/theme persists; GET `me` returns them; invalid values rejected; 401 without session
+  - [x] API/default: unset language → Accept-Language resolution path covered (unit or integration)
+  - [x] UI critical (test-after OK; respect 1.1 coverage floor ≥60%): Account menu shows four affordances; selecting EN/ES updates `lang` + chrome strings; theme Light/Dark/System swaps token set; System follows `prefers-color-scheme` change
+  - [x] Fixtures: generic emails only (`user@example.com`); no PII
+  - [x] Do **not** require full Playwright every PR (AD-15)
 
 ## Dev Notes
 
@@ -297,15 +301,59 @@ Recent commits are planning/BMAD artifacts only (`Add Story 1.1…`, sprint-stat
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Cursor Grok 4.5
 
 ### Debug Log References
 
+- Host `docker compose run … uv run pytest` failed: permission denied writing `/app/.venv` (image runs as `appuser`; prod image has `--no-dev` so no pytest). Used host `.venv` + temporary `alpine/socat` publish of Compose `db:5432` → `127.0.0.1:5432`.
+
 ### Completion Notes List
+
+- Reused AD-8: opaque `fh_session`, api single issuer, Next BFF `/api/auth/*` — no new session stack.
+- Alembic `0005_user_preferences`: nullable `users.language` / `users.theme`.
+- Domain `parse_accept_language` + GET/PATCH `/auth/me` return effective language/theme; stored nulls remain until user chooses.
+- UI: `/account` Account menu (EN/ES, Light/Dark/System, password reset → `/forgot-password`, sign out); lists/upload use `AccountNavLink` instead of bare SignOut.
+- Custom i18n (existing pattern) + Warm Balance `--wb-*` CSS with `html.dark` / system listener; localStorage used only as FOUC cache, SoT is account API.
+- Tests: domain unit + Postgres integration prefs; UI locale/account/BFF/AccountMenu; sign-in + email-verification regressions green.
 
 ### File List
 
+- api/domain/preferences.py
+- api/domain/errors.py
+- api/application/preferences.py
+- api/adapters/persistence/models.py
+- api/adapters/persistence/repositories.py
+- api/adapters/persistence/migrations/versions/0005_user_preferences.py
+- api/api/schemas/auth.py
+- api/api/routes/auth.py
+- api/tests/test_preferences_domain.py
+- api/tests/test_preferences_integration.py
+- ui/lib/i18n/locale.ts
+- ui/lib/i18n/locale.test.ts
+- ui/lib/i18n/account.ts
+- ui/lib/i18n/account.test.ts
+- ui/lib/i18n/signin.ts
+- ui/app/globals.css
+- ui/app/layout.tsx
+- ui/app/account/page.tsx
+- ui/app/lists/page.tsx
+- ui/app/upload/page.tsx
+- ui/app/api/auth/me/route.ts
+- ui/app/api/auth/me/route.test.ts
+- ui/components/PreferencesProvider.tsx
+- ui/components/AccountMenu.tsx
+- ui/components/AccountMenu.module.css
+- ui/components/AccountMenu.test.tsx
+- ui/components/AccountNavLink.tsx
+- ui/components/AccountNavLink.module.css
+- _bmad-output/implementation-artifacts/1-6-account-menu-language-en-es-and-theme.md
+- _bmad-output/implementation-artifacts/sprint-status.yaml
+
+### Change Log
+
+- 2026-08-04: Implemented Account menu language/theme prefs (API + UI) for Story 1.6; status → review.
+
 ## Story completion status
 
-Status: ready-for-dev  
-Completion note: Ultimate context engine analysis completed — comprehensive developer guide created.
+Status: review  
+Completion note: All tasks/ACs implemented and tested — ready for code-review.

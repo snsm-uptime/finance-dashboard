@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { SignOutButton } from "@/components/SignOutButton";
+import { AccountNavLink } from "@/components/AccountNavLink";
 import { fetchSession } from "@/lib/session";
 import styles from "../lists/lists.module.css";
 
@@ -17,7 +17,7 @@ export default async function UploadPage() {
     <main className={styles.main}>
       <div className={styles.header}>
         <p className={styles.brand}>finance-helper</p>
-        <SignOutButton />
+        <AccountNavLink />
       </div>
       <h1 className={styles.title}>Upload</h1>
       <p className={styles.copy}>

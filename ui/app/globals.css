@@ -1,22 +1,73 @@
 :root {
-  --background: #f7f3ec;
-  --surface: #fffcf7;
-  --foreground: #2a241c;
-  --muted: #6e6456;
-  --border: #e2d8c8;
-  --accent: #3f6b45;
-  --on-accent: #fffcf7;
+  /* Warm Balance light (UX-DR1) — --wb-* canonical + legacy aliases */
+  --wb-bg: #f7f3ec;
+  --wb-surface: #fffcf7;
+  --wb-text: #2a241c;
+  --wb-muted: #6e6456;
+  --wb-border: #e2d8c8;
+  --wb-accent: #3f6b45;
+  --wb-on-accent: #fffcf7;
+  --wb-owe: #a04936;
+  --wb-owed: #2f6e48;
+
+  --background: var(--wb-bg);
+  --surface: var(--wb-surface);
+  --foreground: var(--wb-text);
+  --muted: var(--wb-muted);
+  --border: var(--wb-border);
+  --accent: var(--wb-accent);
+  --on-accent: var(--wb-on-accent);
+  --owe: var(--wb-owe);
+  --owed: var(--wb-owed);
 }
 
+html.dark {
+  --wb-bg: #17140f;
+  --wb-surface: #221e17;
+  --wb-text: #f0e9dc;
+  --wb-muted: #a89b88;
+  --wb-border: #3a342a;
+  --wb-accent: #8fbb8e;
+  --wb-on-accent: #17140f;
+  --wb-owe: #d48b78;
+  --wb-owed: #7ec794;
+
+  --background: var(--wb-bg);
+  --surface: var(--wb-surface);
+  --foreground: var(--wb-text);
+  --muted: var(--wb-muted);
+  --border: var(--wb-border);
+  --accent: var(--wb-accent);
+  --on-accent: var(--wb-on-accent);
+  --owe: var(--wb-owe);
+  --owed: var(--wb-owed);
+}
+
+/*
+ * System default before JS hydrates: follow OS when no explicit .dark/.light
+ * class was applied by the FOUC script / PreferencesProvider.
+ */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #17140f;
-    --surface: #221e17;
-    --foreground: #f0e9dc;
-    --muted: #a89b88;
-    --border: #3a342a;
-    --accent: #8fbb8e;
-    --on-accent: #17140f;
+  html:not(.light):not(.dark) {
+    --wb-bg: #17140f;
+    --wb-surface: #221e17;
+    --wb-text: #f0e9dc;
+    --wb-muted: #a89b88;
+    --wb-border: #3a342a;
+    --wb-accent: #8fbb8e;
+    --wb-on-accent: #17140f;
+    --wb-owe: #d48b78;
+    --wb-owed: #7ec794;
+
+    --background: var(--wb-bg);
+    --surface: var(--wb-surface);
+    --foreground: var(--wb-text);
+    --muted: var(--wb-muted);
+    --border: var(--wb-border);
+    --accent: var(--wb-accent);
+    --on-accent: var(--wb-on-accent);
+    --owe: var(--wb-owe);
+    --owed: var(--wb-owed);
   }
 }
 
