@@ -25,12 +25,20 @@ export async function POST(request: NextRequest) {
   const email = typeof body.email === "string" ? body.email : "";
   const password = typeof body.password === "string" ? body.password : "";
 
-  const upstream = await fetch(`${getApiInternalUrl()}/auth/register`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ email, password }),
-    cache: "no-store",
-  });
+  let upstream: Response;
+  try {
+    upstream = await fetch(`${getApiInternalUrl()}/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ email, password }),
+      cache: "no-store",
+    });
+  } catch {
+    return NextResponse.json(
+      { detail: "Upstream unavailable.", code: "bad_gateway" },
+      { status: 502 },
+    );
+  }
 
   const text = await upstream.text();
   const responseHeaders = new Headers();
@@ -48,9 +56,7 @@ export async function POST(request: NextRequest) {
     }
   } else {
     const single = upstream.headers.get("set-cookie");
-    if (single) {
-      responseHeaders.append("Set-Cookie", single);
-    }
+    if (single) responseHeaders.append("Set-Cookie", single);
   }
 
   return new NextResponse(text, {

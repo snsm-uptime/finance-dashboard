@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from adapters.persistence.models import SessionModel
 
 DEFAULT_SESSION_TTL = timedelta(days=30)
+SESSION_COOKIE_MAX_AGE = int(DEFAULT_SESSION_TTL.total_seconds())
 
 
 def create_session(

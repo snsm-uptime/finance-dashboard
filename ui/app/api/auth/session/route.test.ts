@@ -35,4 +35,16 @@ describe("session BFF route", () => {
     );
     expect(response.status).toBe(200);
   });
+
+  it("returns 502 when upstream fetch fails", async () => {
+    process.env.API_INTERNAL_URL = "http://api:8000";
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("connection refused")));
+    const { GET } = await import("@/app/api/auth/session/route");
+    const response = await GET(
+      new Request("http://localhost:3000/api/auth/session") as never,
+    );
+    expect(response.status).toBe(502);
+    const body = (await response.json()) as { code?: string };
+    expect(body.code).toBe("bad_gateway");
+  });
 });

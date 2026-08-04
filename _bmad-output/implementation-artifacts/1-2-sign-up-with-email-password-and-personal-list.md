@@ -4,7 +4,7 @@ baseline_commit: c0114a76b3109b544a0b2d47cb6d39c7f077eec3
 
 # Story 1.2: Sign up with email/password and personal list
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -77,15 +77,14 @@ so that I can start owning expenses without a separate setup step.
 
 ### Review Findings
 
-- [ ] [Review][Decision] SESSION_SECRET required but unused — Opaque session tokens use `secrets.token_urlsafe` and never sign/HMAC with `SESSION_SECRET`, yet register refuses empty secret. Choose: (A) HMAC/sign the cookie token with SESSION_SECRET, (B) stop requiring SESSION_SECRET for opaque-token design (rename/document), or (C) defer until a later hardening story.
-
-- [ ] [Review][Patch] Catch unique-email IntegrityError as 409 duplicate_email [api/application/signup.py:41, api/api/routes/auth.py]
-- [ ] [Review][Patch] Reject whitespace-only passwords [api/domain/signup.py:24]
-- [ ] [Review][Patch] Reject SameSite=none unless Secure=true [api/api/settings.py:32]
-- [ ] [Review][Patch] Wrap BFF upstream fetch failures in structured JSON [ui/app/api/auth/register/route.ts:28, ui/app/api/auth/session/route.ts:11]
-- [ ] [Review][Patch] Restore UI coverage floor / test auth paths [ui/vitest.config.mts:16] — branches was dropped 60→50; `lib/session.ts` excluded; no SignupForm submit-path test (Task 6)
-- [ ] [Review][Patch] Constantize session TTL for cookie max_age and DB expires_at [api/adapters/persistence/sessions.py:14, api/api/routes/auth.py]
-- [ ] [Review][Patch] Close signup timing email-enumeration side-channel [api/application/signup.py:42] — hash (or equal-cost work) before/without short-circuiting solely on email_exists
+- [x] [Review][Decision] SESSION_SECRET required but unused for HMAC — resolved (B): keep as auth config presence gate; opaque `token_urlsafe` sessions are not signed with SESSION_SECRET (documented in `api/settings.py`)
+- [x] [Review][Patch] Catch unique-email IntegrityError as 409 duplicate_email [api/adapters/persistence/repositories.py]
+- [x] [Review][Patch] Reject whitespace-only passwords [api/domain/signup.py]
+- [x] [Review][Patch] Reject SameSite=none unless Secure=true [api/api/settings.py]
+- [x] [Review][Patch] Wrap BFF upstream fetch failures in structured JSON [ui/app/api/auth/register/route.ts, ui/app/api/auth/session/route.ts]
+- [x] [Review][Patch] Restore UI coverage floor / test auth paths [ui/vitest.config.mts, ui/app/signup/signupClient.test.ts] — branches ≥60; signup submit path via `attemptSignup`
+- [x] [Review][Patch] Constantize session TTL for cookie max_age and DB expires_at [api/adapters/persistence/sessions.py]
+- [x] [Review][Patch] Close signup timing email-enumeration side-channel [api/application/signup.py] — hash before email_exists short-circuit
 
 - [x] [Review][Defer] No rate limiting on /auth/register — deferred, pre-existing/hardening
 - [x] [Review][Defer] Opaque session tokens stored plaintext in DB — deferred, pre-existing
@@ -296,6 +295,8 @@ Cursor Grok 4.5 (bmad-dev-story)
 - `ui/app/signup/page.tsx`
 - `ui/app/signup/SignupForm.tsx`
 - `ui/app/signup/signup.module.css`
+- `ui/app/signup/signupClient.ts`
+- `ui/app/signup/signupClient.test.ts`
 - `ui/app/lists/page.tsx`
 - `ui/app/lists/lists.module.css`
 - `ui/app/api/auth/register/route.ts`
@@ -309,8 +310,9 @@ Cursor Grok 4.5 (bmad-dev-story)
 ### Change Log
 
 - 2026-08-03: Implemented signup + personal list (FR-1/FR-5), opaque httpOnly sessions, BFF proxy, Alembic 0002, Postgres integration tests; status → review.
+- 2026-08-03: Closed code-review findings (IntegrityError 409, whitespace passwords, SameSite=none guard, BFF 502, TTL constant, hash-before-exists, signupClient tests, SESSION_SECRET documented as config gate); status → done.
 
 ## Story completion status
 
-Status: review  
-Completion note: All tasks complete; ACs satisfied; tests green — ready for code-review.
+Status: done  
+Completion note: ACs + tasks complete; review findings resolved and patched.

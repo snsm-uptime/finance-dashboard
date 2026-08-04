@@ -7,8 +7,9 @@ from uuid import UUID
 from application.ports import NewListRecord, NewMembershipRecord, NewUserRecord
 from application.preferences import UserPreferencesRecord
 from application.signin import AuthUserRecord
-from domain.errors import PrincipalNotFoundError
+from domain.errors import DuplicateEmailError, PrincipalNotFoundError
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from adapters.persistence.models import ListMembershipModel, ListModel, UserModel
@@ -29,14 +30,18 @@ class SqlAlchemySignupRepository:
         personal_list: NewListRecord,
         membership: NewMembershipRecord,
     ) -> None:
-        self._session.add(
-            UserModel(
-                id=user.id,
-                email=user.email,
-                password_hash=user.password_hash,
-            )
-        )
-        self._session.flush()
+        try:
+            with self._session.begin_nested():
+                self._session.add(
+                    UserModel(
+                        id=user.id,
+                        email=user.email,
+                        password_hash=user.password_hash,
+                    )
+                )
+                self._session.flush()
+        except IntegrityError as exc:
+            raise DuplicateEmailError("An account with this email already exists.") from exc
         self._session.add(
             ListModel(
                 id=personal_list.id,

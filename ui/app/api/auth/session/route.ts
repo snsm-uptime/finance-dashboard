@@ -8,14 +8,22 @@ import { getApiInternalUrl } from "@/lib/api";
  */
 export async function GET(request: NextRequest) {
   const cookie = request.headers.get("cookie") || "";
-  const upstream = await fetch(`${getApiInternalUrl()}/auth/session`, {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-      ...(cookie ? { Cookie: cookie } : {}),
-    },
-    cache: "no-store",
-  });
+  let upstream: Response;
+  try {
+    upstream = await fetch(`${getApiInternalUrl()}/auth/session`, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        ...(cookie ? { Cookie: cookie } : {}),
+      },
+      cache: "no-store",
+    });
+  } catch {
+    return NextResponse.json(
+      { detail: "Upstream unavailable.", code: "bad_gateway" },
+      { status: 502 },
+    );
+  }
 
   const text = await upstream.text();
   return new NextResponse(text, {

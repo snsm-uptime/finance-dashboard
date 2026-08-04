@@ -31,6 +31,7 @@
 - Incomplete hexagonal ports for session create/resolve and hasher (routes import concrete adapters) — polish later
 - `Argon2PasswordHasher.verify` only caught `VerifyMismatchError` in the 1.2 merge (unused on signup; sign-in path owns hardening)
 - CASCADE `ondelete` from users→lists/memberships/sessions untested — no user-delete API yet
+- HMAC/sign opaque session cookies with `SESSION_SECRET` — Story 1.2 kept secret as config presence gate only (decision B); signing deferred to hardening
 
 ## Deferred from: code review of 1-4-password-reset-via-email.md (2026-08-03)
 

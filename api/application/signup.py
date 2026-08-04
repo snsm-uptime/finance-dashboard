@@ -39,6 +39,8 @@ class SignUpService:
 
     def execute(self, command: SignupCommand) -> SignupResult:
         email = validate_signup_input(command.email, command.password)
+        # Hash before existence short-circuit so duplicate vs new signup share Argon2 cost.
+        password_hash = self._hasher.hash(command.password)
         if self._repo.email_exists(email):
             raise DuplicateEmailError("An account with this email already exists.")
 
@@ -50,7 +52,6 @@ class SignUpService:
         user_id = uuid4()
         list_id = uuid4()
         membership_id = uuid4()
-        password_hash = self._hasher.hash(command.password)
 
         self._repo.create_user_with_personal_list(
             user=NewUserRecord(id=user_id, email=email, password_hash=password_hash),
@@ -66,7 +67,6 @@ class SignUpService:
                 role="owner",
             ),
         )
-
         return SignupResult(
             user_id=user_id,
             email=email,

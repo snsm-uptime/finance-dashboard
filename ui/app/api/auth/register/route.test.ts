@@ -62,4 +62,19 @@ describe("register BFF route", () => {
     const body = (await response.json()) as { code?: string };
     expect(body.code).toBe("invalid_body");
   });
+
+  it("returns 502 when upstream fetch fails", async () => {
+    process.env.API_INTERNAL_URL = "http://api:8000";
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("connection refused")));
+    const { POST } = await import("@/app/api/auth/register/route");
+    const request = new Request("http://localhost:3000/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "member@example.com", password: "password1" }),
+    });
+    const response = await POST(request as never);
+    expect(response.status).toBe(502);
+    const body = (await response.json()) as { code?: string };
+    expect(body.code).toBe("bad_gateway");
+  });
 });

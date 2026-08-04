@@ -57,6 +57,11 @@ def test_validate_signup_rejects_short_password() -> None:
         validate_signup_input("user@example.com", "short")
 
 
+def test_validate_signup_rejects_whitespace_only_password() -> None:
+    with pytest.raises(InvalidSignupError):
+        validate_signup_input("user@example.com", "        ")
+
+
 def test_signup_creates_user_and_exactly_one_personal_list() -> None:
     repo = FakeSignupRepo()
     service = SignUpService(repo, FakeHasher())
@@ -82,12 +87,24 @@ def test_signup_creates_user_and_exactly_one_personal_list() -> None:
 
 def test_signup_rejects_duplicate_email() -> None:
     repo = FakeSignupRepo(emails={"member@example.com"})
-    service = SignUpService(repo, FakeHasher())
+
+    class CountingHasher(FakeHasher):
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def hash(self, password: str) -> str:
+            self.calls += 1
+            return super().hash(password)
+
+    hasher = CountingHasher()
+    service = SignUpService(repo, hasher)
 
     with pytest.raises(DuplicateEmailError):
         service.execute(SignupCommand(email="Member@Example.com", password="password1"))
 
     assert len(repo.users) == 0
+    # Argon2-cost work still runs before existence short-circuit.
+    assert hasher.calls == 1
 
 
 def test_signup_fr4_off_does_not_require_verification_step() -> None:

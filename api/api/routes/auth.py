@@ -14,6 +14,7 @@ from adapters.persistence.repositories import (
     SqlAlchemySignupRepository,
 )
 from adapters.persistence.sessions import (
+    SESSION_COOKIE_MAX_AGE,
     create_session,
     resolve_session_user_id,
     revoke_all_sessions_for_user,
@@ -83,7 +84,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-_SESSION_MAX_AGE = 60 * 60 * 24 * 30
 _GENERIC_CREDENTIALS_CODE = "invalid_credentials"
 _RESET_ACK = PasswordResetRequestResponse().detail
 _VERIFY_ACK = VerifyRequestResponse().detail
@@ -99,7 +99,7 @@ def _set_session_cookie(response: Response, settings: AuthSettings, token: str) 
         secure=settings.session_cookie_secure,
         samesite=settings.session_cookie_samesite,  # type: ignore[arg-type]
         path="/",
-        max_age=_SESSION_MAX_AGE,
+        max_age=SESSION_COOKIE_MAX_AGE,
     )
 
 

@@ -4,6 +4,7 @@ import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { signupMessages, type Locale } from "@/lib/i18n/signup";
+import { attemptSignup } from "./signupClient";
 import styles from "./signup.module.css";
 
 type Props = {
@@ -67,30 +68,19 @@ export function SignupForm({ locale }: Props) {
     setError(null);
     setPending(true);
     try {
-      const response = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ email, password }),
-        credentials: "same-origin",
+      const result = await attemptSignup({
+        email,
+        password,
+        errorDuplicate: t.errorDuplicate,
+        errorInvalid: t.errorInvalid,
+        errorGeneric: t.errorGeneric,
       });
-      const data = (await response.json().catch(() => ({}))) as {
-        detail?: string;
-        code?: string;
-      };
-      if (!response.ok) {
-        if (data.code === "duplicate_email") {
-          setError(t.errorDuplicate);
-        } else if (data.code === "invalid_signup" || response.status === 400) {
-          setError(data.detail || t.errorInvalid);
-        } else {
-          setError(t.errorGeneric);
-        }
+      if (!result.ok) {
+        setError(result.error);
         return;
       }
       router.replace("/lists");
       router.refresh();
-    } catch {
-      setError(t.errorGeneric);
     } finally {
       setPending(false);
     }

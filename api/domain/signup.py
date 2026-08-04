@@ -21,6 +21,8 @@ def validate_signup_input(email: str, password: str) -> str:
     normalized = normalize_email(email)
     if not normalized or not _EMAIL_RE.match(normalized):
         raise InvalidSignupError("Enter a valid email address.")
+    if not password or not password.strip():
+        raise InvalidSignupError("Password must be at least 8 characters.")
     if len(password) < MIN_PASSWORD_LEN:
         raise InvalidSignupError("Password must be at least 8 characters.")
     return normalized
