@@ -1,5 +1,5 @@
 # generated: 2026-08-03T22:46:31
-# last_updated: 2026-08-04T17:20:00
+# last_updated: 2026-08-04T19:00:00
 
 # project: finance-dashboard
 # project_key: NOKEY
@@ -42,7 +42,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-03T22:46:31
-last_updated: 2026-08-04T17:20:00
+last_updated: 2026-08-04T19:00:00
 project: finance-dashboard
 project_key: NOKEY
 tracking_system: file-system
@@ -63,7 +63,7 @@ development_status:
   1-5-1-token-claim-rechecks-expires-at: backlog
   1-5-2-auth-mail-interaction-map-and-story-close-overview: done
   1-5-3-invite-verify-gate-contract: review
-  1-5-4-membership-acl-enforcement-sketch: ready-for-dev
+  1-5-4-membership-acl-enforcement-sketch: review
   1-5-5-epic-1-spine-smoke: backlog
   1-5-6-auth-smtp-rate-limit-hardening: backlog
   1-5-7-hex-port-polish-and-compose-pytest-ergonomics: backlog
@@ -133,7 +133,7 @@ action_items:
   - epic: 1
     action: "Membership ACL enforcement sketch (contract only; impl in 2.2)"
     owner: "Winston"
-    status: open
+    status: done
   - epic: 1
     action: "Epic 1 spine smoke checklist after claim fix (auth + mail + personal list)"
     owner: "Dana"

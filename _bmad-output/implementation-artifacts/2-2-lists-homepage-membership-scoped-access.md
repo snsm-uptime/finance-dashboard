@@ -140,7 +140,7 @@ Epic 2 = Shared lists & household membership (FR-6…FR-10). Demo gate = unregis
 - **AD-8:** Reuse 1.2/1.3 httpOnly Secure cookie — single session issuer; same-origin BFF/proxy
 - **AD-19:** Users are peers; read/write list ledger only with membership; personal list auto-created at signup; no product admin
 - **Proposed AD-24 (review guidance — apply as practice):** list-scoped reads/writes through domain ACL port → `ListAccessGrant`; repos require that grant — do not rely on application-only checks with unscoped repos
-- **Disclosure (Story 1.5.4):** list-scoped **reads** → **404** missing ≡ non-member; member-gated mutations (e.g. set last-opened) → **403** `not_list_member`; contract: `membership-acl-enforcement-sketch.md`
+- **Disclosure (Story 1.5.4):** list-scoped **reads** → **404** missing ≡ non-member; member-gated mutations (e.g. set last-opened) → **403** `not_list_member`; living contract: [`membership-acl-enforcement-sketch.md`](../planning-artifacts/architecture/architecture-finance-helper-2026-08-03/membership-acl-enforcement-sketch.md)
 - **AD-12:** DESIGN.md + EXPERIENCE.md win; Warm Balance / Soft-Ledger; kits unstyled only
 - **AD-5:** If any money fields appear on wire, `Decimal` / string amounts — never float / JSON numbers
 - **AD-22:** Alembic for any last-opened column; never recreate PG volume
@@ -300,4 +300,4 @@ Follow `_bmad-output/project-context.md` entirely. Highest-risk misses for this 
 
 Status: **ready-for-dev**
 
-Completion note: Ultimate context engine analysis completed — comprehensive developer guide created (2026-08-03). Disclosure aligned with Story 1.5.4 (reads → 404; mutations → 403; ListAccessGrant) on 2026-08-04.
+Completion note: Ultimate context engine analysis completed — comprehensive developer guide created (2026-08-03). Disclosure aligned with Story 1.5.4 (reads → 404; mutations → 403; ListAccessGrant) on 2026-08-04. Sketch path linked after Story 1.5.4 landed (2026-08-04).
