@@ -38,3 +38,9 @@
 - Expired/used `password_reset_tokens` table retention/cleanup — no AC for pruning; ops housekeeping
 - `revoke_all_sessions_for_user` loads and deletes session rows one-by-one — fine for v1 peer households; bulk DELETE later
 - DATABASE_URL default-fallback removal bundled on this branch — Story 1.1 review fix, not introduced by password-reset logic
+
+## Deferred from: code review of 1-5-config-gated-email-verification.md (2026-08-04)
+
+- No per-user throttle on `POST /auth/verify/request` SMTP send — same hardening class as register/reset rate limits
+- `claim_token` atomic UPDATE does not re-check `expires_at` — mirrors password-reset token claim pattern from 1.4
+- Request/send vs concurrent confirm can email a dead (already-invalidated) link — rare race; persist-then-send family shared with 1.4

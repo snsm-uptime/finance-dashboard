@@ -43,7 +43,8 @@ class SignUpService:
             raise DuplicateEmailError("An account with this email already exists.")
 
         # FR-4 off: no verification gate — account is immediately usable.
-        # When verification is required (Story 1.5), gating happens elsewhere.
+        # When verification is required (Story 1.5), register route auto-sends
+        # verification mail; gating remains orthogonal via EnsureEmailVerifiedService.
         _ = command.email_verification_required
 
         user_id = uuid4()

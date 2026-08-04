@@ -18,6 +18,9 @@ class UserModel(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False, index=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    email_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -26,6 +29,9 @@ class UserModel(Base):
     memberships: Mapped[list[ListMembershipModel]] = relationship(back_populates="user")
     sessions: Mapped[list[SessionModel]] = relationship(back_populates="user")
     password_reset_tokens: Mapped[list[PasswordResetTokenModel]] = relationship(
+        back_populates="user"
+    )
+    email_verification_tokens: Mapped[list[EmailVerificationTokenModel]] = relationship(
         back_populates="user"
     )
 
@@ -97,3 +103,20 @@ class PasswordResetTokenModel(Base):
     )
 
     user: Mapped[UserModel] = relationship(back_populates="password_reset_tokens")
+
+
+class EmailVerificationTokenModel(Base):
+    __tablename__ = "email_verification_tokens"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    user: Mapped[UserModel] = relationship(back_populates="email_verification_tokens")

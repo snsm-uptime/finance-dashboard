@@ -56,3 +56,42 @@ class SmtpSendError(DomainError):
 
     def __init__(self, detail: str | None = None) -> None:
         super().__init__(detail or self.MESSAGE)
+
+
+class EmailNotVerifiedError(DomainError):
+    """Raised when a gated flow requires verified email and the user is unverified."""
+
+    MESSAGE = (
+        "Verify your email before continuing with this action. "
+        "Check your inbox for a verification link, or open /verify to resend one."
+    )
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
+class InvalidVerificationTokenError(DomainError):
+    """Raised when an email-verification token is missing, expired, or already used."""
+
+    MESSAGE = "This verification link is invalid or has expired. Request a new one."
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
+class VerificationNotRequiredError(DomainError):
+    """Raised when verification endpoints are called while the config gate is off."""
+
+    MESSAGE = "Email verification is not required for this deployment."
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
+class PrincipalNotFoundError(DomainError):
+    """Raised when an authenticated user_id has no matching account row."""
+
+    MESSAGE = "Not authenticated."
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
