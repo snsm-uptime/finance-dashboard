@@ -119,6 +119,7 @@ flowchart LR
 - **Rule:** Email+password with password reset via SMTP. Browser session is an **httpOnly Secure** cookie (JWT or opaque session id). Traffic is **same-origin** via reverse proxy and/or Next Route Handler BFF (`/api` → `api`). Bearer-in-client-storage is forbidden. Library may be fastapi-users or custom argon2 + signed cookies.
 - **Addendum (Epic 1.5):** Single-use email tokens (password reset, email verify, and future invites) MUST hash at rest, enforce TTL, and **re-check `expires_at` on claim** — a successful claim MUST NOT succeed solely because a row matched. SMTP send is fail-loud (no silent “sent”). Prefer one shared claim helper over copy-paste per token type.
 - **Living map:** [auth-mail-interaction-map.md](./auth-mail-interaction-map.md) (session/BFF, reset, verify, SMTP — Story 1.5.2)
+- **Invite verify-gate contract:** [invite-verify-gate-contract.md](../../../implementation-artifacts/invite-verify-gate-contract.md) (Story 1.5.3 — Ensure at accept, not send)
 
 ### AD-9 — Individual review gestures [ADOPTED]
 
