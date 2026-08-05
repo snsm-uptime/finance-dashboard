@@ -77,3 +77,8 @@
 - First-paint client clearing stale `last_opened_list_id` on membership deny — Story 2.2 UX, not contract sketch scope
 - Malformed non-UUID `list_id` FastAPI validation (422) vs forcing 404 for anti-enumeration — pre-existing framework path validation
 - Rename (`RenameListService`) migration exit criteria / when 2.1 pays AD-24 bare-`list_id` debt — intentional grandfather until an implement story migrates it
+
+## Deferred from: code review of 1-5-7-hex-port-polish-and-compose-pytest-ergonomics.md (2026-08-04)
+
+- Shared `make_client` omits per-request `except`/`rollback` (preferences-style): protects 422 paths sharing the outer test transaction; mid-handler DB errors can leave an aborted transaction for later assertions in the same test — revisit if flakes appear
+- New shared `api/tests/conftest.py` has no rate-limiter store reset; if Story 1.5.6 merges first (or after), preserve limiter-store fixture/hooks on rebase per Task 6 conflict map

@@ -5,7 +5,7 @@ validated: 2026-08-04
 
 # Story 1.5.7: Hex port polish and Compose pytest ergonomics
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -161,6 +161,13 @@ so that Epic 2 application services do not pile onto incomplete boundaries (para
   - [x] Mark sprint `action_items` “Hex port polish…” and “Compose pytest ergonomics…” → `done` when story is marked done
   - [x] Branch: `refactor/1/1-5-7-hex-port-polish-and-compose-pytest-ergonomics` (AD-13; `feat`/`chore` OK if preferred)
   - [x] Before `done`: paste story-close how/why overview per `story-close-overview-checklist.md`
+
+### Review Findings
+
+- [x] [Review][Patch] Revert sprint action_items to `open` until story is `done` [`_bmad-output/implementation-artifacts/sprint-status.yaml`] — resolved by promoting story → `done` (Task 7 gate satisfied; action_items remain `done`)
+- [x] [Review][Patch] Fix stale `DEFAULT_SESSION_TTL` sync comment [`api/application/ports.py:10`] — comment now states ports owns the canonical TTL
+- [x] [Review][Defer] Shared `make_client` omits per-request rollback on mid-handler DB errors [`api/tests/integration_db.py:41-46`] — deferred, intentional preferences-style override for 422; residual within-test aborted-tx risk
+- [x] [Review][Defer] Latent 1.5.6 conftest merge (rate-limiter reset) [`api/tests/conftest.py`] — deferred, pre-existing parallel-story conflict documented in Task 6
 
 ## Dev Notes
 
@@ -396,5 +403,5 @@ AD-1 hex ports at the composition root without reshaping password-reset revoke (
 
 ---
 
-**Status:** review  
-**Completion note:** Story implementation complete — ready for code-review
+**Status:** done  
+**Completion note:** Code review complete — patches applied; deferred items logged
