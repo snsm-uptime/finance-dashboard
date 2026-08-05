@@ -4,7 +4,7 @@ baseline_commit: e9898c1 docs(1): land membership ACL enforcement sketch for Sto
 
 # Story 1.5.5: Epic 1 spine smoke (auth, mail, personal list)
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -26,17 +26,17 @@ Supports readiness for **FR-1** (signup/session), **FR-4** (config-gated verify)
 
 ## Tasks / Subtasks
 
-- [ ] Task 0: Gate on prerequisites (AC: #1)
-  - [ ] Confirm Story **1.5.1** (`1-5-1-token-claim-rechecks-expires-at`) is **`done`** — shared claim helper re-checks `expires_at` atomically; `auth-email-token-claim-pattern.md` exists under implementation-artifacts
-  - [ ] Confirm Story **1.5.2** map exists: `…/architecture-finance-helper-2026-08-03/auth-mail-interaction-map.md` (orientation only — already `done`)
-  - [ ] Confirm **1.5.3** / **1.5.4** contracts exist (verify-gate + ACL sketch) — do **not** re-execute their ACs; optional one-line “map/contracts present” tick on the checklist is enough
-  - [ ] **HALT** if 1.5.1 is still `backlog` / `ready-for-dev` / `in-progress` / `review` — create/finish 1.5.1 first. Do **not** mark this story done against a pre-claim-fix stack
-  - [ ] Prefer branch `test/1/1-5-5-epic-1-spine-smoke` (or `docs/1/1-5-5-…` if checklist-only); one story per branch (AD-13)
+- [x] Task 0: Gate on prerequisites (AC: #1)
+  - [x] Confirm Story **1.5.1** (`1-5-1-token-claim-rechecks-expires-at`) is **`done`** — shared claim helper re-checks `expires_at` atomically; `auth-email-token-claim-pattern.md` exists under implementation-artifacts
+  - [x] Confirm Story **1.5.2** map exists: `…/architecture-finance-helper-2026-08-03/auth-mail-interaction-map.md` (orientation only — already `done`)
+  - [x] Confirm **1.5.3** / **1.5.4** contracts exist (verify-gate + ACL sketch) — do **not** re-execute their ACs; optional one-line “map/contracts present” tick on the checklist is enough
+  - [x] **HALT** if 1.5.1 is still `backlog` / `ready-for-dev` / `in-progress` / `review` — create/finish 1.5.1 first. Do **not** mark this story done against a pre-claim-fix stack
+  - [x] Prefer branch `test/1/1-5-5-epic-1-spine-smoke` (or `docs/1/1-5-5-…` if checklist-only); one story per branch (AD-13)
 
-- [ ] Task 1: Author reusable smoke checklist (AC: #2)
-  - [ ] Create durable artifact: `_bmad-output/implementation-artifacts/epic-1-spine-smoke-checklist.md`
-  - [ ] Start from the **checklist skeleton** in Dev Notes (required sections + pass/fail table) — do not invent a thinner substitute
-  - [ ] Checklist MUST cover (pass/fail + notes columns):
+- [x] Task 1: Author reusable smoke checklist (AC: #2)
+  - [x] Create durable artifact: `_bmad-output/implementation-artifacts/epic-1-spine-smoke-checklist.md`
+  - [x] Start from the **checklist skeleton** in Dev Notes (required sections + pass/fail table) — do not invent a thinner substitute
+  - [x] Checklist MUST cover (pass/fail + notes columns):
     1. **Compose boot** — `.env` from `.env.example`; `docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build` (or prod-like `docker compose up --build`); `db`/`api`/`ui` healthy
     2. **Health** — `GET http://localhost:8000/health` and `GET http://localhost:3000/health` both OK
     3. **Signup** — new email/password via UI **`/signup`** (no hyphen) → httpOnly **`fh_session`** cookie set (api issuer; BFF forwards); lands usable (typically `/lists`). Alternate: curl cookie-jar against BFF (see Dev Notes)
@@ -46,43 +46,43 @@ Supports readiness for **FR-1** (signup/session), **FR-4** (config-gated verify)
     7. **Password reset** — `/forgot-password` → mail received → `/reset-password?token=…` confirm → old session dead → sign-in with **new** password works; unknown email still gets generic ack (no oracle)
     8. **Verify path (as configured)** — see matrix below. Gate-**off** alone satisfies AC #1 when that is the configured run. Gate-**on** is a **strong reuse recommendation** (document skip reason if omitted). Never claim “verify covered” without stating which mode(s) ran
     9. **Post-1.5.1 claim** — expired reset **or** verify token fails via the **shared/atomic claim helper** (not merely an incidental application pre-check). Prefer steps from `auth-email-token-claim-pattern.md`; fallback SQL age method in Dev Notes
-  - [ ] Document SMTP catcher as **side-car only** (Mailpit via `docker run` / host) — **do not** add a fourth service to `docker-compose.yml` (AD-2: `db`|`api`|`ui` only)
-  - [ ] Document Mac **and** Linux reachability from `api` → Mailpit (see SMTP wiring below)
-  - [ ] Point operators at the living map for “why”: [`auth-mail-interaction-map.md`](../planning-artifacts/architecture/architecture-finance-helper-2026-08-03/auth-mail-interaction-map.md)
-  - [ ] Include env knobs table: `EMAIL_VERIFICATION_REQUIRED`, `PUBLIC_APP_URL`, `SMTP_*`, `SESSION_COOKIE_NAME` / `SESSION_COOKIE_*`
-  - [ ] Include “what not to break” invariants (AD-8 / map cheat sheet) so reuse stays honest
+  - [x] Document SMTP catcher as **side-car only** (Mailpit via `docker run` / host) — **do not** add a fourth service to `docker-compose.yml` (AD-2: `db`|`api`|`ui` only)
+  - [x] Document Mac **and** Linux reachability from `api` → Mailpit (see SMTP wiring below)
+  - [x] Point operators at the living map for “why”: [`auth-mail-interaction-map.md`](../planning-artifacts/architecture/architecture-finance-helper-2026-08-03/auth-mail-interaction-map.md)
+  - [x] Include env knobs table: `EMAIL_VERIFICATION_REQUIRED`, `PUBLIC_APP_URL`, `SMTP_*`, `SESSION_COOKIE_NAME` / `SESSION_COOKIE_*`
+  - [x] Include “what not to break” invariants (AD-8 / map cheat sheet) so reuse stays honest
 
-- [ ] Task 2: Execute smoke on Compose and record results (AC: #1, #2)
-  - [ ] Bring up Compose with a filled `.env` (never commit `.env`)
-  - [ ] For mail paths: start Mailpit **before** any SMTP-sending step; wire api SMTP to it (**outside** permanent compose graph)
+- [x] Task 2: Execute smoke on Compose and record results (AC: #1, #2)
+  - [x] Bring up Compose with a filled `.env` (never commit `.env`)
+  - [x] For mail paths: start Mailpit **before** any SMTP-sending step; wire api SMTP to it (**outside** permanent compose graph)
     - Suggested: `docker run --rm -d --name fh-mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit`
     - Env on **api**: `SMTP_PORT=1025`, `SMTP_FROM=noreply@example.com`, `SMTP_USE_TLS=false`, `SMTP_STARTTLS=false`, `PUBLIC_APP_URL=http://localhost:3000`
     - **Mac (Docker Desktop):** `SMTP_HOST=host.docker.internal`
     - **Linux Compose:** `host.docker.internal` often missing — use host gateway IP, `network_mode: host` for Mailpit experiments, or add Compose `extra_hosts: ["host.docker.internal:host-gateway"]` on **api** for the smoke run only (do **not** permanently add a mail service). If SMTP connect fails, fix reachability before continuing — do not skip mail rows
     - Captured mail UI: `http://localhost:8025`
-  - [ ] Run every checklist row; mark pass/fail with date + executor initials
-  - [ ] **Verify off (default — AC-sufficient when this is the configured mode):** `EMAIL_VERIFICATION_REQUIRED=false` — signup usable without verify; BFF `POST /api/auth/verify/request|confirm` → `404` `verification_not_required`
-  - [ ] **Verify on (recommended second pass):**
+  - [x] Run every checklist row; mark pass/fail with date + executor initials
+  - [x] **Verify off (default — AC-sufficient when this is the configured mode):** `EMAIL_VERIFICATION_REQUIRED=false` — signup usable without verify; BFF `POST /api/auth/verify/request|confirm` → `404` `verification_not_required`
+  - [x] **Verify on (recommended second pass):**
     1. Ensure Mailpit is up and `SMTP_*` reach it
     2. Set `EMAIL_VERIFICATION_REQUIRED=true`, recreate/restart **api**
     3. Register (or signed-in verify request) — gate-on register **auto-sends** verify mail; misconfigured SMTP → fail-loud / registration rollback — do **not** flip the gate before SMTP works
     4. Open mail link → explicit confirm on `/verify` (**no auto-confirm on mount**)
     5. Probe invite stub (**api-only, no BFF**): with session cookie, `curl -X POST http://localhost:8000/auth/gated-flows/invite-accept-stub` — unverified → `403` `email_not_verified`; after verify (or gate off) → allowed
-  - [ ] **Expired-token claim probe (required):** follow `auth-email-token-claim-pattern.md` if it defines a smoke/probe. Else:
+  - [x] **Expired-token claim probe (required):** follow `auth-email-token-claim-pattern.md` if it defines a smoke/probe. Else:
     1. Complete a reset **or** verify **request** so a hashed token row exists (`used_at` null)
     2. Age it in Postgres, e.g. `UPDATE password_reset_tokens SET expires_at = NOW() - INTERVAL '1 hour' WHERE used_at IS NULL;` (or `email_verification_tokens` — match actual table from 1.5.1/models)
     3. Confirm with the **raw** token from Mailpit — claim/confirm must fail closed; row must **not** be treated as successfully consumed for a state change
     4. Record that failure path exercised the **shared claim helper** (1.5.1), not only a pre-helper application `expires_at` guard
-  - [ ] Paste a short run summary into this story’s Completion Notes (date, Compose mode, gate on/off status, claim probe method, failures if any)
-  - [ ] If any required row fails: file/fix before marking this story `done` — do **not** greenwash
+  - [x] Paste a short run summary into this story’s Completion Notes (date, Compose mode, gate on/off status, claim probe method, failures if any)
+  - [x] If any required row fails: file/fix before marking this story `done` — do **not** greenwash
 
-- [ ] Task 3: Hygiene + handoff (AC: #1, #2)
-  - [ ] Link checklist path from Completion Notes / File List
-  - [ ] Mark sprint `action_items` entry “Epic 1 spine smoke checklist after claim fix…” → `done` when checklist exists **and** execution is green
-  - [ ] Do **not** mark sibling Epic 1.5 stories done; do **not** start Stories **2.2+** product work on this branch
-  - [ ] Do **not** delete the invite-accept stub solely because smoke passed — stub fate stays with 2.4 / contract guidance (`invite-verify-gate-contract.md`)
-  - [ ] Before marking this story `done`: paste story-close how/why overview per `story-close-overview-checklist.md`
-  - [ ] Prefer Conventional Commit on the story branch
+- [x] Task 3: Hygiene + handoff (AC: #1, #2)
+  - [x] Link checklist path from Completion Notes / File List
+  - [x] Mark sprint `action_items` entry “Epic 1 spine smoke checklist after claim fix…” → `done` when checklist exists **and** execution is green
+  - [x] Do **not** mark sibling Epic 1.5 stories done; do **not** start Stories **2.2+** product work on this branch
+  - [x] Do **not** delete the invite-accept stub solely because smoke passed — stub fate stays with 2.4 / contract guidance (`invite-verify-gate-contract.md`)
+  - [x] Before marking this story `done`: paste story-close how/why overview per `story-close-overview-checklist.md`
+  - [x] Prefer Conventional Commit on the story branch
 
 ## Dev Notes
 
@@ -301,15 +301,44 @@ Follow `_bmad-output/project-context.md`: AD-8 cookie/BFF rules; AD-2 three-serv
 
 ### Agent Model Used
 
-_(filled by implementing agent)_
+Composer (Cursor agent router)
 
 ### Debug Log References
 
+- Compose smoke via BFF cookie-jar + Mailpit side-car (Mac `host.docker.internal`); api SMTP overridden for the run then restored to `.env`.
+- Local `pytest`: 65 non-integration tests passed; integration suite needs Compose-network DB (host→`db` IP hung on Docker Desktop) — no product code changed in this story.
+
 ### Completion Notes List
+
+- **Run summary (2026-08-04, AI):** Compose mode = dev overlay. Gate **off** then gate **on** both green. Claim probe = SQL age `password_reset_tokens` + BFF confirm → `400 invalid_reset_token`, `used_at` stayed null; adapter calls `claim_single_use_email_token`. Failures: none.
+- Checklist artifact: `_bmad-output/implementation-artifacts/epic-1-spine-smoke-checklist.md` (all rows PASS).
+- Sprint action item “Epic 1 spine smoke checklist after claim fix…” → `done`. Sibling Epic 1.5 stories untouched; invite stub retained; no 2.2+ work on this branch.
+
+## Story-close overview — 1.5.5 / 1-5-5-epic-1-spine-smoke
+
+**Request path:**  
+browser/curl → ui BFF `/api/auth/*` + `/api/lists` → api auth/lists → application services → persistence + SMTP (Mailpit side-car) → `fh_session` cookie hop
+
+**Key components:**  
+`epic-1-spine-smoke-checklist.md`; Mailpit side-car; Compose `db`/`api`/`ui`; `adapters/persistence/token_claim.py` (exercised via reset confirm); api-only `POST /auth/gated-flows/invite-accept-stub`
+
+**Why this shape:**  
+Operator/Compose confidence after 1.5.1 claim fix (Correct Course AI #6) — reusable checklist under implementation-artifacts, not a Playwright substitute for CI (AD-15).
+
+**What not to break:**  
+httpOnly `fh_session` api-issued only; Personal = `name=="Personal"` + `role==owner`; claim must re-check `expires_at`; AD-2 no permanent mail Compose service; verify gate modes documented when claiming coverage.
+
+### Change Log
+
+- 2026-08-04: Authored checklist + executed green Compose smoke (gate off/on + expired claim probe); story → review.
 
 ### File List
 
+- `_bmad-output/implementation-artifacts/epic-1-spine-smoke-checklist.md` (new)
+- `_bmad-output/implementation-artifacts/1-5-5-epic-1-spine-smoke.md` (status/tasks/record)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (story → review; action item → done)
+
 ---
 
-**Status:** ready-for-dev  
-**Completion note:** Ultimate context engine analysis completed — comprehensive developer/QA guide created
+**Status:** review  
+**Completion note:** Epic 1 spine smoke green; critical path 1.5.1→1.5.5 checklist complete
