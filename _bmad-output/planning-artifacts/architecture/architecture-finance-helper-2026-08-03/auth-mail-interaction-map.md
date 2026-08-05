@@ -29,7 +29,7 @@ flowchart LR
 
 All browser hops (pages and `/api/auth/*`) still enter via `proxy.ts`. Auth BFF paths are on the **public allowlist** (presence check skipped), then the Route Handler runs.
 
-**Cookie hop (sign-in / register):** Browser → `proxy.ts` → Next Route Handler → `fetch(API_INTERNAL_URL + /auth/…)` → FastAPI `_set_session_cookie` → BFF forwards `Set-Cookie` via `headers.getSetCookie()` when available, else falls back to the single `Set-Cookie` header string. **Api is the sole cookie issuer**; ui never mints `fh_session` (sign-out may only clear).
+**Cookie hop (sign-in / register):** Browser → `proxy.ts` → Next Route Handler → `fetch(API_INTERNAL_URL + /auth/…)` with `X-FH-Client-IP` (browser peer) → FastAPI `_set_session_cookie` → BFF forwards `Set-Cookie` via `headers.getSetCookie()` when available, else falls back to the single `Set-Cookie` header string; also forwards `Retry-After` on 429. **Api is the sole cookie issuer**; ui never mints `fh_session` (sign-out may only clear).
 
 **Mail hop (reset / verify):** Application persists hashed token row → `EmailSender.send` → on SMTP failure, route rolls back and returns `503` (`smtp_*`) — never silent “sent”. Link host is `PUBLIC_APP_URL` (defaults to `http://localhost:3000` if unset — mis-set values yield broken email links, not a hard fail today).
 
@@ -216,4 +216,6 @@ Single transactional mail path from api (AD-8). Fail-loud beats silent success t
 | `EnsureEmailVerifiedService` as the gate seam — see [`invite-verify-gate-contract.md`](../../../implementation-artifacts/invite-verify-gate-contract.md) | Ad-hoc verify checks only in routes |
 | Generic auth errors | Email-existence oracles on invite/reset/sign-in |
 
-**Known deferred (not shipped):** rate limits (1.5.6), session HMAC / token cleanup (later), hex port polish (1.5.7), reset SMTP timing oracle (deferred-work / 1.4).
+**Known deferred (not shipped):** session HMAC / token cleanup (later), hex port polish (1.5.7), reset SMTP timing oracle (deferred-work / 1.4).
+
+**Rate limits (1.5.6 — shipped):** Application-layer sliding window on `POST /auth/register`, `/sign-in`, `/password-reset/request` (trusted client IP), and `/verify/request` (`user_id`). ui BFF sets `X-FH-Client-IP` from the browser-facing peer (`request.ip`, then `X-Real-IP`); api trusts that header only when peer is in `TRUSTED_PROXY_IPS` (Compose default = Docker bridge `172.16.0.0/12` + loopback — not blanket RFC1918). Exceeded → `429` `{detail, code: rate_limited}` + `Retry-After`; BFF forwards status, body, and `Retry-After`. In-process store (single-worker assumption; multi-worker multiplies allowance). Not on confirm/sign-out/session/me/health.

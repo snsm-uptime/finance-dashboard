@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getApiInternalUrl } from "@/lib/api";
+import { forwardUpstreamHeaders, withClientIpHeader } from "@/lib/authBff";
 
 type Body = {
   email?: unknown;
@@ -29,7 +30,10 @@ export async function POST(request: NextRequest) {
     `${getApiInternalUrl()}/auth/password-reset/request`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      headers: withClientIpHeader(request, {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      }),
       body: JSON.stringify({ email }),
       cache: "no-store",
     },
@@ -38,9 +42,6 @@ export async function POST(request: NextRequest) {
   const text = await upstream.text();
   return new NextResponse(text, {
     status: upstream.status,
-    headers: {
-      "Content-Type":
-        upstream.headers.get("Content-Type") || "application/json",
-    },
+    headers: forwardUpstreamHeaders(upstream),
   });
 }

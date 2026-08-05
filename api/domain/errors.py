@@ -22,6 +22,16 @@ class InvalidCredentialsError(DomainError):
         super().__init__(self.MESSAGE)
 
 
+class RateLimitedError(DomainError):
+    """Raised when an auth request path exceeds its configured rate limit."""
+
+    MESSAGE = "Too many attempts. Please try again later."
+    CODE = "rate_limited"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
 class InvalidResetTokenError(DomainError):
     """Raised when a password-reset token is missing, expired, or already used."""
 

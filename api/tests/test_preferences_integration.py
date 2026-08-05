@@ -59,6 +59,10 @@ def client(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> Iterator[Tes
     monkeypatch.setenv("SESSION_COOKIE_SECURE", "false")
     monkeypatch.setenv("EMAIL_VERIFICATION_REQUIRED", "false")
     monkeypatch.setenv("SESSION_COOKIE_NAME", "fh_session")
+    monkeypatch.setenv("AUTH_RATE_LIMIT_REGISTER_MAX", "10000")
+    monkeypatch.setenv("AUTH_RATE_LIMIT_SIGN_IN_MAX", "10000")
+    monkeypatch.setenv("AUTH_RATE_LIMIT_PASSWORD_RESET_REQUEST_MAX", "10000")
+    monkeypatch.setenv("AUTH_RATE_LIMIT_VERIFY_REQUEST_MAX", "10000")
 
     app = create_app()
 

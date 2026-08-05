@@ -89,4 +89,40 @@ describe("password-reset BFF", () => {
     const response = await requestReset(request as never);
     expect(response.status).toBe(503);
   });
+
+  it("forwards 429 Retry-After and sets X-FH-Client-IP on request", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          detail: "Too many attempts. Please try again later.",
+          code: "rate_limited",
+        }),
+        {
+          status: 429,
+          headers: {
+            "Content-Type": "application/json",
+            "Retry-After": "99",
+          },
+        },
+      ),
+    );
+    const request = new Request(
+      "http://localhost/api/auth/password-reset/request",
+      {
+        method: "POST",
+        body: JSON.stringify({ email: "user@example.com" }),
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+    Object.defineProperty(request, "ip", { value: "192.0.2.44" });
+    const response = await requestReset(request as never);
+    expect(response.status).toBe(429);
+    expect(response.headers.get("Retry-After")).toBe("99");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test:8000/auth/password-reset/request",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "X-FH-Client-IP": "192.0.2.44" }),
+      }),
+    );
+  });
 });

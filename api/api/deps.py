@@ -8,6 +8,7 @@ from collections.abc import Iterator
 from adapters.persistence.db import get_session_factory
 from adapters.persistence.password_hasher import Argon2PasswordHasher
 from adapters.persistence.sessions import resolve_session_user_id
+from application.rate_limit import SlidingWindowRateLimiter, resolve_trusted_client_ip
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
@@ -37,6 +38,24 @@ def get_auth_settings(request: Request) -> AuthSettings:
         cached = load_auth_settings()
         request.app.state.auth_settings = cached
     return cached
+
+
+def get_rate_limiter(request: Request) -> SlidingWindowRateLimiter:
+    limiter = getattr(request.app.state, "rate_limiter", None)
+    if limiter is None:
+        limiter = SlidingWindowRateLimiter()
+        request.app.state.rate_limiter = limiter
+    return limiter
+
+
+def resolve_request_client_ip(request: Request, settings: AuthSettings) -> str:
+    """Trusted client IP for rate-limit keys (BFF header only from TRUSTED_PROXY_IPS)."""
+    peer = request.client.host if request.client is not None else "unknown"
+    return resolve_trusted_client_ip(
+        peer_host=peer,
+        header_value=request.headers.get(settings.auth_client_ip_header),
+        trusted_proxies=settings.trusted_proxy_ips,
+    )
 
 
 def require_authenticated_user(

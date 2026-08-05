@@ -20,13 +20,13 @@
 
 ## Deferred from: code review of 1-3-sign-in-sign-out-and-protect-routes.md (2026-08-03)
 
-- Application-layer rate limiting / lockout on `POST /auth/sign-in` — not in Story 1.3 scope; defer to a dedicated hardening story
+- ~~Application-layer rate limiting / lockout on `POST /auth/sign-in` — not in Story 1.3 scope; defer to a dedicated hardening story~~ **Resolved in 1.5.6**
 - Delete expired opaque session rows inside `resolve_session_user_id` — expired tokens already fail auth; cleanup is housekeeping
 - Strengthen “password never logged” tests beyond INFO-level `caplog` (access logs / DEBUG / exception paths)
 
 ## Deferred from: code review of 1-2-sign-up-with-email-password-and-personal-list.md (2026-08-03)
 
-- No rate limiting on `POST /auth/register` — Argon2 CPU burn possible; defer to dedicated hardening story
+- ~~No rate limiting on `POST /auth/register` — Argon2 CPU burn possible; defer to dedicated hardening story~~ **Resolved in 1.5.6**
 - Opaque session tokens stored plaintext in `sessions.token` — consider hashing at rest in a later hardening pass
 - Incomplete hexagonal ports for session create/resolve and hasher (routes import concrete adapters) — polish later
 - `Argon2PasswordHasher.verify` only caught `VerifyMismatchError` in the 1.2 merge (unused on signup; sign-in path owns hardening)
@@ -42,7 +42,7 @@
 
 ## Deferred from: code review of 1-5-config-gated-email-verification.md (2026-08-04)
 
-- No per-user throttle on `POST /auth/verify/request` SMTP send — same hardening class as register/reset rate limits
+- ~~No per-user throttle on `POST /auth/verify/request` SMTP send — same hardening class as register/reset rate limits~~ **Resolved in 1.5.6**
 - Request/send vs concurrent confirm can email a dead (already-invalidated) link — rare race; persist-then-send family shared with 1.4
 
 <!-- Resolved in Story 1.5.1: claim_token re-checks expires_at via shared helper
@@ -71,7 +71,11 @@
 
 - Known-user SMTP failure returns 503 while unknown email returns identical 200 ack — timing/oracle class already deferred from Story 1.4; map may reference but not “fix” here
 
-## Deferred from: code review of 1-5-4-membership-acl-enforcement-sketch.md (2026-08-04)
+## Deferred from: code review of 1-5-6-auth-smtp-rate-limit-hardening.md (2026-08-04)
+
+- Max-key eviction can reset victim windows under key churn — story required hard max-key eviction; deny-new is alternate hardening
+- `threading.Lock` inside async `sign_in` can block the event loop — story required Lock for sync+async coexistence on single-worker Compose
+- IPv4-mapped IPv6 peer hosts may miss CIDR trust matches — rare under Compose bridge; normalize later if dual-stack peers appear
 
 - Optional `require_authenticated_user` docstring still says “membership ACL = Epic 2” — optional docs-only; Story 2.2 can update when implementing the port
 - First-paint client clearing stale `last_opened_list_id` on membership deny — Story 2.2 UX, not contract sketch scope

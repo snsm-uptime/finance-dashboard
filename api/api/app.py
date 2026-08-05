@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from application.rate_limit import SlidingWindowRateLimiter
 from fastapi import FastAPI
 
 from api.routes.auth import router as auth_router
@@ -20,6 +21,7 @@ logging.basicConfig(
 def create_app() -> FastAPI:
     application = FastAPI(title="finance-helper-api", version="0.1.0")
     application.state.auth_settings = load_auth_settings()
+    application.state.rate_limiter = SlidingWindowRateLimiter()
     application.include_router(health_router)
     application.include_router(auth_router)
     application.include_router(lists_router)
