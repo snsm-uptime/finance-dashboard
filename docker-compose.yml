@@ -2,7 +2,10 @@
 # Services: db | api | ui only (AD-2). Volumes outside the repo (AD-3 / NFR-9).
 # Requires a local `.env` (copy from `.env.example`) — no silent secret defaults.
 
-name: finance-helper
+# FH_COMPOSE_NAME / API_HOST_PORT / UI_HOST_PORT let parallel Cursor worktrees
+# run isolated Compose stacks without port or container-name clashes.
+# Defaults preserve the single-checkout local workflow.
+name: ${FH_COMPOSE_NAME:-finance-helper}
 
 services:
   db:
@@ -48,7 +51,7 @@ services:
       SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
       SMTP_TIMEOUT_SECONDS: ${SMTP_TIMEOUT_SECONDS:-20}
     ports:
-      - "8000:8000"
+      - "${API_HOST_PORT:-8000}:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -72,7 +75,7 @@ services:
       HOSTNAME: "0.0.0.0"
       PORT: "3000"
     ports:
-      - "3000:3000"
+      - "${UI_HOST_PORT:-3000}:3000"
     depends_on:
       api:
         condition: service_healthy
