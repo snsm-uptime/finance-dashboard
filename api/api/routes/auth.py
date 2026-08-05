@@ -34,6 +34,7 @@ from application.preferences import (
     UpdatePreferencesCommand,
     UpdatePreferencesService,
 )
+from application.rate_limit import RateLimitPolicy, SlidingWindowRateLimiter
 from application.signin import SignInCommand, SignInService
 from application.signup import SignupCommand, SignUpService
 from domain.errors import (
@@ -46,6 +47,7 @@ from domain.errors import (
     InvalidSignupError,
     InvalidVerificationTokenError,
     PrincipalNotFoundError,
+    RateLimitedError,
     SmtpConfigurationError,
     SmtpSendError,
     VerificationNotRequiredError,
@@ -59,8 +61,10 @@ from api.deps import (
     get_db,
     get_password_hasher,
     get_preferences_repository,
+    get_rate_limiter,
     get_session_store,
     require_authenticated_user,
+    resolve_request_client_ip,
 )
 from api.schemas.auth import (
     GatedFlowStubResponse,
@@ -134,6 +138,42 @@ def _smtp_error_response(exc: SmtpConfigurationError | SmtpSendError) -> JSONRes
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         content={"detail": str(exc), "code": code},
     )
+
+
+def _rate_limited_response(retry_after: int) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        content={"detail": RateLimitedError.MESSAGE, "code": RateLimitedError.CODE},
+        headers={"Retry-After": str(max(1, int(retry_after)))},
+    )
+
+
+def _consume_ip_rate_limit(
+    request: Request,
+    settings: AuthSettings,
+    limiter: SlidingWindowRateLimiter,
+    *,
+    bucket: str,
+    policy: RateLimitPolicy,
+) -> JSONResponse | None:
+    identity = resolve_request_client_ip(request, settings)
+    allowed, retry_after = limiter.check_and_consume(f"{bucket}:{identity}", policy)
+    if not allowed:
+        return _rate_limited_response(retry_after)
+    return None
+
+
+def _consume_user_rate_limit(
+    limiter: SlidingWindowRateLimiter,
+    *,
+    bucket: str,
+    user_id: uuid.UUID,
+    policy: RateLimitPolicy,
+) -> JSONResponse | None:
+    allowed, retry_after = limiter.check_and_consume(f"{bucket}:{user_id}", policy)
+    if not allowed:
+        return _rate_limited_response(retry_after)
+    return None
 
 
 @router.get("/session", response_model=SessionResponse)
@@ -218,11 +258,13 @@ def patch_current_user(
 )
 def register(
     body: RegisterRequest,
+    request: Request,
     response: Response,
     db: Session = Depends(get_db),
     sessions: SessionStore = Depends(get_session_store),
     hasher: PasswordHasher = Depends(get_password_hasher),
     settings: AuthSettings = Depends(get_auth_settings),
+    limiter: SlidingWindowRateLimiter = Depends(get_rate_limiter),
 ) -> RegisterResponse | JSONResponse:
     if not settings.session_secret:
         logger.error("SESSION_SECRET is not configured")
@@ -230,6 +272,16 @@ def register(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"detail": "Server configuration error.", "code": "config_error"},
         )
+
+    limited = _consume_ip_rate_limit(
+        request,
+        settings,
+        limiter,
+        bucket="register",
+        policy=settings.rate_limit_register,
+    )
+    if limited is not None:
+        return limited
 
     service = SignUpService(SqlAlchemySignupRepository(db), hasher)
     try:
@@ -301,6 +353,7 @@ async def sign_in(
     sessions: SessionStore = Depends(get_session_store),
     hasher: PasswordHasher = Depends(get_password_hasher),
     settings: AuthSettings = Depends(get_auth_settings),
+    limiter: SlidingWindowRateLimiter = Depends(get_rate_limiter),
 ) -> SignInResponse | JSONResponse:
     if not settings.session_secret:
         logger.error("SESSION_SECRET is not configured")
@@ -318,6 +371,16 @@ async def sign_in(
     email = payload.get("email") if isinstance(payload.get("email"), str) else ""
     password = payload.get("password") if isinstance(payload.get("password"), str) else ""
     body = SignInRequest(email=email, password=password)
+
+    limited = _consume_ip_rate_limit(
+        request,
+        settings,
+        limiter,
+        bucket="sign_in",
+        policy=settings.rate_limit_sign_in,
+    )
+    if limited is not None:
+        return limited
 
     service = SignInService(SqlAlchemyAuthUserRepository(db), hasher)
     try:
@@ -352,9 +415,21 @@ def sign_out(
 )
 def request_password_reset(
     body: PasswordResetRequestBody,
+    request: Request,
     db: Session = Depends(get_db),
     settings: AuthSettings = Depends(get_auth_settings),
+    limiter: SlidingWindowRateLimiter = Depends(get_rate_limiter),
 ) -> PasswordResetRequestResponse | JSONResponse:
+    limited = _consume_ip_rate_limit(
+        request,
+        settings,
+        limiter,
+        bucket="password_reset_request",
+        policy=settings.rate_limit_password_reset_request,
+    )
+    if limited is not None:
+        return limited
+
     try:
         mailer = SmtpEmailSender(load_smtp_settings())
         service = RequestPasswordResetService(
@@ -415,7 +490,18 @@ def request_email_verification(
     db: Session = Depends(get_db),
     settings: AuthSettings = Depends(get_auth_settings),
     user_id: uuid.UUID = Depends(require_authenticated_user),
+    limiter: SlidingWindowRateLimiter = Depends(get_rate_limiter),
 ) -> VerifyRequestResponse | JSONResponse:
+    # Gate-off 404 may still consume this user's verify quota (documented; acceptable).
+    limited = _consume_user_rate_limit(
+        limiter,
+        bucket="verify_request",
+        user_id=user_id,
+        policy=settings.rate_limit_verify_request,
+    )
+    if limited is not None:
+        return limited
+
     if not settings.email_verification_required:
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,

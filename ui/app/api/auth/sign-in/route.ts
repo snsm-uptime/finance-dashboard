@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getApiInternalUrl } from "@/lib/api";
+import { forwardUpstreamHeaders, withClientIpHeader } from "@/lib/authBff";
 
 type SignInBody = {
   email?: unknown;
@@ -31,7 +32,10 @@ export async function POST(request: NextRequest) {
   try {
     upstream = await fetch(`${getApiInternalUrl()}/auth/sign-in`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      headers: withClientIpHeader(request, {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      }),
       body: JSON.stringify({ email, password }),
       cache: "no-store",
     });
@@ -40,27 +44,8 @@ export async function POST(request: NextRequest) {
   }
 
   const text = await upstream.text();
-  const responseHeaders = new Headers();
-  responseHeaders.set(
-    "Content-Type",
-    upstream.headers.get("Content-Type") || "application/json",
-  );
-
-  const getSetCookie = upstream.headers.getSetCookie?.bind(upstream.headers);
-  const setCookies = getSetCookie ? getSetCookie() : [];
-  if (setCookies.length > 0) {
-    for (const cookie of setCookies) {
-      responseHeaders.append("Set-Cookie", cookie);
-    }
-  } else {
-    const single = upstream.headers.get("set-cookie");
-    if (single) {
-      responseHeaders.append("Set-Cookie", single);
-    }
-  }
-
   return new NextResponse(text, {
     status: upstream.status,
-    headers: responseHeaders,
+    headers: forwardUpstreamHeaders(upstream, { forwardSetCookie: true }),
   });
 }

@@ -4,7 +4,7 @@ baseline_commit: e9898c1f2524ac24ff45bbccaf0d8c7863948276
 
 # Story 1.5.6: Auth and SMTP rate-limit hardening
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -24,91 +24,77 @@ so that invite-era abuse surfaces are reduced (parallel hardening).
 
 ## Tasks / Subtasks
 
-- [ ] Task 0: Confirm scope and as-built surfaces (AC: #1, #2)
-  - [ ] Read Epic 1.5 / Story 1.5.6 in `epics.md`, Correct Course proposal, Epic 1 retro AI #7, and `deferred-work.md` entries for register / sign-in / verify-request
-  - [ ] Confirm living map defers rate limits to this story: `auth-mail-interaction-map.md` (“Known deferred”)
-  - [ ] Confirm **no** rate-limit code exists today (`slowapi` / Redis / 429 / throttle — empty)
-  - [ ] Confirm AD-2: Compose stays `db` | `api` | `ui` — **do not add Redis/worker**
-  - [ ] Confirm as-built hop: Browser → `ui` BFF → `fetch(API_INTERNAL_URL + /auth/…)` → `api`; entrypoint sets `proxy_headers=False` (`api/scripts/entrypoint.py`) — raw `request.client.host` on api is the **ui container**, not the household browser
-  - [ ] Confirm out of scope: claim/`expires_at` (1.5.1), spine smoke (1.5.5), hex ports (1.5.7), session HMAC/token cleanup (later), reset **timing oracle** (1.4 deferred — do not claim to fix), dual-key IP∧email dimensions, confirm-path throttling
-  - [ ] Naming trap: sprint key `1-5-6-…` = Epic **1.5** story 6 — **not** Epic 1 story 5 (`1-5-config-gated-…`)
+- [x] Task 0: Confirm scope and as-built surfaces (AC: #1, #2)
+  - [x] Read Epic 1.5 / Story 1.5.6 in `epics.md`, Correct Course proposal, Epic 1 retro AI #7, and `deferred-work.md` entries for register / sign-in / verify-request
+  - [x] Confirm living map defers rate limits to this story: `auth-mail-interaction-map.md` (“Known deferred”)
+  - [x] Confirm **no** rate-limit code exists today (`slowapi` / Redis / 429 / throttle — empty)
+  - [x] Confirm AD-2: Compose stays `db` | `api` | `ui` — **do not add Redis/worker**
+  - [x] Confirm as-built hop: Browser → `ui` BFF → `fetch(API_INTERNAL_URL + /auth/…)` → `api`; entrypoint sets `proxy_headers=False` (`api/scripts/entrypoint.py`) — raw `request.client.host` on api is the **ui container**, not the household browser
+  - [x] Confirm out of scope: claim/`expires_at` (1.5.1), spine smoke (1.5.5), hex ports (1.5.7), session HMAC/token cleanup (later), reset **timing oracle** (1.4 deferred — do not claim to fix), dual-key IP∧email dimensions, confirm-path throttling
+  - [x] Naming trap: sprint key `1-5-6-…` = Epic **1.5** story 6 — **not** Epic 1 story 5 (`1-5-config-gated-…`)
 
-- [ ] Task 1: Rate-limit policy + store (AC: #1)
-  - [ ] Implement an in-repo **sliding window of timestamps** (stdlib only — no new PyPI deps; do not add `slowapi`/Redis)
-  - [ ] Place policy free of FastAPI/SQLAlchemy in `api/application/rate_limit.py`; add `RateLimitedError` to `api/domain/errors.py` with locked `MESSAGE` / `CODE` (see Locked decisions)
-  - [ ] In-memory process-local store with `threading.Lock` (sync + async routes coexist — `sign_in` is `async def`, others sync)
-  - [ ] Lazy prune of expired windows on access **and** a hard max-key cap (evict oldest idle keys) — do not leak forever per identity
-  - [ ] Document single-worker assumption in story-close (multi-worker multiplies allowance — acceptable for v1 Compose)
-  - [ ] Extend `AuthSettings` (or sibling dataclass on `app.state`) with env-tunable max + window_seconds for each path; load in `create_app()` like existing auth settings
-  - [ ] Exact env knobs (placeholders in `.env.example` + wire in `docker-compose.yml` / `.prod.yml` `api.environment`):
+- [x] Task 1: Rate-limit policy + store (AC: #1)
+  - [x] Implement an in-repo **sliding window of timestamps** (stdlib only — no new PyPI deps; do not add `slowapi`/Redis)
+  - [x] Place policy free of FastAPI/SQLAlchemy in `api/application/rate_limit.py`; add `RateLimitedError` to `api/domain/errors.py` with locked `MESSAGE` / `CODE` (see Locked decisions)
+  - [x] In-memory process-local store with `threading.Lock` (sync + async routes coexist — `sign_in` is `async def`, others sync)
+  - [x] Lazy prune of expired windows on access **and** a hard max-key cap (evict oldest idle keys) — do not leak forever per identity
+  - [x] Document single-worker assumption in story-close (multi-worker multiplies allowance — acceptable for v1 Compose)
+  - [x] Extend `AuthSettings` (or sibling dataclass on `app.state`) with env-tunable max + window_seconds for each path; load in `create_app()` like existing auth settings
+  - [x] Exact env knobs (placeholders in `.env.example` + wire in `docker-compose.yml` / `.prod.yml` `api.environment`)
+  - [x] Locked path keys (single key per path — **no** dual-dimension “optional email”)
 
-    | Env | Default |
-    |-----|---------|
-    | `AUTH_RATE_LIMIT_REGISTER_MAX` | `5` |
-    | `AUTH_RATE_LIMIT_REGISTER_WINDOW_SECONDS` | `3600` |
-    | `AUTH_RATE_LIMIT_SIGN_IN_MAX` | `20` |
-    | `AUTH_RATE_LIMIT_SIGN_IN_WINDOW_SECONDS` | `900` |
-    | `AUTH_RATE_LIMIT_PASSWORD_RESET_REQUEST_MAX` | `5` |
-    | `AUTH_RATE_LIMIT_PASSWORD_RESET_REQUEST_WINDOW_SECONDS` | `3600` |
-    | `AUTH_RATE_LIMIT_VERIFY_REQUEST_MAX` | `5` |
-    | `AUTH_RATE_LIMIT_VERIFY_REQUEST_WINDOW_SECONDS` | `3600` |
-    | `AUTH_CLIENT_IP_HEADER` | `X-FH-Client-IP` |
-    | `TRUSTED_PROXY_IPS` | compose/default: peer addresses that may set the client-IP header (document chosen default: ui service / Docker internal peers — **not** the open internet) |
+- [x] Task 2: Client identity + wire the four routes (AC: #1)
+  - [x] **Identity lock (required):** Do **not** use bare `request.client.host` as the only key for Compose BFF traffic.
+  - [x] Enforce **before** Argon2 / SMTP / token persist / signup persist on the four paths
+  - [x] **Counting rule (locked):** After body validation succeeds, atomically check+consume before hasher / SMTP / persist
+  - [x] Prefer FastAPI `Depends` / shared helper — **not** global middleware that also throttles `/health`
+  - [x] Exceeded → `_rate_limited_response(retry_after: int)` — 429 + locked body + `Retry-After`
+  - [x] Depends order for verify: `require_authenticated_user` then rate-limit by `user_id`
+  - [x] Register with gate on still sends verify mail inside register — keep that behind the **register** bucket only
+  - [x] Do **not** rate-limit: `password-reset/confirm`, `verify/confirm`, sign-out, `/session`, `/me`, `/health`, invite stub
+  - [x] Preserve fail-loud SMTP under the limit (503 `smtp_*`); preserve generic sign-in / reset 200 ack behaviors under the limit
 
-  - [ ] Locked path keys (single key per path — **no** dual-dimension “optional email”):
+- [x] Task 3: UI/BFF pass-through (AC: #1 — required for contract)
+  - [x] Four BFF routes: forward upstream status, JSON body, **and `Retry-After`** (plus `Content-Type`; keep existing `Set-Cookie` forward on register/sign-in)
+  - [x] Set `X-FH-Client-IP` (or configured header) on those four BFF → api fetches (Task 2)
+  - [x] Extend existing `route.test.ts` files to assert 429 body + `Retry-After` passthrough
+  - [x] Optional (test-after): map `code === "rate_limited"` in existing client error switches (`signupClient.ts`, `signInClient`, forgot-password / `VerifyForm`)
 
-    | Path | Key | Default |
-    |------|-----|---------|
-    | `POST /auth/register` | trusted client IP (see identity lock) | 5 / 1h |
-    | `POST /auth/sign-in` | trusted client IP | 20 / 15m |
-    | `POST /auth/password-reset/request` | trusted client IP | 5 / 1h |
-    | `POST /auth/verify/request` | authenticated `user_id` | 5 / 1h |
+- [x] Task 4: Tests (AC: #1)
+  - [x] Unit (TDD): sliding window allows under threshold; rejects when exceeded; resets after window; key isolation; lock-safe under concurrent calls
+  - [x] Integration: hammer each of the four endpoints past limit → 429 + `code=rate_limited` + `Retry-After`; early requests still succeed
+  - [x] Identity isolation: two different trusted client-IP headers do **not** share a bucket
+  - [x] Anti-oracle: rate-limited reset/sign-in responses use the same status/`code`/`detail` regardless of whether the email exists
+  - [x] Verify hammer: flip gate on via `dataclasses.replace` on `client.app.state.auth_settings`
+  - [x] Health guard: after auth paths are exhausted to 429, `GET /health` remains 200
+  - [x] Fake SMTP (`CapturingMailer` / monkeypatch `SmtpEmailSender`) — never live SMTP; under-limit SMTP fail still 503
+  - [x] Test wiring: env-before-create_app / `replace` on `app.state.auth_settings`; clear in-memory limiter store per test; raise limits in chatty suites
+  - [x] Existing suites must stay green
 
-- [ ] Task 2: Client identity + wire the four routes (AC: #1)
-  - [ ] **Identity lock (required):** Do **not** use bare `request.client.host` as the only key for Compose BFF traffic.
-    1. On the four BFF POSTs, set `AUTH_CLIENT_IP_HEADER` (default `X-FH-Client-IP`) from `NextRequest` remote address (the browser-facing peer of `ui`)
-    2. On api, trust that header **only** when `request.client.host` is in `TRUSTED_PROXY_IPS` (ui / internal Docker peers). Otherwise fall back to `request.client.host` (direct api hits / TestClient)
-    3. Do **not** enable uvicorn `proxy_headers=True` globally; do **not** blindly honor public `X-Forwarded-For` / `X-Real-IP`
-  - [ ] Enforce **before** Argon2 / SMTP / token persist / signup persist on:
-    - `POST /auth/register` — **add `request: Request`** (missing today)
-    - `POST /auth/sign-in`
-    - `POST /auth/password-reset/request` — **add `request: Request`**
-    - `POST /auth/verify/request`
-  - [ ] **Counting rule (locked):** After body validation succeeds (Pydantic / accepted JSON), **atomically check+consume one unit before** hasher / SMTP / token/user persist. Over limit → 429 with **no** side effects. Invalid JSON on sign-in that already maps to generic 401 may remain uncounted (preserve `_credentials_error_response`). Gate-off `verify/request` → 404 may still consume that user’s verify quota — document; acceptable
-  - [ ] Prefer FastAPI `Depends` / shared helper — **not** global middleware that also throttles `/health`
-  - [ ] Exceeded → `_rate_limited_response(retry_after: int)` mirroring `_smtp_error_response` / `_credentials_error_response`: **429** + locked body + `Retry-After` (int seconds). Same `detail`/`code` on all four paths — no remaining-quota / which-dimension text in `detail`
-  - [ ] Depends order for verify: `require_authenticated_user` then rate-limit by `user_id`
-  - [ ] Register with gate on still sends verify mail inside register — keep that behind the **register** bucket only (do not invent a cross-path verify-request consume unless documented — do not)
-  - [ ] Do **not** rate-limit: `password-reset/confirm`, `verify/confirm`, sign-out, `/session`, `/me`, `/health`, invite stub
-  - [ ] Preserve fail-loud SMTP under the limit (503 `smtp_*`); preserve generic sign-in / reset 200 ack behaviors under the limit
+- [x] Task 5: Hygiene + handoff (AC: #1, #2)
+  - [x] Update `auth-mail-interaction-map.md`: rate limits shipped; remove from “Known deferred”
+  - [x] Resolve absorbed bullets in `deferred-work.md` (1.2 register, 1.3 sign-in, 1.5 verify/request)
+  - [x] Mark sprint `action_items` “Auth/SMTP rate-limit hardening…” → `done`
+  - [x] Branch: `feat/1/1-5-6-auth-smtp-rate-limit-hardening` (AD-13 one story per branch)
+  - [x] Before `done`: paste story-close how/why overview per `story-close-overview-checklist.md`
 
-- [ ] Task 3: UI/BFF pass-through (AC: #1 — required for contract)
-  - [ ] Four BFF routes: forward upstream status, JSON body, **and `Retry-After`** (plus `Content-Type`; keep existing `Set-Cookie` forward on register/sign-in)
-  - [ ] Set `X-FH-Client-IP` (or configured header) on those four BFF → api fetches (Task 2)
-  - [ ] Extend existing `route.test.ts` files to assert 429 body + `Retry-After` passthrough
-  - [ ] Optional (test-after): map `code === "rate_limited"` in existing client error switches (`signupClient.ts`, `signInClient`, forgot-password / `VerifyForm`) — do not rebuild error plumbing or invent a second limiter in `ui` / `proxy.ts`
+### Review Findings
 
-- [ ] Task 4: Tests (AC: #1)
-  - [ ] Unit (TDD): sliding window allows under threshold; rejects when exceeded; resets after window; key isolation; lock-safe under concurrent calls
-  - [ ] Integration: hammer each of the four endpoints past limit → 429 + `code=rate_limited` + `Retry-After`; early requests still succeed
-  - [ ] Identity isolation: two different trusted client-IP headers do **not** share a bucket (TestClient default host alone is insufficient for this assertion)
-  - [ ] Anti-oracle: rate-limited reset/sign-in responses use the same status/`code`/`detail` regardless of whether the email exists
-  - [ ] Verify hammer: flip gate on via `dataclasses.replace` on `client.app.state.auth_settings` (see `_set_verification_required` in `test_email_verification_integration.py`) — gate-off 404 never proves the limiter
-  - [ ] Health guard: after auth paths are exhausted to 429, `GET /health` remains 200
-  - [ ] Fake SMTP (`CapturingMailer` / monkeypatch `SmtpEmailSender`) — never live SMTP; under-limit SMTP fail still 503
-  - [ ] Test wiring: `monkeypatch.setenv(...)` **before** `create_app()`, **or** `replace` on `app.state.auth_settings`; **reset/clear in-memory limiter store per test** (fixture). Copy existing per-file integration fixture pattern — there is **no** shared `conftest.py`; do not invent one unless intentionally extracting
-  - [ ] Existing suites must stay green (raise limits via settings replace / env-before-create_app when a suite is chatty)
+- [x] [Review][Patch] Tighten Compose `TRUSTED_PROXY_IPS` default — no blanket RFC1918; document ui/Docker-bridge pin (decision D1→1) [docker-compose.yml / .env.example]
+- [x] [Review][Patch] BFF client IP: prefer ui peer sources beyond `request.ip` (e.g. `x-real-ip` / connection) without teaching api to trust public XFF (decision D2→2) [ui/lib/authBff.ts]
 
-- [ ] Task 5: Hygiene + handoff (AC: #1, #2)
-  - [ ] Update `auth-mail-interaction-map.md`: rate limits shipped (four paths, identity header trust, 429 `rate_limited`, BFF `Retry-After` forward); remove from “Known deferred”
-  - [ ] Resolve absorbed bullets in `deferred-work.md` exactly:
-    - 1.2 — No rate limiting on `POST /auth/register`
-    - 1.3 — Application-layer rate limiting / lockout on `POST /auth/sign-in`
-    - 1.5 — No per-user throttle on `POST /auth/verify/request` SMTP send  
-    Leave untouched: 1.4 timing oracle; session HMAC / token cleanup
-  - [ ] Mark sprint `action_items` “Auth/SMTP rate-limit hardening…” → `done` when story is marked done
-  - [ ] Branch: `feat/1/1-5-6-auth-smtp-rate-limit-hardening` (AD-13 one story per branch)
-  - [ ] Before `done`: paste story-close how/why overview per `story-close-overview-checklist.md`
+- [x] [Review][Patch] Delete unused `ui/lib/clientIp.ts` (orphan + XFF fallback contradicts anti-scope) [ui/lib/clientIp.ts:1]
+- [x] [Review][Patch] Validate/canonicalize trusted client-IP header as an IP before using as limiter key [api/application/rate_limit.py:116]
+- [x] [Review][Patch] Do not fail-open when `max_attempts`/`window_seconds` < 1 — clamp or reject bad policy [api/application/rate_limit.py:50]
+- [x] [Review][Patch] Move register rate-limit consume after `SESSION_SECRET` presence check (align with sign-in) [api/api/routes/auth.py:274]
+- [x] [Review][Patch] Mirror `AUTH_CLIENT_IP_HEADER` onto ui in `docker-compose.prod.yml` [docker-compose.prod.yml]
+- [x] [Review][Patch] Reopen sprint action item “Auth/SMTP rate-limit hardening…” until story is `done` [sprint-status.yaml]
+- [x] [Review][Patch] Log or fail loud on unparseable `AUTH_RATE_LIMIT_*` int env (don’t silently fall back) [api/api/settings.py]
+- [x] [Review][Patch] Clamp absurdly large `max_attempts` to bound in-memory stamp lists [api/api/settings.py]
+
+- [x] [Review][Defer] Max-key eviction can reset victim windows under key churn [api/application/rate_limit.py:77] — deferred, story required hard max-key eviction (deny-new is alternate hardening)
+- [x] [Review][Defer] `threading.Lock` inside async `sign_in` can block the event loop [api/application/rate_limit.py:29] — deferred, story required Lock for sync+async coexistence on single-worker Compose
+- [x] [Review][Defer] IPv4-mapped IPv6 peer hosts may miss CIDR trust matches [api/application/rate_limit.py:87] — deferred, pre-existing class / rare under Compose bridge (partial: ipv4_mapped peer normalization added)
 
 ## Dev Notes
 
@@ -313,15 +299,86 @@ Follow `_bmad-output/project-context.md`: no Redis; generic auth errors; hex lay
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Cursor Grok 4.5
 
 ### Debug Log References
 
+- Unit: `uv run pytest tests/test_rate_limit.py` — 10 passed
+- Integration + full api: compose `exec api uv run pytest` — 126 passed
+- UI: `npm test -- --run` — 60 passed
+
+### Implementation Plan
+
+- Stdlib sliding-window limiter in `application/rate_limit.py` + `RateLimitedError`; settings/env knobs on `AuthSettings`
+- Trust model: BFF `X-FH-Client-IP` only when peer ∈ `TRUSTED_PROXY_IPS` (Compose private/Docker defaults); never bare peer-only; never `proxy_headers=True`
+- Route helpers `_consume_ip_rate_limit` / `_consume_user_rate_limit` after body validation, before Argon2/SMTP/persist
+- BFF shared `authBff.ts` forwards Retry-After + client-IP header on the four POSTs
+
 ### Completion Notes List
+
+- Shipped application-layer rate limits on register / sign-in / password-reset request / verify request with locked 429 `{detail, code: rate_limited}` + `Retry-After`
+- BFF sets trusted client-IP header and forwards Retry-After; optional form clients map `rate_limited`
+- Living map + deferred-work + sprint action item updated; single-worker Compose assumption documented below
+- Gate-off verify/request 404 may still consume that user’s verify quota (acceptable per story lock)
+- Timing oracle / session HMAC / confirm-path throttling intentionally untouched
+
+## Story-close overview — 1.5.6 / 1-5-6-auth-smtp-rate-limit-hardening
+
+**Request path:**
+Browser → ui BFF (`X-FH-Client-IP` from ui peer) → api `/auth/{register|sign-in|password-reset/request|verify/request}` → sliding-window check+consume → application/adapters (Argon2/SMTP/persist only if under limit)
+
+**Key components:**
+`api/application/rate_limit.py`, `api/api/routes/auth.py` (`_rate_limited_response`), `api/api/settings.py` + Compose env, `ui/lib/authBff.ts`, four BFF `route.ts` files
+
+**Why this shape:**
+AD-2 forbids Redis/workers; AD-8 keeps api as authority; BFF IP collapse makes bare `request.client.host` useless behind Compose, so header trust is restricted to `TRUSTED_PROXY_IPS` without enabling uvicorn `proxy_headers`.
+
+**What not to break:**
+Same 429 body/code on all four paths (no email-existence oracle); count before Argon2/SMTP; do not throttle confirm/sign-out/session/me/health; multi-worker multiplies allowance (document / accept for single-api Compose v1); do not flip `proxy_headers=True` or honor public `X-Forwarded-For` blindly.
 
 ### File List
 
+- `api/application/rate_limit.py` (new)
+- `api/tests/test_rate_limit.py` (new)
+- `api/tests/test_rate_limit_integration.py` (new)
+- `api/domain/errors.py`
+- `api/api/settings.py`
+- `api/api/app.py`
+- `api/api/deps.py`
+- `api/api/routes/auth.py`
+- `api/tests/test_signup_integration.py`
+- `api/tests/test_signin_integration.py`
+- `api/tests/test_password_reset_integration.py`
+- `api/tests/test_email_verification_integration.py`
+- `api/tests/test_preferences_integration.py`
+- `api/tests/test_lists_integration.py`
+- `.env.example`
+- `docker-compose.yml`
+- `docker-compose.prod.yml`
+- `ui/lib/authBff.ts` (new)
+- `ui/app/api/auth/register/route.ts`
+- `ui/app/api/auth/register/route.test.ts`
+- `ui/app/api/auth/sign-in/route.ts`
+- `ui/app/api/auth/sign-in/route.test.ts`
+- `ui/app/api/auth/password-reset/request/route.ts`
+- `ui/app/api/auth/password-reset/route.test.ts`
+- `ui/app/api/auth/verify/request/route.ts`
+- `ui/app/api/auth/verify/route.test.ts`
+- `ui/app/signup/signupClient.ts`
+- `ui/app/sign-in/signInClient.ts`
+- `ui/app/sign-in/signInClient.test.ts`
+- `ui/app/forgot-password/ForgotPasswordForm.tsx`
+- `ui/app/verify/VerifyForm.tsx`
+- `_bmad-output/planning-artifacts/architecture/architecture-finance-helper-2026-08-03/auth-mail-interaction-map.md`
+- `_bmad-output/implementation-artifacts/deferred-work.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `_bmad-output/implementation-artifacts/1-5-6-auth-smtp-rate-limit-hardening.md`
+
+### Change Log
+
+- 2026-08-04: Implemented auth/SMTP rate-limit hardening (sliding window, BFF identity/`Retry-After`, tests, living-map/deferred hygiene) → status `review`
+- 2026-08-04: Code review patches applied (trust default tightened, BFF X-Real-IP, header IP validate, env fail-loud, register order, delete orphan clientIp) → status `done`
+
 ---
 
-**Status:** ready-for-dev  
-**Completion note:** Ultimate context engine analysis completed - comprehensive developer guide created
+**Status:** done

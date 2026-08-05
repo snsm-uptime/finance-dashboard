@@ -41,6 +41,18 @@ export function ForgotPasswordForm({ locale }: Props) {
         setError(t.forgotErrorSmtp);
         return;
       }
+      if (response.status === 429) {
+        const body = (await response.json().catch(() => null)) as {
+          code?: string;
+          detail?: string;
+        } | null;
+        if (body?.code === "rate_limited") {
+          setError(
+            body.detail || "Too many attempts. Please try again later.",
+          );
+          return;
+        }
+      }
       if (!response.ok) {
         setError(t.forgotErrorGeneric);
         return;

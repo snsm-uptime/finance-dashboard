@@ -25,6 +25,12 @@ export async function attemptSignup(args: {
       code?: string;
     };
     if (!response.ok) {
+      if (data.code === "rate_limited" || response.status === 429) {
+        return {
+          ok: false,
+          error: data.detail || "Too many attempts. Please try again later.",
+        };
+      }
       if (data.code === "duplicate_email") {
         return { ok: false, error: args.errorDuplicate };
       }

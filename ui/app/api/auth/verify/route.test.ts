@@ -80,4 +80,43 @@ describe("email-verification BFF", () => {
     expect(body.code).toBe("invalid_verification_token");
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it("forwards 429 Retry-After and sets X-FH-Client-IP on verify request", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          detail: "Too many attempts. Please try again later.",
+          code: "rate_limited",
+        }),
+        {
+          status: 429,
+          headers: {
+            "Content-Type": "application/json",
+            "Retry-After": "7",
+          },
+        },
+      ),
+    );
+
+    const request = new Request("http://localhost/api/auth/verify/request", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        cookie: "fh_session=opaque",
+      },
+    });
+    Object.defineProperty(request, "ip", { value: "203.0.113.8" });
+    const response = await requestVerify(request as never);
+    expect(response.status).toBe(429);
+    expect(response.headers.get("Retry-After")).toBe("7");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test:8000/auth/verify/request",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Cookie: "fh_session=opaque",
+          "X-FH-Client-IP": "203.0.113.8",
+        }),
+      }),
+    );
+  });
 });

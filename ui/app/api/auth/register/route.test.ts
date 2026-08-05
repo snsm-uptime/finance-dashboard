@@ -77,4 +77,47 @@ describe("register BFF route", () => {
     const body = (await response.json()) as { code?: string };
     expect(body.code).toBe("bad_gateway");
   });
+
+  it("forwards 429 body, Retry-After, and sets X-FH-Client-IP on upstream", async () => {
+    process.env.API_INTERNAL_URL = "http://api:8000";
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          detail: "Too many attempts. Please try again later.",
+          code: "rate_limited",
+        }),
+        {
+          status: 429,
+          headers: {
+            "Content-Type": "application/json",
+            "Retry-After": "42",
+          },
+        },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { POST } = await import("@/app/api/auth/register/route");
+    const request = new Request("http://localhost:3000/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "member@example.com",
+        password: "password1",
+      }),
+    });
+    Object.defineProperty(request, "ip", { value: "203.0.113.50" });
+
+    const response = await POST(request as never);
+    expect(response.status).toBe(429);
+    expect(response.headers.get("Retry-After")).toBe("42");
+    const body = (await response.json()) as { code?: string };
+    expect(body.code).toBe("rate_limited");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api:8000/auth/register",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "X-FH-Client-IP": "203.0.113.50" }),
+      }),
+    );
+  });
 });

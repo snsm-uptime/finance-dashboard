@@ -93,6 +93,12 @@ export function VerifyForm({ locale, token }: Props) {
         setError(t.resendSmtp);
         return;
       }
+      if (response.status === 429 || body?.code === "rate_limited") {
+        setError(
+          body?.detail || "Too many attempts. Please try again later.",
+        );
+        return;
+      }
       if (!response.ok) {
         setError(t.resendGeneric);
         return;

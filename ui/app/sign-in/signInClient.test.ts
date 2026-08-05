@@ -38,6 +38,31 @@ describe("sign-in form failure path", () => {
     expect(errorGeneric.toLowerCase()).toContain("invalid");
   });
 
+  it("returns rate_limited detail on 429", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          detail: "Too many attempts. Please try again later.",
+          code: "rate_limited",
+        }),
+        { status: 429 },
+      ),
+    );
+
+    const result = await attemptSignIn({
+      email: "user@example.com",
+      password: "password1",
+      returnTo: "/lists",
+      errorGeneric: signInMessages.en.errorGeneric,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: "Too many attempts. Please try again later.",
+    });
+  });
+
   it("returns safe returnTo on success", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ user_id: "u1", email: "a@example.com" }), {

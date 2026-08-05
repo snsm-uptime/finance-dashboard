@@ -75,4 +75,41 @@ describe("POST /api/auth/sign-in BFF", () => {
     const body = await response.json();
     expect(body.code).toBe("invalid_credentials");
   });
+
+  it("forwards 429 body, Retry-After, and sets X-FH-Client-IP", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          detail: "Too many attempts. Please try again later.",
+          code: "rate_limited",
+        }),
+        {
+          status: 429,
+          headers: {
+            "Content-Type": "application/json",
+            "Retry-After": "15",
+          },
+        },
+      ),
+    );
+
+    const request = new Request("http://localhost/api/auth/sign-in", {
+      method: "POST",
+      body: JSON.stringify({ email: "a@example.com", password: "password1" }),
+      headers: { "Content-Type": "application/json" },
+    });
+    Object.defineProperty(request, "ip", { value: "198.51.100.7" });
+
+    const response = await POST(request as never);
+    expect(response.status).toBe(429);
+    expect(response.headers.get("Retry-After")).toBe("15");
+    const body = await response.json();
+    expect(body.code).toBe("rate_limited");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test:8000/auth/sign-in",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "X-FH-Client-IP": "198.51.100.7" }),
+      }),
+    );
+  });
 });

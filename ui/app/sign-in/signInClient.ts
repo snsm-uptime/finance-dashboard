@@ -37,6 +37,18 @@ export async function attemptSignIn(options: {
       credentials: "same-origin",
     });
     if (!response.ok) {
+      if (response.status === 429) {
+        const data = (await response.json().catch(() => ({}))) as {
+          code?: string;
+          detail?: string;
+        };
+        if (data.code === "rate_limited") {
+          return {
+            ok: false,
+            error: data.detail || "Too many attempts. Please try again later.",
+          };
+        }
+      }
       return { ok: false, error: signInFailureMessage(options.errorGeneric) };
     }
     return { ok: true, returnTo: safeReturnTo(options.returnTo) };

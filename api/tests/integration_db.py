@@ -21,6 +21,11 @@ def apply_base_auth_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SESSION_COOKIE_SECURE", "false")
     monkeypatch.setenv("EMAIL_VERIFICATION_REQUIRED", "false")
     monkeypatch.setenv("SESSION_COOKIE_NAME", "fh_session")
+    # Chatty auth suites must not trip production-default rate ceilings (1.5.6).
+    monkeypatch.setenv("AUTH_RATE_LIMIT_REGISTER_MAX", "10000")
+    monkeypatch.setenv("AUTH_RATE_LIMIT_SIGN_IN_MAX", "10000")
+    monkeypatch.setenv("AUTH_RATE_LIMIT_PASSWORD_RESET_REQUEST_MAX", "10000")
+    monkeypatch.setenv("AUTH_RATE_LIMIT_VERIFY_REQUEST_MAX", "10000")
 
 
 def make_client(
