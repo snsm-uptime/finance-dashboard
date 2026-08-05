@@ -28,7 +28,7 @@
 
 - No rate limiting on `POST /auth/register` — Argon2 CPU burn possible; defer to dedicated hardening story
 - Opaque session tokens stored plaintext in `sessions.token` — consider hashing at rest in a later hardening pass
-- Incomplete hexagonal ports for session create/resolve and hasher (routes import concrete adapters) — polish later
+- ~~Incomplete hexagonal ports for session create/resolve and hasher (routes import concrete adapters)~~ — **Resolved by 1.5.7:** `PreferencesRepository`/`UserPreferencesRecord` live in `ports.py`; `/me` Depends on Protocol. `SqlAlchemyAuthUserRepository` remains dual-purpose adapter. Optional physical class split still residual debt (not claimed). Incomplete session/hasher route imports resolved via `SessionStore` + Protocol-typed hasher Depends; free functions retained for password-reset adapter.
 - `Argon2PasswordHasher.verify` only caught `VerifyMismatchError` in the 1.2 merge (unused on signup; sign-in path owns hardening)
 - CASCADE `ondelete` from users→lists/memberships/sessions untested — no user-delete API yet
 - HMAC/sign opaque session cookies with `SESSION_SECRET` — Story 1.2 kept secret as config presence gate only (decision B); signing deferred to hardening
@@ -59,7 +59,7 @@
 - Dead API Accept-Language helpers on HTTP path after UI-owned defaults — retained for domain unit tests / possible future consumers
 - Unauthenticated `/me` 401 shape mismatch (HTTPException string detail vs JSON `code`) — pre-existing `require_authenticated_user` pattern
 - Application-layer unit tests for GetMe/UpdatePreferences services — domain + Postgres integration cover the path when DATABASE_URL is set
-- Split PreferencesRepository port from SqlAlchemyAuthUserRepository concrete — architecture polish beyond story scope
+- ~~Split PreferencesRepository port from SqlAlchemyAuthUserRepository concrete~~ — **Resolved by 1.5.7:** `PreferencesRepository`/`UserPreferencesRecord` live in `ports.py`; `/me` Depends on Protocol. `SqlAlchemyAuthUserRepository` remains dual-purpose adapter. Optional physical class split still residual debt (not claimed). Incomplete session/hasher route imports resolved via `SessionStore` + Protocol-typed hasher Depends; free functions retained for password-reset adapter.
 
 ## Deferred from: code review of 2-1-create-and-rename-owned-lists.md (2026-08-04)
 

@@ -5,57 +5,21 @@ Requires DATABASE_URL (Compose db or CI Postgres 16). Skips when unset.
 
 from __future__ import annotations
 
-import os
 from collections.abc import Iterator
 
 import pytest
 from adapters.persistence.models import PasswordResetTokenModel, SessionModel, UserModel
-from api.app import create_app
-from api.deps import get_db
 from application.ports import EmailMessage
 from domain.password_reset import hash_reset_token
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, select
-from sqlalchemy.engine import Engine
-from sqlalchemy.orm import Session, sessionmaker
-
-
-def _database_url() -> str | None:
-    return (os.environ.get("DATABASE_URL") or "").strip() or None
-
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+from tests.integration_db import database_url, make_client
 
 pytestmark = pytest.mark.skipif(
-    _database_url() is None,
+    database_url() is None,
     reason="DATABASE_URL not set — Postgres 16 required for integration tests",
 )
-
-
-@pytest.fixture(scope="module")
-def engine() -> Iterator[Engine]:
-    url = _database_url()
-    assert url is not None
-    eng = create_engine(url, pool_pre_ping=True)
-    from alembic import command
-    from alembic.config import Config
-
-    cfg = Config("alembic.ini")
-    cfg.set_main_option("sqlalchemy.url", url)
-    command.upgrade(cfg, "head")
-    yield eng
-    eng.dispose()
-
-
-@pytest.fixture
-def db_session(engine: Engine) -> Iterator[Session]:
-    connection = engine.connect()
-    transaction = connection.begin()
-    session = sessionmaker(bind=connection, autoflush=False, autocommit=False)()
-    try:
-        yield session
-    finally:
-        session.close()
-        transaction.rollback()
-        connection.close()
 
 
 class CapturingMailer:
@@ -80,14 +44,6 @@ def client(
     monkeypatch: pytest.MonkeyPatch,
     mailer: CapturingMailer,
 ) -> Iterator[TestClient]:
-    monkeypatch.setenv("SESSION_SECRET", "test-session-secret-not-for-prod")
-    monkeypatch.setenv("SESSION_COOKIE_SECURE", "false")
-    monkeypatch.setenv("EMAIL_VERIFICATION_REQUIRED", "false")
-    monkeypatch.setenv("SESSION_COOKIE_NAME", "fh_session")
-    monkeypatch.setenv("PUBLIC_APP_URL", "http://localhost:3000")
-    monkeypatch.setenv("SMTP_HOST", "smtp.test")
-    monkeypatch.setenv("SMTP_FROM", "noreply@example.com")
-
     from adapters import email as email_pkg
     from adapters.email import settings as email_settings
     from api.routes import auth as auth_routes
@@ -105,20 +61,7 @@ def client(
     # Keep import surface stable if routes import SmtpEmailSender from package.
     monkeypatch.setattr(email_pkg, "SmtpEmailSender", lambda _settings: mailer)
 
-    app = create_app()
-
-    def _override_db() -> Iterator[Session]:
-        try:
-            yield db_session
-            db_session.flush()
-        except Exception:
-            db_session.rollback()
-            raise
-
-    app.dependency_overrides[get_db] = _override_db
-    with TestClient(app) as test_client:
-        yield test_client
-    app.dependency_overrides.clear()
+    yield from make_client(db_session, monkeypatch, smtp=True)
 
 
 def _register(client: TestClient, email: str, password: str = "password1") -> None:
