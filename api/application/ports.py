@@ -7,7 +7,8 @@ from datetime import timedelta
 from typing import Protocol
 from uuid import UUID
 
-# Canonical session TTL (30d). adapters.persistence.sessions re-exports this for SESSION_COOKIE_MAX_AGE.
+# Canonical session TTL (30d).
+# adapters.persistence.sessions re-exports this for SESSION_COOKIE_MAX_AGE.
 DEFAULT_SESSION_TTL = timedelta(days=30)
 
 
