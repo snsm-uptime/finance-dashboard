@@ -1,0 +1,6 @@
+{
+  "setup-worktree-unix": "../scripts/cursor-worktree/setup-worktree-unix.sh",
+  "setup-worktree": [
+    "echo 'Use setup-worktree-unix (see scripts/cursor-worktree/README.md).'"
+  ]
+}
