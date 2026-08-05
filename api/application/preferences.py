@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Protocol
 from uuid import UUID
 
 from domain.errors import PrincipalNotFoundError
@@ -15,27 +14,20 @@ from domain.preferences import (
     validate_theme,
 )
 
+from application.ports import PreferencesRepository, UserPreferencesRecord
+
 logger = logging.getLogger(__name__)
 
-
-@dataclass(frozen=True, slots=True)
-class UserPreferencesRecord:
-    id: UUID
-    email: str
-    language: str | None
-    theme: str | None
-
-
-class PreferencesRepository(Protocol):
-    def get_preferences(self, user_id: UUID) -> UserPreferencesRecord | None: ...
-
-    def update_preferences(
-        self,
-        user_id: UUID,
-        *,
-        language: str | None = None,
-        theme: str | None = None,
-    ) -> UserPreferencesRecord: ...
+# Thin re-export for existing test/import paths (canonical home is application.ports).
+__all__ = [
+    "GetMePreferencesCommand",
+    "GetMePreferencesService",
+    "MePreferencesResult",
+    "PreferencesRepository",
+    "UpdatePreferencesCommand",
+    "UpdatePreferencesService",
+    "UserPreferencesRecord",
+]
 
 
 @dataclass(frozen=True, slots=True)

@@ -5,7 +5,7 @@ validated: 2026-08-04
 
 # Story 1.5.7: Hex port polish and Compose pytest ergonomics
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -38,15 +38,15 @@ so that Epic 2 application services do not pile onto incomplete boundaries (para
 
 ## Tasks / Subtasks
 
-- [ ] Task 0: Confirm scope and as-built surfaces (AC: #1–#3)
-  - [ ] Read Epic 1.5 / Story 1.5.7 in `epics.md`, Correct Course proposal, Epic 1 retro AIs #8–#9, and `deferred-work.md` entries for session/hasher ports + PreferencesRepository split
-  - [ ] Confirm living map lists hex port polish under “Known deferred” → this story
-  - [ ] Confirm failure modes: prod API image is `uv sync --frozen --no-dev` + `USER appuser` → `docker compose run … uv run pytest` hits EACCES on `/app/.venv` and has no pytest; Host `.venv` + Compose DB works awkwardly (socat / container IP)
-  - [ ] Confirm out of scope: rate limits (1.5.6), claim/`expires_at` (1.5.1), spine smoke (1.5.5), session HMAC / token cleanup (later), ACL port impl (2.2 / 1.5.4 sketch), lists/email/signup/`AuthUserRepository` DI polish beyond prefs seam
-  - [ ] Naming trap: sprint key `1-5-7-…` = Epic **1.5** story 7 — **not** Epic 1 story 5 (`1-5-config-gated-…`)
+- [x] Task 0: Confirm scope and as-built surfaces (AC: #1–#3)
+  - [x] Read Epic 1.5 / Story 1.5.7 in `epics.md`, Correct Course proposal, Epic 1 retro AIs #8–#9, and `deferred-work.md` entries for session/hasher ports + PreferencesRepository split
+  - [x] Confirm living map lists hex port polish under “Known deferred” → this story
+  - [x] Confirm failure modes: prod API image is `uv sync --frozen --no-dev` + `USER appuser` → `docker compose run … uv run pytest` hits EACCES on `/app/.venv` and has no pytest; Host `.venv` + Compose DB works awkwardly (socat / container IP)
+  - [x] Confirm out of scope: rate limits (1.5.6), claim/`expires_at` (1.5.1), spine smoke (1.5.5), session HMAC / token cleanup (later), ACL port impl (2.2 / 1.5.4 sketch), lists/email/signup/`AuthUserRepository` DI polish beyond prefs seam
+  - [x] Naming trap: sprint key `1-5-7-…` = Epic **1.5** story 7 — **not** Epic 1 story 5 (`1-5-config-gated-…`)
 
-- [ ] Task 1: Session port (AC: #1)
-  - [ ] Add `SessionStore` Protocol to `api/application/ports.py` with exact signatures:
+- [x] Task 1: Session port (AC: #1)
+  - [x] Add `SessionStore` Protocol to `api/application/ports.py` with exact signatures:
 
     ```python
     class SessionStore(Protocol):
@@ -58,19 +58,19 @@ so that Epic 2 application services do not pile onto incomplete boundaries (para
 
     Default `ttl` = existing `DEFAULT_SESSION_TTL` (`timedelta(days=30)`). Adapter `__init__(self, db: Session)`; methods must **not** take `db`.
 
-  - [ ] Implement `SqlAlchemySessionStore` in `api/adapters/persistence/sessions.py` that **delegates** to the existing free functions. Keep module-level `create_session` / `resolve_session_user_id` / `revoke_session` / `revoke_all_sessions_for_user` — do **not** delete or rename them (`password_reset.py` still calls `revoke_all_sessions_for_user` directly; mapping: Protocol `revoke_all_for_user` → free function `revoke_all_sessions_for_user`)
-  - [ ] Wire `get_session_store(db) → SessionStore` in `api/api/deps.py`; use it in `require_authenticated_user` instead of calling `resolve_session_user_id` directly
-  - [ ] Update **register / sign-in / sign-out / `/session`** to Depend on `SessionStore`. Route-level `revoke_all` + `create` callers today are **register** and **sign-in** only (before issuing the new cookie)
-  - [ ] **Do NOT** wire `SessionStore` into `POST /auth/password-reset/confirm`. Reset confirm already revokes via `CompletePasswordResetService` → `PasswordResetTokenRepository.revoke_all_sessions_for_user` (`adapters/persistence/password_reset.py` → sessions free function). Leave that path alone — do not touch `password_reset.py` application or adapter for this story
-  - [ ] Cookie set/clear helpers stay in routes. After dropping session **function** imports, **still** bind cookie max-age: keep `from adapters.persistence.sessions import SESSION_COOKIE_MAX_AGE` (constant-only import is allowed), or re-export the same int from deps. Do **not** hardcode a different value
-  - [ ] FastAPI note: `get_session_store(db=Depends(get_db))` + route `db=Depends(get_db)` is fine (request-scoped cache). Do not “simplify” by dropping `db` from routes that still construct concrete signup/auth repos
+  - [x] Implement `SqlAlchemySessionStore` in `api/adapters/persistence/sessions.py` that **delegates** to the existing free functions. Keep module-level `create_session` / `resolve_session_user_id` / `revoke_session` / `revoke_all_sessions_for_user` — do **not** delete or rename them (`password_reset.py` still calls `revoke_all_sessions_for_user` directly; mapping: Protocol `revoke_all_for_user` → free function `revoke_all_sessions_for_user`)
+  - [x] Wire `get_session_store(db) → SessionStore` in `api/api/deps.py`; use it in `require_authenticated_user` instead of calling `resolve_session_user_id` directly
+  - [x] Update **register / sign-in / sign-out / `/session`** to Depend on `SessionStore`. Route-level `revoke_all` + `create` callers today are **register** and **sign-in** only (before issuing the new cookie)
+  - [x] **Do NOT** wire `SessionStore` into `POST /auth/password-reset/confirm`. Reset confirm already revokes via `CompletePasswordResetService` → `PasswordResetTokenRepository.revoke_all_sessions_for_user` (`adapters/persistence/password_reset.py` → sessions free function). Leave that path alone — do not touch `password_reset.py` application or adapter for this story
+  - [x] Cookie set/clear helpers stay in routes. After dropping session **function** imports, **still** bind cookie max-age: keep `from adapters.persistence.sessions import SESSION_COOKIE_MAX_AGE` (constant-only import is allowed), or re-export the same int from deps. Do **not** hardcode a different value
+  - [x] FastAPI note: `get_session_store(db=Depends(get_db))` + route `db=Depends(get_db)` is fine (request-scoped cache). Do not “simplify” by dropping `db` from routes that still construct concrete signup/auth repos
 
-- [ ] Task 2: Hasher Depends typed to port (AC: #1)
-  - [ ] `PasswordHasher` Protocol already exists in `ports.py` — **reuse**; do not invent a second hasher interface
-  - [ ] Change `get_password_hasher() → PasswordHasher` (return type Protocol); keep constructing `Argon2PasswordHasher()` only inside `deps.py`
-  - [ ] Annotate route params as `PasswordHasher`, not `Argon2PasswordHasher`; drop concrete hasher import from `auth.py` (register, sign-in, password-reset confirm still take hasher Depends)
+- [x] Task 2: Hasher Depends typed to port (AC: #1)
+  - [x] `PasswordHasher` Protocol already exists in `ports.py` — **reuse**; do not invent a second hasher interface
+  - [x] Change `get_password_hasher() → PasswordHasher` (return type Protocol); keep constructing `Argon2PasswordHasher()` only inside `deps.py`
+  - [x] Annotate route params as `PasswordHasher`, not `Argon2PasswordHasher`; drop concrete hasher import from `auth.py` (register, sign-in, password-reset confirm still take hasher Depends)
 
-- [ ] Task 3: Preferences port in `ports.py` (AC: #1)
+- [x] Task 3: Preferences port in `ports.py` (AC: #1)
 
   **AuthUserRepository vs PreferencesRepository (read first)**
   - `AuthUserRepository` + `AuthUserRecord` stay in `application/signin.py` — **out of scope** to move/DI
@@ -78,16 +78,16 @@ so that Epic 2 application services do not pile onto incomplete boundaries (para
   - This story only swaps **`/auth/me` GET+PATCH** to `Depends(get_preferences_repository)` typed as `PreferencesRepository`
   - Do **not** remove the `SqlAlchemyAuthUserRepository` import from `auth.py` (other call sites remain)
 
-  - [ ] Define `UserPreferencesRecord` + `PreferencesRepository` **in** `ports.py` (canonical home)
-  - [ ] `preferences.py` imports them from `ports` (services stay in `preferences.py`)
-  - [ ] Update `repositories.py` to `from application.ports import UserPreferencesRecord`
-  - [ ] Optional thin re-export from `preferences.py` for tests is OK **only if** `ports.py` never imports `preferences`
-  - [ ] **Forbidden:** `ports.py` importing from `application.preferences`
-  - [ ] Keep `SqlAlchemyAuthUserRepository` as the structural adapter (dual-purpose; Protocol satisfaction is the bar) — **no** DB schema change, **no** mandatory second SQLAlchemy prefs class
-  - [ ] Add `get_preferences_repository(db) → PreferencesRepository` in `deps.py`
+  - [x] Define `UserPreferencesRecord` + `PreferencesRepository` **in** `ports.py` (canonical home)
+  - [x] `preferences.py` imports them from `ports` (services stay in `preferences.py`)
+  - [x] Update `repositories.py` to `from application.ports import UserPreferencesRecord`
+  - [x] Optional thin re-export from `preferences.py` for tests is OK **only if** `ports.py` never imports `preferences`
+  - [x] **Forbidden:** `ports.py` importing from `application.preferences`
+  - [x] Keep `SqlAlchemyAuthUserRepository` as the structural adapter (dual-purpose; Protocol satisfaction is the bar) — **no** DB schema change, **no** mandatory second SQLAlchemy prefs class
+  - [x] Add `get_preferences_repository(db) → PreferencesRepository` in `deps.py`
 
-- [ ] Task 4: Composition hygiene (AC: #1 — preserve behavior)
-  - [ ] `auth.py` import before/after checklist:
+- [x] Task 4: Composition hygiene (AC: #1 — preserve behavior)
+  - [x] `auth.py` import before/after checklist:
 
     **Remove (session/hasher/prefs seams only):**
     - `Argon2PasswordHasher` type annotation (use `PasswordHasher` from ports)
@@ -104,13 +104,13 @@ so that Epic 2 application services do not pile onto incomplete boundaries (para
     - `PasswordHasher` on register, sign-in, password-reset/confirm
     - `PreferencesRepository` on GET+PATCH `/me` only
 
-  - [ ] Leave `SqlAlchemySignupRepository` / email / verify / lists concrete imports as **known remaining debt** — document in story-close; do not expand into full DI cleanup
-  - [ ] Prefer matching existing `Depends(get_*)` style; `Annotated[..., Depends(...)]` is welcome if you touch signatures — do not mass-migrate every route param
-  - [ ] Prove no product behavior change: existing signup / sign-in / sign-out / session / me / reset-confirm integration tests still green
+  - [x] Leave `SqlAlchemySignupRepository` / email / verify / lists concrete imports as **known remaining debt** — document in story-close; do not expand into full DI cleanup
+  - [x] Prefer matching existing `Depends(get_*)` style; `Annotated[..., Depends(...)]` is welcome if you touch signatures — do not mass-migrate every route param
+  - [x] Prove no product behavior change: existing signup / sign-in / sign-out / session / me / reset-confirm integration tests still green
 
-- [ ] Task 5: Compose pytest ergonomics (AC: #2)
-  - [ ] Add thin overlay `docker-compose.test.yml` (mirror `dev`/`prod` — **no** fourth app service; AD-2 stays `db|api|ui`)
-  - [ ] Dockerfile build-arg so default prod image stays `--no-dev`. **Shell-form RUN required** so `"--group dev"` word-splits:
+- [x] Task 5: Compose pytest ergonomics (AC: #2)
+  - [x] Add thin overlay `docker-compose.test.yml` (mirror `dev`/`prod` — **no** fourth app service; AD-2 stays `db|api|ui`)
+  - [x] Dockerfile build-arg so default prod image stays `--no-dev`. **Shell-form RUN required** so `"--group dev"` word-splits:
 
     ```dockerfile
     ARG UV_SYNC_ARGS=--no-dev
@@ -119,7 +119,7 @@ so that Epic 2 application services do not pile onto incomplete boundaries (para
     ```
 
     After all `COPY`s: `RUN chown -R appuser:appuser /app` so `appuser` can write `.pytest_cache` under `/app` (not only `.venv`). Prefer chown over `user: "0:0"` as the permanent test path.
-  - [ ] Test overlay builds with `args: { UV_SYNC_ARGS: "--group dev" }`, mounts `./api/tests:/app/tests`, and **replaces CMD** (Dockerfile has `CMD` entrypoint script, not `ENTRYPOINT`):
+  - [x] Test overlay builds with `args: { UV_SYNC_ARGS: "--group dev" }`, mounts `./api/tests:/app/tests`, and **replaces CMD** (Dockerfile has `CMD` entrypoint script, not `ENTRYPOINT`):
 
     ```yaml
     services:
@@ -136,31 +136,38 @@ so that Epic 2 application services do not pile onto incomplete boundaries (para
     ```
 
     Prefer `command: ["pytest", …]` — `PATH` already includes `/app/.venv/bin`. Avoid `uv run` in-container.
-  - [ ] Document in `README.md` **API tests** section:
+  - [x] Document in `README.md` **API tests** section:
     1. **Canonical Compose path:** `docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm --build api` (exact flags you ship)
     2. **Host path (CI parity):** `cd api && uv sync --group dev && DATABASE_URL=… uv run pytest` — match `.github/workflows/ci.yml` (service Postgres on `localhost:5432`). Base compose **does not** publish `db:5432`; do **not** document a broken host URL against unpublished Compose `db`. Optional footnote: personal port-publish overlay / socat — not primary
-  - [ ] Prove the Compose path once: suite exits 0 (pytest, not a silent uvicorn boot)
-  - [ ] Do **not** bake pytest into the default prod image; do **not** make root the permanent api user; do **not** add Redis/Makefile monolith
+  - [x] Prove the Compose path once: suite exits 0 (pytest, not a silent uvicorn boot)
+  - [x] Do **not** bake pytest into the default prod image; do **not** make root the permanent api user; do **not** add Redis/Makefile monolith
 
-- [ ] Task 6: Shared test fixtures (AC: #2 — recommended)
+- [x] Task 6: Shared test fixtures (AC: #2 — recommended)
 
   **Conflict with 1.5.6 (conftest):** 1.5.6 told developers not to invent `conftest.py` unless intentionally extracting. This story **does** extract one.
   - If 1.5.6 merges first: rebase fixtures into conftest **and** preserve its limiter-store reset + env-raised limits for chatty suites
   - If this story merges first: 1.5.6 must extend conftest (supersedes its anti-conftest note)
   - Do not flatten password-reset / email-verification `client` fixtures that monkeypatch `SmtpEmailSender` / `CapturingMailer` — keep mailer-aware client fixtures (module-local or conftest factories)
 
-  - [ ] Add `api/tests/conftest.py` extracting duplicated Postgres engine / alembic upgrade / rollback `db_session` / base `client` pattern
-  - [ ] Migrate at least auth-related integration suites (signup, signin, preferences, password_reset, email_verification)
-  - [ ] Keep `skipif` when `DATABASE_URL` unset so host unit runs stay fast
+  - [x] Add `api/tests/conftest.py` extracting duplicated Postgres engine / alembic upgrade / rollback `db_session` / base `client` pattern
+  - [x] Migrate at least auth-related integration suites (signup, signin, preferences, password_reset, email_verification)
+  - [x] Keep `skipif` when `DATABASE_URL` unset so host unit runs stay fast
 
-- [ ] Task 7: Hygiene + handoff (AC: #1–#3)
-  - [ ] Update `auth-mail-interaction-map.md`: move hex port polish off “Known deferred”; note `SessionStore` / `PasswordHasher` Depends / `PreferencesRepository` in `ports.py`
-  - [ ] Resolve absorbed deferrals in `deferred-work.md` using this wording:
+- [x] Task 7: Hygiene + handoff (AC: #1–#3)
+  - [x] Update `auth-mail-interaction-map.md`: move hex port polish off “Known deferred”; note `SessionStore` / `PasswordHasher` Depends / `PreferencesRepository` in `ports.py`
+  - [x] Resolve absorbed deferrals in `deferred-work.md` using this wording:
     > Resolved by 1.5.7: `PreferencesRepository`/`UserPreferencesRecord` live in `ports.py`; `/me` Depends on Protocol. `SqlAlchemyAuthUserRepository` remains dual-purpose adapter. Optional physical class split still residual debt (not claimed). Incomplete session/hasher route imports resolved via `SessionStore` + Protocol-typed hasher Depends; free functions retained for password-reset adapter.
     Leave HMAC / session cleanup deferred.
-  - [ ] Mark sprint `action_items` “Hex port polish…” and “Compose pytest ergonomics…” → `done` when story is marked done
-  - [ ] Branch: `refactor/1/1-5-7-hex-port-polish-and-compose-pytest-ergonomics` (AD-13; `feat`/`chore` OK if preferred)
-  - [ ] Before `done`: paste story-close how/why overview per `story-close-overview-checklist.md`
+  - [x] Mark sprint `action_items` “Hex port polish…” and “Compose pytest ergonomics…” → `done` when story is marked done
+  - [x] Branch: `refactor/1/1-5-7-hex-port-polish-and-compose-pytest-ergonomics` (AD-13; `feat`/`chore` OK if preferred)
+  - [x] Before `done`: paste story-close how/why overview per `story-close-overview-checklist.md`
+
+### Review Findings
+
+- [x] [Review][Patch] Revert sprint action_items to `open` until story is `done` [`_bmad-output/implementation-artifacts/sprint-status.yaml`] — resolved by promoting story → `done` (Task 7 gate satisfied; action_items remain `done`)
+- [x] [Review][Patch] Fix stale `DEFAULT_SESSION_TTL` sync comment [`api/application/ports.py:10`] — comment now states ports owns the canonical TTL
+- [x] [Review][Defer] Shared `make_client` omits per-request rollback on mid-handler DB errors [`api/tests/integration_db.py:41-46`] — deferred, intentional preferences-style override for 422; residual within-test aborted-tx risk
+- [x] [Review][Defer] Latent 1.5.6 conftest merge (rate-limiter reset) [`api/tests/conftest.py`] — deferred, pre-existing parallel-story conflict documented in Task 6
 
 ## Dev Notes
 
@@ -336,15 +343,65 @@ Follow `_bmad-output/project-context.md`: hexagonal layout; no Redis; AD-8 cooki
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Composer (Cursor Agent)
 
 ### Debug Log References
 
+- Compose proof (worktree stack): `docker compose -f docker-compose.yml -f docker-compose.worktree.yml -f docker-compose.test.yml run --rm --build api` → **110 passed** (pytest, not uvicorn)
+- Host unit path: `cd api && uv run pytest -q` → 65 passed, 45 skipped (no DATABASE_URL)
+
 ### Completion Notes List
+
+- Introduced `SessionStore`, moved `PreferencesRepository`/`UserPreferencesRecord` into `ports.py`, Protocol-typed hasher Depends; routes no longer import session free functions or concrete hasher.
+- `SqlAlchemySessionStore` delegates to retained free functions; password-reset confirm still revokes via adapter path (no route SessionStore).
+- `/me` GET+PATCH Depends on `PreferencesRepository`; `SqlAlchemyAuthUserRepository` remains dual-purpose for sign-in/reset/verify.
+- Compose pytest: `docker-compose.test.yml` + `UV_SYNC_ARGS` shell-form sync + post-COPY chown; README documents Compose + CI host paths.
+- Shared `api/tests/conftest.py` + `integration_db.py`; mailer-aware clients preserved in reset/verify suites.
+- Known remaining debt: signup/email/verify repo concretes still constructed in routes (not expanded this story).
+
+## Story-close overview — 1.5.7
+
+**Request path:**
+browser → ui BFF cookie → api auth routes → `SessionStore` / `PasswordHasher` / `PreferencesRepository` Depends → adapters (`SqlAlchemySessionStore`, `Argon2PasswordHasher`, `SqlAlchemyAuthUserRepository`) → Postgres
+
+**Key components:**
+`api/application/ports.py`, `api/api/deps.py`, `api/api/routes/auth.py`, `api/adapters/persistence/sessions.py`, `docker-compose.test.yml`, `api/Dockerfile`, `api/tests/conftest.py`
+
+**Why this shape:**
+AD-1 hex ports at the composition root without reshaping password-reset revoke (stays inside token adapter) or forcing a second prefs SQLAlchemy class.
+
+**What not to break:**
+`SESSION_COOKIE_MAX_AGE` = 30d; free functions for reset revoke; `/me` wire nulls; no `SessionStore` on password-reset confirm; prod image stays `--no-dev`.
 
 ### File List
 
+- `api/application/ports.py`
+- `api/application/preferences.py`
+- `api/adapters/persistence/sessions.py`
+- `api/adapters/persistence/repositories.py`
+- `api/api/deps.py`
+- `api/api/routes/auth.py`
+- `api/Dockerfile`
+- `docker-compose.test.yml`
+- `README.md`
+- `api/tests/conftest.py`
+- `api/tests/integration_db.py`
+- `api/tests/test_signup_integration.py`
+- `api/tests/test_signin_integration.py`
+- `api/tests/test_preferences_integration.py`
+- `api/tests/test_password_reset_integration.py`
+- `api/tests/test_email_verification_integration.py`
+- `api/tests/test_lists_integration.py`
+- `_bmad-output/planning-artifacts/architecture/architecture-finance-helper-2026-08-03/auth-mail-interaction-map.md`
+- `_bmad-output/implementation-artifacts/deferred-work.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `_bmad-output/implementation-artifacts/1-5-7-hex-port-polish-and-compose-pytest-ergonomics.md`
+
+### Change Log
+
+- 2026-08-04: Implemented hex SessionStore / PasswordHasher / PreferencesRepository ports + Compose pytest overlay and shared fixtures; status → review
+
 ---
 
-**Status:** ready-for-dev  
-**Completion note:** Ultimate context engine analysis completed - comprehensive developer guide created; validated 2026-08-04 (all critical/enhancement/optimization patches applied)
+**Status:** done  
+**Completion note:** Code review complete — patches applied; deferred items logged

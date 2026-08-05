@@ -216,6 +216,8 @@ Single transactional mail path from api (AD-8). Fail-loud beats silent success t
 | `EnsureEmailVerifiedService` as the gate seam — see [`invite-verify-gate-contract.md`](../../../implementation-artifacts/invite-verify-gate-contract.md) | Ad-hoc verify checks only in routes |
 | Generic auth errors | Email-existence oracles on invite/reset/sign-in |
 
-**Known deferred (not shipped):** session HMAC / token cleanup (later), hex port polish (1.5.7), reset SMTP timing oracle (deferred-work / 1.4).
+**Known deferred (not shipped):** session HMAC / token cleanup (later), reset SMTP timing oracle (deferred-work / 1.4).
 
 **Rate limits (1.5.6 — shipped):** Application-layer sliding window on `POST /auth/register`, `/sign-in`, `/password-reset/request` (trusted client IP), and `/verify/request` (`user_id`). ui BFF sets `X-FH-Client-IP` from the browser-facing peer (`request.ip`, then `X-Real-IP`); api trusts that header only when peer is in `TRUSTED_PROXY_IPS` (Compose default = Docker bridge `172.16.0.0/12` + loopback — not blanket RFC1918). Exceeded → `429` `{detail, code: rate_limited}` + `Retry-After`; BFF forwards status, body, and `Retry-After`. In-process store (single-worker assumption; multi-worker multiplies allowance). Not on confirm/sign-out/session/me/health.
+
+**Hex ports (1.5.7 — shipped):** `SessionStore` + Protocol-typed `PasswordHasher` Depends on auth routes; `PreferencesRepository` / `UserPreferencesRecord` live in `application/ports.py`; `/me` Depends on the prefs Protocol (`SqlAlchemyAuthUserRepository` remains the dual-purpose adapter). Session free functions retained for password-reset adapter revoke path.
