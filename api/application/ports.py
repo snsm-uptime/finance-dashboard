@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Protocol
 from uuid import UUID
+
+# Canonical session TTL (30d).
+# adapters.persistence.sessions re-exports this for SESSION_COOKIE_MAX_AGE.
+DEFAULT_SESSION_TTL = timedelta(days=30)
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,10 +34,40 @@ class NewMembershipRecord:
     role: str
 
 
+@dataclass(frozen=True, slots=True)
+class UserPreferencesRecord:
+    id: UUID
+    email: str
+    language: str | None
+    theme: str | None
+
+
 class PasswordHasher(Protocol):
     def hash(self, password: str) -> str: ...
 
     def verify(self, password: str, password_hash: str) -> bool: ...
+
+
+class SessionStore(Protocol):
+    def create(self, user_id: UUID, *, ttl: timedelta = DEFAULT_SESSION_TTL) -> str: ...
+
+    def resolve_user_id(self, token: str | None) -> UUID | None: ...
+
+    def revoke(self, token: str | None) -> bool: ...
+
+    def revoke_all_for_user(self, user_id: UUID) -> int: ...
+
+
+class PreferencesRepository(Protocol):
+    def get_preferences(self, user_id: UUID) -> UserPreferencesRecord | None: ...
+
+    def update_preferences(
+        self,
+        user_id: UUID,
+        *,
+        language: str | None = None,
+        theme: str | None = None,
+    ) -> UserPreferencesRecord: ...
 
 
 class SignupRepository(Protocol):

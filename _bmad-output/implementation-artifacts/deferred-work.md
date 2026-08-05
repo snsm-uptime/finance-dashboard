@@ -28,7 +28,7 @@
 
 - No rate limiting on `POST /auth/register` — Argon2 CPU burn possible; defer to dedicated hardening story
 - Opaque session tokens stored plaintext in `sessions.token` — consider hashing at rest in a later hardening pass
-- Incomplete hexagonal ports for session create/resolve and hasher (routes import concrete adapters) — polish later
+- ~~Incomplete hexagonal ports for session create/resolve and hasher (routes import concrete adapters)~~ — **Resolved by 1.5.7:** `PreferencesRepository`/`UserPreferencesRecord` live in `ports.py`; `/me` Depends on Protocol. `SqlAlchemyAuthUserRepository` remains dual-purpose adapter. Optional physical class split still residual debt (not claimed). Incomplete session/hasher route imports resolved via `SessionStore` + Protocol-typed hasher Depends; free functions retained for password-reset adapter.
 - `Argon2PasswordHasher.verify` only caught `VerifyMismatchError` in the 1.2 merge (unused on signup; sign-in path owns hardening)
 - CASCADE `ondelete` from users→lists/memberships/sessions untested — no user-delete API yet
 - HMAC/sign opaque session cookies with `SESSION_SECRET` — Story 1.2 kept secret as config presence gate only (decision B); signing deferred to hardening
@@ -59,7 +59,7 @@
 - Dead API Accept-Language helpers on HTTP path after UI-owned defaults — retained for domain unit tests / possible future consumers
 - Unauthenticated `/me` 401 shape mismatch (HTTPException string detail vs JSON `code`) — pre-existing `require_authenticated_user` pattern
 - Application-layer unit tests for GetMe/UpdatePreferences services — domain + Postgres integration cover the path when DATABASE_URL is set
-- Split PreferencesRepository port from SqlAlchemyAuthUserRepository concrete — architecture polish beyond story scope
+- ~~Split PreferencesRepository port from SqlAlchemyAuthUserRepository concrete~~ — **Resolved by 1.5.7:** `PreferencesRepository`/`UserPreferencesRecord` live in `ports.py`; `/me` Depends on Protocol. `SqlAlchemyAuthUserRepository` remains dual-purpose adapter. Optional physical class split still residual debt (not claimed). Incomplete session/hasher route imports resolved via `SessionStore` + Protocol-typed hasher Depends; free functions retained for password-reset adapter.
 
 ## Deferred from: code review of 2-1-create-and-rename-owned-lists.md (2026-08-04)
 
@@ -77,3 +77,8 @@
 - First-paint client clearing stale `last_opened_list_id` on membership deny — Story 2.2 UX, not contract sketch scope
 - Malformed non-UUID `list_id` FastAPI validation (422) vs forcing 404 for anti-enumeration — pre-existing framework path validation
 - Rename (`RenameListService`) migration exit criteria / when 2.1 pays AD-24 bare-`list_id` debt — intentional grandfather until an implement story migrates it
+
+## Deferred from: code review of 1-5-7-hex-port-polish-and-compose-pytest-ergonomics.md (2026-08-04)
+
+- Shared `make_client` omits per-request `except`/`rollback` (preferences-style): protects 422 paths sharing the outer test transaction; mid-handler DB errors can leave an aborted transaction for later assertions in the same test — revisit if flakes appear
+- New shared `api/tests/conftest.py` has no rate-limiter store reset; if Story 1.5.6 merges first (or after), preserve limiter-store fixture/hooks on rebase per Task 6 conflict map

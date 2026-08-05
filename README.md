@@ -49,6 +49,32 @@ Homelab overlay (same service graph, Secure cookies default on):
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
 
+## API tests
+
+### Canonical Compose path
+
+Runs pytest inside the `api` service against Compose Postgres (`db:5432`). The test overlay installs the `dev` group and replaces the API CMD — default prod images stay `--no-dev`.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm --build api
+```
+
+### Host path (CI parity)
+
+Matches `.github/workflows/ci.yml`: host `uv` + a Postgres reachable on `localhost:5432` (CI service container). Base Compose does **not** publish `db:5432`, so do not point `DATABASE_URL` at unpublished Compose `db`.
+
+```bash
+cd api
+uv sync --group dev
+DATABASE_URL=postgresql+psycopg://finance:finance_ci@localhost:5432/finance_helper \
+  SESSION_SECRET=ci-session-secret-not-for-prod \
+  SESSION_COOKIE_SECURE=false \
+  EMAIL_VERIFICATION_REQUIRED=false \
+  uv run pytest -q
+```
+
+Optional footnote: a personal port-publish overlay or `socat` can expose Compose `db` for host pytest — not the documented primary path.
+
 ## Layout
 
 ```text

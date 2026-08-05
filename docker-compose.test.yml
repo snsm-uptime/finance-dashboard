@@ -1,0 +1,25 @@
+# Test overlay — run API pytest against Compose Postgres (AD-2: db|api|ui only).
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm --build api
+#
+# Builds api with --group dev so pytest is installed; keeps default prod image --no-dev.
+# Prefer `pytest` on PATH (venv) — do not `uv run` as appuser against a root-owned .venv.
+
+services:
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+      args:
+        UV_SYNC_ARGS: "--group dev"
+    volumes:
+      - ./api/tests:/app/tests
+    # replaces CMD — do not invoke scripts.entrypoint / uvicorn
+    command: ["pytest", "-q"]
+    # DATABASE_URL already @db:5432 from base compose
+    healthcheck:
+      disable: true
+
+  ui:
+    profiles:
+      - donotstart
