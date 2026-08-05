@@ -5,8 +5,12 @@ from __future__ import annotations
 from uuid import UUID
 
 from application.lists import ListMembershipSummary, ListRecord, MembershipRecord
-from application.ports import NewListRecord, NewMembershipRecord, NewUserRecord
-from application.preferences import UserPreferencesRecord
+from application.ports import (
+    NewListRecord,
+    NewMembershipRecord,
+    NewUserRecord,
+    UserPreferencesRecord,
+)
 from application.signin import AuthUserRecord
 from domain.errors import (
     DuplicateEmailError,

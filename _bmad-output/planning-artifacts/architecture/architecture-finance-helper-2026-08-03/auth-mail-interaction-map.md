@@ -216,4 +216,6 @@ Single transactional mail path from api (AD-8). Fail-loud beats silent success t
 | `EnsureEmailVerifiedService` as the gate seam — see [`invite-verify-gate-contract.md`](../../../implementation-artifacts/invite-verify-gate-contract.md) | Ad-hoc verify checks only in routes |
 | Generic auth errors | Email-existence oracles on invite/reset/sign-in |
 
-**Known deferred (not shipped):** rate limits (1.5.6), session HMAC / token cleanup (later), hex port polish (1.5.7), reset SMTP timing oracle (deferred-work / 1.4).
+**Known deferred (not shipped):** rate limits (1.5.6), session HMAC / token cleanup (later), reset SMTP timing oracle (deferred-work / 1.4).
+
+**Shipped in 1.5.7:** `SessionStore` + Protocol-typed `PasswordHasher` Depends on auth routes; `PreferencesRepository` / `UserPreferencesRecord` live in `application/ports.py`; `/me` Depends on the prefs Protocol (`SqlAlchemyAuthUserRepository` remains the dual-purpose adapter). Session free functions retained for password-reset adapter revoke path.

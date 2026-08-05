@@ -7,19 +7,12 @@ import uuid
 
 from adapters.email import SmtpEmailSender, load_smtp_settings
 from adapters.persistence.email_verification import SqlAlchemyEmailVerificationRepository
-from adapters.persistence.password_hasher import Argon2PasswordHasher
 from adapters.persistence.password_reset import SqlAlchemyPasswordResetTokenRepository
 from adapters.persistence.repositories import (
     SqlAlchemyAuthUserRepository,
     SqlAlchemySignupRepository,
 )
-from adapters.persistence.sessions import (
-    SESSION_COOKIE_MAX_AGE,
-    create_session,
-    resolve_session_user_id,
-    revoke_all_sessions_for_user,
-    revoke_session,
-)
+from adapters.persistence.sessions import SESSION_COOKIE_MAX_AGE
 from application.email_verification import (
     ConfirmEmailVerificationCommand,
     ConfirmEmailVerificationService,
@@ -34,6 +27,7 @@ from application.password_reset import (
     RequestPasswordResetCommand,
     RequestPasswordResetService,
 )
+from application.ports import PasswordHasher, PreferencesRepository, SessionStore
 from application.preferences import (
     GetMePreferencesCommand,
     GetMePreferencesService,
@@ -60,7 +54,14 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
-from api.deps import get_auth_settings, get_db, get_password_hasher, require_authenticated_user
+from api.deps import (
+    get_auth_settings,
+    get_db,
+    get_password_hasher,
+    get_preferences_repository,
+    get_session_store,
+    require_authenticated_user,
+)
 from api.schemas.auth import (
     GatedFlowStubResponse,
     MeResponse,
@@ -138,11 +139,11 @@ def _smtp_error_response(exc: SmtpConfigurationError | SmtpSendError) -> JSONRes
 @router.get("/session", response_model=SessionResponse)
 def session_status(
     request: Request,
-    db: Session = Depends(get_db),
+    sessions: SessionStore = Depends(get_session_store),
     settings: AuthSettings = Depends(get_auth_settings),
 ) -> SessionResponse | JSONResponse:
     token = request.cookies.get(settings.session_cookie_name)
-    user_id = resolve_session_user_id(db, token)
+    user_id = sessions.resolve_user_id(token)
     if user_id is None:
         return JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -153,14 +154,12 @@ def session_status(
 
 @router.get("/me", response_model=MeResponse)
 def current_user(
-    db: Session = Depends(get_db),
+    prefs: PreferencesRepository = Depends(get_preferences_repository),
     user_id: uuid.UUID = Depends(require_authenticated_user),
 ) -> MeResponse | JSONResponse:
     """Current account + stored language/theme (null when unset)."""
     try:
-        result = GetMePreferencesService(SqlAlchemyAuthUserRepository(db)).execute(
-            GetMePreferencesCommand(user_id=user_id)
-        )
+        result = GetMePreferencesService(prefs).execute(GetMePreferencesCommand(user_id=user_id))
     except PrincipalNotFoundError:
         return JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -178,13 +177,13 @@ def current_user(
 @router.patch("/me", response_model=MeResponse)
 def patch_current_user(
     body: PatchMeBody,
-    db: Session = Depends(get_db),
+    prefs: PreferencesRepository = Depends(get_preferences_repository),
     user_id: uuid.UUID = Depends(require_authenticated_user),
 ) -> MeResponse | JSONResponse:
     """Persist language/theme on the account (source of truth — not device-only)."""
     wrote = body.language is not None or body.theme is not None
     try:
-        result = UpdatePreferencesService(SqlAlchemyAuthUserRepository(db)).execute(
+        result = UpdatePreferencesService(prefs).execute(
             UpdatePreferencesCommand(
                 user_id=user_id,
                 language=body.language,
@@ -221,7 +220,8 @@ def register(
     body: RegisterRequest,
     response: Response,
     db: Session = Depends(get_db),
-    hasher: Argon2PasswordHasher = Depends(get_password_hasher),
+    sessions: SessionStore = Depends(get_session_store),
+    hasher: PasswordHasher = Depends(get_password_hasher),
     settings: AuthSettings = Depends(get_auth_settings),
 ) -> RegisterResponse | JSONResponse:
     if not settings.session_secret:
@@ -277,8 +277,8 @@ def register(
             )
             return _smtp_error_response(exc)
 
-    revoke_all_sessions_for_user(db, result.user_id)
-    token = create_session(db, user_id=result.user_id)
+    sessions.revoke_all_for_user(result.user_id)
+    token = sessions.create(result.user_id)
     _set_session_cookie(response, settings, token)
     logger.info(
         "user_registered user_id=%s list_id=%s",
@@ -298,7 +298,8 @@ async def sign_in(
     request: Request,
     response: Response,
     db: Session = Depends(get_db),
-    hasher: Argon2PasswordHasher = Depends(get_password_hasher),
+    sessions: SessionStore = Depends(get_session_store),
+    hasher: PasswordHasher = Depends(get_password_hasher),
     settings: AuthSettings = Depends(get_auth_settings),
 ) -> SignInResponse | JSONResponse:
     if not settings.session_secret:
@@ -324,8 +325,8 @@ async def sign_in(
     except InvalidCredentialsError:
         return _credentials_error_response()
 
-    revoke_all_sessions_for_user(db, result.user_id)
-    token = create_session(db, user_id=result.user_id)
+    sessions.revoke_all_for_user(result.user_id)
+    token = sessions.create(result.user_id)
     _set_session_cookie(response, settings, token)
     logger.info("user_signed_in user_id=%s", result.user_id)
     return SignInResponse(user_id=result.user_id, email=result.email)
@@ -335,11 +336,11 @@ async def sign_in(
 def sign_out(
     request: Request,
     response: Response,
-    db: Session = Depends(get_db),
+    sessions: SessionStore = Depends(get_session_store),
     settings: AuthSettings = Depends(get_auth_settings),
 ) -> Response:
     token = request.cookies.get(settings.session_cookie_name)
-    revoke_session(db, token)
+    sessions.revoke(token)
     _clear_session_cookie(response, settings)
     logger.info("user_signed_out")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -380,7 +381,7 @@ def request_password_reset(
 def confirm_password_reset(
     body: PasswordResetConfirmBody,
     db: Session = Depends(get_db),
-    hasher: Argon2PasswordHasher = Depends(get_password_hasher),
+    hasher: PasswordHasher = Depends(get_password_hasher),
 ) -> PasswordResetConfirmResponse | JSONResponse:
     service = CompletePasswordResetService(
         SqlAlchemyAuthUserRepository(db),
