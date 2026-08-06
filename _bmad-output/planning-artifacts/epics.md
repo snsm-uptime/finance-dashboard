@@ -580,7 +580,7 @@ So that I can open the right household or personal list quickly.
 
 **Given** I am not a member of a list
 **When** I request that list’s expenses or balances via API/UI
-**Then** access is denied (NFR-3)
+**Then** access is denied with **404** (same body as missing list) (NFR-3; Story 1.5.4 disclosure)
 
 **Given** I select a list row
 **When** navigation completes
