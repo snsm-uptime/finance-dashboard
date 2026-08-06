@@ -434,8 +434,9 @@ def test_build_invite_email_renders_en_and_es_and_strips_crlf() -> None:
 
 
 def test_invite_service_module_does_not_call_ensure_email_verified() -> None:
-    import application.list_invite as mod
     import inspect
+
+    import application.list_invite as mod
 
     source = inspect.getsource(mod)
     assert "EnsureEmailVerified" not in source

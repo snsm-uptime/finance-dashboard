@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 import pytest
 from application.lists import (
     CreateOwnedListCommand,
     CreateOwnedListService,
+    GetListDefaultSplitCommand,
+    GetListDefaultSplitService,
     ListMembershipsCommand,
     ListMembershipsService,
     ListMembershipSummary,
@@ -16,10 +19,16 @@ from application.lists import (
     MembershipRecord,
     RenameListCommand,
     RenameListService,
+    SetListDefaultSplitCommand,
+    SetListDefaultSplitService,
+    StoredDefaultSplit,
 )
 from application.ports import NewListRecord, NewMembershipRecord
+from domain.default_split import MODE_EVEN, MODE_PERCENTAGE
 from domain.errors import (
+    InvalidDefaultSplitError,
     InvalidListNameError,
+    ListNotFoundError,
     NotListMemberError,
     NotListOwnerError,
 )
@@ -209,3 +218,150 @@ def test_rename_missing_list_raises_not_member() -> None:
         RenameListService(FakeListRepo()).execute(
             RenameListCommand(actor_user_id=uuid4(), list_id=uuid4(), name="X")
         )
+
+
+# --- Story 2.5 default-split application (fake repo) ---
+
+
+def _extend_fake(repo: FakeListRepo) -> FakeListRepo:
+    repo.default_modes = {}  # type: ignore[attr-defined]
+    repo.default_shares = {}  # type: ignore[attr-defined]
+
+    def list_member_ids(list_id: UUID) -> list[UUID]:
+        return [m.user_id for m in repo.memberships if m.list_id == list_id]
+
+    def get_stored_default_split(list_id: UUID) -> StoredDefaultSplit | None:
+        if list_id not in repo.lists:
+            return None
+        mode = repo.default_modes.get(list_id, MODE_EVEN)  # type: ignore[attr-defined]
+        shares = repo.default_shares.get(list_id, {})  # type: ignore[attr-defined]
+        return StoredDefaultSplit(mode=mode, shares=dict(shares))
+
+    def set_default_split(
+        list_id: UUID,
+        *,
+        mode: str,
+        shares: dict[UUID, Decimal] | None,
+    ) -> None:
+        if list_id not in repo.lists:
+            raise ListNotFoundError()
+        repo.default_modes[list_id] = mode  # type: ignore[attr-defined]
+        repo.default_shares[list_id] = dict(shares or {})  # type: ignore[attr-defined]
+
+    repo.list_member_ids = list_member_ids  # type: ignore[method-assign]
+    repo.get_stored_default_split = get_stored_default_split  # type: ignore[method-assign]
+    repo.set_default_split = set_default_split  # type: ignore[method-assign]
+    return repo
+
+
+def test_get_default_split_even_for_new_list() -> None:
+    repo = _extend_fake(FakeListRepo())
+    owner = uuid4()
+    CreateOwnedListService(repo).execute(
+        CreateOwnedListCommand(actor_user_id=owner, name="Household")
+    )
+    list_id = next(iter(repo.lists))
+    view = GetListDefaultSplitService(repo).execute(
+        GetListDefaultSplitCommand(actor_user_id=owner, list_id=list_id)
+    )
+    assert view.mode == MODE_EVEN
+    assert len(view.shares) == 1
+    assert view.shares[0].percentage == Decimal("100.00")
+
+
+def test_owner_sets_percentage_default() -> None:
+    repo = _extend_fake(FakeListRepo())
+    owner = uuid4()
+    member = uuid4()
+    CreateOwnedListService(repo).execute(
+        CreateOwnedListCommand(actor_user_id=owner, name="Household")
+    )
+    list_id = next(iter(repo.lists))
+    repo.memberships.append(
+        MembershipRecord(list_id=list_id, user_id=member, role="member")
+    )
+    view = SetListDefaultSplitService(repo).execute(
+        SetListDefaultSplitCommand(
+            actor_user_id=owner,
+            list_id=list_id,
+            mode=MODE_PERCENTAGE,
+            shares={owner: Decimal("60.00"), member: Decimal("40.00")},
+        )
+    )
+    assert view.mode == MODE_PERCENTAGE
+    by_user = {s.user_id: s.percentage for s in view.shares}
+    assert by_user[owner] == Decimal("60.00")
+    assert by_user[member] == Decimal("40.00")
+
+
+def test_set_percentage_rejects_bad_sum() -> None:
+    repo = _extend_fake(FakeListRepo())
+    owner = uuid4()
+    member = uuid4()
+    CreateOwnedListService(repo).execute(
+        CreateOwnedListCommand(actor_user_id=owner, name="Household")
+    )
+    list_id = next(iter(repo.lists))
+    repo.memberships.append(
+        MembershipRecord(list_id=list_id, user_id=member, role="member")
+    )
+    with pytest.raises(InvalidDefaultSplitError):
+        SetListDefaultSplitService(repo).execute(
+            SetListDefaultSplitCommand(
+                actor_user_id=owner,
+                list_id=list_id,
+                mode=MODE_PERCENTAGE,
+                shares={owner: Decimal("60.00"), member: Decimal("30.00")},
+            )
+        )
+
+
+def test_non_owner_cannot_set_default_split() -> None:
+    repo = _extend_fake(FakeListRepo())
+    owner = uuid4()
+    member = uuid4()
+    CreateOwnedListService(repo).execute(
+        CreateOwnedListCommand(actor_user_id=owner, name="Household")
+    )
+    list_id = next(iter(repo.lists))
+    repo.memberships.append(
+        MembershipRecord(list_id=list_id, user_id=member, role="member")
+    )
+    with pytest.raises(NotListOwnerError):
+        SetListDefaultSplitService(repo).execute(
+            SetListDefaultSplitCommand(
+                actor_user_id=member,
+                list_id=list_id,
+                mode=MODE_EVEN,
+            )
+        )
+
+
+def test_membership_change_falls_back_to_even_on_get() -> None:
+    repo = _extend_fake(FakeListRepo())
+    owner = uuid4()
+    member = uuid4()
+    extra = uuid4()
+    CreateOwnedListService(repo).execute(
+        CreateOwnedListCommand(actor_user_id=owner, name="Household")
+    )
+    list_id = next(iter(repo.lists))
+    repo.memberships.append(
+        MembershipRecord(list_id=list_id, user_id=member, role="member")
+    )
+    SetListDefaultSplitService(repo).execute(
+        SetListDefaultSplitCommand(
+            actor_user_id=owner,
+            list_id=list_id,
+            mode=MODE_PERCENTAGE,
+            shares={owner: Decimal("60.00"), member: Decimal("40.00")},
+        )
+    )
+    repo.memberships.append(
+        MembershipRecord(list_id=list_id, user_id=extra, role="member")
+    )
+    view = GetListDefaultSplitService(repo).execute(
+        GetListDefaultSplitCommand(actor_user_id=owner, list_id=list_id)
+    )
+    assert view.mode == MODE_EVEN
+    assert len(view.member_ids) == 3

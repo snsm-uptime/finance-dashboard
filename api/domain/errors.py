@@ -161,6 +161,15 @@ class ListWriteError(DomainError):
         super().__init__(detail or self.MESSAGE)
 
 
+class InvalidDefaultSplitError(DomainError):
+    """Raised when standing default-split mode/shares fail validation (FR-9)."""
+
+    MESSAGE = "Default split percentages must sum to exactly 100 across current members."
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(detail or self.MESSAGE)
+
+
 class InvalidInviteEmailError(DomainError):
     """Raised when an invite email fails shape validation."""
 

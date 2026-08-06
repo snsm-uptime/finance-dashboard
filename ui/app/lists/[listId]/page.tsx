@@ -7,7 +7,9 @@ import { getApiInternalUrl } from "@/lib/api";
 import { listsMessages } from "@/lib/i18n/lists";
 import type { Locale } from "@/lib/i18n/locale";
 import { fetchSession } from "@/lib/session";
+import { DefaultSplitPanel } from "../DefaultSplitPanel";
 import { InviteForm } from "../InviteForm";
+import type { DefaultSplitPayload } from "../listsClient";
 import styles from "../lists.module.css";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +33,27 @@ async function cookieHeader(): Promise<string> {
     .join("; ");
 }
 
+function asDefaultSplit(data: unknown): DefaultSplitPayload | null {
+  if (!data || typeof data !== "object") return null;
+  const row = data as Partial<DefaultSplitPayload>;
+  if (
+    typeof row.list_id !== "string" ||
+    typeof row.owner_id !== "string" ||
+    (row.mode !== "even" && row.mode !== "percentage") ||
+    !Array.isArray(row.shares) ||
+    !Array.isArray(row.member_ids)
+  ) {
+    return null;
+  }
+  return {
+    list_id: row.list_id,
+    owner_id: row.owner_id,
+    mode: row.mode,
+    shares: row.shares as DefaultSplitPayload["shares"],
+    member_ids: row.member_ids as string[],
+  };
+}
+
 /** Soft-Ledger list detail shell — settle first / receipts below (empty OK). */
 export default async function ListDetailPage({
   params,
@@ -49,6 +72,7 @@ export default async function ListDetailPage({
   const header = await cookieHeader();
 
   let detail: DetailPayload | null = null;
+  let defaultSplit: DefaultSplitPayload | null = null;
   let notFound = false;
   let loadError = false;
   try {
@@ -70,6 +94,20 @@ export default async function ListDetailPage({
       notFound = true;
     } else if (response.ok) {
       detail = (await response.json()) as DetailPayload;
+      const splitRes = await fetch(
+        `${getApiInternalUrl()}/lists/${encodeURIComponent(listId)}/default-split`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            ...(header ? { Cookie: header } : {}),
+          },
+          cache: "no-store",
+        },
+      );
+      if (splitRes.ok) {
+        defaultSplit = asDefaultSplit(await splitRes.json());
+      }
     } else {
       loadError = true;
     }
@@ -147,6 +185,27 @@ export default async function ListDetailPage({
                 errorUnauthorized: t.errorUnauthorized,
                 errorAlreadyMember: t.errorAlreadyMember,
                 errorSmtp: t.errorSmtp,
+              }}
+            />
+          ) : null}
+          {defaultSplit ? (
+            <DefaultSplitPanel
+              listId={listId}
+              isOwner={isOwner}
+              initial={defaultSplit}
+              messages={{
+                errorGeneric: t.errorGeneric,
+                errorInvalidName: t.errorInvalidName,
+                errorForbidden: t.errorForbidden,
+                errorUnauthorized: t.errorUnauthorized,
+                defaultSplitTitle: t.defaultSplitTitle,
+                defaultSplitEven: t.defaultSplitEven,
+                defaultSplitCustom: t.defaultSplitCustom,
+                defaultSplitSum: t.defaultSplitSum,
+                defaultSplitSave: t.defaultSplitSave,
+                defaultSplitSaving: t.defaultSplitSaving,
+                defaultSplitReadOnly: t.defaultSplitReadOnly,
+                errorInvalidSplit: t.errorInvalidSplit,
               }}
             />
           ) : null}

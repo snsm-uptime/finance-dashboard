@@ -1,15 +1,26 @@
 # Cursor worktrees (finance-dashboard)
 
 Parallel agents need **isolated checkouts** plus **unique Compose ports/data**.
-This folder wires that up.
+This folder wires that up. New-user flow: see `HOW-TO-DEV.md`.
 
 ## Files
 
 | File | Role |
 | --- | --- |
-| `worktrees.json` | Cursor runs `setup-worktree-unix.sh` on new worktrees |
-| `setup-worktree-unix.sh` | Copy `.env`, assign ports/project/data dir, `uv`/`npm`, optional Compose up |
+| `worktrees.json` (under `.cursor/`) | Cursor runs `setup-worktree-unix.sh` on new worktrees |
+| `setup-worktree-unix.sh` | Copy `.env`, assign ports/project/data dir, `uv`/`npm` |
+| `worktree-add.sh` | Create `../finance-dashboard-wt-<slug>` + branch |
+| `worktree-bootstrap.sh` | Set `ROOT_WORKTREE_PATH`, run setup, optional `compose-up -d` |
+| `worktree-remove.sh` | Compose-down (best effort) + `git worktree remove` |
 | `docker-compose.worktree.yml` (repo root) | Fast healthchecks so `depends_on: service_healthy` works in minutes |
+
+Day-to-day Compose helpers (primary or worktree):
+
+| Script | Role |
+| --- | --- |
+| `scripts/compose-up.sh` | Hot-reload up (auto worktree overlay when `.env` looks like a worktree) |
+| `scripts/compose-down.sh` | Matching down; `--wipe` → named volumes only (`down -v`) |
+| `scripts/compose-restart.sh` | Down then up |
 
 Compose knobs (written into the worktree `.env`):
 
@@ -18,48 +29,27 @@ Compose knobs (written into the worktree `.env`):
 - `FINANCE_HELPER_DATA` — Postgres bind parent (default `~/finance-helper`)
 - `PUBLIC_APP_URL` — must match the UI host port for mail links
 
-## Manual story worktrees (already created)
+## Typical flow
 
-From repo parent (`Documents/github/personal`):
-
-| Story | Path | Branch |
-| --- | --- | --- |
-| Setup | `finance-dashboard-wt-cursor-setup` | `chore/1/cursor-worktree-setup` |
-| 1.5.6 | `finance-dashboard-wt-1-5-6` | `feat/1/1-5-6-auth-smtp-rate-limit-hardening` |
-| 1.5.7 | `finance-dashboard-wt-1-5-7` | `refactor/1/1-5-7-hex-port-polish-and-compose-pytest-ergonomics` |
-
-Open each path as a Cursor window (or Agents Window → worktree).
-
-## Agent prompts
-
-**1.5.6** (in `finance-dashboard-wt-1-5-6`):
-
-```text
-Dev story `_bmad-output/implementation-artifacts/1-5-6-auth-smtp-rate-limit-hardening.md`.
-Stay on branch feat/1/1-5-6-auth-smtp-rate-limit-hardening. Do not touch 1.5.7 port / pytest ergonomics.
-When ACs pass: commit, push -u, open PR to main.
-```
-
-**1.5.7** (in `finance-dashboard-wt-1-5-7`):
-
-```text
-Dev story `_bmad-output/implementation-artifacts/1-5-7-hex-port-polish-and-compose-pytest-ergonomics.md`.
-Stay on branch refactor/1/1-5-7-hex-port-polish-and-compose-pytest-ergonomics.
-Do not implement rate limits (1.5.6). If rebasing later, preserve 1.5.6 Depends/helpers.
-When ACs pass: commit, push -u, open PR to main.
-```
-
-## Merge order
-
-Prefer merge **1.5.6 → main**, then rebase **1.5.7** (story anti-goal: do not undo rate-limit wiring). Land **chore worktree setup** on main first so both story PRs stay free of bootstrap noise.
-
-## Commands
+From the primary checkout:
 
 ```bash
-# Re-run bootstrap (deps only)
-START_COMPOSE=0 ROOT_WORKTREE_PATH=/path/to/finance-dashboard \
-  .cursor/setup-worktree-unix.sh
+./scripts/cursor-worktree/worktree-add.sh 2-3-invite feat/2/2-3-invite-members-by-email
+cd ../finance-dashboard-wt-2-3-invite
+../finance-dashboard/scripts/cursor-worktree/worktree-bootstrap.sh
+./scripts/compose-up.sh -d   # if START_COMPOSE=0 during bootstrap
+```
 
-# List worktrees
+Re-run bootstrap (deps / `.env` only):
+
+```bash
+START_COMPOSE=0 ../finance-dashboard/scripts/cursor-worktree/worktree-bootstrap.sh
+```
+
+List / remove:
+
+```bash
 git worktree list
+# from primary:
+./scripts/cursor-worktree/worktree-remove.sh 2-3-invite
 ```
