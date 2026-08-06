@@ -1,7 +1,7 @@
 """Alembic revision: list standing default split (FR-9 / Story 2.5).
 
-Revision ID: 0007_list_default_split
-Revises: 0006_last_opened_list
+Revision ID: 0008_list_default_split
+Revises: 0007_list_invite_tokens
 Create Date: 2026-08-06
 """
 
@@ -11,8 +11,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0007_list_default_split"
-down_revision: str | None = "0006_last_opened_list"
+revision: str = "0008_list_default_split"
+down_revision: str | None = "0007_list_invite_tokens"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

@@ -1,4 +1,4 @@
-"""List create / rename / membership / ACL-gated reads / default split (2.1 / 2.2 / 2.5)."""
+"""List create / rename / membership / ACL reads / invites / default split (2.1–2.5)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,13 @@ import logging
 import uuid
 from decimal import Decimal, InvalidOperation
 
-from adapters.persistence.repositories import SqlAlchemyListRepository
+from adapters.email import SmtpEmailSender, load_smtp_settings
+from adapters.persistence.list_invite import SqlAlchemyListInviteTokenRepository
+from adapters.persistence.repositories import (
+    SqlAlchemyAuthUserRepository,
+    SqlAlchemyListRepository,
+)
+from application.list_invite import InviteMemberToListCommand, InviteMemberToListService
 from application.lists import (
     CreateOwnedListCommand,
     CreateOwnedListService,
@@ -26,22 +32,28 @@ from application.lists import (
     SetListDefaultSplitService,
 )
 from domain.errors import (
+    AlreadyListMemberError,
     InvalidDefaultSplitError,
+    InvalidInviteEmailError,
     InvalidListNameError,
     ListNotFoundError,
     ListWriteError,
     NotListMemberError,
     NotListOwnerError,
+    SmtpConfigurationError,
+    SmtpSendError,
 )
 from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
-from api.deps import get_db, require_authenticated_user
+from api.deps import get_auth_settings, get_db, require_authenticated_user
 from api.schemas.lists import (
     CreateListBody,
     DefaultSplitResponse,
     DefaultSplitShareItem,
+    InviteMemberBody,
+    InviteMemberResponse,
     ListBalancesStubResponse,
     ListDetailResponse,
     ListExpensesStubResponse,
@@ -51,6 +63,7 @@ from api.schemas.lists import (
     RenameListBody,
     SetDefaultSplitBody,
 )
+from api.settings import AuthSettings
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +103,14 @@ def _default_split_response(view: object) -> DefaultSplitResponse:
             for s in view.shares  # type: ignore[attr-defined]
         ],
         member_ids=list(view.member_ids),  # type: ignore[attr-defined]
+    )
+
+
+def _smtp_error_response(exc: SmtpConfigurationError | SmtpSendError) -> JSONResponse:
+    code = "smtp_config_error" if isinstance(exc, SmtpConfigurationError) else "smtp_send_error"
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"detail": str(exc), "code": code},
     )
 
 
@@ -145,9 +166,7 @@ def get_list_detail(
 ) -> ListDetailResponse | JSONResponse:
     service = GetListDetailService(SqlAlchemyListRepository(db))
     try:
-        result = service.execute(
-            GetListDetailCommand(actor_user_id=user_id, list_id=list_id)
-        )
+        result = service.execute(GetListDetailCommand(actor_user_id=user_id, list_id=list_id))
     except ListNotFoundError:
         return _list_not_found()
     return ListDetailResponse(id=result.id, name=result.name, owner_id=result.owner_id)
@@ -227,9 +246,7 @@ def get_list_expenses_stub(
 ) -> ListExpensesStubResponse | JSONResponse:
     service = GetListExpensesStubService(SqlAlchemyListRepository(db))
     try:
-        result = service.execute(
-            GetListExpensesStubCommand(actor_user_id=user_id, list_id=list_id)
-        )
+        result = service.execute(GetListExpensesStubCommand(actor_user_id=user_id, list_id=list_id))
     except ListNotFoundError:
         return _list_not_found()
     return ListExpensesStubResponse(list_id=result.list_id, expenses=list(result.expenses))
@@ -243,12 +260,80 @@ def get_list_balances_stub(
 ) -> ListBalancesStubResponse | JSONResponse:
     service = GetListBalancesStubService(SqlAlchemyListRepository(db))
     try:
-        result = service.execute(
-            GetListBalancesStubCommand(actor_user_id=user_id, list_id=list_id)
-        )
+        result = service.execute(GetListBalancesStubCommand(actor_user_id=user_id, list_id=list_id))
     except ListNotFoundError:
         return _list_not_found()
     return ListBalancesStubResponse(list_id=result.list_id, balance_crc=result.balance_crc)
+
+
+@router.post(
+    "/{list_id}/invites",
+    response_model=InviteMemberResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def invite_member(
+    list_id: uuid.UUID,
+    body: InviteMemberBody,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+    settings: AuthSettings = Depends(get_auth_settings),
+) -> InviteMemberResponse | JSONResponse:
+    list_repo = SqlAlchemyListRepository(db)
+    users = SqlAlchemyAuthUserRepository(db)
+    try:
+        # load_smtp_settings inside try — misconfig must be 503 smtp_config_error (AC #5).
+        service = InviteMemberToListService(
+            list_repo,
+            users,
+            users,
+            SqlAlchemyListInviteTokenRepository(db),
+            SmtpEmailSender(load_smtp_settings()),
+            public_app_url=settings.public_app_url,
+        )
+        result = service.execute(
+            InviteMemberToListCommand(
+                actor_user_id=user_id,
+                list_id=list_id,
+                email=body.email,
+            )
+        )
+    except InvalidInviteEmailError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            content={"detail": str(exc), "code": "invalid_invite_email"},
+        )
+    except AlreadyListMemberError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"detail": str(exc), "code": "already_list_member"},
+        )
+    except (ListNotFoundError, NotListMemberError):
+        return _access_denied()
+    except NotListOwnerError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={"detail": str(exc), "code": "not_list_owner"},
+        )
+    except (SmtpConfigurationError, SmtpSendError) as exc:
+        db.rollback()
+        logger.error(
+            "list_invite_smtp_failed list_id=%s code=%s",
+            list_id,
+            type(exc).__name__,
+        )
+        return _smtp_error_response(exc)
+
+    logger.info(
+        "list_invite_sent list_id=%s invite_id=%s template=%s",
+        list_id,
+        result.invite_id,
+        result.template_kind,
+    )
+    return InviteMemberResponse(
+        status=result.status,
+        template_kind=result.template_kind,
+        invite_id=result.invite_id,
+    )
 
 
 @router.patch("/{list_id}", response_model=ListResponse)

@@ -71,7 +71,7 @@ so that new items inherit our household arrangement without per-item edits.
   - [x] Suggested persistence (not spine-locked — document final columns in completion notes):
     - List-level `default_split_mode`: `even` | `percentage`
     - Per-member share rows **or** JSON map keyed by member UUID with `NUMERIC` percentages — must round-trip exactly
-  - [x] New Alembic revision **after** `0006_last_opened_list` — never wipe PG volume (AD-22)
+  - [x] New Alembic revision **after** `0007_list_invite_tokens` — never wipe PG volume (AD-22)
   - [x] Extend existing `ListModel` / repositories — do **not** duplicate List/ListMembership
 
 - [x] Task 3: API edge — owner-only default-split mutations (AC: #1–#5)
@@ -218,7 +218,7 @@ api/
   application/lists.py + ports.py    # UPDATE — Get/SetListDefaultSplit + repo methods
   adapters/persistence/models.py     # UPDATE — mode + shares on List (or related table)
   adapters/persistence/repositories.py
-  adapters/persistence/migrations/versions/0007_*.py   # NEW after 0006_last_opened_list
+  adapters/persistence/migrations/versions/0008_*.py   # NEW after 0007_list_invite_tokens
   api/routes/lists.py                # UPDATE — GET/PUT default-split
   api/schemas/lists.py               # UPDATE — DTOs (string percentages)
   tests/test_*default_split*.py      # NEW — domain TDD + Postgres ACL/validation/AD-6
@@ -289,7 +289,7 @@ ui/
 
 - **AD-6:** `(total * pct / 100)` → `quantize(..., rounding=ROUND_DOWN)` per share; assign `total - sum(floored)` to **`owner_id`**. No largest-remainder / first-N leftover schemes
 - Prefer `Decimal("…")` strings; avoid `float`. For positive CRC floors use `ROUND_DOWN` (not `//` toward-zero surprises on edge cases)
-- SQLAlchemy 2.0 `Mapped[]` + Alembic after `0006_last_opened_list`; import models in `env.py`
+- SQLAlchemy 2.0 `Mapped[]` + Alembic after `0007_list_invite_tokens`; import models in `env.py`
 - Lockfile pins: fastapi `0.141.1`, sqlalchemy `2.0.51`, alembic `1.18.5`, pydantic `2.13.4`, pytest `9.x` — no churn
 - No money library dependency — small domain helper only
 
@@ -335,7 +335,7 @@ Cursor Grok 4.5 (bmad-dev-story)
 
 - Creator / AD-6 sink = `lists.owner_id` only (no `created_by`)
 - Owner mutate via `authorize_list_access(..., "edit_default_split")`
-- Persistence: `lists.default_split_mode` + `list_default_split_shares` (Alembic `0007_list_default_split`); create-time default `even`
+- Persistence: `lists.default_split_mode` + `list_default_split_shares` (Alembic `0008_list_default_split`); create-time default `even`
 - Membership-change documented default: invalid stored % map → effective `even` on get/apply until owner re-saves
 - Member roster: returned on `GET/PUT .../default-split` as `member_ids` + `shares` (no separate members endpoint)
 - Multi-member tests seed `ListMembership` directly (2.3/2.4 invite not implemented)
@@ -348,7 +348,7 @@ Cursor Grok 4.5 (bmad-dev-story)
 - api/application/ports.py
 - api/adapters/persistence/models.py
 - api/adapters/persistence/repositories.py
-- api/adapters/persistence/migrations/versions/0007_list_default_split.py
+- api/adapters/persistence/migrations/versions/0008_list_default_split.py
 - api/api/routes/lists.py
 - api/api/schemas/lists.py
 - api/tests/test_default_split_domain.py

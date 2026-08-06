@@ -194,6 +194,38 @@ Single transactional mail path from api (AD-8). Fail-loud beats silent success t
 
 ---
 
+## 5. List invite send (Story 2.3)
+
+### Request path
+
+1. Owner on list detail → same-origin BFF `POST /api/lists/{listId}/invites` → api `POST /lists/{list_id}/invites`
+2. Session cookie auth → `authorize_list_access(..., invite_member)` (owner-only)
+3. Normalize email → resolve registered vs unregistered → persist `list_invite_tokens` hash → SMTP send
+4. SMTP failure → `db.rollback()` → **503** `smtp_config_error` / `smtp_send_error` (never `{status: sent}`)
+5. Success → **201** `{status: sent, template_kind, invite_id}` — **no membership row** (accept = Story 2.4)
+
+### Key components
+
+| Layer | Path |
+|-------|------|
+| UI / BFF | `ui/app/lists/InviteForm.tsx`; `ui/app/api/lists/[listId]/invites/route.ts` |
+| Application | `api/application/list_invite.py` (`InviteMemberToListService` + `build_invite_email_message` → `EmailSender.send`) |
+| Domain | `api/domain/list_invite.py` (`INVITE_TOKEN_TTL` = 7d); ACL `invite_member` |
+| Persistence | `api/adapters/persistence/list_invite.py` + Alembic `0007_list_invite_tokens` |
+
+### Why this shape
+
+Reuse 1.4 SMTP + fail-loud path; separate invite token table (claim helper reserved for 2.4). Locale from inviter Account language. Verify gate stays off the send path.
+
+### What not to break
+
+- Do **not** call `EnsureEmailVerifiedService` on send
+- Do **not** create membership on send
+- Raw invite token only in email link; hash at rest; invalidate prior unused `(list_id, email)`
+- Links for 2.4: `/invites/accept?token=…` (join) and `/sign-up?invite=…` (signup)
+
+---
+
 ## Related docs
 
 | Doc | Role |

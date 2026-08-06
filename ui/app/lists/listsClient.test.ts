@@ -1,12 +1,15 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 
-import { createList, renameList } from "./listsClient";
+import { createList, inviteMember, renameList, saveDefaultSplit } from "./listsClient";
 
 const messages = {
   errorGeneric: "generic",
   errorInvalidName: "invalid",
   errorForbidden: "forbidden",
   errorUnauthorized: "unauthorized",
+  errorInvalidEmail: "bad-email",
+  errorAlreadyMember: "already",
+  errorSmtp: "smtp",
 };
 
 afterEach(() => {
@@ -64,9 +67,63 @@ describe("listsClient", () => {
     const result = await createList("Household", messages);
     expect(result).toEqual({ ok: false, error: "generic" });
   });
+
+  it("inviteMember returns sent state on success", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      json: async () => ({
+        status: "sent",
+        template_kind: "signup",
+        invite_id: "inv-1",
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await inviteMember("list-1", "new@example.com", messages);
+    expect(result).toEqual({
+      ok: true,
+      invite: {
+        status: "sent",
+        template_kind: "signup",
+        invite_id: "inv-1",
+      },
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/lists/list-1/invites",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("inviteMember maps SMTP failure without claiming sent", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        json: async () => ({ code: "smtp_send_error", detail: "down" }),
+      }),
+    );
+
+    const result = await inviteMember("list-1", "new@example.com", messages);
+    expect(result).toEqual({ ok: false, error: "smtp" });
+  });
+
+  it("inviteMember maps already-member conflict", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: async () => ({ code: "already_list_member" }),
+      }),
+    );
+
+    const result = await inviteMember("list-1", "member@example.com", messages);
+    expect(result).toEqual({ ok: false, error: "already" });
+  });
 });
 
-import { saveDefaultSplit } from "./listsClient";
 
 describe("default split client", () => {
   it("maps 422 invalid_default_split to invalid message", async () => {

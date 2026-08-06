@@ -146,7 +146,7 @@ class NotListMemberError(DomainError):
 class NotListOwnerError(DomainError):
     """Raised when a member who is not the owner attempts an owner-only action."""
 
-    MESSAGE = "Only the list owner can do this."
+    MESSAGE = "Only the list owner can perform this action."
 
     def __init__(self, detail: str | None = None) -> None:
         super().__init__(detail or self.MESSAGE)
@@ -168,3 +168,21 @@ class InvalidDefaultSplitError(DomainError):
 
     def __init__(self, detail: str | None = None) -> None:
         super().__init__(detail or self.MESSAGE)
+
+
+class InvalidInviteEmailError(DomainError):
+    """Raised when an invite email fails shape validation."""
+
+    MESSAGE = "Enter a valid email address."
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(detail or self.MESSAGE)
+
+
+class AlreadyListMemberError(DomainError):
+    """Raised when inviting an email that already has membership on the list."""
+
+    MESSAGE = "That person is already a member of this list."
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)

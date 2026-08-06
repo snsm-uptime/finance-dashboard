@@ -69,3 +69,13 @@ class DefaultSplitResponse(BaseModel):
 class SetDefaultSplitBody(BaseModel):
     mode: Literal["even", "percentage"]
     shares: list[DefaultSplitShareItem] | None = None
+
+
+class InviteMemberBody(BaseModel):
+    email: str = Field(max_length=320)
+
+
+class InviteMemberResponse(BaseModel):
+    status: str
+    template_kind: str
+    invite_id: UUID
