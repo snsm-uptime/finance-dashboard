@@ -105,7 +105,6 @@ fi
 
 # --- Compose stack ---
 START_COMPOSE="${START_COMPOSE:-1}"
-COMPOSE_FILES=(-f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.worktree.yml)
 
 if [[ "$START_COMPOSE" == "1" ]]; then
   if ! command -v docker >/dev/null 2>&1; then
@@ -113,18 +112,12 @@ if [[ "$START_COMPOSE" == "1" ]]; then
   elif ! docker info >/dev/null 2>&1; then
     warn "docker daemon not reachable — skip compose up"
   else
-    log "Building and starting Compose (detached, dev overlay)"
-    (
-      cd "$WT_ROOT"
-      docker compose "${COMPOSE_FILES[@]}" up --build -d
-    )
-    log "UI  ${PUBLIC_APP_URL}"
-    log "API http://localhost:${API_HOST_PORT}"
-    log "Health: curl -sf http://localhost:${API_HOST_PORT}/health"
+    log "Building and starting Compose (detached, via scripts/compose-up.sh)"
+    COMPOSE_ROOT="$WT_ROOT" bash "$WT_ROOT/scripts/compose-up.sh" -d
   fi
 else
   log "START_COMPOSE=0 — deps ready; start later with:"
-  log "  docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.worktree.yml up --build"
+  log "  ./scripts/compose-up.sh"
 fi
 
 cat <<EOF

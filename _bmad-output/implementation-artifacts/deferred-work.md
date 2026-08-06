@@ -99,3 +99,7 @@
 - SMTP send can succeed then `get_db` session commit fail — emailed token not durable; shared persist-then-send + commit-on-exit pattern from auth mail
 - BFF `POST /api/lists/{id}/invites` has no upstream fetch timeout — consistent with other list BFF routes
 - No rate limit on owner invite send — auth SMTP paths limited in 1.5.6; invite abuse hardening out of Story 2.3 AC
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-dev-compose-worktree-scripts.md`
+  summary: Primary-checkout Compose can stall ~1h on first boot when a healthcheck fails because base compose uses interval 1h without the worktree overlay
+  evidence: Pre-existing docker-compose.yml healthcheck intervals; frozen intent keeps primary on base+dev only, so scripts do not always attach docker-compose.worktree.yml
