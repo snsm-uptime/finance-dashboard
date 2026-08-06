@@ -4,7 +4,7 @@ baseline_commit: e9898c1 docs(1): land membership ACL enforcement sketch for Sto
 
 # Story 1.5.5: Epic 1 spine smoke (auth, mail, personal list)
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
