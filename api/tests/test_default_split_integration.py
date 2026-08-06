@@ -205,3 +205,6 @@ def test_membership_change_falls_back_to_even_on_read(
     assert got.status_code == 200
     assert got.json()["mode"] == "even"
     assert len(got.json()["member_ids"]) == 3
+    row = db_session.get(ListModel, list_id)
+    assert row is not None
+    assert row.default_split_mode == "even"

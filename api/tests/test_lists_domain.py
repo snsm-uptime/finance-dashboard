@@ -24,7 +24,7 @@ from application.lists import (
     StoredDefaultSplit,
 )
 from application.ports import NewListRecord, NewMembershipRecord
-from domain.default_split import MODE_EVEN, MODE_PERCENTAGE
+from domain.default_split import MODE_EVEN, MODE_PERCENTAGE, validate_percentage_shares
 from domain.errors import (
     InvalidDefaultSplitError,
     InvalidListNameError,
@@ -248,9 +248,20 @@ def _extend_fake(repo: FakeListRepo) -> FakeListRepo:
         repo.default_modes[list_id] = mode  # type: ignore[attr-defined]
         repo.default_shares[list_id] = dict(shares or {})  # type: ignore[attr-defined]
 
+    def clear_invalid_percentage_default(list_id: UUID) -> None:
+        stored = get_stored_default_split(list_id)
+        if stored is None or stored.mode != MODE_PERCENTAGE:
+            return
+        members = list_member_ids(list_id)
+        try:
+            validate_percentage_shares(members, stored.shares)
+        except InvalidDefaultSplitError:
+            set_default_split(list_id, mode=MODE_EVEN, shares=None)
+
     repo.list_member_ids = list_member_ids  # type: ignore[method-assign]
     repo.get_stored_default_split = get_stored_default_split  # type: ignore[method-assign]
     repo.set_default_split = set_default_split  # type: ignore[method-assign]
+    repo.clear_invalid_percentage_default = clear_invalid_percentage_default  # type: ignore[method-assign]
     return repo
 
 

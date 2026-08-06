@@ -185,6 +185,11 @@ def get_list_default_split(
         )
     except ListNotFoundError:
         return _list_not_found()
+    except InvalidDefaultSplitError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            content={"detail": str(exc), "code": "invalid_default_split"},
+        )
     return _default_split_response(view)
 
 

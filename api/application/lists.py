@@ -108,6 +108,8 @@ class ListRepository(Protocol):
         shares: dict[UUID, Decimal] | None,
     ) -> None: ...
 
+    def clear_invalid_percentage_default(self, list_id: UUID) -> None: ...
+
 
 @dataclass(frozen=True, slots=True)
 class CreateOwnedListCommand:
@@ -359,6 +361,7 @@ class GetListDefaultSplitService:
         )
         lst = self._repo.get_list_with_grant(grant, command.list_id)
         members = self._repo.list_member_ids(command.list_id)
+        self._repo.clear_invalid_percentage_default(command.list_id)
         stored = self._repo.get_stored_default_split(command.list_id)
         return _build_default_split_view(
             list_id=lst.id,

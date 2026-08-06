@@ -49,6 +49,7 @@ export const listsMessages = {
     defaultSplitSaving: "Saving…",
     defaultSplitReadOnly: "Only the list owner can change the standing default.",
     errorInvalidSplit: "Percentages must sum to exactly 100.",
+    errorDefaultSplitLoad: "Could not load the default split. Refresh and try again.",
   },
   es: {
     brand: "finance-helper",
@@ -99,6 +100,8 @@ export const listsMessages = {
     defaultSplitSaving: "Guardando…",
     defaultSplitReadOnly: "Solo el propietario de la lista puede cambiar la división predeterminada.",
     errorInvalidSplit: "Los porcentajes deben sumar exactamente 100.",
+    errorDefaultSplitLoad:
+      "No se pudo cargar la división predeterminada. Actualiza e inténtalo de nuevo.",
   },
 } as const;
 

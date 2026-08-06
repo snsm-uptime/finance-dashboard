@@ -20,9 +20,10 @@ from application.ports import (
     UserPreferencesRecord,
 )
 from application.signin import AuthUserRecord
-from domain.default_split import MODE_EVEN, MODE_PERCENTAGE
+from domain.default_split import MODE_EVEN, MODE_PERCENTAGE, validate_percentage_shares
 from domain.errors import (
     DuplicateEmailError,
+    InvalidDefaultSplitError,
     ListNotFoundError,
     ListWriteError,
     NotListMemberError,
@@ -165,6 +166,7 @@ class SqlAlchemyListRepository:
                         id=owned_list.id,
                         name=owned_list.name,
                         owner_id=owned_list.owner_id,
+                        default_split_mode=owned_list.default_split_mode or MODE_EVEN,
                     )
                 )
                 self._session.flush()
@@ -213,6 +215,18 @@ class SqlAlchemyListRepository:
                 self._session.flush()
         except IntegrityError as exc:
             raise ListWriteError() from exc
+        self.clear_invalid_percentage_default(membership.list_id)
+
+    def clear_invalid_percentage_default(self, list_id: UUID) -> None:
+        """Hard-clear stored % → even when the map no longer matches memberships."""
+        stored = self.get_stored_default_split(list_id)
+        if stored is None or stored.mode != MODE_PERCENTAGE:
+            return
+        members = self.list_member_ids(list_id)
+        try:
+            validate_percentage_shares(members, stored.shares)
+        except InvalidDefaultSplitError:
+            self.set_default_split(list_id, mode=MODE_EVEN, shares=None)
 
     def update_list_name(self, list_id: UUID, name: str) -> ListRecord:
         row = self._session.get(ListModel, list_id)

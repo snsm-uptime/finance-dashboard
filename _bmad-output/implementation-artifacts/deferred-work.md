@@ -103,3 +103,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-dev-compose-worktree-scripts.md`
   summary: Primary-checkout Compose can stall ~1h on first boot when a healthcheck fails because base compose uses interval 1h without the worktree overlay
   evidence: Pre-existing docker-compose.yml healthcheck intervals; frozen intent keeps primary on base+dev only, so scripts do not always attach docker-compose.worktree.yml
+
+## Deferred from: code review of 2-5-configurable-list-default-split.md (2026-08-06)
+
+- TOCTOU between member roster snapshot and default-split persist — no row lock/version fence against concurrent invite accept
+- No DB integrity that share rows ⊆ current memberships — relies on application soft-fallback; schema FK only to lists/users
+- Owner default-split editor labels truncated UUIDs only — display names later; operational mis-assign risk until then

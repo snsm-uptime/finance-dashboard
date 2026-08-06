@@ -36,7 +36,11 @@ def validate_percentage_shares(
     member_ids: Iterable[UUID],
     shares: Mapping[UUID, Decimal | str],
 ) -> dict[UUID, Decimal]:
-    """Require exact coverage of current members and sum == 100 (no float)."""
+    """Require exact coverage of current members and sum == 100 (no float).
+
+    Percentages are quantized to ``PERCENT_QUANTUM`` (2 dp) so they round-trip
+    through ``Numeric(12, 4)`` without silently failing on later reads.
+    """
     members = set(member_ids)
     if not members:
         raise InvalidDefaultSplitError("A list must have at least one member.")
@@ -50,7 +54,12 @@ def validate_percentage_shares(
             raise InvalidDefaultSplitError("Percentages must be exact decimal values.") from exc
         if pct < 0:
             raise InvalidDefaultSplitError("Percentages cannot be negative.")
-        normalized[user_id] = pct
+        quantized = pct.quantize(PERCENT_QUANTUM)
+        if quantized != pct:
+            raise InvalidDefaultSplitError(
+                "Percentages may have at most two decimal places."
+            )
+        normalized[user_id] = quantized
 
     if set(normalized.keys()) != members:
         raise InvalidDefaultSplitError(
@@ -92,23 +101,24 @@ def allocate_percentage_shares(
     *,
     currency_exponent: int = 2,
 ) -> dict[UUID, Decimal]:
-    """Floor each percentage share of total; leftover minor units → list creator (AD-6)."""
+    """Floor each percentage share of total; leftover minor units → list creator (AD-6).
+
+    Share maps must pass ``validate_percentage_shares`` (exact 100%, non-negative).
+    """
     amount = total if isinstance(total, Decimal) else Decimal(str(total))
     if amount < 0:
         raise InvalidDefaultSplitError("Amount cannot be negative.")
     if currency_exponent < 0:
         raise InvalidDefaultSplitError("Currency exponent cannot be negative.")
 
-    quantum = Decimal("1").scaleb(-currency_exponent)
-    normalized: dict[UUID, Decimal] = {}
-    for raw_id, raw_pct in shares.items():
-        user_id = raw_id if isinstance(raw_id, UUID) else UUID(str(raw_id))
-        pct = raw_pct if isinstance(raw_pct, Decimal) else Decimal(str(raw_pct))
-        normalized[user_id] = pct
-
+    member_ids = [
+        (raw_id if isinstance(raw_id, UUID) else UUID(str(raw_id))) for raw_id in shares
+    ]
+    normalized = validate_percentage_shares(member_ids, shares)
     if creator_user_id not in normalized:
         raise InvalidDefaultSplitError("List creator must be included in the share map.")
 
+    quantum = Decimal("1").scaleb(-currency_exponent)
     floored: dict[UUID, Decimal] = {}
     for user_id, pct in normalized.items():
         part = (amount * pct / HUNDRED).quantize(quantum, rounding=ROUND_DOWN)

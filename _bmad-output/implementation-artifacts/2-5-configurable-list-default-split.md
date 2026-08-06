@@ -4,7 +4,7 @@ baseline_commit: 66f1e29bd32d2f6fdc3617b115d4d56873666cb6
 
 # Story 2.5: Configurable list default split
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -98,6 +98,19 @@ so that new items inherit our household arrangement without per-item edits.
   - [x] Membership-change: seed extra member under percentage mode → apply-time falls back to even (Task 1 documented default)
   - [x] pytest green; ui typecheck/lint; thin UI test for owner save / validation if practical
   - [x] Generic fixtures only — no real PII
+
+### Review Findings
+
+- [x] [Review][Patch] Hard-clear stored default-split mode/shares to even when membership change invalidates the % map [`api/application/lists.py` / membership write paths]
+- [x] [Review][Patch] `allocate_percentage_shares` skips sum/non-negative validation (can mint negative creator leftover) [`api/domain/default_split.py:88`]
+- [x] [Review][Patch] Quantize validated percentages to `PERCENT_QUANTUM` before persist/compare (avoid Numeric(12,4) silent even-fallback) [`api/domain/default_split.py:35`]
+- [x] [Review][Patch] Custom-mode UI merge preserves stale member keys over server roster [`ui/app/lists/DefaultSplitPanel.tsx:140`]
+- [x] [Review][Patch] List detail silently omits split panel when default-split fetch fails [`ui/app/lists/[listId]/page.tsx:108`]
+- [x] [Review][Patch] GET default-split does not map `InvalidDefaultSplitError` (empty member set) [`api/api/routes/lists.py:176`]
+- [x] [Review][Patch] Wire `NewListRecord.default_split_mode` into `create_owned_list` (port field currently ignored) [`api/adapters/persistence/repositories.py`]
+- [x] [Review][Defer] TOCTOU between member roster snapshot and default-split persist [`api/application/lists.py:391`] — deferred, pre-existing concurrency style
+- [x] [Review][Defer] No DB integrity that share rows ⊆ current memberships [`api/adapters/persistence/migrations/versions/0008_list_default_split.py`] — deferred, pre-existing
+- [x] [Review][Defer] Owner editor labels truncated UUIDs only [`ui/app/lists/DefaultSplitPanel.tsx:152`] — deferred, pre-existing
 
 ## Dev Notes
 
@@ -367,8 +380,9 @@ Cursor Grok 4.5 (bmad-dev-story)
 ## Change Log
 
 - 2026-08-06: Implemented FR-9 standing default split (even/percentage), AD-6 allocate helper, owner UI on list detail, Postgres integration tests
+- 2026-08-06: Code review patches — hard-clear % on membership invalidate, allocate validates 100%, percent quantum, UI roster/error handling; status → done
 
 ## Story completion status
 
-Status: review  
-Completion note: Implementation complete — default split domain/API/UI + AD-6 allocate; ready for code-review.
+Status: done  
+Completion note: Code review complete — patches applied; deferred TOCTOU/FK/UUID-label items tracked in deferred-work.md.

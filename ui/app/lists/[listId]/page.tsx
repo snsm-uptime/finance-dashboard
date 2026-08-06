@@ -73,6 +73,7 @@ export default async function ListDetailPage({
 
   let detail: DetailPayload | null = null;
   let defaultSplit: DefaultSplitPayload | null = null;
+  let splitLoadError = false;
   let notFound = false;
   let loadError = false;
   try {
@@ -106,7 +107,14 @@ export default async function ListDetailPage({
         },
       );
       if (splitRes.ok) {
-        defaultSplit = asDefaultSplit(await splitRes.json());
+        const parsed = asDefaultSplit(await splitRes.json());
+        if (parsed) {
+          defaultSplit = parsed;
+        } else {
+          splitLoadError = true;
+        }
+      } else {
+        splitLoadError = true;
       }
     } else {
       loadError = true;
@@ -187,6 +195,11 @@ export default async function ListDetailPage({
                 errorSmtp: t.errorSmtp,
               }}
             />
+          ) : null}
+          {splitLoadError ? (
+            <p className={styles.copy} role="alert">
+              {t.errorDefaultSplitLoad}
+            </p>
           ) : null}
           {defaultSplit ? (
             <DefaultSplitPanel

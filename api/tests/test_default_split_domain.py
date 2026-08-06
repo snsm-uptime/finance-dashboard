@@ -107,3 +107,22 @@ def test_allocate_rejects_creator_not_in_map() -> None:
             {a: Decimal("50.00"), b: Decimal("50.00")},
             uuid4(),
         )
+
+
+def test_allocate_rejects_shares_not_summing_to_100() -> None:
+    creator, other = uuid4(), uuid4()
+    with pytest.raises(InvalidDefaultSplitError):
+        allocate_percentage_shares(
+            Decimal("100.00"),
+            {creator: Decimal("300.00"), other: Decimal("300.00")},
+            creator,
+        )
+
+
+def test_validate_rejects_more_than_two_decimal_places() -> None:
+    a, b = uuid4(), uuid4()
+    with pytest.raises(InvalidDefaultSplitError):
+        validate_percentage_shares(
+            [a, b],
+            {a: Decimal("60.001"), b: Decimal("39.999")},
+        )

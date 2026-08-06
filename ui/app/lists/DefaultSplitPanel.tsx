@@ -137,7 +137,7 @@ export function DefaultSplitPanel({ listId, isOwner, initial, messages }: Props)
                   for (const share of res.split.shares) {
                     map[share.user_id] = share.percentage;
                   }
-                  setPercents((prev) => ({ ...map, ...prev }));
+                  setPercents(map);
                 }
               });
             }}
