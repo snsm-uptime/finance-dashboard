@@ -208,7 +208,7 @@ def test_build_invite_link_paths() -> None:
             raw_token="tok",
             kind="signup",
         )
-        == "http://localhost:3000/sign-up?invite=tok"
+        == "http://localhost:3000/signup?invite=tok"
     )
 
 
@@ -260,7 +260,7 @@ def test_owner_invite_unregistered_sends_signup() -> None:
 
     assert result.template_kind == "signup"
     assert "Create an account" in mailer.sent[0].subject
-    assert "/sign-up?invite=" in mailer.sent[0].body_text
+    assert "/signup?invite=" in mailer.sent[0].body_text
 
 
 def test_member_not_owner_rejected() -> None:
@@ -418,7 +418,7 @@ def test_build_invite_email_renders_en_and_es_and_strips_crlf() -> None:
     )
     es = build_invite_email_message(
         to="b@example.com",
-        link="http://x/sign-up?invite=t",
+        link="http://x/signup?invite=t",
         list_name="Home",
         inviter_display="owner@example.com",
         locale="es",

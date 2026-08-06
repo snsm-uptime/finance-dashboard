@@ -7,12 +7,15 @@ const SESSION_COOKIE =
 const PUBLIC_PREFIXES = [
   "/sign-in",
   "/signup",
+  "/sign-up",
+  "/invites",
   "/forgot-password",
   "/reset-password",
   "/verify",
   "/health",
   "/api/auth",
   "/api/lists",
+  "/api/invites",
 ];
 
 function isPublicPath(pathname: string): boolean {

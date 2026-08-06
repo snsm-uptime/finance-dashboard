@@ -13,9 +13,14 @@ export const signupMessages = {
     errorGeneric: "Something went wrong. Try again.",
     errorDuplicate: "An account with this email already exists.",
     errorInvalid: "Check your email and password and try again.",
+    errorExpiredInvite:
+      "This invite link is invalid or has expired. Ask the list owner for a new invite.",
+    errorInviteMismatch: "Use the email address this invite was sent to.",
+    errorNotVerified: "Verify your email before joining this list.",
     passwordHint: "At least 8 characters",
     showPassword: "Show password",
     hidePassword: "Hide password",
+    loadingInvite: "Loading invite…",
   },
   es: {
     brand: "finance-helper",
@@ -29,9 +34,14 @@ export const signupMessages = {
     errorGeneric: "Algo salió mal. Inténtalo de nuevo.",
     errorDuplicate: "Ya existe una cuenta con este correo.",
     errorInvalid: "Revisa tu correo y contraseña e inténtalo de nuevo.",
+    errorExpiredInvite:
+      "Este enlace de invitación no es válido o ha caducado. Pide uno nuevo al dueño de la lista.",
+    errorInviteMismatch: "Usa el correo al que se envió esta invitación.",
+    errorNotVerified: "Verifica tu correo antes de unirte a esta lista.",
     passwordHint: "Mínimo 8 caracteres",
     showPassword: "Mostrar contraseña",
     hidePassword: "Ocultar contraseña",
+    loadingInvite: "Cargando invitación…",
   },
 } as const;
 

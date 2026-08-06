@@ -1,6 +1,10 @@
+---
+baseline_commit: d91c38984b2ed1cea449759ad6fd55fda82f3e60
+---
+
 # Story 2.4: Invitee signup lands on inviting list
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -27,55 +31,59 @@ so that I see settle-up context immediately instead of a blank home.
 
 ## Tasks / Subtasks
 
-- [ ] Task 0: Confirm hard prerequisites are implemented (do not invent parallel stacks)
-  - [ ] **1.2** User + List + ListMembership; argon2; session cookie issuer; personal list at signup (FR-5)
-  - [ ] **1.3** Sign-in / sign-out / `me`; protected routes; same-origin BFF/proxy; generic auth errors; public allowlist for invite deep links
-  - [ ] **1.4** SMTP adapter + email port + `PUBLIC_APP_URL` + hashed single-use token discipline — **reuse patterns; do not create a second token crypto stack**
-  - [ ] **1.5 Soft couple:** when `EMAIL_VERIFICATION_REQUIRED` is on, call the 1.5 `ensure_email_verified` / gated-flow port **before** creating membership on accept; when off/absent, accept proceeds without verify — authoritative: [`invite-verify-gate-contract.md`](./invite-verify-gate-contract.md)
-  - [ ] **2.1** Owned lists + durable owner/creator
-  - [ ] **2.2** Lists homepage + list detail shell + membership ACL + first-paint router with **invite deep-link hook** (must not force Lists homepage after invitee signup)
-  - [ ] **2.3** Invite send + `list_invite_token` persistence + join/signup email templates + documented deep-link URLs — **this story consumes those tokens; does not re-issue send**
-  - [ ] Read completion notes from 1.2–1.5 and 2.2–2.3 for: cookie name/issuer, BFF vs proxy, opaque vs JWT, invite table columns, link paths (`/invites/accept?token=…` and/or `/sign-up?invite=…`), token TTL — **reuse; never re-decide**
-  - [ ] If any hard prerequisite is incomplete: **stop** — finish those stories first (one story per branch)
+- [x] Task 0: Confirm hard prerequisites are implemented (do not invent parallel stacks)
+  - [x] **1.2** User + List + ListMembership; argon2; `fh_session` cookie issuer; personal list at signup (FR-5) — extend `SignUpService` / `POST /auth/register`
+  - [x] **1.3** Sign-in / sign-out / `me`; protected routes; same-origin BFF/proxy; generic auth errors; public allowlist — add invite paths to `ui/proxy.ts`
+  - [x] **1.4** SMTP adapter + email port + `PUBLIC_APP_URL` + hashed single-use token discipline — **reuse hash helpers; do not create a second token crypto stack**
+  - [x] **1.5.1** Reuse `claim_single_use_email_token` in `api/adapters/persistence/token_claim.py` for invite consume (must include `expires_at` in UPDATE) — see [`auth-email-token-claim-pattern.md`](./auth-email-token-claim-pattern.md)
+  - [x] **1.5 Soft couple:** when `EMAIL_VERIFICATION_REQUIRED` is on, call `EnsureEmailVerifiedService` **before** creating inviting-list membership; when off/absent, accept proceeds without verify — authoritative: [`invite-verify-gate-contract.md`](./invite-verify-gate-contract.md)
+  - [x] **2.1** Owned lists + durable owner/creator
+  - [x] **2.2** Lists homepage + list detail shell + membership ACL + **`resolveAuthenticatedLanding({ inviteListId })`** / `resolveServerAuthenticatedLanding` — pass inviting `listId` after accept; must not force Lists homepage
+  - [x] **2.3** Invite send + `list_invite_token` persistence + join/signup email templates + **completion-note deep-link URLs** — this story consumes those tokens; does not re-issue send. **If 2.3 is not done: stop.**
+  - [x] Read completion notes from 1.2–1.5.x and 2.1–2.3 for: cookie name/issuer, BFF paths, invite table columns, chosen link paths, token TTL — **reuse; never re-decide**
+  - [x] Align deep links to as-built routes: UI signup is **`/signup`** (not `/sign-up`); register API is **`POST /auth/register`** (BFF `ui/app/api/auth/register`). Prefer documenting final invite URLs as `/signup?invite=…` and `/invites/accept?token=…` in **2.3 completion notes** and wire those here
+  - [x] If any hard prerequisite is incomplete: **stop** — finish those stories first (one story per branch). Rebase onto a branch that already includes 2.2 before starting
 
-- [ ] Task 1: Domain — accept invite / signup-with-invite rules (AC: #1–#3) — TDD first
-  - [ ] Domain owns: validate invite token (exists, unexpired, unused, hash matches); bind invitee email; create `ListMembership` on inviting list; consume token; reject invalid/expired/used
-  - [ ] **Unregistered path:** signup (reuse 1.2 SignUp) **plus** membership on inviting list **in one atomic flow** — still create personal list (FR-5) **and** second membership on inviting list
-  - [ ] **Registered path:** authenticated accept → membership on inviting list; consume token; idempotent calm handling if already a member (document choice: success no-op vs clear message — never duplicate membership rows)
-  - [ ] Email bind (security — architecture gap close): signup/accept email **must match** invitee email on the token row (normalize case); pre-fill and/or lock email on invitee signup UI from token preview — do not allow arbitrary email to redeem a token
-  - [ ] Token lifecycle (mirror 2.3 / 1.4 defaults): enforce TTL, single-use consume on success, never store raw token; invalid/expired/used → reject with clear structured error, **no membership**
-  - [ ] Call 1.5 verification gate port when flag on before membership commit
-  - [ ] Domain free of FastAPI / SQLAlchemy / aiosmtplib (AD-1)
+- [x] Task 1: Domain — accept invite / signup-with-invite rules (AC: #1–#3) — TDD first
+  - [x] Domain owns: validate invite token (exists, unexpired, unused, hash matches); bind invitee email; create `ListMembership` on inviting list; consume token; reject invalid/expired/used
+  - [x] **Locked ordering** (from verify-gate contract): email-bind → `EnsureEmailVerifiedService` → claim token → create inviting membership. Never claim token or create inviting membership if bind or Ensure fails
+  - [x] **Unregistered success path (flag off, or already verified):** compose reuse of 1.2 SignUp **plus** inviting membership — create personal list (FR-5) **and** second membership on inviting list. Invitee membership role = **`"member"`** (peer; AD-19) — do not invent admin/viewer product roles; creators already use `"owner"`
+  - [x] **Unregistered + `EMAIL_VERIFICATION_REQUIRED` on (intentional partial success):** create user + personal list + **session cookie**; Ensure blocks → return **403** `email_not_verified`; **do not** claim token; **do not** create inviting membership. Client retains invite token → `/verify` → then **`AcceptListInvite(token)`** (never a second `SignUpWithInvite`)
+  - [x] **Registered path:** authenticated accept → email-bind → Ensure → claim → membership; idempotent **silent success** if already a member (UniqueConstraint `(list_id, user_id)`); never duplicate membership rows
+  - [x] Email bind (security): signup/accept email **must match** invitee email on the token row (normalize case); pre-fill and lock email on invitee signup UI from token preview — do not allow arbitrary email to redeem a token
+  - [x] Token lifecycle: enforce 2.3 TTL; consume via **`claim_single_use_email_token`** on the invite model; never store raw token; invalid/expired/used → reject with clear structured error, **no membership**
+  - [x] Call `EnsureEmailVerifiedService.execute(EnsureEmailVerifiedCommand(user_id, email_verification_required=settings.email_verification_required))` — never hard-code the flag; never call the invite-accept **stub** from product UI; map errors like the stub (**403** + `code: "email_not_verified"`)
+  - [x] Domain free of FastAPI / SQLAlchemy / aiosmtplib (AD-1)
 
-- [ ] Task 2: Application + API — accept / signup-with-invite endpoints (AC: #1–#3)
-  - [ ] Use-cases (names may vary): `SignUpWithInvite`, `AcceptListInvite` — orchestrate ports only
-  - [ ] Recommended API shapes (align with 2.3 completion-note URLs):
-    - `GET /api/invites/{token}` or `GET /api/invites/preview?token=` — public; returns safe preview `{ list_name, email_hint, path: "signup"|"join", expired: bool }` without leaking other users
-    - `POST /api/auth/sign-up` extended with `{ email, password, invite_token }` **or** dedicated `POST /api/invites/accept-signup` — creates user + personal list + inviting membership + session cookie
-    - `POST /api/invites/accept` `{ token }` — requires session; registered join path
-  - [ ] On signup-with-invite success: set **same** httpOnly Secure session cookie as 1.2 (single issuer); return list id for redirect
-  - [ ] Invalid/expired/used token → clear 4xx + calm error body; no membership; no session elevation from a bad token
-  - [ ] Auth cookie / BFF: same-origin only; never Bearer in `localStorage`
-  - [ ] Keep `/health` public; never log raw tokens or plaintext passwords
+- [x] Task 2: Application + API — accept / signup-with-invite endpoints (AC: #1–#3)
+  - [x] Use-cases: `SignUpWithInvite`, `AcceptListInvite` — orchestrate ports only; compose `SignUpService` rather than forking register
+  - [x] Preferred API shapes (lock exact paths in 2.3/2.4 completion notes; prefer query-token preview to avoid token-in-path access logs):
+    - `GET /api/invites/preview?token=` — public; returns safe preview `{ list_name, email_hint, path: "signup"|"join" }` without leaking other users; **404**/`410` for invalid/expired (do not also use a soft `expired: bool` success body)
+    - Extend existing `POST /auth/register` with optional `{ email, password, invite_token }` (and matching BFF) — on full success: same httpOnly Secure session cookie as 1.2 + `{ user, inviting_list_id }`; on verify-gate partial success: session set + **403** `email_not_verified` with enough UI context to retain token and route to `/verify`
+    - `POST /api/invites/accept` `{ token }` — requires session; registered join path + post-verify retry path
+  - [x] Invalid/expired/used token → clear 4xx + calm error body; no membership; no session elevation from a bad token alone
+  - [x] Auth cookie / BFF: same-origin only; never Bearer in `localStorage`; reuse register rate limits (1.5.6)
+  - [x] Keep `/health` public; never log raw tokens or plaintext passwords
+  - [x] UI i18n for gate/errors keys off stable `code` values (`email_not_verified`, token errors) — do not treat English `detail` as UX contract
 
-- [ ] Task 3: UI — invitee deep links + landing (AC: #1–#3) — J4 Act B
-  - [ ] Wire deep-link routes documented by **2.3** (e.g. `/sign-up?invite=…` and `/invites/accept?token=…`) — public in `proxy.ts` allowlist
-  - [ ] **Unregistered path:** open link → signup form (email pre-filled/locked from preview + password) → on success **navigate to inviting list detail** (`/lists/{listId}` or 2.2 detail route) — **not** Lists homepage, **not** blank home
-  - [ ] Override 2.2 first-paint / post-signup default when invite context is present — use the hook/comment left in 2.2; after landing, set remembered last-opened to inviting list
-  - [ ] **Registered path:** if signed out → sign-in with `returnTo` back to accept; if signed in → accept → open list detail (or Lists homepage with list visible — AC allows either; prefer deep link to list detail)
-  - [ ] Invalid/expired token surface: clear calm error (what happened + what to do); no fake membership; EN+ES keys (UX-DR17/18)
-  - [ ] Climax UX: list detail / shared-expenses **shell** with settle-up context slot visible — Soft-Ledger strip may be zero/empty until Epic 3 (same as 2.2); do **not** invent settle math in the browser
-  - [ ] Warm Balance form chrome; moss primary CTA `{rounded.sm}`; kits unstyled only (AD-12); phone-first (J4)
-  - [ ] Submit via same-origin BFF/proxy only
+- [x] Task 3: UI — invitee deep links + landing (AC: #1–#3) — J4 Act B
+  - [x] Wire deep-link routes from **2.3 completion notes**, defaulting to as-built: `/signup?invite=…` and `/invites/accept?token=…` — add to `ui/proxy.ts` public allowlist
+  - [x] **Unregistered path:** open link → update `ui/app/signup/` (email pre-filled/locked from preview + password) → on full success navigate via `resolveAuthenticatedLanding({ inviteListId })` to `/lists/{listId}` — **not** Lists homepage, **not** blank home; set remembered last-opened to inviting list after landing
+  - [x] **Verify-on unlock UI:** when register-with-invite returns 403 `email_not_verified`, keep session, retain invite token across `/verify` (query/`returnTo`/equivalent), then call `AcceptListInvite` and land on inviting list
+  - [x] **Registered path:** if signed out → sign-in with `safeReturnTo` back to accept; if signed in → accept → land on list detail via same resolver (`inviteListId`)
+  - [x] Invalid/expired token surface: clear calm error (what happened + what to do); no fake membership; EN+ES in `ui/lib/i18n/` (extend `signup.ts` / new invite strings — **not** `messages/*.json`)
+  - [x] Climax UX: list detail Soft-Ledger shell with settle-up context slot visible — may be zero/empty until Epic 3; do **not** invent settle math in the browser; announce destination on navigate when feasible (UX-DR19)
+  - [x] Warm Balance form chrome; moss primary CTA `{rounded.sm}`; kits unstyled only (AD-12); phone-first (J4)
+  - [x] Submit via same-origin BFF/proxy only
 
-- [ ] Task 4: Tests (AC: #1–#3)
-  - [ ] Domain TDD: signup-with-invite → personal list **and** inviting membership; token consumed; email mismatch rejected; expired/invalid/used → no membership; already-member idempotent
-  - [ ] Domain/application: registered accept while authenticated → membership; verification-on blocks accept until verified (1.5 port); verification-off proceeds
-  - [ ] Integration on **Postgres 16**: full unregistered path through API → membership row + session cookie; registered accept path; bad token leaves membership count unchanged
-  - [ ] UI test-after: post-invite-signup redirect lands on list detail (not homepage); expired-token error page; keep 1.1 coverage floor (60%)
-  - [ ] Fixtures: `owner@example.com`, `invitee@example.com` — no real PII / personal names
-  - [ ] Assert project-context must-cover edge: **unregistered invite → land on inviting list**
-  - [ ] Do **not** require full Playwright every PR; no live SMTP in CI
+- [x] Task 4: Tests (AC: #1–#3)
+  - [x] Domain TDD: signup-with-invite success → personal list **and** inviting `"member"` membership; token consumed via claim helper; email mismatch rejected; expired/invalid/used → no membership; already-member silent idempotent
+  - [x] Domain/application: registered accept while authenticated → membership; verification-on SignUpWithInvite → user+session+personal list kept, **403**, token unclaimed, no inviting membership; after verify + `AcceptListInvite` → membership; verification-off proceeds atomically
+  - [x] Integration on **Postgres 16**: full unregistered path through API → membership row + session cookie; registered accept path; bad token leaves membership count unchanged; claim respects `expires_at`
+  - [x] UI test-after: post-invite-signup redirect lands on list detail (not homepage); expired-token error page; verify-on retain-token → accept → list; keep 1.1 coverage floor (60%)
+  - [x] Fixtures: `owner@example.com`, `invitee@example.com` — no real PII / personal names
+  - [x] Assert project-context must-cover edge: **unregistered invite → land on inviting list**
+  - [x] Do **not** require full Playwright every PR; no live SMTP in CI
 
 ## Dev Notes
 
@@ -85,20 +93,20 @@ Epic 2 = Shared lists & household membership (FR-6…FR-10). **Demo gate = this 
 
 | Sibling | Relationship to 2.4 |
 |---------|---------------------|
-| **2.1** Create/rename lists | Prerequisite — list exists to invite into |
-| **2.2** Lists homepage / detail / first paint | Prerequisite — landing surface + invite deep-link exception hook |
-| **2.3** Invite by email | Prerequisite — issues tokens + emails; 2.4 consumes/accepts |
+| **2.1** Create/rename lists | Prerequisite — list exists to invite into (**done**) |
+| **2.2** Lists homepage / detail / first paint | Prerequisite — Soft-Ledger shell + `inviteListId` landing resolver (**done on main**; rebase if local worktree lacks it) |
+| **2.3** Invite by email | Prerequisite — issues tokens + emails; 2.4 consumes/accepts (**must land before this story**) |
 | **2.5** Default split | Downstream — needs multi-member lists from accept |
 | **2.6** Split overrides | Downstream — peer membership set |
-| **1.2 / 1.3** Auth signup/session | Hard — reuse register + cookie issuer |
-| **1.4** SMTP / tokens | Pattern reuse — hash/TTL/single-use |
-| **1.5** Verification | Soft gate on accept when config on |
+| **1.2 / 1.3** Auth signup/session | Hard — extend register + cookie issuer |
+| **1.4 / 1.5.1** SMTP / token claim | Pattern reuse — hash/TTL; `claim_single_use_email_token` |
+| **1.5 / 1.5.3** Verification | Soft gate on accept when config on — [`invite-verify-gate-contract.md`](./invite-verify-gate-contract.md) |
 | **Epic 3** Soft-Ledger settle | Landing may show empty settle shell until then |
 
 ### Hard prerequisites / ordering
 
 ```text
-1.1 → 1.2 → 1.3 → 1.4 (+ 1.5 optional gate, 1.6 for invite locale in 2.3)
+1.1 → 1.2 → 1.3 → 1.4 → 1.5 (+ 1.5.1 claim, 1.5.3 contract) → 1.6
   → 2.1 → 2.2 → 2.3 → 2.4   ← you are here
 ```
 
@@ -114,12 +122,12 @@ Epic 2 = Shared lists & household membership (FR-6…FR-10). **Demo gate = this 
 | Unregistered invite → signup → membership + land on inviting list detail | Invite **send** UI/API / SMTP templates (**2.3**) |
 | Registered join accept → membership + open list | Owner invite form / invite-sent confirmation (**2.3**) |
 | Invalid/expired/used token → clear error, no membership | Standing default split when members join (**2.5**) |
-| Email-bind + consume token + FR-5 personal list still created | Real settle-up balances / Adjust-split UI (**Epic 3**) |
-| Override first-paint when invite deep link present | Lists homepage / ACL implementation (**2.2**) |
-| Call 1.5 verified gate when config on | Global verify-to-login wall; Account settings product |
+| Email-bind + claim token + FR-5 personal list still created | Real settle-up balances / Adjust-split UI (**Epic 3**) |
+| Override first-paint via `inviteListId` resolver | Lists homepage / ACL implementation (**2.2**) |
+| Call Ensure gate when config on; verify unlock → `AcceptListInvite` | Global verify-to-login wall; Account settings product |
 | EN+ES invitee error/signup chrome | New SMTP client; Redis/worker |
 
-**Forbidden:** Bearer in `localStorage` · landing on blank Lists homepage after invitee signup · creating membership without valid token · skipping FR-5 personal list · second session issuer · domain importing FastAPI/SQLAlchemy · `NEXT_PUBLIC_*` secrets · inventing owner-vs-viewer product roles (AD-19 peers) · settle math in the browser · SQLite as integration stand-in.
+**Forbidden:** Bearer in `localStorage` · landing on blank Lists homepage after invitee signup · creating membership without valid token · claiming token when Ensure/email-bind fails · skipping FR-5 personal list · second session issuer · second register entrypoint · domain importing FastAPI/SQLAlchemy · `NEXT_PUBLIC_*` secrets · inventing owner-vs-viewer product roles (AD-19 peers) · settle math in the browser · SQLite as integration stand-in · hand-rolled token claim that omits `expires_at`.
 
 ### Architecture compliance
 
@@ -127,16 +135,18 @@ Epic 2 = Shared lists & household membership (FR-6…FR-10). **Demo gate = this 
 
 - **AD-1:** Hex — accept/signup-with-invite rules in `domain`/`application`; ORM in `adapters/persistence`; cookie edge in `api/api/`; `ui` → HTTP only
 - **AD-2:** No Redis/worker for invite tokens — Postgres row only
-- **AD-8:** httpOnly Secure cookie session after signup; invite links carry opaque tokens (not API Bearer tokens); same-origin BFF/proxy
+- **AD-8:** httpOnly Secure cookie session after signup; invite links carry opaque tokens (not API Bearer tokens); same-origin BFF/proxy; AD-8 addendum = claim helper with `expires_at`
 - **AD-12:** EXPERIENCE J4 + DESIGN bind landing UX; Soft-Ledger shell OK empty until Epic 3
 - **AD-13 / AD-15:** One story per branch; domain TDD; CI lint + pytest + ui typecheck — not full Playwright every PR
-- **AD-19:** **Invite acceptance creates membership**; peers; personal list still auto-created at signup; membership ACL for subsequent R/W
+- **AD-19:** **Invite acceptance creates membership**; peers (`"member"`); personal list still auto-created at signup; membership ACL for subsequent R/W
 - **AD-22:** Alembic only if schema gap vs 2.3; never wipe PG volume; secrets outside repo
 
-**Known gaps (implementer closes with documented defaults — reviews flagged Missing):**
-1. Invite token lifecycle — enforce 2.3 defaults (TTL, single-use, hash-at-rest)
-2. Email-match on redeem — bind token ↔ invitee email (not spelled as an AD; treat as required)
-3. Invite landing “Dropped” from spine ADs — still binding via EXPERIENCE (AD-12), SPEC CAP-3, epics, project-context tests
+**Living contracts (must follow — do not re-decide):**
+1. [`invite-verify-gate-contract.md`](./invite-verify-gate-contract.md) — Ensure ordering, partial success, 403 `email_not_verified`, retain token → AcceptListInvite
+2. [`auth-email-token-claim-pattern.md`](./auth-email-token-claim-pattern.md) — `claim_single_use_email_token`
+3. Architecture review gap close: invite token lifecycle defaults owned by 2.3 issue / 2.4 consume
+4. Email-match on redeem — bind token ↔ invitee email (required security default)
+5. Invite landing “Dropped” from spine ADs — still binding via EXPERIENCE (AD-12), SPEC CAP-3, epics, project-context tests, and 2.2 `inviteListId` resolver
 
 **Do not confuse:** Auth **session** (cookie) ≠ **Import Session** (AD-4) ≠ **invite token** ≠ **password-reset token** ≠ **verification token**.
 
@@ -144,96 +154,123 @@ Epic 2 = Shared lists & household membership (FR-6…FR-10). **Demo gate = this 
 
 | Piece | Pin / guidance | Notes |
 |-------|----------------|-------|
-| argon2-cffi / session cookie | From **1.2/1.3** lock + completion notes | Same hasher + single cookie issuer |
+| argon2-cffi / `fh_session` cookie | From **1.2/1.3** lock + completion notes | Same hasher + single cookie issuer (`AuthSettings.session_cookie_name`) |
 | aiosmtplib | ≥5.1.2 | Send already done in 2.3 — 2.4 typically does not send mail |
-| FastAPI / Pydantic / SQLAlchemy / Alembic | From 1.1 lockfile | Accept/signup routes + persistence |
-| Next.js / React | 16.2.x / 19.2.x | Deep-link signup/accept + list detail redirect |
-| i18n | From 1.6 | Invitee UI chrome/errors EN+ES |
+| FastAPI / Pydantic / SQLAlchemy / Alembic | From 1.1 lockfile | Extend register + invite preview/accept routes |
+| Next.js / React | 16.2.x / 19.2.x | `/signup` invite param + `/invites/accept` + list detail redirect |
+| i18n | `ui/lib/i18n/*.ts` (from 1.6) | Invitee UI chrome/errors EN+ES |
 
 After lockfiles exist: do not bump unrelated majors inside this feature story.
 
-**Latest auth practice (2026):** Prefer opaque DB-backed sessions + httpOnly Secure SameSite cookies for first-party apps; hash invite tokens at rest; single-use consume; never put tokens in `localStorage`. Aligns with AD-8 and Stories 1.2–1.4.
+**Latest auth practice (2026):** Prefer opaque DB-backed sessions + httpOnly Secure SameSite cookies for first-party apps; hash invite tokens at rest; single-use consume with `expires_at` re-check; never put tokens in `localStorage`. Aligns with AD-8 and Stories 1.2–1.5.1.
 
 ### Recommended API / UI shapes
 
 ```text
-# Preview (public)
-GET  /api/invites/preview?token=…  → { list_name, email, path: "signup"|"join" } | 410/404 expired/invalid
+# Preview (public) — prefer query param over path token
+GET  /api/invites/preview?token=…
+  → 200 { list_name, email_hint, path: "signup"|"join" }
+  → 404/410 invalid or expired
 
-# Unregistered climax
-POST /api/auth/sign-up  { email, password, invite_token }
-  → Set-Cookie + { user, inviting_list_id }   # or dedicated accept-signup route
+# Unregistered climax — extend as-built register (do not add /auth/sign-up)
+POST /auth/register  { email, password, invite_token? }
+  → Set-Cookie (fh_session) + { user, inviting_list_id }     # full success
+  → Set-Cookie + 403 { code: "email_not_verified", … }       # flag on: retain token → /verify → AcceptListInvite
 
-# Registered join
+# Registered join + post-verify retry
 POST /api/invites/accept  { token }   # session required
-  → { list_id } | 401 → UI routes to sign-in?returnTo=…
+  → { list_id } | 401 → UI routes to /sign-in?returnTo=…
 
-ui/app/sign-up/page.tsx              # UPDATE — support ?invite= token (prefill/lock email)
-ui/app/invites/accept/page.tsx       # NEW — registered accept / sign-in returnTo
-ui/…/lists/[listId]/…                # destination after success (2.2 shell)
-ui/proxy.ts                          # UPDATE — public allowlist for invite paths
-ui first-paint helper                # UPDATE — skip homepage when invite landing context
+# Landing choke (2.2 — do not fork)
+resolveAuthenticatedLanding({ inviteListId }) → `/lists/{id}`
+
+ui/app/signup/…                      # UPDATE — ?invite= token (prefill/lock email)
+ui/app/invites/accept/…              # NEW — registered accept / sign-in returnTo
+ui/app/lists/[listId]/…              # destination after success (2.2 Soft-Ledger shell)
+ui/lib/landing.ts + serverLanding.ts # UPDATE call sites — pass inviteListId
+ui/proxy.ts                          # UPDATE — public allowlist for /invites…
+ui/lib/i18n/signup.ts (+ invite keys)# UPDATE — EN+ES chrome/errors keyed by code
 ```
 
 Wire snake_case on API DTOs; map at UI edge.
+
+### Carry-forward from 2.3 (issue contract — consume only)
+
+When 2.3 completion notes land, treat them as SoT. Expected shape unless 2.3 documents otherwise:
+
+| Concern | Default |
+|---------|---------|
+| Table | `list_invite_token`: UUID PK; `list_id`; invitee email (normalized); `token_hash`; `inviter_user_id`; locale; `expires_at`; `used_at`; `created_at` |
+| TTL | ≤7 days recommended (document chosen value) |
+| Single-use | Consumed on successful accept here via `claim_single_use_email_token` |
+| Resend | Outstanding unused invites for same `(list_id, email)` invalidated on new send (2.3) |
+| Membership on send | **Never** — membership only on accept |
+| Deep links | Prefer `/signup?invite=…` + `/invites/accept?token=…` (align with as-built `/signup`) |
 
 ### File structure requirements
 
 ```text
 api/
   domain/…                         # accept + signup-with-invite rules (pure) — NEW/UPDATE
-  application/…                    # SignUpWithInvite, AcceptListInvite — NEW
+  application/signup.py            # UPDATE/compose — SignUpWithInvite orchestration
+  application/…                    # AcceptListInvite — NEW
+  application/email_verification.py# REUSE EnsureEmailVerifiedService
+  adapters/persistence/token_claim.py  # REUSE claim_single_use_email_token
   adapters/persistence/…           # UPDATE invite token consume; ListMembership insert
-  api/routes/…                     # invite preview/accept + signup extension
+  api/routes/auth.py               # UPDATE register optional invite_token; map gate errors
+  api/routes/…                     # invite preview + accept
+  api/schemas/auth.py              # UPDATE RegisterRequest
   tests/…                          # domain TDD + Postgres integration
 ui/
-  app/sign-up/…                    # UPDATE — invite query param path
+  app/signup/…                     # UPDATE — invite query param path
   app/invites/accept/…             # NEW — registered accept surface
-  app/(auth)/lists/[listId]/…      # UPDATE — post-accept destination (existing 2.2)
-  lib/… first-paint / invite landing helper
+  app/lists/[listId]/…             # destination (existing 2.2)
+  app/api/auth/register/…          # UPDATE BFF if body gains invite_token
+  lib/landing.ts, serverLanding.ts # UPDATE — pass inviteListId
   proxy.ts                         # UPDATE — public invite routes
-  messages/en.json, es.json        # UPDATE — invitee errors/chrome
-  app/api/…                        # optional BFF forwarders
+  lib/i18n/*.ts                    # UPDATE — invitee errors/chrome EN+ES
 ```
 
 ### Existing code being modified
 
 | Path | Expected state entering 2.4 | This story | Preserve |
 |------|----------------------------|------------|----------|
-| Signup use-case / `POST …/sign-up` | From **1.2** — standalone signup → personal list + cookie | Extend with invite_token path OR compose SignUp + Accept | Same hasher, cookie issuer, FR-5 personal list |
-| `list_invite_token` + email templates | From **2.3** — issued, hashed, emailed | Consume/validate only; do not re-send | TTL/hash/single-use rules; link URL shapes |
-| First-paint / post-auth redirect | From **2.2** — remembered list else homepage | Invite deep-link **overrides** homepage | Membership re-check; ACL ports |
+| `SignUpService` / `POST /auth/register` | From **1.2** — standalone signup → personal list + cookie | Compose SignUpWithInvite / optional `invite_token` on register | Same hasher, cookie issuer, FR-5 personal list |
+| `list_invite_token` + email templates | From **2.3** — issued, hashed, emailed | Consume/validate only; do not re-send | TTL/hash/single-use; link URL shapes from 2.3 notes |
+| `resolveAuthenticatedLanding` / server twin | From **2.2** — `inviteListId` → `/lists/{id}` else remembered/homepage | Pass inviting list id after accept/signup success | Membership re-check; ACL ports |
 | List detail shell | From **2.2** | Landing climax surface | Empty settle OK until Epic 3 |
-| `ensure_email_verified` port | From **1.5** | Call on accept when flag on | Flow-scoped gate; not global login wall |
-| `proxy.ts` / BFF | From **1.3** | Allowlist invite public paths | Same-origin cookie; no Bearer storage |
+| `EnsureEmailVerifiedService` | From **1.5** | Call on accept / signup-with-invite before membership | Flow-scoped gate; not global login wall; stub remains probe until deleted post-2.4 |
+| `claim_single_use_email_token` | From **1.5.1** | Claim invite rows | `expires_at` in UPDATE |
+| `proxy.ts` / BFF | From **1.3** | Allowlist `/invites…` | Same-origin cookie; no Bearer storage |
 | `api/adapters/email/` | From **1.4/2.3** | Usually untouched (send = 2.3) | Do not add second SMTP client |
+| `safeReturnTo` / sign-in | From **1.3** | Registered accept when signed out | Open-redirect safety |
 
-**Greenfield note (as of story creation):** Working tree is still largely **1.1 scaffold** (health only; empty `adapters/email/`; no auth/lists). Auth, lists, invite send, and first-paint land in prerequisite stories before this one runs. Do not scaffold a parallel auth or membership stack.
+**As-built baseline:** Epic 1 + 1.5 + 2.1 are done; 2.2 landing resolver exists on main. Treat File Lists / completion notes in those stories as SoT. Do **not** scaffold a parallel auth, membership, i18n, or landing stack. **2.3 must still land first** (tokens/templates/URLs).
 
 ### UX requirements
 
-[Source: EXPERIENCE.md · DESIGN.md · journey-j4-invite.md · UX-DR9/16/17/18 · list-settle.html as visual climax reference]
+[Source: EXPERIENCE.md · DESIGN.md · journey-j4-invite.md · UX-DR9/16/17/18/19 · list-settle.html as visual climax reference]
 
-- **J4 Act B (this story):** Open invite email → sign up (email + password) → land on inviting household list (**not blank home**) → climax: shared list with settle-up context visible
+- **J4 Act B (this story):** Open invite email → sign up (email + password) → land on inviting household list (**not blank home**) → climax: shared list with settle-up context visible (empty Soft-Ledger OK until Epic 3)
 - **IA:** Invitee signup + Invitee lands states (UX-DR9)
 - **UX-DR16:** Invitee signup lands on inviting list with settle-up context (email language already set by 2.3 from inviter Account EN/ES)
-- First-paint remembered-list / homepage applies when there is **no** invite deep link (2.2 AC)
-- Errors: what happened + what to do; clear + calm; no peer blame
+- First-paint remembered-list / homepage applies when there is **no** invite deep link (2.2 AC) — invitee path always supplies `inviteListId`
+- Errors: what happened + what to do; clear + calm; no peer blame; i18n keyed by stable API `code`
 - No dedicated invitee mock — use Warm Balance forms + `mockups/list-settle.html` composition for post-landing shell
 - Registered join is required by FR-7 / AC #2 even though J4 narrates the unregistered path
 
-**Unresolved in PRD/UX (document choice in completion notes):**
-- Exact EN/ES strings for expired-token and email-mismatch
-- Whether already-member accept is silent success or calm “you’re already on this list”
-- Prefer redirect to list detail over homepage after registered accept (recommended)
+**Documented product choices for this story:**
+- Already-member accept → **silent success** (idempotent; no duplicate row)
+- After registered accept → prefer **list detail** via `inviteListId` (AC also allows homepage visibility)
+- Exact EN/ES copy for expired-token / email-mismatch → define in `ui/lib/i18n` and record in completion notes
 
 ### Testing requirements
 
-- Domain: red→green TDD for accept / signup-with-invite / token reject / email bind (AD-15)
-- Integration: Postgres 16 — membership created only on success; cookie set; bad token no membership
+- Domain: red→green TDD for accept / signup-with-invite / token reject / email bind / claim helper (AD-15)
+- Integration: Postgres 16 — membership created only on success; cookie set; bad token no membership; flag-on partial success retains unclaimed token
 - Must-cover (project-context): **unregistered invite → land on inviting list**
-- UI: redirect target after invite signup; expired token error — test-after OK; keep coverage floor
-- When 1.5 on: accept blocked until verified; when off: accept works
+- UI: redirect target after invite signup; expired token error; verify retain-token unlock — test-after OK; keep coverage floor
+- When 1.5 on: SignUpWithInvite blocks inviting membership until verified + AcceptListInvite; when off: full success without verify
 - No live SMTP; no Playwright-every-PR requirement
 
 ### Previous story intelligence
@@ -241,35 +278,37 @@ ui/
 | Source | Carry forward into 2.4 |
 |--------|------------------------|
 | **2.3** | Issues `list_invite_token` (hash, TTL ≤7d recommended, invalidate outstanding per list+email); deep-link URLs in completion notes; membership **not** created on send; join vs signup templates; owner-only send |
-| **2.2** | List detail destination; first-paint hook/comment for invite exception; membership ACL; forbidden “always Lists homepage after every signup” |
-| **2.1** | Owner/creator model; lists to invite into |
-| **1.2** | Standalone signup **outside** invite flows until this story; FR-5 personal list; argon2 + cookie; explicit deferral: invitee landing = 2.4 |
-| **1.3** | `proxy.ts` public allowlist; sign-in `returnTo` for registered accept; generic auth errors |
+| **2.2** | Soft-Ledger destination; `resolveAuthenticatedLanding({ inviteListId })`; membership ACL; forbid hardcoding “always `/lists` homepage” after signup |
+| **2.1** | Owner/creator model; lists to invite into; as-built `ui/app/lists/` |
+| **1.2** | `SignUpService`, `POST /auth/register`, BFF register, FR-5 personal list, argon2 + `fh_session`; invitee landing deferred here |
+| **1.3** | `proxy.ts` public allowlist; sign-in `returnTo` / `safeReturnTo`; generic auth errors |
 | **1.4** | Token hash/TTL/single-use discipline; fail-loud SMTP (send side already 2.3) |
-| **1.5** | `EMAIL_VERIFICATION_REQUIRED`; flow-scoped gate; “do not implement full invitee landing here”; stable port for accept |
-| **1.6** | Inviter language already applied at send (2.3); invitee UI chrome uses viewer locale |
+| **1.5 / 1.5.3** | `EMAIL_VERIFICATION_REQUIRED`; Ensure service; locked ordering + partial success + AcceptListInvite retry |
+| **1.5.1** | `claim_single_use_email_token` mandatory for invite consume |
+| **1.5.6** | Register rate limits still apply to signup-with-invite |
+| **1.6** | Inviter language already applied at send (2.3); invitee UI chrome uses viewer locale via `ui/lib/i18n` |
 
-Epic 1–2 File Lists / Completion Notes are empty while stories are ready-for-dev — treat story specs + scaffold as SoT until implementation lands.
+Use done-story File Lists / Completion Notes as SoT for seams. For 2.3, wait for its completion notes before locking final invite URL strings if they differ from `/signup?invite=` / `/invites/accept?token=`.
 
 ### Git intelligence summary
 
-Recent commits are BMAD story-context artifacts (`1.1`–`1.6`, Epic 2 story files appearing for 2.1–2.3). Application code on disk is still **1.1 scaffold**. Expect 1.2–2.3 implementation commits before this branch starts; follow their completion notes rather than re-opening stack forks.
+Recent history includes Epic 1.5 hardening, Story **2.1** lists, and Story **2.2** homepage/ACL/landing on main. Follow those Conventional Commit / File List patterns. Expect **2.3** implementation commits before this branch starts; consume their completion notes rather than re-opening stack forks.
 
 ### Latest tech information
 
 - **Browser auth (2026):** httpOnly + Secure + SameSite cookies remain the right default for first-party apps; Bearer-in-`localStorage` remains an anti-pattern (matches AD-8).
-- **Opaque sessions:** Prefer DB-backed opaque session ids when revocation matters (logout, password reset) — Stories 1.2/1.3 already bias this way.
-- **Invite tokens:** High-entropy opaque value in email link; store only hash; single-use consume; TTL; bind to email + list_id — fills architecture rubric gap.
+- **Opaque sessions:** Prefer DB-backed opaque session ids when revocation matters — Stories 1.2/1.3 already ship this (`fh_session`).
+- **Invite tokens:** High-entropy opaque value in email link; store only hash; single-use claim with `expires_at`; bind to email + list_id — fills architecture rubric gap.
 - **aiosmtplib ≥5.1.2:** Irrelevant to accept path unless resending; do not add a second mail stack.
 
 ### Project context reference
 
 Follow `_bmad-output/project-context.md`:
 
-- Hex ports; UUID entities; generic auth errors; EN+ES chrome
+- Hex ports; UUID entities; generic auth errors; EN+ES chrome keyed by stable codes
 - Never Bearer in `localStorage`; never `NEXT_PUBLIC_*` secrets
 - Must-cover when auth/invite stories exist: generic auth errors; **unregistered invite → land on inviting list**
-- Source-of-truth order: ARCHITECTURE-SPINE + project-context → SPEC → DESIGN/EXPERIENCE → PRD/epics
+- Source-of-truth order: ARCHITECTURE-SPINE + project-context → SPEC → DESIGN/EXPERIENCE → PRD/epics → living invite/verify contracts
 
 ### References
 
@@ -282,22 +321,84 @@ Follow `_bmad-output/project-context.md`:
 - `_bmad-output/planning-artifacts/ux-designs/ux-finance-helper-2026-08-03/mockups/list-settle.html` — landing visual reference
 - `_bmad-output/planning-artifacts/prds/prd-finance-helper-2026-08-02/prd.md` — FR-7 narrative
 - `_bmad-output/implementation-artifacts/2-3-invite-members-by-email.md` — token issue + link contracts
-- `_bmad-output/implementation-artifacts/2-2-lists-homepage-membership-scoped-access.md` — first-paint invite exception
+- `_bmad-output/implementation-artifacts/2-2-lists-homepage-membership-scoped-access.md` — `inviteListId` landing resolver
 - `_bmad-output/implementation-artifacts/1-2-sign-up-with-email-password-and-personal-list.md` — signup + personal list
-- `_bmad-output/implementation-artifacts/1-5-config-gated-email-verification.md` — accept gate port
+- `_bmad-output/implementation-artifacts/invite-verify-gate-contract.md` — accept gate (authoritative)
+- `_bmad-output/implementation-artifacts/auth-email-token-claim-pattern.md` — claim helper
 - `_bmad-output/project-context.md` — agent implementation rules
 
 ## Dev Agent Record
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Cursor Grok 4.5
 
 ### Debug Log References
 
+- Merged `origin/main` (PR #22 / Story 2.3) into `feat/2/2-4-…` before Task 0 — local branch had been behind.
+- Aligned `INVITE_SIGNUP_PATH` to as-built `/signup`; added `/sign-up` → `/signup` redirect for any already-sent 2.3 emails.
+- Compose integration: used worktree overlay so db healthcheck is not 1h; `--no-cache` rebuild after Bake cached stale application layers.
+
 ### Completion Notes List
 
+- **Deep links (locked):** unregistered `/signup?invite=…`; registered `/invites/accept?token=…`; legacy `/sign-up?invite=…` redirects to `/signup`.
+- **API:** `GET /invites/preview?token=` → `{ list_name, email, email_hint, path }` | 410 `invalid_invite_token`; `POST /auth/register` optional `invite_token` → cookie + `inviting_list_id` | 403 `email_not_verified` (session kept, token unclaimed); `POST /invites/accept` `{ token }` (session) → `{ list_id }`.
+- **Ordering:** email-bind → Ensure → claim (`claim_single_use_email_token` + `expires_at`) → `"member"` membership; already-member silent idempotent.
+- **UI:** signup prefill/lock from preview email; land via `resolveAuthenticatedLanding({ inviteListId })`; verify retain via `/verify?returnTo=/invites/accept?token=…`; set last-opened after join.
+- **Tests:** domain 12 passed; Compose Postgres invite accept + send integration 11 passed; UI vitest 77 passed; host API unit 119 passed / 66 skipped (no host DATABASE_URL).
+
+**Request path (story-close overview):**
+invite email → `/signup?invite=` or `/invites/accept?token=` → BFF `/api/auth/register` or `/api/invites/*` → api register/accept → claim + membership → `/lists/{id}`
+
+**Key components:**
+`api/application/list_invite_accept.py`, `api/api/routes/invites.py`, register invite branch in `auth.py`, `ui/app/signup/*`, `ui/app/invites/accept/*`, `ui/lib/landing.ts`
+
+**Why this shape:**
+Compose SignUpService (FR-5 personal list) instead of a second register stack; reuse 1.5.1 claim helper and 1.5.3 Ensure gate; land through 2.2 `inviteListId` choke.
+
+**What not to break:**
+No membership without redeemable token + email-bind; no claim when Ensure blocks; no Bearer/`localStorage`; do not land invitee on blank `/lists` homepage after signup-with-invite success.
+
 ### File List
+
+- `_bmad-output/implementation-artifacts/2-4-invitee-signup-lands-on-inviting-list.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `api/domain/errors.py`
+- `api/domain/list_invite.py`
+- `api/application/list_invite.py`
+- `api/application/list_invite_accept.py`
+- `api/adapters/persistence/list_invite.py`
+- `api/adapters/persistence/repositories.py`
+- `api/api/app.py`
+- `api/api/routes/auth.py`
+- `api/api/routes/invites.py`
+- `api/api/schemas/auth.py`
+- `api/api/schemas/invites.py`
+- `api/tests/test_invite_accept_domain.py`
+- `api/tests/test_invite_accept_integration.py`
+- `api/tests/test_list_invite_domain.py`
+- `api/tests/test_list_invite_integration.py`
+- `ui/proxy.ts`
+- `ui/proxy.test.ts`
+- `ui/lib/i18n/signup.ts`
+- `ui/lib/i18n/invite.ts`
+- `ui/app/api/auth/register/route.ts`
+- `ui/app/api/invites/preview/route.ts`
+- `ui/app/api/invites/accept/route.ts`
+- `ui/app/signup/page.tsx`
+- `ui/app/signup/SignupForm.tsx`
+- `ui/app/signup/signupClient.ts`
+- `ui/app/signup/signupClient.test.ts`
+- `ui/app/sign-up/page.tsx`
+- `ui/app/invites/inviteClient.ts`
+- `ui/app/invites/accept/page.tsx`
+- `ui/app/invites/accept/AcceptInvitePanel.tsx`
+- `ui/app/verify/page.tsx`
+- `ui/app/verify/VerifyForm.tsx`
+
+### Change Log
+
+- 2026-08-06: Implemented Story 2.4 invitee signup/accept landing — domain accept rules, preview/accept APIs, register `invite_token`, UI deep links + verify retain, Postgres + UI tests; status → review.
 
 ---
 

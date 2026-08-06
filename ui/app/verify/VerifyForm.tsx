@@ -9,15 +9,21 @@ import styles from "../signup/signup.module.css";
 type Props = {
   locale: Locale;
   token: string;
+  returnTo?: string;
 };
 
-export function VerifyForm({ locale, token }: Props) {
+export function VerifyForm({ locale, token, returnTo }: Props) {
   const t = verifyMessages[locale];
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [pendingConfirm, setPendingConfirm] = useState(false);
   const [resendMessage, setResendMessage] = useState<string | null>(null);
   const [pendingResend, setPendingResend] = useState(false);
+
+  const continueHref =
+    returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//")
+      ? returnTo
+      : "/lists";
 
   const canConfirm = useMemo(
     () => token.length > 0 && !pendingConfirm,
@@ -118,7 +124,7 @@ export function VerifyForm({ locale, token }: Props) {
           {t.confirmSuccess}
         </p>
         <p className={styles.hint}>
-          <Link href="/lists">{t.listsLink}</Link>
+          <Link href={continueHref}>{t.listsLink}</Link>
         </p>
       </div>
     );

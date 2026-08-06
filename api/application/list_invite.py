@@ -71,6 +71,8 @@ class ListInviteTokenRepository(Protocol):
 
     def get_by_token_hash(self, token_hash: str) -> ListInviteTokenRecord | None: ...
 
+    def claim_token(self, token_id: UUID, *, used_at: datetime) -> bool: ...
+
 
 class ListInviteLookup(Protocol):
     """Narrow list surface for invite ACL + name resolution."""

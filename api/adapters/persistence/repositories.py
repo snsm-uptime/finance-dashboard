@@ -199,6 +199,21 @@ class SqlAlchemyListRepository:
             return None
         return MembershipRecord(list_id=row.list_id, user_id=row.user_id, role=row.role)
 
+    def add_membership(self, membership: NewMembershipRecord) -> None:
+        try:
+            with self._session.begin_nested():
+                self._session.add(
+                    ListMembershipModel(
+                        id=membership.id,
+                        list_id=membership.list_id,
+                        user_id=membership.user_id,
+                        role=membership.role,
+                    )
+                )
+                self._session.flush()
+        except IntegrityError as exc:
+            raise ListWriteError() from exc
+
     def update_list_name(self, list_id: UUID, name: str) -> ListRecord:
         row = self._session.get(ListModel, list_id)
         if row is None:

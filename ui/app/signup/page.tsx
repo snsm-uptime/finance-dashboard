@@ -10,9 +10,27 @@ import styles from "./signup.module.css";
 
 export const dynamic = "force-dynamic";
 
-export default async function SignupPage() {
+type SearchParams = Promise<{ invite?: string | string[] }>;
+
+export default async function SignupPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
+  const params = await searchParams;
+  const rawInvite = params.invite;
+  const inviteToken =
+    typeof rawInvite === "string"
+      ? rawInvite
+      : Array.isArray(rawInvite)
+        ? (rawInvite[0] ?? "")
+        : "";
+
   const session = await fetchSession();
   if (session) {
+    if (inviteToken) {
+      redirect(`/invites/accept?token=${encodeURIComponent(inviteToken)}`);
+    }
     redirect(await resolveServerAuthenticatedLanding());
   }
 
@@ -22,12 +40,18 @@ export default async function SignupPage() {
 
   return (
     <main className={styles.shell}>
-      <RedirectIfAuthenticated to="/" />
+      <RedirectIfAuthenticated
+        to={
+          inviteToken
+            ? `/invites/accept?token=${encodeURIComponent(inviteToken)}`
+            : "/"
+        }
+      />
       <div className={styles.card}>
         <p className={styles.brand}>{t.brand}</p>
         <h1 className={styles.title}>{t.title}</h1>
-        <p className={styles.subtitle}>{t.subtitle}</p>
-        <SignupForm locale={locale} />
+        {!inviteToken ? <p className={styles.subtitle}>{t.subtitle}</p> : null}
+        <SignupForm locale={locale} inviteToken={inviteToken || undefined} />
       </div>
     </main>
   );

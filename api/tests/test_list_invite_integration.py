@@ -146,7 +146,7 @@ def test_owner_invite_unregistered_signup_template_es(
 
     assert len(mailer.sent) == 1
     assert "Crea tu cuenta" in mailer.sent[0].subject
-    assert "/sign-up?invite=" in mailer.sent[0].body_text
+    assert "/signup?invite=" in mailer.sent[0].body_text
 
     raw = _extract_raw_from_link(mailer.sent[0].body_text)
     row = db_session.scalars(

@@ -1,14 +1,19 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { resolveAuthenticatedLanding } from "@/lib/landing";
+import { inviteMessages } from "@/lib/i18n/invite";
 import { signupMessages, type Locale } from "@/lib/i18n/signup";
+import { setLastOpenedList } from "@/app/lists/listsClient";
+import { fetchInvitePreview } from "@/app/invites/inviteClient";
 import { attemptSignup } from "./signupClient";
 import styles from "./signup.module.css";
 
 type Props = {
   locale: Locale;
+  inviteToken?: string;
 };
 
 function EyeIcon({ open }: { open: boolean }) {
@@ -49,19 +54,66 @@ function EyeIcon({ open }: { open: boolean }) {
   );
 }
 
-export function SignupForm({ locale }: Props) {
+export function SignupForm({ locale, inviteToken }: Props) {
   const router = useRouter();
   const t = signupMessages[locale];
+  const ti = inviteMessages[locale];
   const [email, setEmail] = useState("");
+  const [emailLocked, setEmailLocked] = useState(false);
+  const [emailHint, setEmailHint] = useState<string | null>(null);
+  const [listName, setListName] = useState<string | null>(null);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [inviteLoading, setInviteLoading] = useState(Boolean(inviteToken));
+  const [inviteFatal, setInviteFatal] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!inviteToken) return;
+    let cancelled = false;
+    (async () => {
+      setInviteLoading(true);
+      const preview = await fetchInvitePreview(inviteToken, {
+        errorExpired: t.errorExpiredInvite,
+        errorGeneric: t.errorGeneric,
+      });
+      if (cancelled) return;
+      if (!preview.ok) {
+        setInviteFatal(preview.error);
+        setInviteLoading(false);
+        return;
+      }
+      if (preview.preview.path === "join") {
+        router.replace(
+          `/invites/accept?token=${encodeURIComponent(inviteToken)}`,
+        );
+        return;
+      }
+      setListName(preview.preview.list_name);
+      setEmailHint(preview.preview.email_hint);
+      setEmail(preview.preview.email);
+      setEmailLocked(true);
+      setInviteLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [inviteToken, t.errorExpiredInvite, t.errorGeneric]);
 
   const canSubmit = useMemo(
-    () => email.trim().length > 0 && password.length >= 8 && !pending,
-    [email, password, pending],
+    () =>
+      email.trim().length > 0 &&
+      password.length >= 8 &&
+      !pending &&
+      !inviteLoading &&
+      !inviteFatal,
+    [email, password, pending, inviteLoading, inviteFatal],
   );
+
+  const subtitle = listName
+    ? ti.inviteSignupSubtitle.replace("{listName}", listName)
+    : t.subtitle;
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -71,23 +123,65 @@ export function SignupForm({ locale }: Props) {
       const result = await attemptSignup({
         email,
         password,
+        inviteToken: inviteToken || null,
         errorDuplicate: t.errorDuplicate,
         errorInvalid: t.errorInvalid,
         errorGeneric: t.errorGeneric,
+        errorExpiredInvite: t.errorExpiredInvite,
+        errorInviteMismatch: t.errorInviteMismatch,
+        errorNotVerified: t.errorNotVerified,
       });
       if (!result.ok) {
+        if (result.needsVerify && inviteToken) {
+          const returnTo = `/invites/accept?token=${encodeURIComponent(inviteToken)}`;
+          router.replace(`/verify?returnTo=${encodeURIComponent(returnTo)}`);
+          router.refresh();
+          return;
+        }
         setError(result.error);
         return;
       }
-      router.replace("/");
+      const inviteListId = result.invitingListId;
+      if (inviteListId) {
+        await setLastOpenedList(inviteListId, {
+          errorGeneric: t.errorGeneric,
+          errorInvalidName: t.errorGeneric,
+          errorForbidden: t.errorGeneric,
+          errorUnauthorized: t.errorGeneric,
+        });
+      }
+      const dest = resolveAuthenticatedLanding({ inviteListId });
+      router.replace(dest);
       router.refresh();
     } finally {
       setPending(false);
     }
   }
 
+  if (inviteFatal) {
+    return (
+      <p className={styles.error} role="alert">
+        {inviteFatal}
+      </p>
+    );
+  }
+
+  if (inviteLoading) {
+    return (
+      <p className={styles.hint} role="status">
+        {t.loadingInvite}
+      </p>
+    );
+  }
+
   return (
     <form className={styles.form} onSubmit={onSubmit} noValidate>
+      <p className={styles.hint}>{subtitle}</p>
+      {emailHint ? (
+        <p className={styles.hint}>
+          {ti.emailLockedHint.replace("{emailHint}", emailHint)}
+        </p>
+      ) : null}
       <label className={styles.label} htmlFor="email">
         {t.email}
         <input
@@ -98,6 +192,7 @@ export function SignupForm({ locale }: Props) {
           autoComplete="email"
           required
           value={email}
+          readOnly={emailLocked}
           onChange={(e) => setEmail(e.target.value)}
         />
       </label>

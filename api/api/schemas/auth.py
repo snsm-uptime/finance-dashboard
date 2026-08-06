@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 class RegisterRequest(BaseModel):
     email: str = Field(min_length=3, max_length=320)
     password: str = Field(min_length=8, max_length=256)
+    invite_token: str | None = Field(default=None, max_length=512)
 
 
 class RegisterResponse(BaseModel):
@@ -18,6 +19,7 @@ class RegisterResponse(BaseModel):
     email: str
     list_id: UUID
     list_name: str
+    inviting_list_id: UUID | None = None
 
 
 class SignInRequest(BaseModel):
