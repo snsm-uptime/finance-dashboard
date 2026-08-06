@@ -7,7 +7,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import DateTime, ForeignKey, Index, Numeric, String, UniqueConstraint, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from adapters.persistence.base import Base
@@ -74,6 +74,9 @@ class ListModel(Base):
         cascade="all, delete-orphan",
     )
     invite_tokens: Mapped[list[ListInviteTokenModel]] = relationship(back_populates="list")
+    receipts: Mapped[list[ReceiptModel]] = relationship(back_populates="list")
+    ledger_entries: Mapped[list[LedgerEntryModel]] = relationship(back_populates="list")
+    split_overrides: Mapped[list[SplitOverrideModel]] = relationship(back_populates="list")
 
 
 class ListMembershipModel(Base):
@@ -98,9 +101,7 @@ class ListMembershipModel(Base):
 
 class ListDefaultSplitShareModel(Base):
     __tablename__ = "list_default_split_shares"
-    __table_args__ = (
-        UniqueConstraint("list_id", "user_id", name="uq_list_default_split_share"),
-    )
+    __table_args__ = (UniqueConstraint("list_id", "user_id", name="uq_list_default_split_share"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     list_id: Mapped[uuid.UUID] = mapped_column(
@@ -166,9 +167,7 @@ class EmailVerificationTokenModel(Base):
 
 class ListInviteTokenModel(Base):
     __tablename__ = "list_invite_tokens"
-    __table_args__ = (
-        Index("ix_list_invite_tokens_list_id_email", "list_id", "email"),
-    )
+    __table_args__ = (Index("ix_list_invite_tokens_list_id_email", "list_id", "email"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     list_id: Mapped[uuid.UUID] = mapped_column(
@@ -191,3 +190,83 @@ class ListInviteTokenModel(Base):
         back_populates="sent_list_invites",
         foreign_keys=[inviter_user_id],
     )
+
+
+class ReceiptModel(Base):
+    """Minimal receipt subject stub — explicit total for 2.6 overrides (Story 3.2 expands)."""
+
+    __tablename__ = "receipts"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    list_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("lists.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    list: Mapped[ListModel] = relationship(back_populates="receipts")
+    ledger_entries: Mapped[list[LedgerEntryModel]] = relationship(
+        "LedgerEntryModel", back_populates="receipt"
+    )
+
+
+class LedgerEntryModel(Base):
+    """Minimal LEDGER_ENTRY stub for allocatable item subjects (Story 3.2 expands fields)."""
+
+    __tablename__ = "ledger_entries"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    list_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("lists.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    receipt_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("receipts.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    list: Mapped[ListModel] = relationship(back_populates="ledger_entries")
+    receipt: Mapped[ReceiptModel | None] = relationship(
+        "ReceiptModel", back_populates="ledger_entries"
+    )
+
+
+class SplitOverrideModel(Base):
+    """Persisted split override configuration (not computed share cents)."""
+
+    __tablename__ = "split_overrides"
+    __table_args__ = (
+        UniqueConstraint("subject_kind", "subject_id", name="uq_split_override_subject"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    list_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("lists.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    subject_kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    subject_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    set_by_user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    list: Mapped[ListModel] = relationship(back_populates="split_overrides")

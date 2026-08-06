@@ -109,3 +109,9 @@
 - TOCTOU between member roster snapshot and default-split persist — no row lock/version fence against concurrent invite accept
 - No DB integrity that share rows ⊆ current memberships — relies on application soft-fallback; schema FK only to lists/users
 - Owner default-split editor labels truncated UUIDs only — display names later; operational mis-assign risk until then
+
+## Deferred from: code review of 2-6-item-and-receipt-split-overrides-domain-api.md (2026-08-06)
+
+- Item override survival across list reassignment — Story 5.5 must migrate/re-key overrides with the ledger subject
+- Hardcoded `currency_exponent=2` — v1 CRC/USD only; ISO minor units later
+- Settle double-count if summing receipt + item allocations — Epic 3.4 settle must choose one subject grain

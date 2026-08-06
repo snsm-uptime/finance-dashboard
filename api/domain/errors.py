@@ -170,6 +170,33 @@ class InvalidDefaultSplitError(DomainError):
         super().__init__(detail or self.MESSAGE)
 
 
+class InvalidSplitOverrideError(DomainError):
+    """Raised when item/receipt split override or allocation input is invalid (FR-10)."""
+
+    MESSAGE = "Split override is invalid."
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(detail or self.MESSAGE)
+
+
+class SubjectNotFoundError(DomainError):
+    """Raised when an allocatable item/receipt subject does not exist on the list."""
+
+    MESSAGE = "Subject not found."
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
+class SplitOverrideNotFoundError(DomainError):
+    """Raised when no override is stored for a subject."""
+
+    MESSAGE = "Split override not found."
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
 class InvalidInviteEmailError(DomainError):
     """Raised when an invite email fails shape validation."""
 

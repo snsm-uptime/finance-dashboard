@@ -15,6 +15,7 @@ ListAccessAction = Literal[
     "read_ledger",
     "write_expense",
     "write_ledger",
+    "set_split_override",
     "import_to_list",
     "set_last_opened_list",
     "rename_list",
@@ -25,6 +26,8 @@ ListAccessAction = Literal[
 _ACTION_ALIASES: dict[str, str] = {
     "read_expenses": "read_ledger",
     "write_expense": "write_ledger",
+    # Member write — same capability class as write_ledger (FR-10).
+    "set_split_override": "write_ledger",
 }
 
 _MEMBER_READ_ACTIONS = frozenset(
