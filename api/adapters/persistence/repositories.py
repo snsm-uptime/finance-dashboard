@@ -20,6 +20,7 @@ from application.ports import (
     UserPreferencesRecord,
 )
 from application.signin import AuthUserRecord
+from application.splits import AllocatableSubject, StoredSplitOverride
 from domain.default_split import MODE_EVEN, MODE_PERCENTAGE, validate_percentage_shares
 from domain.errors import (
     DuplicateEmailError,
@@ -29,14 +30,22 @@ from domain.errors import (
     NotListMemberError,
     PrincipalNotFoundError,
 )
+from domain.splits import (
+    KIND_ABSOLUTE_AMOUNTS,
+    KIND_PERCENTAGE,
+    KIND_WHOLE_ASSIGNEE,
+)
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from adapters.persistence.models import (
+    LedgerEntryModel,
     ListDefaultSplitShareModel,
     ListMembershipModel,
     ListModel,
+    ReceiptModel,
+    SplitOverrideModel,
     UserModel,
 )
 
@@ -302,9 +311,7 @@ class SqlAlchemyListRepository:
             raise ListNotFoundError()
         row.default_split_mode = mode
         self._session.execute(
-            delete(ListDefaultSplitShareModel).where(
-                ListDefaultSplitShareModel.list_id == list_id
-            )
+            delete(ListDefaultSplitShareModel).where(ListDefaultSplitShareModel.list_id == list_id)
         )
         if mode == MODE_PERCENTAGE and shares:
             for user_id, percentage in shares.items():
@@ -317,3 +324,130 @@ class SqlAlchemyListRepository:
                     )
                 )
         self._session.flush()
+
+    def get_ledger_entry(self, list_id: UUID, entry_id: UUID) -> AllocatableSubject | None:
+        row = self._session.get(LedgerEntryModel, entry_id)
+        if row is None or row.list_id != list_id:
+            return None
+        return AllocatableSubject(
+            id=row.id,
+            list_id=row.list_id,
+            amount=Decimal(str(row.amount)),
+            currency=row.currency,
+            receipt_id=row.receipt_id,
+        )
+
+    def get_receipt(self, list_id: UUID, receipt_id: UUID) -> AllocatableSubject | None:
+        row = self._session.get(ReceiptModel, receipt_id)
+        if row is None or row.list_id != list_id:
+            return None
+        return AllocatableSubject(
+            id=row.id,
+            list_id=row.list_id,
+            amount=Decimal(str(row.amount)),
+            currency=row.currency,
+            receipt_id=None,
+        )
+
+    def get_split_override(
+        self, list_id: UUID, subject_kind: str, subject_id: UUID
+    ) -> StoredSplitOverride | None:
+        stmt = select(SplitOverrideModel).where(
+            SplitOverrideModel.list_id == list_id,
+            SplitOverrideModel.subject_kind == subject_kind,
+            SplitOverrideModel.subject_id == subject_id,
+        )
+        row = self._session.scalars(stmt).first()
+        if row is None:
+            return None
+        return _stored_override_from_row(row)
+
+    def upsert_split_override(
+        self,
+        *,
+        list_id: UUID,
+        subject_kind: str,
+        subject_id: UUID,
+        kind: str,
+        payload: dict,
+        set_by_user_id: UUID,
+    ) -> StoredSplitOverride:
+        from datetime import UTC, datetime
+
+        stmt = select(SplitOverrideModel).where(
+            SplitOverrideModel.list_id == list_id,
+            SplitOverrideModel.subject_kind == subject_kind,
+            SplitOverrideModel.subject_id == subject_id,
+        )
+        row = self._session.scalars(stmt).first()
+        now = datetime.now(UTC)
+        if row is None:
+            try:
+                with self._session.begin_nested():
+                    row = SplitOverrideModel(
+                        id=uuid4(),
+                        list_id=list_id,
+                        subject_kind=subject_kind,
+                        subject_id=subject_id,
+                        kind=kind,
+                        payload=payload,
+                        set_by_user_id=set_by_user_id,
+                        updated_at=now,
+                    )
+                    self._session.add(row)
+                    self._session.flush()
+            except IntegrityError:
+                # Concurrent INSERT on the same subject — reload and update.
+                row = self._session.scalars(stmt).first()
+                if row is None or row.list_id != list_id:
+                    raise ListWriteError() from None
+                row.kind = kind
+                row.payload = payload
+                row.set_by_user_id = set_by_user_id
+                row.updated_at = now
+                self._session.flush()
+        else:
+            row.kind = kind
+            row.payload = payload
+            row.set_by_user_id = set_by_user_id
+            row.updated_at = now
+            self._session.flush()
+        return _stored_override_from_row(row)
+
+    def delete_split_override(self, list_id: UUID, subject_kind: str, subject_id: UUID) -> bool:
+        stmt = select(SplitOverrideModel).where(
+            SplitOverrideModel.list_id == list_id,
+            SplitOverrideModel.subject_kind == subject_kind,
+            SplitOverrideModel.subject_id == subject_id,
+        )
+        row = self._session.scalars(stmt).first()
+        if row is None:
+            return False
+        self._session.delete(row)
+        self._session.flush()
+        return True
+
+
+def _stored_override_from_row(row: SplitOverrideModel) -> StoredSplitOverride:
+    assignee_id: UUID | None = None
+    amounts: dict[UUID, Decimal] | None = None
+    percentages: dict[UUID, Decimal] | None = None
+    payload = row.payload or {}
+    if row.kind == KIND_WHOLE_ASSIGNEE:
+        assignee_id = UUID(str(payload["assignee_id"]))
+    elif row.kind == KIND_ABSOLUTE_AMOUNTS:
+        amounts = {UUID(str(k)): Decimal(str(v)) for k, v in (payload.get("amounts") or {}).items()}
+    elif row.kind == KIND_PERCENTAGE:
+        percentages = {
+            UUID(str(k)): Decimal(str(v)) for k, v in (payload.get("percentages") or {}).items()
+        }
+    return StoredSplitOverride(
+        list_id=row.list_id,
+        subject_kind=row.subject_kind,
+        subject_id=row.subject_id,
+        kind=row.kind,
+        assignee_id=assignee_id,
+        amounts=amounts,
+        percentages=percentages,
+        set_by_user_id=row.set_by_user_id,
+    )
