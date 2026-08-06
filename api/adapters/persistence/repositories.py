@@ -4,8 +4,14 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from application.lists import ListMembershipSummary, ListRecord, MembershipRecord
+from application.lists import (
+    PLACEHOLDER_BALANCE_CRC,
+    ListMembershipSummary,
+    ListRecord,
+    MembershipRecord,
+)
 from application.ports import (
+    ListAccessGrant,
     NewListRecord,
     NewMembershipRecord,
     NewUserRecord,
@@ -16,6 +22,7 @@ from domain.errors import (
     DuplicateEmailError,
     ListNotFoundError,
     ListWriteError,
+    NotListMemberError,
     PrincipalNotFoundError,
 )
 from sqlalchemy import select
@@ -95,6 +102,7 @@ class SqlAlchemyAuthUserRepository:
             email=row.email,
             language=row.language,
             theme=row.theme,
+            last_opened_list_id=row.last_opened_list_id,
         )
 
     def update_preferences(
@@ -103,6 +111,8 @@ class SqlAlchemyAuthUserRepository:
         *,
         language: str | None = None,
         theme: str | None = None,
+        last_opened_list_id: UUID | None = None,
+        clear_last_opened_list_id: bool = False,
     ) -> UserPreferencesRecord:
         row = self._session.get(UserModel, user_id)
         if row is None:
@@ -111,12 +121,22 @@ class SqlAlchemyAuthUserRepository:
             row.language = language
         if theme is not None:
             row.theme = theme
-        self._session.flush()
+        if clear_last_opened_list_id:
+            row.last_opened_list_id = None
+        elif last_opened_list_id is not None:
+            row.last_opened_list_id = last_opened_list_id
+        try:
+            self._session.flush()
+        except IntegrityError as exc:
+            if last_opened_list_id is not None:
+                raise NotListMemberError() from exc
+            raise
         return UserPreferencesRecord(
             id=row.id,
             email=row.email,
             language=row.language,
             theme=row.theme,
+            last_opened_list_id=row.last_opened_list_id,
         )
 
 
@@ -196,6 +216,16 @@ class SqlAlchemyListRepository:
                 name=lst.name,
                 owner_id=lst.owner_id,
                 role=role,
+                balance_crc=PLACEHOLDER_BALANCE_CRC,
             )
             for lst, role in rows
         ]
+
+    def get_list_with_grant(self, grant: ListAccessGrant, list_id: UUID) -> ListRecord:
+        from application.list_access import assert_grant_list_id
+
+        assert_grant_list_id(grant, list_id)
+        row = self._session.get(ListModel, list_id)
+        if row is None:
+            raise ListNotFoundError()
+        return ListRecord(id=row.id, name=row.name, owner_id=row.owner_id)

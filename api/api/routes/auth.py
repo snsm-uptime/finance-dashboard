@@ -10,6 +10,7 @@ from adapters.persistence.email_verification import SqlAlchemyEmailVerificationR
 from adapters.persistence.password_reset import SqlAlchemyPasswordResetTokenRepository
 from adapters.persistence.repositories import (
     SqlAlchemyAuthUserRepository,
+    SqlAlchemyListRepository,
     SqlAlchemySignupRepository,
 )
 from adapters.persistence.sessions import SESSION_COOKIE_MAX_AGE
@@ -21,6 +22,7 @@ from application.email_verification import (
     RequestEmailVerificationCommand,
     RequestEmailVerificationService,
 )
+from application.lists import SetLastOpenedListCommand, SetLastOpenedListService
 from application.password_reset import (
     CompletePasswordResetCommand,
     CompletePasswordResetService,
@@ -46,6 +48,7 @@ from domain.errors import (
     InvalidResetTokenError,
     InvalidSignupError,
     InvalidVerificationTokenError,
+    NotListMemberError,
     PrincipalNotFoundError,
     RateLimitedError,
     SmtpConfigurationError,
@@ -211,6 +214,7 @@ def current_user(
         email=result.email,
         language=result.language,
         theme=result.theme,
+        last_opened_list_id=result.last_opened_list_id,
     )
 
 
@@ -219,16 +223,32 @@ def patch_current_user(
     body: PatchMeBody,
     prefs: PreferencesRepository = Depends(get_preferences_repository),
     user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
 ) -> MeResponse | JSONResponse:
-    """Persist language/theme on the account (source of truth — not device-only)."""
-    wrote = body.language is not None or body.theme is not None
+    """Persist language/theme/last-opened on the account (source of truth — not device-only)."""
+    wrote_prefs = body.language is not None or body.theme is not None
     try:
+        if body.last_opened_list_id is not None:
+            SetLastOpenedListService(
+                SqlAlchemyListRepository(db),
+                prefs,
+            ).execute(
+                SetLastOpenedListCommand(
+                    actor_user_id=user_id,
+                    list_id=body.last_opened_list_id,
+                )
+            )
         result = UpdatePreferencesService(prefs).execute(
             UpdatePreferencesCommand(
                 user_id=user_id,
                 language=body.language,
                 theme=body.theme,
             )
+        )
+    except NotListMemberError:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={"detail": NotListMemberError.MESSAGE, "code": "not_list_member"},
         )
     except InvalidPreferencesError as exc:
         return JSONResponse(
@@ -240,7 +260,7 @@ def patch_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             content={"detail": "Not authenticated.", "code": "unauthenticated"},
         )
-    if wrote:
+    if wrote_prefs or body.last_opened_list_id is not None:
         logger.info("user_preferences_updated user_id=%s", user_id)
     return MeResponse(
         authenticated=True,
@@ -248,6 +268,7 @@ def patch_current_user(
         email=result.email,
         language=result.language,
         theme=result.theme,
+        last_opened_list_id=result.last_opened_list_id,
     )
 
 

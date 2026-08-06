@@ -1,6 +1,10 @@
+---
+baseline_commit: d84091a633ac68eca9accd7c76d36b82be486342
+---
+
 # Story 2.2: Lists homepage — membership-scoped access
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -32,62 +36,62 @@ so that I can open the right household or personal list quickly.
 
 ## Tasks / Subtasks
 
-- [ ] Task 0: Confirm hard prerequisites (do not invent parallel stacks)
-  - [ ] **Epic 1.5 critical-path pause (sprint):** do **not** start Story 2.2+ until Stories **1.5.1–1.5.5** are done (epics sequencing). Story 2.1 may remain in review until that path completes — if 1.5.1–1.5.5 are incomplete, **HALT**
-  - [ ] **Mandatory read** before coding: [`membership-acl-enforcement-sketch.md`](../planning-artifacts/architecture/architecture-finance-helper-2026-08-03/membership-acl-enforcement-sketch.md) — action matrix, error/disclosure policy, caller map for 2.2. Implementation must match that sketch; update the sketch in the **same PR** if this story adds list-scoped operations
-  - [ ] Epic 1: **1.2** User + `List` + `ListMembership` + session cookie; **1.3** sign-in/out + `proxy.ts` auth gate + stub first-paint landing — already landed
-  - [ ] Story **2.1** create/rename owned lists is **done** — live: `ListMembershipsService` + `GET|POST /lists` + `PATCH /lists/{list_id}` + `ui/app/lists/*` create/rename. Prefer multi-list membership for real homepage rows
-  - [ ] **Grandfather 2.1 rename HTTP:** missing list ≡ non-member rename → **403** `not_list_member` (as-built). Do **not** “fix” rename to 404 in this story — that needs an explicit policy-change story. New **reads** use 404; member-gated **mutations** (incl. set last-opened) use 403 per sketch
-  - [ ] Read 1.2 / 1.3 / 2.1 / 1.5.4 completion notes + sketch for: cookie name/issuer (`fh_session`), BFF vs FastAPI path split, List/ListMembership schema, create/rename ACL codes, preference pattern on `UserModel` (`language`/`theme` via `/auth/me`)
-  - [ ] Branch: `feat/2/2-2-lists-homepage-membership-scoped-access` (AD-13) — one story per branch
+- [x] Task 0: Confirm hard prerequisites (do not invent parallel stacks)
+  - [x] **Epic 1.5 critical-path pause (sprint):** do **not** start Story 2.2+ until Stories **1.5.1–1.5.5** are done (epics sequencing). Story 2.1 may remain in review until that path completes — if 1.5.1–1.5.5 are incomplete, **HALT**
+  - [x] **Mandatory read** before coding: [`membership-acl-enforcement-sketch.md`](../planning-artifacts/architecture/architecture-finance-helper-2026-08-03/membership-acl-enforcement-sketch.md) — action matrix, error/disclosure policy, caller map for 2.2. Implementation must match that sketch; update the sketch in the **same PR** if this story adds list-scoped operations
+  - [x] Epic 1: **1.2** User + `List` + `ListMembership` + session cookie; **1.3** sign-in/out + `proxy.ts` auth gate + stub first-paint landing — already landed
+  - [x] Story **2.1** create/rename owned lists is **done** — live: `ListMembershipsService` + `GET|POST /lists` + `PATCH /lists/{list_id}` + `ui/app/lists/*` create/rename. Prefer multi-list membership for real homepage rows
+  - [x] **Grandfather 2.1 rename HTTP:** missing list ≡ non-member rename → **403** `not_list_member` (as-built). Do **not** “fix” rename to 404 in this story — that needs an explicit policy-change story. New **reads** use 404; member-gated **mutations** (incl. set last-opened) use 403 per sketch
+  - [x] Read 1.2 / 1.3 / 2.1 / 1.5.4 completion notes + sketch for: cookie name/issuer (`fh_session`), BFF vs FastAPI path split, List/ListMembership schema, create/rename ACL codes, preference pattern on `UserModel` (`language`/`theme` via `/auth/me`)
+  - [x] Branch: `feat/2/2-2-lists-homepage-membership-scoped-access` (AD-13) — one story per branch
 
-- [ ] Task 1: Domain ACL port — membership authorization (AC: #1, #2, #4) — TDD first
-  - [ ] Red→green domain tests: member may read list-scoped resources; non-member denied; personal list member (sole) allowed; unknown `action` → deny; no product admin bypass; grant/`list_id` mismatch rejected at repo
-  - [ ] Implement domain ACL port `authorize_list_access(acting_user_id, list_id, action) -> ListAccessGrant` invoked from application services — AD-19; protocol in `api/application/ports.py`; follow proposed AD-24: list-scoped repos require the grant — no bare `list_id` on **new** 2.2 use cases
-  - [ ] **Action vocabulary (sketch — pin these; aliases per sketch OK):**
+- [x] Task 1: Domain ACL port — membership authorization (AC: #1, #2, #4) — TDD first
+  - [x] Red→green domain tests: member may read list-scoped resources; non-member denied; personal list member (sole) allowed; unknown `action` → deny; no product admin bypass; grant/`list_id` mismatch rejected at repo
+  - [x] Implement domain ACL port `authorize_list_access(acting_user_id, list_id, action) -> ListAccessGrant` invoked from application services — AD-19; protocol in `api/application/ports.py`; follow proposed AD-24: list-scoped repos require the grant — no bare `list_id` on **new** 2.2 use cases
+  - [x] **Action vocabulary (sketch — pin these; aliases per sketch OK):**
     - Member-sufficient: `read_list`, `read_expenses` (≡ `read_ledger`), `read_balances`, `set_last_opened_list`
     - Owner-required (exist / migrate later — do not change 2.1 HTTP): `rename_list`
-  - [ ] Peers only (FR-8): membership grants read of list homepage row + expenses/balances stubs; owner-vs-viewer is **not** a product role for these reads
-  - [ ] Keep owner-only actions out of this story’s new endpoints (rename = 2.1 grandfathered, invite = 2.3, default split = 2.5)
-  - [ ] Domain has **no** FastAPI / SQLAlchemy imports (AD-1)
+  - [x] Peers only (FR-8): membership grants read of list homepage row + expenses/balances stubs; owner-vs-viewer is **not** a product role for these reads
+  - [x] Keep owner-only actions out of this story’s new endpoints (rename = 2.1 grandfathered, invite = 2.3, default split = 2.5)
+  - [x] Domain has **no** FastAPI / SQLAlchemy imports (AD-1)
 
-- [ ] Task 2: Application + persistence — extend membership listing + last-opened (AC: #1, #3, #4)
-  - [ ] **Extend** existing `ListMembershipsService` / `list_for_user(acting_user_id)` — do **not** invent a parallel `ListMyLists` use-case. Actor-scoped enum does **not** call per-list `authorize_list_access`
-  - [ ] Extend membership row summary to keep **`id`, `name`, `owner_id`, `role`** (live wire + rename UI need these) and add optional **`balance_crc`** (or equivalent) as string placeholder `"0"` / null until Epic 3 — money as **string**, never JSON number
-  - [ ] Use-case: open list detail / expenses|balances stub — **must** call `authorize_list_access` with `read_list` / `read_expenses` / `read_balances`; missing list ≡ non-member → **404** `list_not_found` body (anti-enumeration; do **not** use 403 on these reads)
-  - [ ] Use-case: set last-opened — member-gated mutation via `authorize_list_access(..., "set_last_opened_list")`; missing/non-member → **403** `not_list_member`
-  - [ ] **Last-opened done path (preferred — only justified alternative):** account column on `User` — `last_opened_list_id` UUID nullable — via Alembic; expose on `GET /auth/me` (+ set via authenticated write matching language/theme preference pattern). Cookie / client-only persistence allowed **only** with documented justification in completion notes; still must re-validate membership on first paint
-  - [ ] First-paint rule: if remembered list id is set **and** `authorize_list_access(..., "read_list")` grants → navigate to that list detail; else → Lists homepage (UX-DR9). Do **not** use ad-hoc “membership id contains” checks that skip the ACL port
-  - [ ] Invalidation: if membership lost (future invite remove / leave), first paint must fall back to homepage — never open a list the user no longer belongs to
-  - [ ] Alembic only for `last_opened_list_id` (or ACL helpers) — never wipe PG volume (AD-22)
+- [x] Task 2: Application + persistence — extend membership listing + last-opened (AC: #1, #3, #4)
+  - [x] **Extend** existing `ListMembershipsService` / `list_for_user(acting_user_id)` — do **not** invent a parallel `ListMyLists` use-case. Actor-scoped enum does **not** call per-list `authorize_list_access`
+  - [x] Extend membership row summary to keep **`id`, `name`, `owner_id`, `role`** (live wire + rename UI need these) and add optional **`balance_crc`** (or equivalent) as string placeholder `"0"` / null until Epic 3 — money as **string**, never JSON number
+  - [x] Use-case: open list detail / expenses|balances stub — **must** call `authorize_list_access` with `read_list` / `read_expenses` / `read_balances`; missing list ≡ non-member → **404** `list_not_found` body (anti-enumeration; do **not** use 403 on these reads)
+  - [x] Use-case: set last-opened — member-gated mutation via `authorize_list_access(..., "set_last_opened_list")`; missing/non-member → **403** `not_list_member`
+  - [x] **Last-opened done path (preferred — only justified alternative):** account column on `User` — `last_opened_list_id` UUID nullable — via Alembic; expose on `GET /auth/me` (+ set via authenticated write matching language/theme preference pattern). Cookie / client-only persistence allowed **only** with documented justification in completion notes; still must re-validate membership on first paint
+  - [x] First-paint rule: if remembered list id is set **and** `authorize_list_access(..., "read_list")` grants → navigate to that list detail; else → Lists homepage (UX-DR9). Do **not** use ad-hoc “membership id contains” checks that skip the ACL port
+  - [x] Invalidation: if membership lost (future invite remove / leave), first paint must fall back to homepage — never open a list the user no longer belongs to
+  - [x] Alembic only for `last_opened_list_id` (or ACL helpers) — never wipe PG volume (AD-22)
 
-- [ ] Task 3: API routes — extend live lists router (AC: #1, #2, #3)
-  - [ ] Authenticated endpoints (session cookie from 1.2/1.3) under `api/api/routes/lists.py` — **extend**, do not replace create/rename
-  - [ ] **Path split (pin both):**
+- [x] Task 3: API routes — extend live lists router (AC: #1, #2, #3)
+  - [x] Authenticated endpoints (session cookie from 1.2/1.3) under `api/api/routes/lists.py` — **extend**, do not replace create/rename
+  - [x] **Path split (pin both):**
     - FastAPI (internal): prefix `/lists` (live router) — `GET /lists`, `GET /lists/{list_id}`, stubs under `/lists/{list_id}/…`
     - UI BFF (browser): `/api/lists` → forwards to FastAPI `/lists` (already true for GET collection + PATCH)
-  - [ ] Wire shapes (extend existing DTOs — preserve `owner_id` / `role`):
+  - [x] Wire shapes (extend existing DTOs — preserve `owner_id` / `role`):
     - `GET /lists` → membership-filtered rows `{ id, name, owner_id, role, balance_crc? }` (balance may be `"0"` string placeholder)
     - `GET /lists/{list_id}` → list detail shell DTO for members only; missing/non-member → **404** `list_not_found`
     - `GET /lists/{list_id}/expenses` and/or `.../balances` → stub empty collections / zero balances for members; missing/non-member → **404** `list_not_found` (NFR-3) — required even before Epic 3 ledger exists
     - Set last-opened via account preference path (preferred): e.g. `PATCH /auth/me` body field `last_opened_list_id` **or** a dedicated authenticated write that updates `UserModel.last_opened_list_id` after ACL — do **not** invent a disconnected `/api/me/…` prefs subtree. Prefer same `/auth/me` pattern as language/theme
-  - [ ] **Error bodies (locked — assert `code` in tests):**
+  - [x] **Error bodies (locked — assert `code` in tests):**
     | Case | HTTP | Body |
     |------|------|------|
     | Unauthenticated | 401 | Existing session gate |
     | List-scoped **reads** missing ≡ non-member | **404** | `{"detail": "List not found.", "code": "list_not_found"}` |
     | `set_last_opened_list` missing ≡ non-member | **403** | `{"detail": "You do not have access to this list.", "code": "not_list_member"}` |
     | 2.1 rename missing ≡ non-member (grandfather) | **403** | `not_list_member` — do not change |
-  - [ ] Unauthenticated → 401; never leak other users’ list names via enumeration bugs on **reads**
-  - [ ] Register any new routers in `api/api/app.py`; keep `/health` public
-  - [ ] Wire structured JSON errors; no PII in info logs
+  - [x] Unauthenticated → 401; never leak other users’ list names via enumeration bugs on **reads**
+  - [x] Register any new routers in `api/api/app.py`; keep `/health` public
+  - [x] Wire structured JSON errors; no PII in info logs
 
-- [ ] Task 4: UI — polish Lists homepage + Soft-Ledger detail shell + first paint (AC: #1, #3, #4)
-  - [ ] **Polish/extend** live `ui/app/lists/` — do **not** invent `(authenticated)/lists/…` and do **not** wipe 2.1 create/rename (`ListsPanel`, `listsClient`, BFF PATCH)
+- [x] Task 4: UI — polish Lists homepage + Soft-Ledger detail shell + first paint (AC: #1, #3, #4)
+  - [x] **Polish/extend** live `ui/app/lists/` — do **not** invent `(authenticated)/lists/…` and do **not** wipe 2.1 create/rename (`ListsPanel`, `listsClient`, BFF PATCH)
     - Lists homepage (`ui/app/lists/page.tsx` + panel): membership rows with **name + owe/owed/zero token treatment** (UX-DR7 must-check; placeholder amount OK)
     - List detail (`ui/app/lists/[listId]/page.tsx` or equivalent under `ui/app/lists/`): Soft-Ledger shell — nav with **brand + list title**; settle-first / receipts-below structure (empty OK until Epic 3)
-  - [ ] Row click → navigate to list detail **and** persist last-opened (API call)
-  - [ ] Named first-paint landing resolver — implement `resolveAuthenticatedLanding({ inviteListId? })` (name may live under `ui/lib/` or `ui/app/`); replace ad-hoc “always `/lists`” and leave a single choke for Story 2.4 invite deep-link. **Call sites that hardcode `/lists` today (must route through resolver or document why not):**
+  - [x] Row click → navigate to list detail **and** persist last-opened (API call)
+  - [x] Named first-paint landing resolver — implement `resolveAuthenticatedLanding({ inviteListId? })` (name may live under `ui/lib/` or `ui/app/`); replace ad-hoc “always `/lists`” and leave a single choke for Story 2.4 invite deep-link. **Call sites that hardcode `/lists` today (must route through resolver or document why not):**
     - `ui/app/page.tsx`
     - `ui/app/sign-in/signInClient.ts` (`safeReturnTo` default)
     - `ui/app/sign-in/page.tsx` (signed-in redirect)
@@ -95,21 +99,39 @@ so that I can open the right household or personal list quickly.
     - `ui/app/forgot-password/page.tsx`, `ui/app/reset-password/page.tsx`
     - `ui/components/AccountMenu.tsx` (nav may stay `/lists` intentionally — homepage chrome)
     - Proxy / returnTo defaults as applicable
-  - [ ] First-paint (post sign-in / cold authenticated open, **no invite deep link**): remembered list if still member via ACL → detail; else homepage
-  - [ ] Same-origin BFF/proxy only — `ui` → HTTP only (AD-1); never Bearer in `localStorage`
-  - [ ] **BFF extend:** `ui/app/api/lists/[listId]/route.ts` is PATCH-only today — add GET detail (+ expenses/balances stub forwarding) matching FastAPI paths; keep PATCH rename
-  - [ ] Visual: Warm Balance tokens — Manrope UI, Petrona for money if shown; moss accent; `rounded.sm` not pills; sand canvas; kits = unstyled primitives only (AD-12). Full Soft-Ledger settle strip polish = Story 3.1 — placeholder zero balances fine
-  - [ ] EN+ES keys for homepage/detail chrome (structure for 1.6 if prefs already land)
-  - [ ] Empty homepage copy: not journeyed — minimal functional empty/personal-only state OK; do not invent marketing copy
-  - [ ] Next 16: keep **`proxy.ts`** coarse cookie redirect from 1.3; authoritative session + ACL still server-side / API
+  - [x] First-paint (post sign-in / cold authenticated open, **no invite deep link**): remembered list if still member via ACL → detail; else homepage
+  - [x] Same-origin BFF/proxy only — `ui` → HTTP only (AD-1); never Bearer in `localStorage`
+  - [x] **BFF extend:** `ui/app/api/lists/[listId]/route.ts` is PATCH-only today — add GET detail (+ expenses/balances stub forwarding) matching FastAPI paths; keep PATCH rename
+  - [x] Visual: Warm Balance tokens — Manrope UI, Petrona for money if shown; moss accent; `rounded.sm` not pills; sand canvas; kits = unstyled primitives only (AD-12). Full Soft-Ledger settle strip polish = Story 3.1 — placeholder zero balances fine
+  - [x] EN+ES keys for homepage/detail chrome (structure for 1.6 if prefs already land)
+  - [x] Empty homepage copy: not journeyed — minimal functional empty/personal-only state OK; do not invent marketing copy
+  - [x] Next 16: keep **`proxy.ts`** coarse cookie redirect from 1.3; authoritative session + ACL still server-side / API
 
-- [ ] Task 5: Tests + CI (AC: #1–#4)
-  - [ ] Domain TDD: ACL allow/deny; unknown action deny; first-paint membership re-check when last-opened stale (via `read_list` grant path)
-  - [ ] Integration on **Postgres 16**: user A’s `GET /lists` excludes list they are not a member of; A denied on B’s expenses/balances with **404** + `code=list_not_found`; selecting list updates `last_opened_list_id`; first paint respects membership
-  - [ ] **Assert wire `code` fields**, not HTTP status alone (reads → `list_not_found`; set last-opened deny → `not_list_member`)
-  - [ ] UI test-after: homepage renders member lists with UX-DR7 row treatment; non-member navigation/API path denied; first-paint fallback — maintain 1.1 coverage floor (60%)
-  - [ ] Fixtures: generic vocabulary (`user@example.com`, “Personal”, “Household”) — no real PII
-  - [ ] Do not require full Playwright every PR (AD-15)
+- [x] Task 5: Tests + CI (AC: #1–#4)
+  - [x] Domain TDD: ACL allow/deny; unknown action deny; first-paint membership re-check when last-opened stale (via `read_list` grant path)
+  - [x] Integration on **Postgres 16**: user A’s `GET /lists` excludes list they are not a member of; A denied on B’s expenses/balances with **404** + `code=list_not_found`; selecting list updates `last_opened_list_id`; first paint respects membership
+  - [x] **Assert wire `code` fields**, not HTTP status alone (reads → `list_not_found`; set last-opened deny → `not_list_member`)
+  - [x] UI test-after: homepage renders member lists with UX-DR7 row treatment; non-member navigation/API path denied; first-paint fallback — maintain 1.1 coverage floor (60%)
+  - [x] Fixtures: generic vocabulary (`user@example.com`, “Personal”, “Household”) — no real PII
+  - [x] Do not require full Playwright every PR (AD-15)
+
+### Review Findings
+
+- [x] [Review][Patch] Ignore setLastOpened failure still navigates (AC #3) [`ui/app/lists/ListsPanel.tsx:109`] — `openList` awaits PATCH but ignores `{ ok: false }` and always `router.push`es
+- [x] [Review][Patch] Secondary Open link races last-opened persistence [`ui/app/lists/ListsPanel.tsx:232`] — fire-and-forget `setLastOpenedList` on `<Link>` without await; route through `openList`
+- [x] [Review][Patch] Soft-Ledger detail nav missing list title (AC #3) [`ui/app/lists/[listId]/page.tsx:77`] — header is brand + AccountNav only; put list title in nav chrome with brand
+- [x] [Review][Patch] `get_list_with_grant` assert is a no-op (AD-24) [`api/adapters/persistence/repositories.py:218`] — `assert_grant_list_id(grant, grant.list_id)` always passes; accept target `list_id` and assert mismatch
+- [x] [Review][Patch] Expenses/balances stubs skip grant-gated repo load [`api/application/lists.py:217`] — after ACL, call `get_list_with_grant(grant)` (or equivalent) before returning stubs
+- [x] [Review][Patch] Money amounts not on Petrona [`ui/app/lists/lists.module.css:232`] — use `var(--font-brand)` (Petrona); `--font-money` is undefined
+- [x] [Review][Patch] Missing set-last-opened unknown list_id → 403 code assert [`api/tests/test_lists_integration.py`] — cover missing UUID same body as non-member
+- [x] [Review][Patch] Disable all open controls while a row is opening [`ui/app/lists/ListsPanel.tsx:169`] — `openingId` only disables the active row button
+- [x] [Review][Patch] Detail treats 5xx like ACL not-found [`ui/app/lists/[listId]/page.tsx:64`] — distinguish load error vs `list_not_found`
+- [x] [Review][Patch] Prefer ACL-only preference write for last-opened [`api/application/preferences.py`] — drop `last_opened_list_id` from `UpdatePreferencesCommand` so writes go only through `SetLastOpenedListService`
+- [x] [Review][Patch] Map prefs FK IntegrityError to ACL deny on set-last-opened [`api/application/lists.py:254`] — deleted-list race after grant must not 500
+- [x] [Review][Patch] Add `ListAccessAuthorizer` protocol on ports [`api/application/ports.py`] — story Task 1 pins protocol home alongside `ListAccessGrant`
+- [x] [Review][Defer] No HTTP clear for `last_opened_list_id` [`api/api/schemas/auth.py`] — deferred, first-paint ACL revalidation already falls back without clearing
+- [x] [Review][Defer] Broader UI/first-paint automated coverage gap [`ui/lib/serverLanding.ts` / ListsPanel] — deferred, residual Task 5; pure landing + balanceTone covered
+- [x] [Review][Defer] Auto-clear stale last-opened after failed landing [`ui/lib/serverLanding.ts`] — deferred with clear-API decision; homepage fallback already safe
 
 ## Dev Notes
 
@@ -349,18 +371,79 @@ Follow `_bmad-output/project-context.md` entirely. Highest-risk misses for this 
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Composer (Cursor agent router)
 
 ### Debug Log References
 
+- Domain ACL: `api/.venv/bin/pytest tests/test_list_access_domain.py tests/test_lists_domain.py` — pass
+- Compose Postgres 16: `docker compose -f docker-compose.yml -f docker-compose.worktree.yml -f docker-compose.test.yml run --rm --build api` — **144 passed**
+- UI: `npm test` 65 passed; `npm run lint` / `typecheck` green; coverage statements/lines/branches/functions ≥ 60%
+
 ### Completion Notes List
 
+- Extended as-built 2.1 `ListMembershipsService` + `/lists` router — no greenfield `ListMyLists`
+- Implemented `authorize_list_access` → `ListAccessGrant` (`domain/list_access.py` + `application/list_access.py`); reads → 404 `list_not_found`; `set_last_opened_list` → 403 `not_list_member`
+- Grandfathered 2.1 rename HTTP (403) unchanged
+- `UserModel.last_opened_list_id` via Alembic `0006_last_opened_list`; exposed on `GET|PATCH /auth/me`
+- Membership rows keep `owner_id`/`role` + placeholder `balance_crc` string `"0"`
+- UI: UX-DR7 owe/owed/zero tokens; Soft-Ledger detail shell at `ui/app/lists/[listId]`; BFF GET + expenses/balances stubs
+- `resolveAuthenticatedLanding` + `resolveServerAuthenticatedLanding` (ACL via GET `/lists/{id}`); AccountMenu stays `/lists` chrome
+- Sketch caller map already covered 2.2 ops — no sketch matrix change required
+- Last-opened done path: account column only (no cookie preference)
+
 ### File List
+
+- `api/domain/list_access.py` (new)
+- `api/application/list_access.py` (new)
+- `api/application/lists.py` (modified)
+- `api/application/ports.py` (modified)
+- `api/application/preferences.py` (modified)
+- `api/adapters/persistence/models.py` (modified)
+- `api/adapters/persistence/repositories.py` (modified)
+- `api/adapters/persistence/migrations/versions/0006_last_opened_list.py` (new)
+- `api/api/schemas/lists.py` (modified)
+- `api/api/schemas/auth.py` (modified)
+- `api/api/routes/lists.py` (modified)
+- `api/api/routes/auth.py` (modified)
+- `api/tests/test_list_access_domain.py` (new)
+- `api/tests/test_lists_domain.py` (modified)
+- `api/tests/test_lists_integration.py` (modified)
+- `api/tests/test_preferences_application.py` (modified)
+- `ui/lib/landing.ts` (new)
+- `ui/lib/landing.test.ts` (new)
+- `ui/lib/serverLanding.ts` (new)
+- `ui/lib/i18n/lists.ts` (modified)
+- `ui/app/lists/page.tsx` (unchanged contract — panel/i18n polish)
+- `ui/app/lists/ListsPanel.tsx` (modified)
+- `ui/app/lists/listsClient.ts` (modified)
+- `ui/app/lists/listsClient.balance.test.ts` (new)
+- `ui/app/lists/lists.module.css` (modified)
+- `ui/app/lists/[listId]/page.tsx` (new)
+- `ui/app/api/lists/[listId]/route.ts` (modified — GET)
+- `ui/app/api/lists/[listId]/expenses/route.ts` (new)
+- `ui/app/api/lists/[listId]/balances/route.ts` (new)
+- `ui/app/page.tsx` (modified)
+- `ui/app/sign-in/page.tsx` (modified)
+- `ui/app/sign-in/signInClient.ts` (modified)
+- `ui/app/sign-in/signInClient.test.ts` (modified)
+- `ui/app/signup/page.tsx` (modified)
+- `ui/app/signup/SignupForm.tsx` (modified)
+- `ui/app/forgot-password/page.tsx` (modified)
+- `ui/app/reset-password/page.tsx` (modified)
+- `ui/app/upload/page.tsx` (modified — Link lint)
+- `ui/components/RedirectIfAuthenticated.tsx` (modified)
+- `ui/vitest.config.mts` (modified — exclude serverLanding like session)
+- `_bmad-output/implementation-artifacts/2-2-lists-homepage-membership-scoped-access.md` (modified)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (modified)
+
+### Change Log
+
+- 2026-08-06: Implemented Story 2.2 membership ACL port, list detail/stubs, last-opened on account, Lists homepage polish, Soft-Ledger shell, first-paint landing resolver
 
 ---
 
 ## Story completion status
 
-Status: **ready-for-dev**
+Status: **done**
 
-Completion note: Ultimate context engine analysis completed — comprehensive developer guide created (2026-08-03). Disclosure aligned with Story 1.5.4 (reads → 404; mutations → 403; ListAccessGrant) on 2026-08-04. Sketch path linked after Story 1.5.4 landed (2026-08-04). Story context quality review applied **all** improvements (critical 1–9, enhancements 10–14, optimizations 15–17) on 2026-08-06 — aligned with as-built 2.1, path split, ACL sketch, last-opened-on-account, landing resolver, Soft-Ledger shell, and epics AC #2 404 wording.
+Completion note: Story 2.2 implemented against as-built 2.1 + 1.5.4 sketch. Compose API pytest 144 passed; UI tests/lint/typecheck/coverage green. Ready for code-review.

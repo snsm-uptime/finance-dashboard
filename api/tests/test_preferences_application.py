@@ -23,7 +23,16 @@ class _FakeRepo:
             return None
         return self._row
 
-    def update_preferences(self, user_id, *, language=None, theme=None):  # noqa: ANN001
+    def update_preferences(
+        self,
+        user_id,
+        *,
+        language=None,
+        theme=None,
+        last_opened_list_id=None,
+        clear_last_opened_list_id=False,
+    ):  # noqa: ANN001
+        del last_opened_list_id, clear_last_opened_list_id
         raise AssertionError("not used")
 
 

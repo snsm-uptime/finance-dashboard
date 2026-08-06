@@ -4,12 +4,13 @@ import { attemptSignIn, safeReturnTo, signInFailureMessage } from "./signInClien
 import { signInMessages } from "@/lib/i18n/signin";
 
 describe("safeReturnTo", () => {
-  it("defaults to /lists for empty or external targets", () => {
-    expect(safeReturnTo(undefined)).toBe("/lists");
-    expect(safeReturnTo("https://evil.example")).toBe("/lists");
-    expect(safeReturnTo("//evil.example")).toBe("/lists");
-    expect(safeReturnTo("/\\evil.example")).toBe("/lists");
+  it("defaults to / for empty or external targets (home resolves first paint)", () => {
+    expect(safeReturnTo(undefined)).toBe("/");
+    expect(safeReturnTo("https://evil.example")).toBe("/");
+    expect(safeReturnTo("//evil.example")).toBe("/");
+    expect(safeReturnTo("/\\evil.example")).toBe("/");
     expect(safeReturnTo("/upload")).toBe("/upload");
+    expect(safeReturnTo("/lists")).toBe("/lists");
   });
 });
 

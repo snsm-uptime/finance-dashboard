@@ -86,3 +86,9 @@
 
 - Shared `make_client` omits per-request `except`/`rollback` (preferences-style): protects 422 paths sharing the outer test transaction; mid-handler DB errors can leave an aborted transaction for later assertions in the same test — revisit if flakes appear
 - New shared `api/tests/conftest.py` has no rate-limiter store reset; if Story 1.5.6 merges first (or after), preserve limiter-store fixture/hooks on rebase per Task 6 conflict map
+
+## Deferred from: code review of 2-2-lists-homepage-membership-scoped-access.md (2026-08-06)
+
+- No HTTP clear for `last_opened_list_id` — first-paint ACL revalidation already falls back without clearing
+- Broader UI/first-paint automated coverage (ListsPanel render, serverLanding) — residual Task 5; pure landing + balanceTone covered
+- Auto-clear stale last-opened after failed landing — deferred with clear-API; homepage fallback already safe

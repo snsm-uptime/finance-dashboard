@@ -1,4 +1,4 @@
-"""Account preference use-cases — language EN/ES and theme Light/Dark/System."""
+"""Account preference use-cases — language, theme; last-opened via SetLastOpenedListService."""
 
 from __future__ import annotations
 
@@ -41,10 +41,13 @@ class MePreferencesResult:
     email: str
     language: str | None
     theme: str | None
+    last_opened_list_id: UUID | None
 
 
 @dataclass(frozen=True, slots=True)
 class UpdatePreferencesCommand:
+    """Language/theme only — last_opened goes through SetLastOpenedListService (ACL)."""
+
     user_id: UUID
     language: str | None = None
     theme: str | None = None
@@ -64,6 +67,16 @@ def _coerce_theme(stored: str | None) -> str | None:
     return coerced
 
 
+def _to_result(row: UserPreferencesRecord) -> MePreferencesResult:
+    return MePreferencesResult(
+        user_id=row.id,
+        email=row.email,
+        language=_coerce_language(row.language),
+        theme=_coerce_theme(row.theme),
+        last_opened_list_id=row.last_opened_list_id,
+    )
+
+
 class GetMePreferencesService:
     def __init__(self, repo: PreferencesRepository) -> None:
         self._repo = repo
@@ -72,12 +85,7 @@ class GetMePreferencesService:
         row = self._repo.get_preferences(command.user_id)
         if row is None:
             raise PrincipalNotFoundError()
-        return MePreferencesResult(
-            user_id=row.id,
-            email=row.email,
-            language=_coerce_language(row.language),
-            theme=_coerce_theme(row.theme),
-        )
+        return _to_result(row)
 
 
 class UpdatePreferencesService:
@@ -102,9 +110,4 @@ class UpdatePreferencesService:
             language=language,
             theme=theme,
         )
-        return MePreferencesResult(
-            user_id=row.id,
-            email=row.email,
-            language=_coerce_language(row.language),
-            theme=_coerce_theme(row.theme),
-        )
+        return _to_result(row)

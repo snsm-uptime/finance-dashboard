@@ -1,11 +1,16 @@
 /** Pure helpers for sign-in form (unit-tested without a React render). */
 
+/**
+ * Sanitize returnTo. Empty/unsafe values → `/` so the home page can run
+ * `resolveServerAuthenticatedLanding` (UX-DR9 / ACL revalidation).
+ * Explicit `/lists` remains valid. AccountMenu keeps intentional `/lists` chrome.
+ */
 export function safeReturnTo(value: string | undefined): string {
-  if (!value) return "/lists";
-  if (!value.startsWith("/")) return "/lists";
-  if (value.startsWith("//")) return "/lists";
-  if (value.includes("\\")) return "/lists";
-  if (value.includes("://")) return "/lists";
+  if (!value) return "/";
+  if (!value.startsWith("/")) return "/";
+  if (value.startsWith("//")) return "/";
+  if (value.includes("\\")) return "/";
+  if (value.includes("://")) return "/";
   return value;
 }
 

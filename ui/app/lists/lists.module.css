@@ -19,6 +19,21 @@
   font-weight: 600;
 }
 
+.detailNavBrand {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.detailNavTitle {
+  margin: 0;
+  font-family: var(--font-ui), system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 650;
+  color: var(--foreground);
+}
+
 .title {
   margin: 0 0 0.5rem;
   font-size: 1.75rem;
@@ -40,6 +55,27 @@
 
 .link:hover {
   text-decoration: underline;
+}
+
+.linkButton {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.linkButton:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.linkButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .error {
@@ -205,10 +241,82 @@
   color: var(--foreground);
 }
 
+.listOpen {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.listOpen:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.balance {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  font-family: var(--font-brand), Georgia, serif;
+  font-size: 0.9rem;
+}
+
+.balanceToken {
+  font-family: var(--font-ui), system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.balanceAmount {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.balanceOwe .balanceAmount {
+  color: #8b3a2a;
+}
+
+.balanceOwed .balanceAmount {
+  color: var(--accent);
+}
+
+.balanceZero .balanceAmount {
+  color: var(--muted);
+}
+
+.rowHint {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+}
+
+.detailSection {
+  max-width: 36rem;
+  margin: 0 0 1.75rem;
+  padding-top: 0.25rem;
+}
+
+.sectionTitle {
+  margin: 0 0 0.5rem;
+  font-size: 1.15rem;
+  font-weight: 650;
+}
+
 .badge {
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  flex: 0 0 auto;
 }

@@ -81,6 +81,16 @@ class FakeListRepo:
             )
         return out
 
+    def get_list_with_grant(self, grant, list_id):  # type: ignore[no-untyped-def]
+        from application.list_access import assert_grant_list_id
+        from domain.errors import ListNotFoundError
+
+        assert_grant_list_id(grant, list_id)
+        row = self.lists.get(list_id)
+        if row is None:
+            raise ListNotFoundError()
+        return row
+
 
 def test_validate_list_name_trims() -> None:
     assert validate_list_name("  Household  ") == "Household"

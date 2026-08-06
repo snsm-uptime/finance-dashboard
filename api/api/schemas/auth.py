@@ -41,11 +41,13 @@ class MeResponse(BaseModel):
     email: str
     language: str | None = None
     theme: str | None = None
+    last_opened_list_id: UUID | None = None
 
 
 class PatchMeBody(BaseModel):
     language: Literal["en", "es"] | None = None
     theme: Literal["light", "dark", "system"] | None = None
+    last_opened_list_id: UUID | None = None
 
 
 class PasswordResetRequestBody(BaseModel):

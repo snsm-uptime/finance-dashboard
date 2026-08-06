@@ -146,3 +146,87 @@ def test_rename_unknown_list_same_as_non_member(client: TestClient) -> None:
     assert unknown.status_code == 403
     assert unknown.json()["code"] == "not_list_member"
     assert unknown.json()["detail"] == "You do not have access to this list."
+
+
+def test_membership_listing_excludes_non_member_lists(client: TestClient) -> None:
+    _register(client, "alice@example.com")
+    created = client.post("/lists", json={"name": "Alice House"})
+    alice_list = created.json()["id"]
+    assert created.status_code == 201
+
+    client.post("/auth/sign-out")
+    _register(client, "bob@example.com")
+    listed = client.get("/lists")
+    assert listed.status_code == 200
+    ids = {item["id"] for item in listed.json()["lists"]}
+    assert alice_list not in ids
+    for item in listed.json()["lists"]:
+        assert "balance_crc" in item
+        assert isinstance(item["balance_crc"], str)
+
+
+def test_non_member_reads_return_list_not_found(client: TestClient) -> None:
+    _register(client, "owner-acl@example.com")
+    created = client.post("/lists", json={"name": "Secret"})
+    list_id = created.json()["id"]
+
+    client.post("/auth/sign-out")
+    _register(client, "outsider@example.com")
+
+    for path in (
+        f"/lists/{list_id}",
+        f"/lists/{list_id}/expenses",
+        f"/lists/{list_id}/balances",
+    ):
+        response = client.get(path)
+        assert response.status_code == 404, response.text
+        body = response.json()
+        assert body["code"] == "list_not_found"
+        assert body["detail"] == "List not found."
+
+    missing = client.get(f"/lists/{uuid4()}")
+    assert missing.status_code == 404
+    assert missing.json()["code"] == "list_not_found"
+
+
+def test_member_detail_and_stubs_ok(client: TestClient) -> None:
+    _register(client, "reader@example.com")
+    created = client.post("/lists", json={"name": "Household"})
+    list_id = created.json()["id"]
+
+    detail = client.get(f"/lists/{list_id}")
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["name"] == "Household"
+    assert "owner_id" in detail.json()
+
+    expenses = client.get(f"/lists/{list_id}/expenses")
+    assert expenses.status_code == 200
+    assert expenses.json()["expenses"] == []
+
+    balances = client.get(f"/lists/{list_id}/balances")
+    assert balances.status_code == 200
+    assert balances.json()["balance_crc"] == "0"
+
+
+def test_set_last_opened_list_member_and_non_member(client: TestClient) -> None:
+    _register(client, "remember@example.com")
+    created = client.post("/lists", json={"name": "Trip"})
+    list_id = created.json()["id"]
+
+    patched = client.patch("/auth/me", json={"last_opened_list_id": list_id})
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["last_opened_list_id"] == list_id
+
+    me = client.get("/auth/me")
+    assert me.json()["last_opened_list_id"] == list_id
+
+    client.post("/auth/sign-out")
+    _register(client, "nosy@example.com")
+    denied = client.patch("/auth/me", json={"last_opened_list_id": list_id})
+    assert denied.status_code == 403
+    assert denied.json()["code"] == "not_list_member"
+
+    missing = client.patch("/auth/me", json={"last_opened_list_id": str(uuid4())})
+    assert missing.status_code == 403
+    assert missing.json()["code"] == "not_list_member"
+    assert missing.json()["detail"] == "You do not have access to this list."
