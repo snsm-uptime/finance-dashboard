@@ -23,11 +23,17 @@ class UserModel(Base):
     )
     language: Mapped[str | None] = mapped_column(String(8), nullable=True)
     theme: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    last_opened_list_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("lists.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    owned_lists: Mapped[list[ListModel]] = relationship(back_populates="owner")
+    owned_lists: Mapped[list[ListModel]] = relationship(
+        back_populates="owner",
+        foreign_keys="ListModel.owner_id",
+    )
     memberships: Mapped[list[ListMembershipModel]] = relationship(back_populates="user")
     sessions: Mapped[list[SessionModel]] = relationship(back_populates="user")
     password_reset_tokens: Mapped[list[PasswordResetTokenModel]] = relationship(
@@ -50,7 +56,10 @@ class ListModel(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    owner: Mapped[UserModel] = relationship(back_populates="owned_lists")
+    owner: Mapped[UserModel] = relationship(
+        back_populates="owned_lists",
+        foreign_keys=[owner_id],
+    )
     memberships: Mapped[list[ListMembershipModel]] = relationship(back_populates="list")
 
 

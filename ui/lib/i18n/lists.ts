@@ -1,10 +1,10 @@
-/** Lists create/rename copy — EN/ES (Story 2.1). */
+/** Lists homepage / detail chrome — EN/ES (Stories 2.1 / 2.2). */
 
 export const listsMessages = {
   en: {
     brand: "finance-helper",
     title: "Lists",
-    subtitle: "Lists you belong to. Create another list or rename one you own.",
+    subtitle: "Lists you belong to. Open one, create another, or rename one you own.",
     createLabel: "New list name",
     createSubmit: "Create list",
     creating: "Creating…",
@@ -17,6 +17,16 @@ export const listsMessages = {
     loadError: "Could not load your lists. Refresh and try again.",
     uploadLink: "Upload",
     uploadHint: "(protected stub — statement import lands in Epic 4).",
+    openLink: "Open list",
+    balanceOwe: "You owe",
+    balanceOwed: "You’re owed",
+    balanceZero: "Settled",
+    detailSettleTitle: "Settle up",
+    detailSettleEmpty: "No balances yet.",
+    detailReceiptsTitle: "Receipts",
+    detailReceiptsEmpty: "No receipts yet.",
+    backToLists: "All lists",
+    detailNotFound: "This list is unavailable.",
     errorGeneric: "Something went wrong. Try again.",
     errorInvalidName: "Enter a list name.",
     errorForbidden: "You cannot rename this list.",
@@ -25,7 +35,8 @@ export const listsMessages = {
   es: {
     brand: "finance-helper",
     title: "Listas",
-    subtitle: "Listas a las que perteneces. Crea otra lista o renombra una que poseas.",
+    subtitle:
+      "Listas a las que perteneces. Abre una, crea otra o renombra una que poseas.",
     createLabel: "Nombre de la nueva lista",
     createSubmit: "Crear lista",
     creating: "Creando…",
@@ -38,6 +49,16 @@ export const listsMessages = {
     loadError: "No se pudieron cargar tus listas. Actualiza e inténtalo de nuevo.",
     uploadLink: "Subir",
     uploadHint: "(stub protegido — la importación llega en el Epic 4).",
+    openLink: "Abrir lista",
+    balanceOwe: "Debes",
+    balanceOwed: "Te deben",
+    balanceZero: "En cero",
+    detailSettleTitle: "Liquidar",
+    detailSettleEmpty: "Aún no hay saldos.",
+    detailReceiptsTitle: "Recibos",
+    detailReceiptsEmpty: "Aún no hay recibos.",
+    backToLists: "Todas las listas",
+    detailNotFound: "Esta lista no está disponible.",
     errorGeneric: "Algo salió mal. Inténtalo de nuevo.",
     errorInvalidName: "Escribe un nombre de lista.",
     errorForbidden: "No puedes renombrar esta lista.",

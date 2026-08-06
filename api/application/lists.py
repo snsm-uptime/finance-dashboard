@@ -1,4 +1,4 @@
-"""Create owned lists and rename (owner-only) — Story 2.1 / FR-6."""
+"""Create owned lists, rename, membership listing, and ACL-gated reads — Stories 2.1 / 2.2."""
 
 from __future__ import annotations
 
@@ -12,7 +12,18 @@ from domain.errors import (
 )
 from domain.lists import validate_list_name
 
-from application.ports import NewListRecord, NewMembershipRecord
+from application.list_access import (
+    AuthorizeListAccessCommand,
+    AuthorizeListAccessService,
+)
+from application.ports import (
+    ListAccessGrant,
+    NewListRecord,
+    NewMembershipRecord,
+    PreferencesRepository,
+)
+
+PLACEHOLDER_BALANCE_CRC = "0"
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,6 +46,7 @@ class ListMembershipSummary:
     name: str
     owner_id: UUID
     role: str
+    balance_crc: str = PLACEHOLDER_BALANCE_CRC
 
 
 class ListRepository(Protocol):
@@ -53,6 +65,8 @@ class ListRepository(Protocol):
 
     def list_for_user(self, user_id: UUID) -> list[ListMembershipSummary]: ...
 
+    def get_list_with_grant(self, grant: ListAccessGrant, list_id: UUID) -> ListRecord: ...
+
 
 @dataclass(frozen=True, slots=True)
 class CreateOwnedListCommand:
@@ -70,6 +84,42 @@ class RenameListCommand:
 @dataclass(frozen=True, slots=True)
 class ListMembershipsCommand:
     actor_user_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class GetListDetailCommand:
+    actor_user_id: UUID
+    list_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class GetListExpensesStubCommand:
+    actor_user_id: UUID
+    list_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class GetListBalancesStubCommand:
+    actor_user_id: UUID
+    list_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class SetLastOpenedListCommand:
+    actor_user_id: UUID
+    list_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class ListBalancesStub:
+    list_id: UUID
+    balance_crc: str
+
+
+@dataclass(frozen=True, slots=True)
+class ListExpensesStub:
+    list_id: UUID
+    expenses: tuple[object, ...]
 
 
 class CreateOwnedListService:
@@ -103,7 +153,11 @@ class CreateOwnedListService:
 
 
 class RenameListService:
-    """Rename a list — owner-only (FR-6); non-members and non-owner members rejected."""
+    """Rename a list — owner-only (FR-6); non-members and non-owner members rejected.
+
+    As-built 2.1: ad-hoc ACL (not shared port). Grandfathered HTTP 403 —
+    do not silently migrate deny paths in this story.
+    """
 
     def __init__(self, repo: ListRepository) -> None:
         self._repo = repo
@@ -124,10 +178,88 @@ class RenameListService:
 
 
 class ListMembershipsService:
-    """Membership-scoped list summaries for the authenticated user."""
+    """Membership-scoped list summaries for the authenticated user.
+
+    Actor-scoped enumeration — does not call authorize_list_access.
+    """
 
     def __init__(self, repo: ListRepository) -> None:
         self._repo = repo
 
     def execute(self, command: ListMembershipsCommand) -> list[ListMembershipSummary]:
         return self._repo.list_for_user(command.actor_user_id)
+
+
+class GetListDetailService:
+    """List detail shell for members — authorize_list_access(read_list)."""
+
+    def __init__(self, repo: ListRepository) -> None:
+        self._repo = repo
+
+    def execute(self, command: GetListDetailCommand) -> ListRecord:
+        grant = AuthorizeListAccessService(self._repo).execute(
+            AuthorizeListAccessCommand(
+                acting_user_id=command.actor_user_id,
+                list_id=command.list_id,
+                action="read_list",
+            )
+        )
+        return self._repo.get_list_with_grant(grant, command.list_id)
+
+
+class GetListExpensesStubService:
+    """Empty expenses collection stub — authorize_list_access(read_expenses)."""
+
+    def __init__(self, repo: ListRepository) -> None:
+        self._repo = repo
+
+    def execute(self, command: GetListExpensesStubCommand) -> ListExpensesStub:
+        grant = AuthorizeListAccessService(self._repo).execute(
+            AuthorizeListAccessCommand(
+                acting_user_id=command.actor_user_id,
+                list_id=command.list_id,
+                action="read_expenses",
+            )
+        )
+        self._repo.get_list_with_grant(grant, command.list_id)
+        return ListExpensesStub(list_id=command.list_id, expenses=())
+
+
+class GetListBalancesStubService:
+    """Zero balance stub — authorize_list_access(read_balances)."""
+
+    def __init__(self, repo: ListRepository) -> None:
+        self._repo = repo
+
+    def execute(self, command: GetListBalancesStubCommand) -> ListBalancesStub:
+        grant = AuthorizeListAccessService(self._repo).execute(
+            AuthorizeListAccessCommand(
+                acting_user_id=command.actor_user_id,
+                list_id=command.list_id,
+                action="read_balances",
+            )
+        )
+        self._repo.get_list_with_grant(grant, command.list_id)
+        return ListBalancesStub(list_id=command.list_id, balance_crc=PLACEHOLDER_BALANCE_CRC)
+
+
+class SetLastOpenedListService:
+    """Remember last-opened list — authorize_list_access(set_last_opened_list) → 403 on deny."""
+
+    def __init__(self, list_repo: ListRepository, prefs_repo: PreferencesRepository) -> None:
+        self._list_repo = list_repo
+        self._prefs_repo = prefs_repo
+
+    def execute(self, command: SetLastOpenedListCommand) -> UUID:
+        AuthorizeListAccessService(self._list_repo).execute(
+            AuthorizeListAccessCommand(
+                acting_user_id=command.actor_user_id,
+                list_id=command.list_id,
+                action="set_last_opened_list",
+            )
+        )
+        self._prefs_repo.update_preferences(
+            command.actor_user_id,
+            last_opened_list_id=command.list_id,
+        )
+        return command.list_id

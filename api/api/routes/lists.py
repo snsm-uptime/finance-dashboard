@@ -1,4 +1,4 @@
-"""List create / rename / membership listing routes (Story 2.1 / FR-6)."""
+"""List create / rename / membership / ACL-gated reads (Stories 2.1 / 2.2)."""
 
 from __future__ import annotations
 
@@ -9,6 +9,12 @@ from adapters.persistence.repositories import SqlAlchemyListRepository
 from application.lists import (
     CreateOwnedListCommand,
     CreateOwnedListService,
+    GetListBalancesStubCommand,
+    GetListBalancesStubService,
+    GetListDetailCommand,
+    GetListDetailService,
+    GetListExpensesStubCommand,
+    GetListExpensesStubService,
     ListMembershipsCommand,
     ListMembershipsService,
     RenameListCommand,
@@ -28,6 +34,9 @@ from sqlalchemy.orm import Session
 from api.deps import get_db, require_authenticated_user
 from api.schemas.lists import (
     CreateListBody,
+    ListBalancesStubResponse,
+    ListDetailResponse,
+    ListExpensesStubResponse,
     ListMembershipItem,
     ListMembershipsResponse,
     ListResponse,
@@ -44,10 +53,18 @@ def _list_response(list_id: uuid.UUID, name: str, owner_id: uuid.UUID) -> ListRe
 
 
 def _access_denied() -> JSONResponse:
-    """Same body for missing list and non-member — no existence oracle."""
+    """Same body for missing list and non-member on mutations — no existence oracle."""
     return JSONResponse(
         status_code=status.HTTP_403_FORBIDDEN,
         content={"detail": NotListMemberError.MESSAGE, "code": "not_list_member"},
+    )
+
+
+def _list_not_found() -> JSONResponse:
+    """Same body for missing list and non-member on reads (Story 1.5.4 disclosure)."""
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={"detail": ListNotFoundError.MESSAGE, "code": "list_not_found"},
     )
 
 
@@ -65,6 +82,7 @@ def list_memberships(
                 name=item.name,
                 owner_id=item.owner_id,
                 role=item.role,
+                balance_crc=item.balance_crc,
             )
             for item in items
         ]
@@ -92,6 +110,54 @@ def create_list(
         )
     logger.info("list_created list_id=%s owner_id=%s", result.id, result.owner_id)
     return _list_response(result.id, result.name, result.owner_id)
+
+
+@router.get("/{list_id}", response_model=ListDetailResponse)
+def get_list_detail(
+    list_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> ListDetailResponse | JSONResponse:
+    service = GetListDetailService(SqlAlchemyListRepository(db))
+    try:
+        result = service.execute(
+            GetListDetailCommand(actor_user_id=user_id, list_id=list_id)
+        )
+    except ListNotFoundError:
+        return _list_not_found()
+    return ListDetailResponse(id=result.id, name=result.name, owner_id=result.owner_id)
+
+
+@router.get("/{list_id}/expenses", response_model=ListExpensesStubResponse)
+def get_list_expenses_stub(
+    list_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> ListExpensesStubResponse | JSONResponse:
+    service = GetListExpensesStubService(SqlAlchemyListRepository(db))
+    try:
+        result = service.execute(
+            GetListExpensesStubCommand(actor_user_id=user_id, list_id=list_id)
+        )
+    except ListNotFoundError:
+        return _list_not_found()
+    return ListExpensesStubResponse(list_id=result.list_id, expenses=list(result.expenses))
+
+
+@router.get("/{list_id}/balances", response_model=ListBalancesStubResponse)
+def get_list_balances_stub(
+    list_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> ListBalancesStubResponse | JSONResponse:
+    service = GetListBalancesStubService(SqlAlchemyListRepository(db))
+    try:
+        result = service.execute(
+            GetListBalancesStubCommand(actor_user_id=user_id, list_id=list_id)
+        )
+    except ListNotFoundError:
+        return _list_not_found()
+    return ListBalancesStubResponse(list_id=result.list_id, balance_crc=result.balance_crc)
 
 
 @router.patch("/{list_id}", response_model=ListResponse)

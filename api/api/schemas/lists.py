@@ -1,4 +1,4 @@
-"""Pydantic DTOs for list create / rename (snake_case wire)."""
+"""Pydantic DTOs for list create / rename / membership / detail (snake_case wire)."""
 
 from __future__ import annotations
 
@@ -29,7 +29,24 @@ class ListMembershipItem(BaseModel):
     name: str
     owner_id: UUID
     role: str
+    balance_crc: str = "0"
 
 
 class ListMembershipsResponse(BaseModel):
     lists: list[ListMembershipItem]
+
+
+class ListDetailResponse(BaseModel):
+    id: UUID
+    name: str
+    owner_id: UUID
+
+
+class ListExpensesStubResponse(BaseModel):
+    list_id: UUID
+    expenses: list[object] = Field(default_factory=list)
+
+
+class ListBalancesStubResponse(BaseModel):
+    list_id: UUID
+    balance_crc: str

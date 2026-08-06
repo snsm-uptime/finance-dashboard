@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { AccountNavLink } from "@/components/AccountNavLink";
@@ -25,9 +26,9 @@ export default async function UploadPage() {
         can be verified now.
       </p>
       <p className={styles.copy}>
-        <a className={styles.link} href="/lists">
+        <Link className={styles.link} href="/lists">
           Back to lists
-        </a>
+        </Link>
       </p>
     </main>
   );

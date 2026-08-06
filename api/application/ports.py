@@ -40,6 +40,27 @@ class UserPreferencesRecord:
     email: str
     language: str | None
     theme: str | None
+    last_opened_list_id: UUID | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ListAccessGrant:
+    """Opaque per-request grant binding list_id + authorized action."""
+
+    list_id: UUID
+    action: str
+    acting_user_id: UUID
+
+
+class ListAccessAuthorizer(Protocol):
+    """Canonical ACL port — authorize_list_access(acting_user_id, list_id, action)."""
+
+    def authorize_list_access(
+        self,
+        acting_user_id: UUID,
+        list_id: UUID,
+        action: str,
+    ) -> ListAccessGrant: ...
 
 
 class PasswordHasher(Protocol):
@@ -67,6 +88,8 @@ class PreferencesRepository(Protocol):
         *,
         language: str | None = None,
         theme: str | None = None,
+        last_opened_list_id: UUID | None = None,
+        clear_last_opened_list_id: bool = False,
     ) -> UserPreferencesRecord: ...
 
 

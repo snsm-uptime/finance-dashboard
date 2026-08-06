@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { detectLocale } from "@/lib/i18n/signin";
 import { passwordResetMessages } from "@/lib/i18n/password-reset";
+import { resolveServerAuthenticatedLanding } from "@/lib/serverLanding";
 import { fetchSession } from "@/lib/session";
 import { ResetPasswordForm } from "./ResetPasswordForm";
 import styles from "../signup/signup.module.css";
@@ -18,7 +19,7 @@ export default async function ResetPasswordPage({
 }) {
   const session = await fetchSession();
   if (session) {
-    redirect("/lists");
+    redirect(await resolveServerAuthenticatedLanding());
   }
 
   const params = await searchParams;

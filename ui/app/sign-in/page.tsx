@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { RedirectIfAuthenticated } from "@/components/RedirectIfAuthenticated";
 import { detectLocale, signInMessages } from "@/lib/i18n/signin";
+import { resolveServerAuthenticatedLanding } from "@/lib/serverLanding";
 import { fetchSession } from "@/lib/session";
 import { safeReturnTo } from "./signInClient";
 import { SignInForm } from "./SignInForm";
@@ -21,7 +22,11 @@ export default async function SignInPage({
   const rawReturnTo = Array.isArray(params.returnTo)
     ? params.returnTo[0]
     : params.returnTo;
-  const landing = safeReturnTo(rawReturnTo);
+  const hasExplicitReturn =
+    typeof rawReturnTo === "string" && rawReturnTo.trim().length > 0;
+  const landing = hasExplicitReturn
+    ? safeReturnTo(rawReturnTo)
+    : await resolveServerAuthenticatedLanding();
 
   const session = await fetchSession();
   if (session) {
@@ -34,7 +39,7 @@ export default async function SignInPage({
 
   return (
     <main className={styles.shell}>
-      <RedirectIfAuthenticated to={landing} />
+      <RedirectIfAuthenticated to={hasExplicitReturn ? landing : "/"} />
       <div className={styles.card}>
         <p className={styles.brand}>{t.brand}</p>
         <h1 className={styles.title}>{t.title}</h1>

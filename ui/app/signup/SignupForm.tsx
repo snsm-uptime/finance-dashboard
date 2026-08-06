@@ -79,7 +79,7 @@ export function SignupForm({ locale }: Props) {
         setError(result.error);
         return;
       }
-      router.replace("/lists");
+      router.replace("/");
       router.refresh();
     } finally {
       setPending(false);

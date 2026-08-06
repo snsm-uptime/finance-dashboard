@@ -1,12 +1,15 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { FormEvent, useMemo, useRef, useState } from "react";
 
 import { usePreferences } from "@/components/PreferencesProvider";
 import { listsMessages } from "@/lib/i18n/lists";
 import {
+  balanceTone,
   createList,
   renameList,
+  setLastOpenedList,
   type ListItem,
 } from "./listsClient";
 import styles from "./lists.module.css";
@@ -19,6 +22,7 @@ type Props = {
 export function ListsPanel({ initialLists, currentUserId }: Props) {
   const { locale } = usePreferences();
   const t = listsMessages[locale];
+  const router = useRouter();
   const [lists, setLists] = useState<ListItem[]>(initialLists);
   const [newName, setNewName] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
@@ -27,6 +31,7 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
   const [renameDrafts, setRenameDrafts] = useState<Record<string, string>>({});
   const [renameErrors, setRenameErrors] = useState<Record<string, string>>({});
   const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [openingId, setOpeningId] = useState<string | null>(null);
 
   const messages = useMemo(
     () => ({
@@ -59,6 +64,7 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
           name: result.list.name,
           owner_id: result.list.owner_id,
           role: "owner",
+          balance_crc: "0",
         },
       ]);
       setNewName("");
@@ -99,6 +105,23 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
     }
   }
 
+  async function openList(list: ListItem) {
+    if (openingId) return;
+    setOpeningId(list.id);
+    try {
+      const result = await setLastOpenedList(list.id, messages);
+      if (!result.ok) {
+        setCreateError(result.error);
+        return;
+      }
+      router.push(`/lists/${encodeURIComponent(list.id)}`);
+    } finally {
+      setOpeningId(null);
+    }
+  }
+
+  const anyOpening = openingId !== null;
+
   return (
     <div className={styles.panel}>
       <form className={styles.createForm} onSubmit={onCreate}>
@@ -134,10 +157,38 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
           {lists.map((list) => {
             const isOwner = list.owner_id === currentUserId;
             const draft = renameDrafts[list.id] ?? list.name;
+            const tone = balanceTone(list.balance_crc);
+            const balanceLabel =
+              tone === "owe"
+                ? t.balanceOwe
+                : tone === "owed"
+                  ? t.balanceOwed
+                  : t.balanceZero;
             return (
               <li key={list.id} className={styles.row}>
                 <div className={styles.rowHead}>
-                  <span className={styles.listName}>{list.name}</span>
+                  <button
+                    type="button"
+                    className={styles.listOpen}
+                    onClick={() => void openList(list)}
+                    disabled={anyOpening}
+                  >
+                    <span className={styles.listName}>{list.name}</span>
+                    <span
+                      className={`${styles.balance} ${
+                        tone === "owe"
+                          ? styles.balanceOwe
+                          : tone === "owed"
+                            ? styles.balanceOwed
+                            : styles.balanceZero
+                      }`}
+                    >
+                      <span className={styles.balanceToken}>{balanceLabel}</span>
+                      <span className={styles.balanceAmount}>
+                        {list.balance_crc ?? "0"}
+                      </span>
+                    </span>
+                  </button>
                   <span className={styles.badge}>
                     {isOwner ? t.ownedBadge : t.memberBadge}
                   </span>
@@ -182,6 +233,16 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
                     ) : null}
                   </form>
                 ) : null}
+                <p className={styles.rowHint}>
+                  <button
+                    type="button"
+                    className={styles.linkButton}
+                    onClick={() => void openList(list)}
+                    disabled={anyOpening}
+                  >
+                    {t.openLink}
+                  </button>
+                </p>
               </li>
             );
           })}

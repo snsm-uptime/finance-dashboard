@@ -1,10 +1,11 @@
-/** Client helpers for list create/rename via same-origin BFF. */
+/** Client helpers for list create/rename/open via same-origin BFF. */
 
 export type ListItem = {
   id: string;
   name: string;
   owner_id: string;
   role: string;
+  balance_crc?: string;
 };
 
 export type ListsClientMessages = {
@@ -17,6 +18,7 @@ export type ListsClientMessages = {
 type ErrorResult = { ok: false; error: string };
 type OkCreate = { ok: true; list: { id: string; name: string; owner_id: string } };
 type OkRename = { ok: true; list: { id: string; name: string; owner_id: string } };
+type OkSimple = { ok: true };
 
 type ListPayload = {
   id?: string;
@@ -106,4 +108,37 @@ export async function renameList(
     return { ok: false, error: messages.errorGeneric };
   }
   return { ok: true, list: { id: data.id, name: data.name, owner_id: data.owner_id } };
+}
+
+/** Persist last-opened via /auth/me (account column) after ACL on the API. */
+export async function setLastOpenedList(
+  listId: string,
+  messages: ListsClientMessages,
+): Promise<OkSimple | ErrorResult> {
+  let response: Response;
+  try {
+    response = await fetch("/api/auth/me", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ last_opened_list_id: listId }),
+    });
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  if (!response.ok) {
+    const body = (await parseJson(response)) as {
+      detail?: unknown;
+      code?: unknown;
+    } | null;
+    return { ok: false, error: mapError(response.status, body, messages) };
+  }
+  return { ok: true };
+}
+
+export function balanceTone(balanceCrc: string | undefined): "owe" | "owed" | "zero" {
+  const raw = (balanceCrc ?? "0").trim();
+  if (raw.startsWith("-")) return "owe";
+  if (raw !== "0" && raw !== "0.00" && raw !== "") return "owed";
+  return "zero";
 }

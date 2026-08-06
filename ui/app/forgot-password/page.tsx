@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { detectLocale } from "@/lib/i18n/signin";
 import { passwordResetMessages } from "@/lib/i18n/password-reset";
+import { resolveServerAuthenticatedLanding } from "@/lib/serverLanding";
 import { fetchSession } from "@/lib/session";
 import { ForgotPasswordForm } from "./ForgotPasswordForm";
 import styles from "../signup/signup.module.css";
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
 export default async function ForgotPasswordPage() {
   const session = await fetchSession();
   if (session) {
-    redirect("/lists");
+    redirect(await resolveServerAuthenticatedLanding());
   }
 
   const headerStore = await headers();

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { RedirectIfAuthenticated } from "@/components/RedirectIfAuthenticated";
 import { detectLocale, signupMessages } from "@/lib/i18n/signup";
+import { resolveServerAuthenticatedLanding } from "@/lib/serverLanding";
 import { fetchSession } from "@/lib/session";
 import { SignupForm } from "./SignupForm";
 import styles from "./signup.module.css";
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
 export default async function SignupPage() {
   const session = await fetchSession();
   if (session) {
-    redirect("/lists");
+    redirect(await resolveServerAuthenticatedLanding());
   }
 
   const headerStore = await headers();
@@ -21,7 +22,7 @@ export default async function SignupPage() {
 
   return (
     <main className={styles.shell}>
-      <RedirectIfAuthenticated />
+      <RedirectIfAuthenticated to="/" />
       <div className={styles.card}>
         <p className={styles.brand}>{t.brand}</p>
         <h1 className={styles.title}>{t.title}</h1>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { RedirectIfAuthenticated } from "@/components/RedirectIfAuthenticated";
+import { resolveServerAuthenticatedLanding } from "@/lib/serverLanding";
 import { fetchSession } from "@/lib/session";
 import styles from "./page.module.css";
 
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   const session = await fetchSession();
   if (session) {
-    redirect("/lists");
+    redirect(await resolveServerAuthenticatedLanding());
   }
 
   return (
