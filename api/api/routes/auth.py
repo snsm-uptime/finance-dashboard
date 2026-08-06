@@ -7,6 +7,7 @@ import uuid
 
 from adapters.email import SmtpEmailSender, load_smtp_settings
 from adapters.persistence.email_verification import SqlAlchemyEmailVerificationRepository
+from adapters.persistence.list_invite import SqlAlchemyListInviteTokenRepository
 from adapters.persistence.password_reset import SqlAlchemyPasswordResetTokenRepository
 from adapters.persistence.repositories import (
     SqlAlchemyAuthUserRepository,
@@ -21,6 +22,10 @@ from application.email_verification import (
     EnsureEmailVerifiedService,
     RequestEmailVerificationCommand,
     RequestEmailVerificationService,
+)
+from application.list_invite_accept import (
+    SignUpWithInviteCommand,
+    SignUpWithInviteService,
 )
 from application.lists import SetLastOpenedListCommand, SetLastOpenedListService
 from application.password_reset import (
@@ -43,11 +48,13 @@ from domain.errors import (
     DuplicateEmailError,
     EmailNotVerifiedError,
     InvalidCredentialsError,
+    InvalidInviteTokenError,
     InvalidPreferencesError,
     InvalidResetPasswordError,
     InvalidResetTokenError,
     InvalidSignupError,
     InvalidVerificationTokenError,
+    InviteEmailMismatchError,
     NotListMemberError,
     PrincipalNotFoundError,
     RateLimitedError,
@@ -305,14 +312,44 @@ def register(
         return limited
 
     service = SignUpService(SqlAlchemySignupRepository(db), hasher)
+    invite_token = (body.invite_token or "").strip() or None
+
     try:
-        result = service.execute(
-            SignupCommand(
-                email=body.email,
-                password=body.password,
-                email_verification_required=settings.email_verification_required,
+        if invite_token:
+            invite_result = SignUpWithInviteService(
+                service,
+                SqlAlchemyListInviteTokenRepository(db),
+                SqlAlchemyAuthUserRepository(db),
+                SqlAlchemyListRepository(db),
+                SqlAlchemyEmailVerificationRepository(db),
+            ).execute(
+                SignUpWithInviteCommand(
+                    email=body.email,
+                    password=body.password,
+                    raw_token=invite_token,
+                    email_verification_required=settings.email_verification_required,
+                )
             )
-        )
+            result_user_id = invite_result.user_id
+            result_email = invite_result.email
+            result_list_id = invite_result.personal_list_id
+            result_list_name = invite_result.personal_list_name
+            inviting_list_id = invite_result.inviting_list_id
+            requires_verify = invite_result.requires_email_verification
+        else:
+            plain = service.execute(
+                SignupCommand(
+                    email=body.email,
+                    password=body.password,
+                    email_verification_required=settings.email_verification_required,
+                )
+            )
+            result_user_id = plain.user_id
+            result_email = plain.email
+            result_list_id = plain.list_id
+            result_list_name = plain.list_name
+            inviting_list_id = None
+            requires_verify = False
     except InvalidSignupError as exc:
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -326,8 +363,21 @@ def register(
                 "code": "duplicate_email",
             },
         )
+    except InvalidInviteTokenError:
+        return JSONResponse(
+            status_code=status.HTTP_410_GONE,
+            content={
+                "detail": InvalidInviteTokenError.MESSAGE,
+                "code": InvalidInviteTokenError.CODE,
+            },
+        )
+    except InviteEmailMismatchError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={"detail": str(exc), "code": InviteEmailMismatchError.CODE},
+        )
 
-    if settings.email_verification_required:
+    if settings.email_verification_required and not invite_token:
         try:
             mailer = SmtpEmailSender(load_smtp_settings())
             RequestEmailVerificationService(
@@ -337,7 +387,7 @@ def register(
                 public_app_url=settings.public_app_url,
             ).execute(
                 RequestEmailVerificationCommand(
-                    user_id=result.user_id,
+                    user_id=result_user_id,
                     email_verification_required=True,
                 )
             )
@@ -350,19 +400,63 @@ def register(
             )
             return _smtp_error_response(exc)
 
-    sessions.revoke_all_for_user(result.user_id)
-    token = sessions.create(result.user_id)
+    if settings.email_verification_required and invite_token and requires_verify:
+        # Partial success: session set + 403 so UI retains invite token → /verify → accept.
+        try:
+            mailer = SmtpEmailSender(load_smtp_settings())
+            RequestEmailVerificationService(
+                SqlAlchemyAuthUserRepository(db),
+                SqlAlchemyEmailVerificationRepository(db),
+                mailer,
+                public_app_url=settings.public_app_url,
+            ).execute(
+                RequestEmailVerificationCommand(
+                    user_id=result_user_id,
+                    email_verification_required=True,
+                )
+            )
+        except (SmtpConfigurationError, SmtpSendError) as exc:
+            db.rollback()
+            logger.error(
+                "register_invite_verification_smtp_failed code=%s",
+                type(exc).__name__,
+            )
+            return _smtp_error_response(exc)
+
+        sessions.revoke_all_for_user(result_user_id)
+        token = sessions.create(result_user_id)
+        _set_session_cookie(response, settings, token)
+        logger.info(
+            "user_registered_invite_pending_verify user_id=%s list_id=%s",
+            result_user_id,
+            result_list_id,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={
+                "detail": EmailNotVerifiedError.MESSAGE,
+                "code": "email_not_verified",
+                "user_id": str(result_user_id),
+                "list_id": str(result_list_id),
+                "invite_token_retained": True,
+            },
+        )
+
+    sessions.revoke_all_for_user(result_user_id)
+    token = sessions.create(result_user_id)
     _set_session_cookie(response, settings, token)
     logger.info(
-        "user_registered user_id=%s list_id=%s",
-        result.user_id,
-        result.list_id,
+        "user_registered user_id=%s list_id=%s inviting_list_id=%s",
+        result_user_id,
+        result_list_id,
+        inviting_list_id,
     )
     return RegisterResponse(
-        user_id=result.user_id,
-        email=result.email,
-        list_id=result.list_id,
-        list_name=result.list_name,
+        user_id=result_user_id,
+        email=result_email,
+        list_id=result_list_id,
+        list_name=result_list_name,
+        inviting_list_id=inviting_list_id,
     )
 
 

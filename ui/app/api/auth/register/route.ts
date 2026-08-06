@@ -6,6 +6,7 @@ import { forwardUpstreamHeaders, withClientIpHeader } from "@/lib/authBff";
 type RegisterBody = {
   email?: unknown;
   password?: unknown;
+  invite_token?: unknown;
 };
 
 /**
@@ -25,6 +26,13 @@ export async function POST(request: NextRequest) {
 
   const email = typeof body.email === "string" ? body.email : "";
   const password = typeof body.password === "string" ? body.password : "";
+  const inviteToken =
+    typeof body.invite_token === "string" ? body.invite_token : undefined;
+
+  const payload: Record<string, string> = { email, password };
+  if (inviteToken) {
+    payload.invite_token = inviteToken;
+  }
 
   let upstream: Response;
   try {
@@ -34,7 +42,7 @@ export async function POST(request: NextRequest) {
         "Content-Type": "application/json",
         Accept: "application/json",
       }),
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify(payload),
       cache: "no-store",
     });
   } catch {

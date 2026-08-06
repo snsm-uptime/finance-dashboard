@@ -177,3 +177,23 @@ class AlreadyListMemberError(DomainError):
 
     def __init__(self) -> None:
         super().__init__(self.MESSAGE)
+
+
+class InvalidInviteTokenError(DomainError):
+    """Raised when an invite token is missing, expired, or already used."""
+
+    MESSAGE = "This invite link is invalid or has expired. Ask the list owner for a new invite."
+    CODE = "invalid_invite_token"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
+class InviteEmailMismatchError(DomainError):
+    """Raised when signup/accept email does not match the invitee on the token."""
+
+    MESSAGE = "Use the email address this invite was sent to."
+    CODE = "invite_email_mismatch"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)

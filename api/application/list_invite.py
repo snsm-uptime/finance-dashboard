@@ -33,7 +33,12 @@ from application.list_access import (
     AuthorizeListAccessService,
 )
 from application.lists import ListRecord, MembershipRecord
-from application.ports import EmailMessage, EmailSender, PreferencesRepository, UserPreferencesRecord
+from application.ports import (
+    EmailMessage,
+    EmailSender,
+    PreferencesRepository,
+    UserPreferencesRecord,
+)
 from application.signin import AuthUserRepository
 
 
@@ -65,6 +70,8 @@ class ListInviteTokenRepository(Protocol):
     ) -> None: ...
 
     def get_by_token_hash(self, token_hash: str) -> ListInviteTokenRecord | None: ...
+
+    def claim_token(self, token_id: UUID, *, used_at: datetime) -> bool: ...
 
 
 class ListInviteLookup(Protocol):

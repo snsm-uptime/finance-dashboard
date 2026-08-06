@@ -68,3 +68,13 @@ class SqlAlchemyListInviteTokenRepository:
             expires_at=row.expires_at,
             used_at=row.used_at,
         )
+
+    def claim_token(self, token_id: UUID, *, used_at: datetime) -> bool:
+        from adapters.persistence.token_claim import claim_single_use_email_token
+
+        return claim_single_use_email_token(
+            self._session,
+            ListInviteTokenModel,
+            token_id,
+            used_at=used_at,
+        )
