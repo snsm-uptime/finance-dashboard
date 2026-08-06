@@ -59,7 +59,6 @@ export function SignupForm({ locale, inviteToken }: Props) {
   const t = signupMessages[locale];
   const ti = inviteMessages[locale];
   const [email, setEmail] = useState("");
-  const [emailLocked, setEmailLocked] = useState(false);
   const [emailHint, setEmailHint] = useState<string | null>(null);
   const [listName, setListName] = useState<string | null>(null);
   const [password, setPassword] = useState("");
@@ -92,8 +91,6 @@ export function SignupForm({ locale, inviteToken }: Props) {
       }
       setListName(preview.preview.list_name);
       setEmailHint(preview.preview.email_hint);
-      setEmail(preview.preview.email);
-      setEmailLocked(true);
       setInviteLoading(false);
     })();
     return () => {
@@ -143,12 +140,16 @@ export function SignupForm({ locale, inviteToken }: Props) {
       }
       const inviteListId = result.invitingListId;
       if (inviteListId) {
-        await setLastOpenedList(inviteListId, {
+        // Last-opened is best-effort; membership already succeeded — always land.
+        const remembered = await setLastOpenedList(inviteListId, {
           errorGeneric: t.errorGeneric,
           errorInvalidName: t.errorGeneric,
           errorForbidden: t.errorGeneric,
           errorUnauthorized: t.errorGeneric,
         });
+        if (!remembered.ok) {
+          // Intentionally still navigate — remembered list is non-blocking.
+        }
       }
       const dest = resolveAuthenticatedLanding({ inviteListId });
       router.replace(dest);
@@ -179,7 +180,7 @@ export function SignupForm({ locale, inviteToken }: Props) {
       <p className={styles.hint}>{subtitle}</p>
       {emailHint ? (
         <p className={styles.hint}>
-          {ti.emailLockedHint.replace("{emailHint}", emailHint)}
+          {ti.emailMatchHint.replace("{emailHint}", emailHint)}
         </p>
       ) : null}
       <label className={styles.label} htmlFor="email">
@@ -192,7 +193,6 @@ export function SignupForm({ locale, inviteToken }: Props) {
           autoComplete="email"
           required
           value={email}
-          readOnly={emailLocked}
           onChange={(e) => setEmail(e.target.value)}
         />
       </label>

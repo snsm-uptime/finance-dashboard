@@ -10,7 +10,6 @@ from pydantic import BaseModel, Field
 
 class InvitePreviewResponse(BaseModel):
     list_name: str
-    email: str
     email_hint: str
     path: Literal["signup", "join"]
 

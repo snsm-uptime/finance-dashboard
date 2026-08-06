@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Protocol
 from uuid import UUID, uuid4
 
-from domain.errors import EmailNotVerifiedError, InvalidInviteTokenError
+from domain.errors import EmailNotVerifiedError, InvalidInviteTokenError, ListWriteError
 from domain.list_invite import (
     INVITE_MEMBER_ROLE,
     assert_invite_email_bind,
@@ -81,7 +81,6 @@ class PreviewListInviteCommand:
 @dataclass(frozen=True, slots=True)
 class PreviewListInviteResult:
     list_name: str
-    email: str
     email_hint: str
     path: str  # "signup" | "join"
 
@@ -112,6 +111,36 @@ def _claim_or_raise(
 ) -> None:
     if not tokens.claim_token(token_id, used_at=now):
         raise InvalidInviteTokenError()
+
+
+def _require_inviting_list(
+    lists: ListInviteAcceptLookup,
+    list_id: UUID,
+) -> None:
+    if lists.get_list(list_id) is None:
+        raise InvalidInviteTokenError()
+
+
+def _add_invite_membership(
+    lists: ListInviteAcceptLookup,
+    *,
+    list_id: UUID,
+    user_id: UUID,
+) -> None:
+    try:
+        lists.add_membership(
+            NewMembershipRecord(
+                id=uuid4(),
+                list_id=list_id,
+                user_id=user_id,
+                role=INVITE_MEMBER_ROLE,
+            )
+        )
+    except ListWriteError as exc:
+        # Deleted list / unique race → calm invite error (or idempotent if won the race).
+        if lists.get_membership(list_id, user_id) is not None:
+            return
+        raise InvalidInviteTokenError() from exc
 
 
 class AcceptListInviteService:
@@ -162,14 +191,19 @@ class AcceptListInviteService:
             )
         )
 
-        _claim_or_raise(self._tokens, invite.id, now=now)
-        self._lists.add_membership(
-            NewMembershipRecord(
-                id=uuid4(),
-                list_id=invite.list_id,
-                user_id=command.actor_user_id,
-                role=INVITE_MEMBER_ROLE,
-            )
+        _require_inviting_list(self._lists, invite.list_id)
+
+        if not self._tokens.claim_token(invite.id, used_at=now):
+            # Concurrent accept: winner claimed; if we already have membership, succeed.
+            raced = self._lists.get_membership(invite.list_id, command.actor_user_id)
+            if raced is not None:
+                return AcceptListInviteResult(list_id=invite.list_id, already_member=True)
+            raise InvalidInviteTokenError()
+
+        _add_invite_membership(
+            self._lists,
+            list_id=invite.list_id,
+            user_id=command.actor_user_id,
         )
         return AcceptListInviteResult(list_id=invite.list_id, already_member=False)
 
@@ -200,6 +234,7 @@ class SignUpWithInviteService:
         now = datetime.now(UTC)
         invite = _load_redeemable_invite(self._tokens, command.raw_token, now=now)
         assert_invite_email_bind(invitee_email=invite.email, actor_email=command.email)
+        _require_inviting_list(self._lists, invite.list_id)
 
         created = self._signup.execute(
             SignupCommand(
@@ -227,13 +262,10 @@ class SignUpWithInviteService:
             )
 
         _claim_or_raise(self._tokens, invite.id, now=now)
-        self._lists.add_membership(
-            NewMembershipRecord(
-                id=uuid4(),
-                list_id=invite.list_id,
-                user_id=created.user_id,
-                role=INVITE_MEMBER_ROLE,
-            )
+        _add_invite_membership(
+            self._lists,
+            list_id=invite.list_id,
+            user_id=created.user_id,
         )
         return SignUpWithInviteResult(
             user_id=created.user_id,
@@ -269,7 +301,6 @@ class PreviewListInviteService:
         path = resolve_invite_preview_path(invitee_registered=invitee is not None)
         return PreviewListInviteResult(
             list_name=owned.name,
-            email=normalize_email(invite.email),
             email_hint=invite_email_hint(invite.email),
             path=path,
         )

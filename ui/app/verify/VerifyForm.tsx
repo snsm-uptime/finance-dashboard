@@ -4,6 +4,7 @@ import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
 
 import { type Locale, verifyMessages } from "@/lib/i18n/verify";
+import { safeReturnTo } from "../sign-in/signInClient";
 import styles from "../signup/signup.module.css";
 
 type Props = {
@@ -20,10 +21,12 @@ export function VerifyForm({ locale, token, returnTo }: Props) {
   const [resendMessage, setResendMessage] = useState<string | null>(null);
   const [pendingResend, setPendingResend] = useState(false);
 
-  const continueHref =
-    returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//")
-      ? returnTo
-      : "/lists";
+  // Reuse sign-in sanitizer; unsafe values become "/" — fall back to lists for verify.
+  const continueHref = (() => {
+    if (!returnTo) return "/lists";
+    const safe = safeReturnTo(returnTo);
+    return safe === "/" ? "/lists" : safe;
+  })();
 
   const canConfirm = useMemo(
     () => token.length > 0 && !pendingConfirm,

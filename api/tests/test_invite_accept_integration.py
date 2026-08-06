@@ -97,7 +97,8 @@ def test_unregistered_signup_with_invite_lands_membership_and_cookie(
     preview = client.get("/invites/preview", params={"token": raw})
     assert preview.status_code == 200
     assert preview.json()["path"] == "signup"
-    assert preview.json()["email"] == "invitee@example.com"
+    assert "email" not in preview.json()
+    assert preview.json()["email_hint"]
 
     registered = client.post(
         "/auth/register",
@@ -235,7 +236,12 @@ def test_signup_with_invite_verify_on_partial_success(
     )
     assert registered.status_code == 403, registered.text
     assert registered.json()["code"] == "email_not_verified"
+    set_cookie = registered.headers.get("set-cookie") or ""
+    assert "fh_session=" in set_cookie
     assert client.cookies.get("fh_session")
+    me = client.get("/auth/me")
+    assert me.status_code == 200, me.text
+    assert me.json()["email"] == "invitee@example.com"
 
     row = db_session.scalars(
         select(ListInviteTokenModel).where(

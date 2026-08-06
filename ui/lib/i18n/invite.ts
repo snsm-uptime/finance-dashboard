@@ -17,7 +17,7 @@ export const inviteMessages = {
     errorUnauthorized: "Sign in to accept this invite.",
     errorGeneric: "Something went wrong. Try again.",
     inviteSignupSubtitle: "Create your account to join “{listName}”.",
-    emailLockedHint: "Invite sent to {emailHint}",
+    emailMatchHint: "Use the email this invite was sent to ({emailHint}).",
   },
   es: {
     brand: "finance-helper",
@@ -36,7 +36,7 @@ export const inviteMessages = {
     errorUnauthorized: "Inicia sesión para aceptar esta invitación.",
     errorGeneric: "Algo salió mal. Inténtalo de nuevo.",
     inviteSignupSubtitle: "Crea tu cuenta para unirte a «{listName}».",
-    emailLockedHint: "Invitación enviada a {emailHint}",
+    emailMatchHint: "Usa el correo al que se envió esta invitación ({emailHint}).",
   },
 } as const;
 

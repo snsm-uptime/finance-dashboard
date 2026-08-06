@@ -425,13 +425,14 @@ def register(
 
         sessions.revoke_all_for_user(result_user_id)
         token = sessions.create(result_user_id)
-        _set_session_cookie(response, settings, token)
         logger.info(
             "user_registered_invite_pending_verify user_id=%s list_id=%s",
             result_user_id,
             result_list_id,
         )
-        return JSONResponse(
+        # Cookies must be set on the returned response — a separate JSONResponse
+        # does not inherit Set-Cookie from the injected Response parameter.
+        pending = JSONResponse(
             status_code=status.HTTP_403_FORBIDDEN,
             content={
                 "detail": EmailNotVerifiedError.MESSAGE,
@@ -441,6 +442,8 @@ def register(
                 "invite_token_retained": True,
             },
         )
+        _set_session_cookie(pending, settings, token)
+        return pending
 
     sessions.revoke_all_for_user(result_user_id)
     token = sessions.create(result_user_id)

@@ -2,7 +2,6 @@
 
 export type InvitePreview = {
   list_name: string;
-  email: string;
   email_hint: string;
   path: "signup" | "join";
 };
@@ -27,7 +26,6 @@ export async function fetchInvitePreview(
     );
     const data = (await response.json().catch(() => ({}))) as {
       list_name?: string;
-      email?: string;
       email_hint?: string;
       path?: string;
       detail?: string;
@@ -41,7 +39,6 @@ export async function fetchInvitePreview(
     }
     if (
       typeof data.list_name !== "string" ||
-      typeof data.email !== "string" ||
       typeof data.email_hint !== "string" ||
       (data.path !== "signup" && data.path !== "join")
     ) {
@@ -51,7 +48,6 @@ export async function fetchInvitePreview(
       ok: true,
       preview: {
         list_name: data.list_name,
-        email: data.email,
         email_hint: data.email_hint,
         path: data.path,
       },

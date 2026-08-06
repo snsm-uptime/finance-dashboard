@@ -441,5 +441,76 @@ def test_preview_signup_path_for_unregistered() -> None:
     )
     assert preview.list_name == "Household"
     assert preview.path == "signup"
-    assert preview.email == "invitee@example.com"
     assert preview.email_hint == "i***e@example.com"
+
+
+def test_accept_deleted_list_is_invalid_invite() -> None:
+    raw, invite = _invite(email="member@example.com")
+    tokens = FakeTokens(tokens={invite.token_hash: invite})
+    actor = AuthUserRecord(id=uuid4(), email="member@example.com", password_hash="x")
+    users = FakeUsers()
+    users.add(actor)
+    lists = FakeLists()  # list missing
+
+    with pytest.raises(InvalidInviteTokenError):
+        AcceptListInviteService(
+            tokens,
+            users,
+            lists,
+            FakeVerification(verified_at={actor.id: datetime.now(UTC)}),
+        ).execute(
+            AcceptListInviteCommand(
+                actor_user_id=actor.id,
+                raw_token=raw,
+                email_verification_required=False,
+            )
+        )
+
+
+def test_accept_lost_claim_race_succeeds_if_membership_exists() -> None:
+    """Concurrent winner claimed + joined; loser's claim fails but membership is there."""
+
+    @dataclass
+    class DeferredMembershipLists(FakeLists):
+        _skip_first: bool = True
+
+        def get_membership(self, list_id: UUID, user_id: UUID) -> MembershipRecord | None:
+            if self._skip_first:
+                self._skip_first = False
+                return None
+            return self.memberships.get((list_id, user_id))
+
+    raw, invite = _invite(email="member@example.com")
+    tokens = FakeTokens(tokens={invite.token_hash: invite})
+
+    def always_lose_claim(token_id: UUID, *, used_at: datetime) -> bool:
+        return False
+
+    tokens.claim_token = always_lose_claim  # type: ignore[method-assign]
+
+    actor = AuthUserRecord(id=uuid4(), email="member@example.com", password_hash="x")
+    users = FakeUsers()
+    users.add(actor)
+    lists = DeferredMembershipLists(
+        lists={invite.list_id: ListRecord(invite.list_id, "Household", uuid4())},
+        memberships={
+            (invite.list_id, actor.id): MembershipRecord(
+                list_id=invite.list_id, user_id=actor.id, role="member"
+            )
+        },
+    )
+
+    result = AcceptListInviteService(
+        tokens,
+        users,
+        lists,
+        FakeVerification(verified_at={actor.id: datetime.now(UTC)}),
+    ).execute(
+        AcceptListInviteCommand(
+            actor_user_id=actor.id,
+            raw_token=raw,
+            email_verification_required=False,
+        )
+    )
+    assert result.already_member is True
+    assert result.list_id == invite.list_id

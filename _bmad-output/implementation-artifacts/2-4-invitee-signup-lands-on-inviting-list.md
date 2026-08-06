@@ -4,7 +4,7 @@ baseline_commit: d91c38984b2ed1cea449759ad6fd55fda82f3e60
 
 # Story 2.4: Invitee signup lands on inviting list
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -84,6 +84,17 @@ so that I see settle-up context immediately instead of a blank home.
   - [x] Fixtures: `owner@example.com`, `invitee@example.com` — no real PII / personal names
   - [x] Assert project-context must-cover edge: **unregistered invite → land on inviting list**
   - [x] Do **not** require full Playwright every PR; no live SMTP in CI
+
+### Review Findings
+
+- [x] [Review][Patch] Preview hint-only: drop full `email` from public preview; signup types email; server bind rejects mismatch [`api/application/list_invite_accept.py:270`]
+- [x] [Review][Patch] Session cookie dropped on verify-gate partial-success 403 [`api/api/routes/auth.py:428`]
+- [x] [Review][Patch] Integration test does not prove invitee `Set-Cookie` on 403 partial success [`api/tests/test_invite_accept_integration.py:238`]
+- [x] [Review][Patch] AcceptInvitePanel effect cancel leaves `pending` true so remount never retries [`ui/app/invites/accept/AcceptInvitePanel.tsx:39`]
+- [x] [Review][Patch] Concurrent accept can 410 after winner already joined (claim race) [`api/application/list_invite_accept.py:145`]
+- [x] [Review][Patch] Accept/signup-with-invite miss deleted-list guard; `ListWriteError` surfaces as 500 [`api/application/list_invite_accept.py:166`]
+- [x] [Review][Patch] Verify `returnTo` weaker than `safeReturnTo` (allows `/\…` open-redirect shapes) [`ui/app/verify/VerifyForm.tsx:23`]
+- [x] [Review][Patch] Ignore `setLastOpenedList` failures before landing navigate [`ui/app/invites/accept/AcceptInvitePanel.tsx:49`]
 
 ## Dev Notes
 
@@ -342,9 +353,9 @@ Cursor Grok 4.5
 ### Completion Notes List
 
 - **Deep links (locked):** unregistered `/signup?invite=…`; registered `/invites/accept?token=…`; legacy `/sign-up?invite=…` redirects to `/signup`.
-- **API:** `GET /invites/preview?token=` → `{ list_name, email, email_hint, path }` | 410 `invalid_invite_token`; `POST /auth/register` optional `invite_token` → cookie + `inviting_list_id` | 403 `email_not_verified` (session kept, token unclaimed); `POST /invites/accept` `{ token }` (session) → `{ list_id }`.
-- **Ordering:** email-bind → Ensure → claim (`claim_single_use_email_token` + `expires_at`) → `"member"` membership; already-member silent idempotent.
-- **UI:** signup prefill/lock from preview email; land via `resolveAuthenticatedLanding({ inviteListId })`; verify retain via `/verify?returnTo=/invites/accept?token=…`; set last-opened after join.
+- **API:** `GET /invites/preview?token=` → `{ list_name, email_hint, path }` (hint only; no full email) | 410 `invalid_invite_token`; `POST /auth/register` optional `invite_token` → cookie + `inviting_list_id` | 403 `email_not_verified` (session Set-Cookie on returned JSONResponse, token unclaimed); `POST /invites/accept` `{ token }` (session) → `{ list_id }`.
+- **Ordering:** email-bind → Ensure → claim (`claim_single_use_email_token` + `expires_at`) → `"member"` membership; already-member silent idempotent; lost claim race OK if membership exists; deleted inviting list → invalid invite.
+- **UI:** signup shows email hint + typed email (server bind); land via `resolveAuthenticatedLanding({ inviteListId })`; verify retain via `/verify?returnTo=/invites/accept?token=…` with `safeReturnTo`; set last-opened best-effort after join.
 - **Tests:** domain 12 passed; Compose Postgres invite accept + send integration 11 passed; UI vitest 77 passed; host API unit 119 passed / 66 skipped (no host DATABASE_URL).
 
 **Request path (story-close overview):**
@@ -399,6 +410,7 @@ No membership without redeemable token + email-bind; no claim when Ensure blocks
 ### Change Log
 
 - 2026-08-06: Implemented Story 2.4 invitee signup/accept landing — domain accept rules, preview/accept APIs, register `invite_token`, UI deep links + verify retain, Postgres + UI tests; status → review.
+- 2026-08-06: Code review patches — 403 cookie on JSONResponse, hint-only preview, accept race/deleted-list guards, AcceptInvitePanel Strict Mode pending, verify `safeReturnTo`; status → done.
 
 ---
 

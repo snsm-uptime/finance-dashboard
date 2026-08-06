@@ -21,6 +21,7 @@ from domain.errors import (
     EmailNotVerifiedError,
     InvalidInviteTokenError,
     InviteEmailMismatchError,
+    ListWriteError,
 )
 from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import JSONResponse
@@ -67,7 +68,6 @@ def preview_invite(
         return _invalid_invite_response()
     return InvitePreviewResponse(
         list_name=result.list_name,
-        email=result.email,
         email_hint=result.email_hint,
         path=result.path,  # type: ignore[arg-type]
     )
@@ -106,6 +106,8 @@ def accept_invite(
             status_code=status.HTTP_403_FORBIDDEN,
             content={"detail": str(exc), "code": "email_not_verified"},
         )
+    except ListWriteError:
+        return _invalid_invite_response()
     logger.info(
         "invite_accepted user_id=%s list_id=%s already_member=%s",
         user_id,

@@ -24,11 +24,11 @@ export function AcceptInvitePanel({ locale, token, authenticated }: Props) {
   const [needsVerify, setNeedsVerify] = useState(false);
 
   useEffect(() => {
-    if (!authenticated || !token || pending) return;
+    if (!authenticated || !token) return;
     let cancelled = false;
+    setPending(true);
+    setError(null);
     (async () => {
-      setPending(true);
-      setError(null);
       const result = await acceptInvite(token, {
         errorExpired: t.errorExpired,
         errorMismatch: t.errorMismatch,
@@ -46,18 +46,24 @@ export function AcceptInvitePanel({ locale, token, authenticated }: Props) {
         setPending(false);
         return;
       }
-      await setLastOpenedList(result.listId, {
+      // Last-opened is best-effort; membership already succeeded — always land.
+      const remembered = await setLastOpenedList(result.listId, {
         errorGeneric: t.errorGeneric,
         errorInvalidName: t.errorGeneric,
         errorForbidden: t.errorGeneric,
         errorUnauthorized: t.errorUnauthorized,
       });
+      if (!remembered.ok) {
+        // Intentionally still navigate — remembered list is non-blocking.
+      }
+      if (cancelled) return;
       const dest = resolveAuthenticatedLanding({ inviteListId: result.listId });
       router.replace(dest);
       router.refresh();
     })();
     return () => {
       cancelled = true;
+      setPending(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per token when signed in
   }, [authenticated, token]);
