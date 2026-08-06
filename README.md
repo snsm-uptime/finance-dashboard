@@ -21,7 +21,7 @@ mkdir -p "${FINANCE_HELPER_DATA:-$HOME/finance-helper}/pgdata"
 
 ### Hot reload (day-to-day development)
 
-Bind-mounts source and runs `uvicorn --reload` + `next dev`:
+Bind-mounts source and runs `uvicorn --reload` + `next dev`. Prefer `./scripts/compose-up.sh` (see `HOW-TO-DEV.md` for worktrees and stop/restart helpers), or:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
