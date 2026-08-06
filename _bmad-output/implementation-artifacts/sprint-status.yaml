@@ -1,5 +1,5 @@
 # generated: 2026-08-03T22:46:31
-# last_updated: 2026-08-05T00:10:00
+# last_updated: 2026-08-06T00:44:00
 
 # project: finance-dashboard
 # project_key: NOKEY
@@ -42,7 +42,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-03T22:46:31
-last_updated: 2026-08-05T00:10:00
+last_updated: 2026-08-06T00:44:00
 project: finance-dashboard
 project_key: NOKEY
 tracking_system: file-system
@@ -59,17 +59,17 @@ development_status:
   epic-1-retrospective: done
 
   # Epic 1.5 — prep before continuing Epic 2 (from Correct Course / Epic 1 retro)
-  epic-1-5: in-progress
+  epic-1-5: done
   1-5-1-token-claim-rechecks-expires-at: done
   1-5-2-auth-mail-interaction-map-and-story-close-overview: done
   1-5-3-invite-verify-gate-contract: done
-  1-5-4-membership-acl-enforcement-sketch: review
-  1-5-5-epic-1-spine-smoke: review
+  1-5-4-membership-acl-enforcement-sketch: done
+  1-5-5-epic-1-spine-smoke: done
   1-5-6-auth-smtp-rate-limit-hardening: done
   1-5-7-hex-port-polish-and-compose-pytest-ergonomics: done
   epic-1-5-retrospective: optional
 
-  # PAUSED: do not start 2.2+ until epic-1-5 critical path (1-5-1 … 1-5-5) is done; 2-1 done
+  # Epic 1.5 critical path complete — Epic 2 (2.2+) unblocked; 2-1 done
   epic-2: in-progress
   2-1-create-and-rename-owned-lists: done
   2-2-lists-homepage-membership-scoped-access: ready-for-dev
