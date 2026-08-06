@@ -42,6 +42,10 @@ class UserModel(Base):
     email_verification_tokens: Mapped[list[EmailVerificationTokenModel]] = relationship(
         back_populates="user"
     )
+    sent_list_invites: Mapped[list[ListInviteTokenModel]] = relationship(
+        back_populates="inviter",
+        foreign_keys="ListInviteTokenModel.inviter_user_id",
+    )
 
 
 class ListModel(Base):
@@ -61,6 +65,7 @@ class ListModel(Base):
         foreign_keys=[owner_id],
     )
     memberships: Mapped[list[ListMembershipModel]] = relationship(back_populates="list")
+    invite_tokens: Mapped[list[ListInviteTokenModel]] = relationship(back_populates="list")
 
 
 class ListMembershipModel(Base):
@@ -131,3 +136,29 @@ class EmailVerificationTokenModel(Base):
     )
 
     user: Mapped[UserModel] = relationship(back_populates="email_verification_tokens")
+
+
+class ListInviteTokenModel(Base):
+    __tablename__ = "list_invite_tokens"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    list_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("lists.id", ondelete="CASCADE"), nullable=False
+    )
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    inviter_user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    locale: Mapped[str] = mapped_column(String(8), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    list: Mapped[ListModel] = relationship(back_populates="invite_tokens")
+    inviter: Mapped[UserModel] = relationship(
+        back_populates="sent_list_invites",
+        foreign_keys=[inviter_user_id],
+    )
