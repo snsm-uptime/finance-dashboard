@@ -269,7 +269,6 @@ def test_send_ok_when_verification_required_and_invitee_unverified(
     mailer: CapturingMailer,
 ) -> None:
     """AC #6 / Task 5: send must not call Ensure; succeeds for unverified invitee."""
-    from collections.abc import Iterator
 
     from adapters.persistence.models import UserModel
     from api.app import create_app

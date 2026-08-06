@@ -24,6 +24,7 @@ class NewListRecord:
     id: UUID
     name: str
     owner_id: UUID
+    default_split_mode: str = "even"
 
 
 @dataclass(frozen=True, slots=True)

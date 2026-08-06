@@ -41,6 +41,14 @@ export const listsMessages = {
     errorAlreadyMember: "That person is already a member of this list.",
     errorSmtp:
       "We couldn’t send the invite email. Check email delivery settings and try again.",
+    defaultSplitTitle: "Default split",
+    defaultSplitEven: "Even among members",
+    defaultSplitCustom: "Custom percentages",
+    defaultSplitSum: "Total",
+    defaultSplitSave: "Save default split",
+    defaultSplitSaving: "Saving…",
+    defaultSplitReadOnly: "Only the list owner can change the standing default.",
+    errorInvalidSplit: "Percentages must sum to exactly 100.",
   },
   es: {
     brand: "finance-helper",
@@ -83,6 +91,14 @@ export const listsMessages = {
     errorAlreadyMember: "Esa persona ya es miembro de esta lista.",
     errorSmtp:
       "No pudimos enviar el correo de invitación. Revisa la configuración de correo e inténtalo de nuevo.",
+    defaultSplitTitle: "División predeterminada",
+    defaultSplitEven: "Igual entre miembros",
+    defaultSplitCustom: "Porcentajes personalizados",
+    defaultSplitSum: "Total",
+    defaultSplitSave: "Guardar división",
+    defaultSplitSaving: "Guardando…",
+    defaultSplitReadOnly: "Solo el propietario de la lista puede cambiar la división predeterminada.",
+    errorInvalidSplit: "Los porcentajes deben sumar exactamente 100.",
   },
 } as const;
 

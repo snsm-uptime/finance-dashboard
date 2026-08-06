@@ -33,7 +33,12 @@ from application.list_access import (
     AuthorizeListAccessService,
 )
 from application.lists import ListRecord, MembershipRecord
-from application.ports import EmailMessage, EmailSender, PreferencesRepository, UserPreferencesRecord
+from application.ports import (
+    EmailMessage,
+    EmailSender,
+    PreferencesRepository,
+    UserPreferencesRecord,
+)
 from application.signin import AuthUserRepository
 
 

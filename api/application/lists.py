@@ -1,12 +1,20 @@
-"""Create owned lists, rename, membership listing, and ACL-gated reads — Stories 2.1 / 2.2."""
+"""Create owned lists, rename, membership listing, ACL reads, default split — 2.1 / 2.2 / 2.5."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Protocol
 from uuid import UUID, uuid4
 
+from domain.default_split import (
+    MODE_EVEN,
+    MODE_PERCENTAGE,
+    resolve_effective_default,
+    validate_percentage_shares,
+)
 from domain.errors import (
+    InvalidDefaultSplitError,
     NotListMemberError,
     NotListOwnerError,
 )
@@ -49,6 +57,27 @@ class ListMembershipSummary:
     balance_crc: str = PLACEHOLDER_BALANCE_CRC
 
 
+@dataclass(frozen=True, slots=True)
+class DefaultSplitShareView:
+    user_id: UUID
+    percentage: Decimal
+
+
+@dataclass(frozen=True, slots=True)
+class DefaultSplitView:
+    list_id: UUID
+    owner_id: UUID
+    mode: str
+    shares: tuple[DefaultSplitShareView, ...]
+    member_ids: tuple[UUID, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class StoredDefaultSplit:
+    mode: str
+    shares: dict[UUID, Decimal]
+
+
 class ListRepository(Protocol):
     def create_owned_list(
         self,
@@ -66,6 +95,18 @@ class ListRepository(Protocol):
     def list_for_user(self, user_id: UUID) -> list[ListMembershipSummary]: ...
 
     def get_list_with_grant(self, grant: ListAccessGrant, list_id: UUID) -> ListRecord: ...
+
+    def list_member_ids(self, list_id: UUID) -> list[UUID]: ...
+
+    def get_stored_default_split(self, list_id: UUID) -> StoredDefaultSplit | None: ...
+
+    def set_default_split(
+        self,
+        list_id: UUID,
+        *,
+        mode: str,
+        shares: dict[UUID, Decimal] | None,
+    ) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,6 +149,20 @@ class GetListBalancesStubCommand:
 class SetLastOpenedListCommand:
     actor_user_id: UUID
     list_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class GetListDefaultSplitCommand:
+    actor_user_id: UUID
+    list_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class SetListDefaultSplitCommand:
+    actor_user_id: UUID
+    list_id: UUID
+    mode: str
+    shares: dict[UUID, Decimal] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -263,3 +318,96 @@ class SetLastOpenedListService:
             last_opened_list_id=command.list_id,
         )
         return command.list_id
+
+
+def _build_default_split_view(
+    *,
+    list_id: UUID,
+    owner_id: UUID,
+    member_ids: list[UUID],
+    stored: StoredDefaultSplit | None,
+) -> DefaultSplitView:
+    stored_mode = stored.mode if stored is not None else MODE_EVEN
+    stored_shares = stored.shares if stored is not None else None
+    mode, shares = resolve_effective_default(stored_mode, stored_shares, member_ids)
+    ordered = sorted(member_ids, key=lambda uid: str(uid))
+    share_views = tuple(
+        DefaultSplitShareView(user_id=uid, percentage=shares[uid]) for uid in ordered
+    )
+    return DefaultSplitView(
+        list_id=list_id,
+        owner_id=owner_id,
+        mode=mode,
+        shares=share_views,
+        member_ids=tuple(ordered),
+    )
+
+
+class GetListDefaultSplitService:
+    """Member-readable standing default — authorize_list_access(read_list)."""
+
+    def __init__(self, repo: ListRepository) -> None:
+        self._repo = repo
+
+    def execute(self, command: GetListDefaultSplitCommand) -> DefaultSplitView:
+        grant = AuthorizeListAccessService(self._repo).execute(
+            AuthorizeListAccessCommand(
+                acting_user_id=command.actor_user_id,
+                list_id=command.list_id,
+                action="read_list",
+            )
+        )
+        lst = self._repo.get_list_with_grant(grant, command.list_id)
+        members = self._repo.list_member_ids(command.list_id)
+        stored = self._repo.get_stored_default_split(command.list_id)
+        return _build_default_split_view(
+            list_id=lst.id,
+            owner_id=lst.owner_id,
+            member_ids=members,
+            stored=stored,
+        )
+
+
+class SetListDefaultSplitService:
+    """Owner-only standing default mutation — authorize_list_access(edit_default_split)."""
+
+    def __init__(self, repo: ListRepository) -> None:
+        self._repo = repo
+
+    def execute(self, command: SetListDefaultSplitCommand) -> DefaultSplitView:
+        AuthorizeListAccessService(self._repo).execute(
+            AuthorizeListAccessCommand(
+                acting_user_id=command.actor_user_id,
+                list_id=command.list_id,
+                action="edit_default_split",
+            )
+        )
+        lst = self._repo.get_list(command.list_id)
+        if lst is None:
+            from domain.errors import ListNotFoundError
+
+            raise ListNotFoundError()
+
+        members = self._repo.list_member_ids(command.list_id)
+        mode = command.mode.strip().lower()
+        if mode == MODE_EVEN:
+            self._repo.set_default_split(command.list_id, mode=MODE_EVEN, shares=None)
+        elif mode == MODE_PERCENTAGE:
+            if command.shares is None:
+                raise InvalidDefaultSplitError(
+                    "Percentage mode requires a share for each current member."
+                )
+            validated = validate_percentage_shares(members, command.shares)
+            self._repo.set_default_split(
+                command.list_id, mode=MODE_PERCENTAGE, shares=validated
+            )
+        else:
+            raise InvalidDefaultSplitError("Default split mode must be even or percentage.")
+
+        stored = self._repo.get_stored_default_split(command.list_id)
+        return _build_default_split_view(
+            list_id=lst.id,
+            owner_id=lst.owner_id,
+            member_ids=members,
+            stored=stored,
+        )
