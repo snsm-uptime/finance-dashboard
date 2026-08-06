@@ -8,7 +8,7 @@ import { resolveAuthenticatedLanding } from "@/lib/landing";
 import { inviteMessages, type Locale } from "@/lib/i18n/invite";
 import { setLastOpenedList } from "@/app/lists/listsClient";
 import { acceptInvite } from "../inviteClient";
-import styles from "../signup/signup.module.css";
+import styles from "../../signup/signup.module.css";
 
 type Props = {
   locale: Locale;
