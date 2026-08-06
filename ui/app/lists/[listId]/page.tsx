@@ -7,6 +7,7 @@ import { getApiInternalUrl } from "@/lib/api";
 import { listsMessages } from "@/lib/i18n/lists";
 import type { Locale } from "@/lib/i18n/locale";
 import { fetchSession } from "@/lib/session";
+import { InviteForm } from "../InviteForm";
 import styles from "../lists.module.css";
 
 export const dynamic = "force-dynamic";
@@ -77,6 +78,7 @@ export default async function ListDetailPage({
   }
 
   const listTitle = detail?.name;
+  const isOwner = Boolean(detail?.owner_id && detail.owner_id === session.user_id);
 
   return (
     <main className={styles.main}>
@@ -129,6 +131,25 @@ export default async function ListDetailPage({
             </h2>
             <p className={styles.copy}>{t.detailReceiptsEmpty}</p>
           </section>
+          {isOwner ? (
+            <InviteForm
+              listId={listId}
+              messages={{
+                inviteTitle: t.inviteTitle,
+                inviteLabel: t.inviteLabel,
+                inviteSubmit: t.inviteSubmit,
+                inviteSending: t.inviteSending,
+                inviteSent: t.inviteSent,
+                errorGeneric: t.errorGeneric,
+                errorInvalidName: t.errorInvalidName,
+                errorInvalidEmail: t.errorInvalidEmail,
+                errorForbidden: t.errorInviteForbidden,
+                errorUnauthorized: t.errorUnauthorized,
+                errorAlreadyMember: t.errorAlreadyMember,
+                errorSmtp: t.errorSmtp,
+              }}
+            />
+          ) : null}
         </>
       )}
     </main>

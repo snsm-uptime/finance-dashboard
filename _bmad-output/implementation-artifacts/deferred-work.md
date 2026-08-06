@@ -92,3 +92,10 @@
 - No HTTP clear for `last_opened_list_id` — first-paint ACL revalidation already falls back without clearing
 - Broader UI/first-paint automated coverage (ListsPanel render, serverLanding) — residual Task 5; pure landing + balanceTone covered
 - Auto-clear stale last-opened after failed landing — deferred with clear-API; homepage fallback already safe
+
+## Deferred from: code review of 2-3-invite-members-by-email.md (2026-08-06)
+
+- Concurrent invites for same `(list_id, email)` can leave multiple unused live tokens — same invalidate-then-insert shape as password-reset; no partial unique index in v1
+- SMTP send can succeed then `get_db` session commit fail — emailed token not durable; shared persist-then-send + commit-on-exit pattern from auth mail
+- BFF `POST /api/lists/{id}/invites` has no upstream fetch timeout — consistent with other list BFF routes
+- No rate limit on owner invite send — auth SMTP paths limited in 1.5.6; invite abuse hardening out of Story 2.3 AC

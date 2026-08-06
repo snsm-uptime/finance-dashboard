@@ -1,6 +1,10 @@
+---
+baseline_commit: 2ff7acab152f917a5fa4bd930dd2d733b962fd1b
+---
+
 # Story 2.3: Invite members by email
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -39,47 +43,47 @@ so that household peers can share expenses with me.
 
 ## Tasks / Subtasks
 
-- [ ] Task 0: Confirm prerequisites + as-built reuse (do not invent parallel stacks)
-  - [ ] **Done facts (reuse — not todos):** Epic **1**, **1.5**, and Story **2.1** are **done** on `main`. Collapse former Epic 1 soft checkboxes into the **As-built reuse table** below — do not re-scaffold SMTP, auth, or lists.
-  - [ ] **2.2 gate (explicit):** Story **2.2** is still `ready-for-dev` (list detail shell + `authorize_list_access`). Choose **one** and document in completion notes:
+- [x] Task 0: Confirm prerequisites + as-built reuse (do not invent parallel stacks)
+  - [x] **Done facts (reuse — not todos):** Epic **1**, **1.5**, and Story **2.1** are **done** on `main`. Collapse former Epic 1 soft checkboxes into the **As-built reuse table** below — do not re-scaffold SMTP, auth, or lists.
+  - [x] **2.2 gate (explicit):** Story **2.2** is still `ready-for-dev` (list detail shell + `authorize_list_access`). Choose **one** and document in completion notes:
     1. **Preferred:** finish **2.2** first — Invite UI on list detail; extend ACL port with `invite_member` (or equivalent owner action).
     2. **Allowed interim:** API-first + Invite UI bolted onto live `ui/app/lists/` (`ListsPanel` / homepage) with **ad-hoc owner ACL mirroring `RenameListService`** until 2.2 lands — then migrate onto `authorize_list_access` + detail shell without changing HTTP error codes.
-  - [ ] **Mandatory living docs** (read before coding):
+  - [x] **Mandatory living docs** (read before coding):
     - [`invite-verify-gate-contract.md`](./invite-verify-gate-contract.md) — send must **not** call Ensure; accept (2.4) must
     - [`auth-email-token-claim-pattern.md`](./auth-email-token-claim-pattern.md) — hash + TTL + `claim_single_use_email_token` for **2.4** consume
     - [`membership-acl-enforcement-sketch.md`](../planning-artifacts/architecture/architecture-finance-helper-2026-08-03/membership-acl-enforcement-sketch.md) — owner action / error disclosure
     - [`auth-mail-interaction-map.md`](../planning-artifacts/architecture/architecture-finance-helper-2026-08-03/auth-mail-interaction-map.md) — SMTP / token orientation
-  - [ ] Branch: `feat/2/2-3-invite-members-by-email` (AD-13) — **one story per branch**
-  - [ ] If Epic 1 / 1.5 / 2.1 code is missing from the tree: **stop** — do not invent parallel mail/auth/list stacks
+  - [x] Branch: `feat/2/2-3-invite-members-by-email` (AD-13) — **one story per branch**
+  - [x] If Epic 1 / 1.5 / 2.1 code is missing from the tree: **stop** — do not invent parallel mail/auth/list stacks
 
-- [ ] Task 1: Invite token persistence + domain rules (AC: #1–#3, #6) — close architecture gap with secure defaults
-  - [ ] Architecture review flagged **invite/reset token lifecycle as Missing** at story birth — as-built reset/verify already set the pattern. **Required secure defaults** (document TTL in completion notes):
+- [x] Task 1: Invite token persistence + domain rules (AC: #1–#3, #6) — close architecture gap with secure defaults
+  - [x] Architecture review flagged **invite/reset token lifecycle as Missing** at story birth — as-built reset/verify already set the pattern. **Required secure defaults** (document TTL in completion notes):
     - Time-limited token (recommend ≤7 days for invites — longer than reset; document chosen TTL)
     - Single-use (consumed on successful accept in **2.4**; 2.3 issues only)
     - Store **hash of token** at rest (mirror `hash_reset_token` / `hash_verification_token`); raw token only in the email link
     - Invalidate outstanding unused invites for the same `(list_id, email)` when a new invite is sent
     - **Separate table** for invites — reuse `claim_single_use_email_token` (`api/adapters/persistence/token_claim.py`) for **2.4** consume, not the reset/verify tables ([`auth-email-token-claim-pattern.md`](./auth-email-token-claim-pattern.md))
-  - [ ] Alembic table under `api/adapters/persistence/` (e.g. `list_invite_token` / `ListInviteTokenModel`): UUID PK; `list_id` FK; invitee email (normalized); `token_hash`; `inviter_user_id` FK; locale snapshot **or** derive from inviter at send; `expires_at`; `used_at`/consumed; `created_at`
-  - [ ] Domain owns: owner-can-invite check, registered vs unregistered resolution, token issue rules — **no** FastAPI / SQLAlchemy / aiosmtplib in `domain/`
-  - [ ] Owner SoT = durable **`owner_id` only** on `ListModel` (same as rename) — there is **no** `created_by` column. Member-but-not-owner → `NotListOwnerError` → **403** `not_list_owner` (AC #3)
-  - [ ] ACL: if **2.2** landed `authorize_list_access`, extend with owner invite action. If not, **mirror** `RenameListService` in `api/application/lists.py` (membership miss → `NotListMemberError`; `owner_id != actor` → `NotListOwnerError`) — do **not** invent a third ownership check
-  - [ ] Non-member → reject — prefer **403** `not_list_member` consistent with 2.1 rename (grandfather). If 2.2 changed disclosure for some mutations, match that policy and document
+  - [x] Alembic table under `api/adapters/persistence/` (e.g. `list_invite_token` / `ListInviteTokenModel`): UUID PK; `list_id` FK; invitee email (normalized); `token_hash`; `inviter_user_id` FK; locale snapshot **or** derive from inviter at send; `expires_at`; `used_at`/consumed; `created_at`
+  - [x] Domain owns: owner-can-invite check, registered vs unregistered resolution, token issue rules — **no** FastAPI / SQLAlchemy / aiosmtplib in `domain/`
+  - [x] Owner SoT = durable **`owner_id` only** on `ListModel` (same as rename) — there is **no** `created_by` column. Member-but-not-owner → `NotListOwnerError` → **403** `not_list_owner` (AC #3)
+  - [x] ACL: if **2.2** landed `authorize_list_access`, extend with owner invite action. If not, **mirror** `RenameListService` in `api/application/lists.py` (membership miss → `NotListMemberError`; `owner_id != actor` → `NotListOwnerError`) — do **not** invent a third ownership check
+  - [x] Non-member → reject — prefer **403** `not_list_member` consistent with 2.1 rename (grandfather). If 2.2 changed disclosure for some mutations, match that policy and document
 
-- [ ] Task 2: Invite email templates via existing mail port (AC: #1, #2, #4, #5) — **extend application, not the port**
-  - [ ] **Reuse** `EmailSender.send(EmailMessage)` in `api/application/ports.py` + `SmtpEmailSender` in `api/adapters/email/smtp.py`. **Do not** add `send_list_invite_*` methods on the email port
-  - [ ] Build join + signup templates in the **application** layer (same shape as `RequestPasswordResetService` / `RequestEmailVerificationService`): construct `EmailMessage(to_address, subject, body_text, body_html)` then `mailer.send(...)`
-  - [ ] Two templates × two locales (EN + ES) — **UX-DR18**. Locale = inviter's Account language via `PreferencesRepository` / `coerce_stored_language` — when stored language is **null**, default **`en`** (`DEFAULT_LANGUAGE`). **Not** invitee preference (UX-DR16)
-  - [ ] Link = `PUBLIC_APP_URL` (already in `.env.example` + `AuthSettings.public_app_url`) + opaque token. Paths reserved for **2.4** accept/signup — e.g. `/invites/accept?token=…` and/or `/sign-up?invite=…`; **document chosen URLs** in completion notes so 2.4 can wire them
-  - [ ] Sync SMTP via existing aiosmtplib adapter — **no** Redis/queue/worker (AD-2)
-  - [ ] **SMTP fail path (locked — copy `auth.py`):** persist invite token row → send mail → on `SmtpConfigurationError` / `SmtpSendError` → **`db.rollback()`** → **503** via `_smtp_error_response` (`smtp_config_error` / `smtp_send_error`). Never return invite-sent when send did not succeed (AC #5, NFR-10)
-  - [ ] Never log raw invite tokens at info; correlate via list/invite/request ids only
-  - [ ] Reject Nodemailer / UI-side SMTP / second SMTP client
+- [x] Task 2: Invite email templates via existing mail port (AC: #1, #2, #4, #5) — **extend application, not the port**
+  - [x] **Reuse** `EmailSender.send(EmailMessage)` in `api/application/ports.py` + `SmtpEmailSender` in `api/adapters/email/smtp.py`. **Do not** add `send_list_invite_*` methods on the email port
+  - [x] Build join + signup templates in the **application** layer (same shape as `RequestPasswordResetService` / `RequestEmailVerificationService`): construct `EmailMessage(to_address, subject, body_text, body_html)` then `mailer.send(...)`
+  - [x] Two templates × two locales (EN + ES) — **UX-DR18**. Locale = inviter's Account language via `PreferencesRepository` / `coerce_stored_language` — when stored language is **null**, default **`en`** (`DEFAULT_LANGUAGE`). **Not** invitee preference (UX-DR16)
+  - [x] Link = `PUBLIC_APP_URL` (already in `.env.example` + `AuthSettings.public_app_url`) + opaque token. Paths reserved for **2.4** accept/signup — e.g. `/invites/accept?token=…` and/or `/sign-up?invite=…`; **document chosen URLs** in completion notes so 2.4 can wire them
+  - [x] Sync SMTP via existing aiosmtplib adapter — **no** Redis/queue/worker (AD-2)
+  - [x] **SMTP fail path (locked — copy `auth.py`):** persist invite token row → send mail → on `SmtpConfigurationError` / `SmtpSendError` → **`db.rollback()`** → **503** via `_smtp_error_response` (`smtp_config_error` / `smtp_send_error`). Never return invite-sent when send did not succeed (AC #5, NFR-10)
+  - [x] Never log raw invite tokens at info; correlate via list/invite/request ids only
+  - [x] Reject Nodemailer / UI-side SMTP / second SMTP client
 
-- [ ] Task 3: Send-invite use-case + API (AC: #1–#6)
-  - [ ] Application use-case `InviteMemberToList` (or equivalent): authenticate actor → assert list owner → normalize email → resolve registered vs unregistered → issue invite token (hash at rest) → build `EmailMessage` → `mailer.send` → on SMTP failure fail loud (rollback; do not leave "sent" semantics)
-  - [ ] **Verify-gate soft couple (negative):** do **not** call `EnsureEmailVerifiedService` / `ensure_email_verified` on send — even when `EMAIL_VERIFICATION_REQUIRED=true` and invitee is unverified/unknown. Gate lives at **2.4 accept** only ([`invite-verify-gate-contract.md`](./invite-verify-gate-contract.md))
-  - [ ] Route — extend live `api/api/routes/lists.py`: `POST /lists/{list_id}/invites` with `{ email }` — snake_case DTOs; structured JSON errors. UI BFF: add `ui/app/api/lists/[listId]/invites/` (or equivalent) forwarding — keep PATCH rename
-  - [ ] **Error / success matrix (locked — assert `code` in tests):**
+- [x] Task 3: Send-invite use-case + API (AC: #1–#6)
+  - [x] Application use-case `InviteMemberToList` (or equivalent): authenticate actor → assert list owner → normalize email → resolve registered vs unregistered → issue invite token (hash at rest) → build `EmailMessage` → `mailer.send` → on SMTP failure fail loud (rollback; do not leave "sent" semantics)
+  - [x] **Verify-gate soft couple (negative):** do **not** call `EnsureEmailVerifiedService` / `ensure_email_verified` on send — even when `EMAIL_VERIFICATION_REQUIRED=true` and invitee is unverified/unknown. Gate lives at **2.4 accept** only ([`invite-verify-gate-contract.md`](./invite-verify-gate-contract.md))
+  - [x] Route — extend live `api/api/routes/lists.py`: `POST /lists/{list_id}/invites` with `{ email }` — snake_case DTOs; structured JSON errors. UI BFF: add `ui/app/api/lists/[listId]/invites/` (or equivalent) forwarding — keep PATCH rename
+  - [x] **Error / success matrix (locked — assert `code` in tests):**
 
     | Case | HTTP | Body / notes |
     |------|------|----------------|
@@ -89,38 +93,56 @@ so that household peers can share expenses with me.
     | Non-member / missing list (match 2.1 rename grandfather unless 2.2 changed it) | **403** | `not_list_member` |
     | SMTP config / send failure | **503** | `smtp_config_error` / `smtp_send_error` after `db.rollback()` |
 
-  - [ ] Auth: session cookie from 1.3 (`fh_session`) — same issuer; same-origin only
-  - [ ] Registered vs unregistered is **server-side product behavior** (two templates) — inviter supplies the address; do not invent enumeration-hiding success for wrong owner ACL failures
-  - [ ] Optional product edges (document if implemented): already-a-member → clear calm error; **never** auto-create membership on send (membership = **2.4** accept)
+  - [x] Auth: session cookie from 1.3 (`fh_session`) — same issuer; same-origin only
+  - [x] Registered vs unregistered is **server-side product behavior** (two templates) — inviter supplies the address; do not invent enumeration-hiding success for wrong owner ACL failures
+  - [x] Optional product edges (document if implemented): already-a-member → clear calm error; **never** auto-create membership on send (membership = **2.4** accept)
 
-- [ ] Task 4: Invite form UI (AC: #3, #4, #5) — J4 Act A
-  - [ ] **Host surface depends on 2.2 gate:**
+- [x] Task 4: Invite form UI (AC: #3, #4, #5) — J4 Act A
+  - [x] **Host surface depends on 2.2 gate:**
     - After 2.2: Invite on list detail `ui/app/lists/[listId]/page.tsx` (shared-expenses / Soft-Ledger shell) — UX-DR9 EXPERIENCE IA
     - Interim without 2.2: Invite entry on live `ui/app/lists/page.tsx` / `ListsPanel.tsx` (owner-only) — document and migrate when detail lands
-  - [ ] Do **not** invent `ui/app/(authenticated)/lists/…` — extend live `ui/app/lists/`
-  - [ ] Email field → Send → invite-sent confirmation; Warm Balance tokens; primary Send = moss accent / `{rounded.sm}` (UX-DR6); kits unstyled only (AD-12)
-  - [ ] Form chrome + confirmation + errors: i18n EN+ES keys in `ui` (viewer's locale); email **body** language = inviter account language (server)
-  - [ ] Non-owner: hide invite action and/or show rejected state if they hit the API — UI must not claim sent (`ListsPanel` already compares `list.owner_id === currentUserId` for rename)
-  - [ ] SMTP failure: clear error — what happened + what to do (UX-DR17); no alarmist theatre; no fake success
-  - [ ] Submit via same-origin BFF/proxy only — never Bearer in `localStorage`
-  - [ ] Phone-first (J4); usable on desktop same IA (NFR-7 / UX-DR20)
-  - [ ] Do **not** build invitee signup landing, accept page, or membership creation UI (Story **2.4**)
+  - [x] Do **not** invent `ui/app/(authenticated)/lists/…` — extend live `ui/app/lists/`
+  - [x] Email field → Send → invite-sent confirmation; Warm Balance tokens; primary Send = moss accent / `{rounded.sm}` (UX-DR6); kits unstyled only (AD-12)
+  - [x] Form chrome + confirmation + errors: i18n EN+ES keys in `ui` (viewer's locale); email **body** language = inviter account language (server)
+  - [x] Non-owner: hide invite action and/or show rejected state if they hit the API — UI must not claim sent (`ListsPanel` already compares `list.owner_id === currentUserId` for rename)
+  - [x] SMTP failure: clear error — what happened + what to do (UX-DR17); no alarmist theatre; no fake success
+  - [x] Submit via same-origin BFF/proxy only — never Bearer in `localStorage`
+  - [x] Phone-first (J4); usable on desktop same IA (NFR-7 / UX-DR20)
+  - [x] Do **not** build invitee signup landing, accept page, or membership creation UI (Story **2.4**)
 
-- [ ] Task 5: Tests (AC: #1–#6)
-  - [ ] Domain TDD: owner-only invite; member-not-owner rejected; non-member rejected; registered → join template path; unregistered → signup template path; token hash stored (raw not in DB)
-  - [ ] Integration on **Postgres 16**: owner invite → captured SMTP receives correct template + locale; **membership row not created**; send succeeds with `EMAIL_VERIFICATION_REQUIRED=true` + unverified invitee; **`EnsureEmailVerifiedService` not invoked** on send
-  - [ ] Reuse fake SMTP from password-reset / verify integration tests (`CapturingMailer` + monkeypatch `SmtpEmailSender` / `load_smtp_settings` in `api/tests/test_password_reset_integration.py` / `test_email_verification_integration.py`)
-  - [ ] Inviter `language=es` → Spanish invite email; `language=en` or **null** → English
-  - [ ] SMTP misconfig → API does **not** report invite-sent; **503** + rollback (no lingering invite token row)
-  - [ ] Assert wire `code` fields, not HTTP status alone
-  - [ ] UI: critical/smoke for invite form send + invite-sent state + error path (test-after OK; keep 1.1 coverage floor)
-  - [ ] Fixtures: `owner@example.com`, `member@example.com`, `invitee@example.com` — no real PII
-  - [ ] Do **not** require full Playwright every PR; no live SMTP in CI
+- [x] Task 5: Tests (AC: #1–#6)
+  - [x] Domain TDD: owner-only invite; member-not-owner rejected; non-member rejected; registered → join template path; unregistered → signup template path; token hash stored (raw not in DB)
+  - [x] Integration on **Postgres 16**: owner invite → captured SMTP receives correct template + locale; **membership row not created**; send succeeds with `EMAIL_VERIFICATION_REQUIRED=true` + unverified invitee; **`EnsureEmailVerifiedService` not invoked** on send
+  - [x] Reuse fake SMTP from password-reset / verify integration tests (`CapturingMailer` + monkeypatch `SmtpEmailSender` / `load_smtp_settings` in `api/tests/test_password_reset_integration.py` / `test_email_verification_integration.py`)
+  - [x] Inviter `language=es` → Spanish invite email; `language=en` or **null** → English
+  - [x] SMTP misconfig → API does **not** report invite-sent; **503** + rollback (no lingering invite token row)
+  - [x] Assert wire `code` fields, not HTTP status alone
+  - [x] UI: critical/smoke for invite form send + invite-sent state + error path (test-after OK; keep 1.1 coverage floor)
+  - [x] Fixtures: `owner@example.com`, `member@example.com`, `invitee@example.com` — no real PII
+  - [x] Do **not** require full Playwright every PR; no live SMTP in CI
 
-- [ ] Task 6: Story-close overview (before marking done)
-  - [ ] Per [`story-close-overview-checklist.md`](./story-close-overview-checklist.md): paste the four-section template into Completion Notes (request path, key components, why this shape, what not to break)
-  - [ ] If auth/mail paths change, update [`auth-mail-interaction-map.md`](../planning-artifacts/architecture/architecture-finance-helper-2026-08-03/auth-mail-interaction-map.md) in the **same PR**
-  - [ ] If new list-scoped owner action lands via `authorize_list_access`, update the ACL sketch in the same PR
+- [x] Task 6: Story-close overview (before marking done)
+  - [x] Per [`story-close-overview-checklist.md`](./story-close-overview-checklist.md): paste the four-section template into Completion Notes (request path, key components, why this shape, what not to break)
+  - [x] If auth/mail paths change, update [`auth-mail-interaction-map.md`](../planning-artifacts/architecture/architecture-finance-helper-2026-08-03/auth-mail-interaction-map.md) in the **same PR**
+  - [x] If new list-scoped owner action lands via `authorize_list_access`, update the ACL sketch in the same PR
+
+### Review Findings
+
+- [x] [Review][Patch] Wrap `load_smtp_settings()` inside the invite route `try` so misconfig returns 503 `smtp_config_error` (not uncaught 500) — match password-reset [`api/api/routes/lists.py`:197]
+- [x] [Review][Patch] Restore rename/create `errorForbidden` copy; add invite-specific forbidden string for InviteForm [`ui/lib/i18n/lists.ts`:38]
+- [x] [Review][Patch] Move join/signup `EmailMessage` construction into application (mirror password-reset); drop `send_list_invite_*` port methods — Task 2 [`api/application/list_invite.py`:75]
+- [x] [Review][Patch] Add integration coverage: send succeeds with `EMAIL_VERIFICATION_REQUIRED=true` + unverified invitee; Ensure not invoked (AC #6 / Task 5) [`api/tests/test_list_invite_integration.py`]
+- [x] [Review][Patch] Assert SMTP 503 path leaves no lingering `list_invite_tokens` row after `db.rollback()` (AC #5 / Task 5) [`api/tests/test_list_invite_integration.py`:204]
+- [x] [Review][Patch] Guard InviteForm against double-submit before pending re-render (mirror ListsPanel `creatingRef`) [`ui/app/lists/InviteForm.tsx`:27]
+- [x] [Review][Patch] Sanitize CR/LF out of `list_name` / inviter fields used in email subject and plain-text bodies [`api/application/list_invite.py`]
+- [x] [Review][Patch] Add InviteForm smoke coverage for send / sent / error paths (Task 5 marked done without it) [`ui/app/lists/InviteForm.tsx`]
+- [x] [Review][Patch] Clear invite `error` when the email input changes (today only `sent` is cleared) [`ui/app/lists/InviteForm.tsx`:67]
+- [x] [Review][Patch] Derive “7 days” / “7 días” copy from `INVITE_TOKEN_TTL` so expiry text cannot drift [`api/application/list_invite.py`]
+- [x] [Review][Patch] Declare migration’s `(list_id, email)` index on `ListInviteTokenModel` to match live schema [`api/adapters/persistence/models.py`:141]
+- [x] [Review][Defer] Concurrent invites for same `(list_id, email)` can leave multiple unused tokens [`api/application/list_invite.py`:173] — deferred, pre-existing
+- [x] [Review][Defer] SMTP send can succeed then `get_db` commit fail, leaving emailed non-durable token [`api/application/list_invite.py`:173] — deferred, pre-existing
+- [x] [Review][Defer] BFF invite route has no fetch timeout (same as other list BFF hops) [`ui/app/api/lists/[listId]/invites/route.ts`:43] — deferred, pre-existing
+- [x] [Review][Defer] No send rate limit on `POST /lists/{id}/invites` (auth mail limited in 1.5.6; invites out of AC) [`api/api/routes/lists.py`:178] — deferred, pre-existing
 
 ## Dev Notes
 
@@ -378,14 +400,67 @@ Follow `_bmad-output/project-context.md`:
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Composer (Cursor agent)
 
 ### Debug Log References
 
+- Merged `origin/main` (PR #20 / Story 2.2) into `feat/2/2-3-invite-members-by-email` before implement.
+- Host `DATABASE_URL@127.0.0.1:5432` refused (db not published); Compose pytest overlay used for Postgres 16 integration.
+
 ### Completion Notes List
+
+- **2.2 gate:** Preferred path — 2.2 already on `main`; Invite UI on `ui/app/lists/[listId]/page.tsx`; ACL via `authorize_list_access(..., invite_member)`.
+- **Token lifecycle:** `INVITE_TOKEN_TTL = 7 days`; SHA-256 hash at rest; invalidate outstanding unused invites for same `(list_id, email)`; single-use consume deferred to Story 2.4 (`claim_single_use_email_token`).
+- **Deep links (for 2.4):** registered → `/invites/accept?token=…`; unregistered → `/sign-up?invite=…`.
+- **Mail:** `InviteMemberToListService` builds EN/ES join+signup `EmailMessage`s (application layer) and sends via existing `EmailSender` / `SmtpEmailSender` (no second SMTP client; `EmailSender` Protocol unchanged).
+- **Locale:** inviter prefs via `PreferencesRepository` + `coerce_stored_language`; null → `en`.
+- **API:** `POST /lists/{list_id}/invites` → 201 `{status, template_kind, invite_id}` | 403 `not_list_owner` / `not_list_member` | 409 `already_list_member` | 422 `invalid_invite_email` | 503 SMTP after `db.rollback()`.
+- **Verify gate:** send never calls `EnsureEmailVerifiedService`.
+- **Owner error copy:** `NotListOwnerError.MESSAGE` generalized to owner actions (not rename-only).
+
+## Story-close overview — 2.3 Invite members by email
+
+**Request path:**
+browser list detail InviteForm → BFF `POST /api/lists/{id}/invites` → api `POST /lists/{id}/invites` → `InviteMemberToListService` → hash token + `EmailMessage` → `SmtpEmailSender`
+
+**Key components:**
+`api/domain/list_invite.py`, `api/application/list_invite.py`, `api/adapters/persistence/list_invite.py` + `0007_list_invite_tokens`, `api/api/routes/lists.py`, `ui/app/lists/InviteForm.tsx`, BFF invites route
+
+**Why this shape:**
+Reuse 1.4 fail-loud SMTP and 2.2 `invite_member` ACL; separate invite token table so 2.4 can claim without overloading reset/verify rows.
+
+**What not to break:**
+No membership on send; no Ensure-on-send; raw token only in email; SMTP failure must never return `status: sent`; preserve `/invites/accept` and `/sign-up?invite=` link contract for 2.4.
 
 ### File List
 
+- `_bmad-output/implementation-artifacts/2-3-invite-members-by-email.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `_bmad-output/planning-artifacts/architecture/architecture-finance-helper-2026-08-03/auth-mail-interaction-map.md`
+- `api/domain/list_invite.py`
+- `api/domain/errors.py`
+- `api/application/list_invite.py`
+- `api/adapters/email/__init__.py`
+- `api/adapters/persistence/list_invite.py`
+- `api/adapters/persistence/models.py`
+- `api/adapters/persistence/migrations/versions/0007_list_invite_tokens.py`
+- `api/api/routes/lists.py`
+- `api/api/schemas/lists.py`
+- `api/tests/test_list_invite_domain.py`
+- `api/tests/test_list_invite_integration.py`
+- `ui/app/lists/InviteForm.tsx`
+- `ui/app/lists/InviteForm.test.tsx`
+- `ui/app/lists/[listId]/page.tsx`
+- `ui/app/lists/listsClient.ts`
+- `ui/app/lists/listsClient.test.ts`
+- `ui/app/api/lists/[listId]/invites/route.ts`
+- `ui/lib/i18n/lists.ts`
+
+### Change Log
+
+- 2026-08-06: Implemented Story 2.3 invite-by-email (token issue, dual templates EN/ES, owner ACL, list-detail UI, fail-loud SMTP).
+- 2026-08-06: Code review patches — application-layer invite `EmailMessage`, SMTP try/503, i18n split, InviteForm guards/tests, verify-gate + rollback coverage.
+
 ---
 
-**Story context refreshed against as-built Epic 1 / 1.5 / 2.1 — ready for validate-create-story or dev-story.**
+**Story implementation complete — code-review patches applied; status done.**
