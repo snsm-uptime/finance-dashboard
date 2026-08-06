@@ -50,3 +50,13 @@ class ListExpensesStubResponse(BaseModel):
 class ListBalancesStubResponse(BaseModel):
     list_id: UUID
     balance_crc: str
+
+
+class InviteMemberBody(BaseModel):
+    email: str = Field(max_length=320)
+
+
+class InviteMemberResponse(BaseModel):
+    status: str
+    template_kind: str
+    invite_id: UUID

@@ -13,6 +13,9 @@ export type ListsClientMessages = {
   errorInvalidName: string;
   errorForbidden: string;
   errorUnauthorized: string;
+  errorInvalidEmail?: string;
+  errorAlreadyMember?: string;
+  errorSmtp?: string;
 };
 
 type ErrorResult = { ok: false; error: string };
@@ -34,7 +37,15 @@ function mapError(
   const code = typeof body?.code === "string" ? body.code : "";
   if (status === 401) return messages.errorUnauthorized;
   if (status === 403) return messages.errorForbidden;
-  if (status === 422 || code === "invalid_list_name") return messages.errorInvalidName;
+  if (status === 409 || code === "already_list_member") {
+    return messages.errorAlreadyMember ?? messages.errorGeneric;
+  }
+  if (status === 422 || code === "invalid_list_name" || code === "invalid_invite_email") {
+    return messages.errorInvalidEmail ?? messages.errorInvalidName;
+  }
+  if (status === 503 || code === "smtp_send_error" || code === "smtp_config_error") {
+    return messages.errorSmtp ?? messages.errorGeneric;
+  }
   return messages.errorGeneric;
 }
 
@@ -134,6 +145,55 @@ export async function setLastOpenedList(
     return { ok: false, error: mapError(response.status, body, messages) };
   }
   return { ok: true };
+}
+
+export type InviteSent = {
+  status: string;
+  template_kind: string;
+  invite_id: string;
+};
+
+type OkInvite = { ok: true; invite: InviteSent };
+
+export async function inviteMember(
+  listId: string,
+  email: string,
+  messages: ListsClientMessages,
+): Promise<OkInvite | ErrorResult> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/lists/${encodeURIComponent(listId)}/invites`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ email }),
+    });
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  if (!response.ok) {
+    const body = (await parseJson(response)) as {
+      detail?: unknown;
+      code?: unknown;
+    } | null;
+    return { ok: false, error: mapError(response.status, body, messages) };
+  }
+  const data = (await parseJson(response)) as {
+    status?: string;
+    template_kind?: string;
+    invite_id?: string;
+  } | null;
+  if (!data?.status || data.status !== "sent" || !data.invite_id || !data.template_kind) {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  return {
+    ok: true,
+    invite: {
+      status: data.status,
+      template_kind: data.template_kind,
+      invite_id: data.invite_id,
+    },
+  };
 }
 
 export function balanceTone(balanceCrc: string | undefined): "owe" | "owed" | "zero" {
