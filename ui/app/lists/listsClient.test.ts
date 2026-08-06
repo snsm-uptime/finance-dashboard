@@ -65,3 +65,49 @@ describe("listsClient", () => {
     expect(result).toEqual({ ok: false, error: "generic" });
   });
 });
+
+import { saveDefaultSplit } from "./listsClient";
+
+describe("default split client", () => {
+  it("maps 422 invalid_default_split to invalid message", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 422,
+        json: async () => ({ code: "invalid_default_split", detail: "bad" }),
+      }),
+    );
+
+    const result = await saveDefaultSplit(
+      "list-1",
+      { mode: "percentage", shares: [{ user_id: "a", percentage: "60" }] },
+      { ...messages, errorInvalidName: "invalid-split" },
+    );
+    expect(result).toEqual({ ok: false, error: "invalid-split" });
+  });
+
+  it("returns split payload on success", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          list_id: "l1",
+          owner_id: "o1",
+          mode: "even",
+          shares: [{ user_id: "o1", percentage: "100.00" }],
+          member_ids: ["o1"],
+        }),
+      }),
+    );
+
+    const result = await saveDefaultSplit("l1", { mode: "even" }, messages);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.split.mode).toBe("even");
+      expect(result.split.shares[0]?.percentage).toBe("100.00");
+    }
+  });
+});

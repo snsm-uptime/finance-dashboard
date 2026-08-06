@@ -142,3 +142,100 @@ export function balanceTone(balanceCrc: string | undefined): "owe" | "owed" | "z
   if (raw !== "0" && raw !== "0.00" && raw !== "") return "owed";
   return "zero";
 }
+
+export type DefaultSplitShare = {
+  user_id: string;
+  percentage: string;
+};
+
+export type DefaultSplitPayload = {
+  list_id: string;
+  owner_id: string;
+  mode: "even" | "percentage";
+  shares: DefaultSplitShare[];
+  member_ids: string[];
+};
+
+type OkDefaultSplit = { ok: true; split: DefaultSplitPayload };
+
+function asDefaultSplit(data: unknown): DefaultSplitPayload | null {
+  if (!data || typeof data !== "object") return null;
+  const row = data as Partial<DefaultSplitPayload>;
+  if (
+    typeof row.list_id !== "string" ||
+    typeof row.owner_id !== "string" ||
+    (row.mode !== "even" && row.mode !== "percentage") ||
+    !Array.isArray(row.shares) ||
+    !Array.isArray(row.member_ids)
+  ) {
+    return null;
+  }
+  return {
+    list_id: row.list_id,
+    owner_id: row.owner_id,
+    mode: row.mode,
+    shares: row.shares as DefaultSplitShare[],
+    member_ids: row.member_ids as string[],
+  };
+}
+
+export async function fetchDefaultSplit(
+  listId: string,
+  messages: ListsClientMessages,
+): Promise<OkDefaultSplit | ErrorResult> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/lists/${encodeURIComponent(listId)}/default-split`, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+    });
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  if (!response.ok) {
+    const body = (await parseJson(response)) as {
+      detail?: unknown;
+      code?: unknown;
+    } | null;
+    return { ok: false, error: mapError(response.status, body, messages) };
+  }
+  const data = asDefaultSplit(await parseJson(response));
+  if (!data) return { ok: false, error: messages.errorGeneric };
+  return { ok: true, split: data };
+}
+
+export async function saveDefaultSplit(
+  listId: string,
+  body: { mode: "even" } | { mode: "percentage"; shares: DefaultSplitShare[] },
+  messages: ListsClientMessages & { errorInvalidName?: string },
+): Promise<OkDefaultSplit | ErrorResult> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/lists/${encodeURIComponent(listId)}/default-split`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify(body),
+    });
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  if (!response.ok) {
+    const parsed = (await parseJson(response)) as {
+      detail?: unknown;
+      code?: unknown;
+    } | null;
+    const code = typeof parsed?.code === "string" ? parsed.code : "";
+    if (response.status === 422 || code === "invalid_default_split") {
+      return {
+        ok: false,
+        error: messages.errorInvalidName ?? messages.errorGeneric,
+      };
+    }
+    return { ok: false, error: mapError(response.status, parsed, messages) };
+  }
+  const data = asDefaultSplit(await parseJson(response));
+  if (!data) return { ok: false, error: messages.errorGeneric };
+  return { ok: true, split: data };
+}

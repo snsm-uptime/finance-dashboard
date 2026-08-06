@@ -146,7 +146,7 @@ class NotListMemberError(DomainError):
 class NotListOwnerError(DomainError):
     """Raised when a member who is not the owner attempts an owner-only action."""
 
-    MESSAGE = "Only the list owner can rename this list."
+    MESSAGE = "Only the list owner can do this."
 
     def __init__(self, detail: str | None = None) -> None:
         super().__init__(detail or self.MESSAGE)
@@ -156,6 +156,15 @@ class ListWriteError(DomainError):
     """Raised when list persistence fails due to a constraint / integrity error."""
 
     MESSAGE = "Could not create the list. Try again."
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(detail or self.MESSAGE)
+
+
+class InvalidDefaultSplitError(DomainError):
+    """Raised when standing default-split mode/shares fail validation (FR-9)."""
+
+    MESSAGE = "Default split percentages must sum to exactly 100 across current members."
 
     def __init__(self, detail: str | None = None) -> None:
         super().__init__(detail or self.MESSAGE)

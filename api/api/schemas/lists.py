@@ -1,7 +1,8 @@
-"""Pydantic DTOs for list create / rename / membership / detail (snake_case wire)."""
+"""Pydantic DTOs for list create / rename / membership / detail / default split."""
 
 from __future__ import annotations
 
+from typing import Literal
 from uuid import UUID
 
 from domain.lists import LIST_NAME_MAX_LENGTH
@@ -50,3 +51,21 @@ class ListExpensesStubResponse(BaseModel):
 class ListBalancesStubResponse(BaseModel):
     list_id: UUID
     balance_crc: str
+
+
+class DefaultSplitShareItem(BaseModel):
+    user_id: UUID
+    percentage: str
+
+
+class DefaultSplitResponse(BaseModel):
+    list_id: UUID
+    owner_id: UUID
+    mode: Literal["even", "percentage"]
+    shares: list[DefaultSplitShareItem]
+    member_ids: list[UUID]
+
+
+class SetDefaultSplitBody(BaseModel):
+    mode: Literal["even", "percentage"]
+    shares: list[DefaultSplitShareItem] | None = None

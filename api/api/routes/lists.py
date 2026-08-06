@@ -1,9 +1,10 @@
-"""List create / rename / membership / ACL-gated reads (Stories 2.1 / 2.2)."""
+"""List create / rename / membership / ACL-gated reads / default split (2.1 / 2.2 / 2.5)."""
 
 from __future__ import annotations
 
 import logging
 import uuid
+from decimal import Decimal, InvalidOperation
 
 from adapters.persistence.repositories import SqlAlchemyListRepository
 from application.lists import (
@@ -11,6 +12,8 @@ from application.lists import (
     CreateOwnedListService,
     GetListBalancesStubCommand,
     GetListBalancesStubService,
+    GetListDefaultSplitCommand,
+    GetListDefaultSplitService,
     GetListDetailCommand,
     GetListDetailService,
     GetListExpensesStubCommand,
@@ -19,8 +22,11 @@ from application.lists import (
     ListMembershipsService,
     RenameListCommand,
     RenameListService,
+    SetListDefaultSplitCommand,
+    SetListDefaultSplitService,
 )
 from domain.errors import (
+    InvalidDefaultSplitError,
     InvalidListNameError,
     ListNotFoundError,
     ListWriteError,
@@ -34,6 +40,8 @@ from sqlalchemy.orm import Session
 from api.deps import get_db, require_authenticated_user
 from api.schemas.lists import (
     CreateListBody,
+    DefaultSplitResponse,
+    DefaultSplitShareItem,
     ListBalancesStubResponse,
     ListDetailResponse,
     ListExpensesStubResponse,
@@ -41,6 +49,7 @@ from api.schemas.lists import (
     ListMembershipsResponse,
     ListResponse,
     RenameListBody,
+    SetDefaultSplitBody,
 )
 
 logger = logging.getLogger(__name__)
@@ -65,6 +74,22 @@ def _list_not_found() -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND,
         content={"detail": ListNotFoundError.MESSAGE, "code": "list_not_found"},
+    )
+
+
+def _default_split_response(view: object) -> DefaultSplitResponse:
+    return DefaultSplitResponse(
+        list_id=view.list_id,  # type: ignore[attr-defined]
+        owner_id=view.owner_id,  # type: ignore[attr-defined]
+        mode=view.mode,  # type: ignore[attr-defined]
+        shares=[
+            DefaultSplitShareItem(
+                user_id=s.user_id,
+                percentage=format(s.percentage, "f"),
+            )
+            for s in view.shares  # type: ignore[attr-defined]
+        ],
+        member_ids=list(view.member_ids),  # type: ignore[attr-defined]
     )
 
 
@@ -126,6 +151,72 @@ def get_list_detail(
     except ListNotFoundError:
         return _list_not_found()
     return ListDetailResponse(id=result.id, name=result.name, owner_id=result.owner_id)
+
+
+@router.get("/{list_id}/default-split", response_model=DefaultSplitResponse)
+def get_list_default_split(
+    list_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> DefaultSplitResponse | JSONResponse:
+    service = GetListDefaultSplitService(SqlAlchemyListRepository(db))
+    try:
+        view = service.execute(
+            GetListDefaultSplitCommand(actor_user_id=user_id, list_id=list_id)
+        )
+    except ListNotFoundError:
+        return _list_not_found()
+    return _default_split_response(view)
+
+
+@router.put("/{list_id}/default-split", response_model=DefaultSplitResponse)
+def put_list_default_split(
+    list_id: uuid.UUID,
+    body: SetDefaultSplitBody,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> DefaultSplitResponse | JSONResponse:
+    shares: dict[uuid.UUID, Decimal] | None = None
+    if body.shares is not None:
+        shares = {}
+        try:
+            for item in body.shares:
+                shares[item.user_id] = Decimal(item.percentage)
+        except (InvalidOperation, ValueError):
+            return JSONResponse(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                content={
+                    "detail": "Percentages must be exact decimal strings.",
+                    "code": "invalid_default_split",
+                },
+            )
+
+    service = SetListDefaultSplitService(SqlAlchemyListRepository(db))
+    try:
+        view = service.execute(
+            SetListDefaultSplitCommand(
+                actor_user_id=user_id,
+                list_id=list_id,
+                mode=body.mode,
+                shares=shares,
+            )
+        )
+    except InvalidDefaultSplitError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            content={"detail": str(exc), "code": "invalid_default_split"},
+        )
+    except NotListOwnerError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={"detail": str(exc), "code": "not_list_owner"},
+        )
+    except NotListMemberError:
+        return _access_denied()
+    except ListNotFoundError:
+        return _access_denied()
+    logger.info("list_default_split_updated list_id=%s mode=%s", list_id, view.mode)
+    return _default_split_response(view)
 
 
 @router.get("/{list_id}/expenses", response_model=ListExpensesStubResponse)

@@ -1,6 +1,10 @@
+---
+baseline_commit: 66f1e29bd32d2f6fdc3617b115d4d56873666cb6
+---
+
 # Story 2.5: Configurable list default split
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -34,66 +38,66 @@ so that new items inherit our household arrangement without per-item edits.
 
 ## Tasks / Subtasks
 
-- [ ] Task 0: Base branch + confirm list/ACL stack (prerequisite)
-  - [ ] **Start from `origin/main` after Story 2.2** (merge/rebase before coding). Tip with only 2.1 lacks `list_access` and `ui/app/lists/[listId]/` — do not re-implement 2.2
-  - [ ] Required on base: **1.2** (User / List / ListMembership), **1.3** (session cookie), **2.1** (create/rename + `owner_id`), **2.2** (`authorize_list_access` + list detail shell)
-  - [ ] **2.3 / 2.4 are story-only today** (no invite runtime). Multi-member demos and tests: **seed** `ListMembership` rows directly — do not invent invite APIs inside 2.5
-  - [ ] If 1.2 → 2.2 missing on the branch: **HALT** — do not invent a parallel list/auth/ACL stack
-  - [ ] Creator / AD-6 sink = **`List.owner_id` only** (2.1: no `created_by` column; creator ≡ owner at create; no ownership transfer in v1)
-  - [ ] Owner mutate via existing ACL action **`edit_default_split`** through `AuthorizeListAccessService` / `authorize_list_access` — do not ad-hoc `owner_id != actor` forks
-  - [ ] Same PR: keep living contract in sync — `membership-acl-enforcement-sketch.md` already lists `edit_default_split`; update sketch only if codes/disclosure change
+- [x] Task 0: Base branch + confirm list/ACL stack (prerequisite)
+  - [x] **Start from `origin/main` after Story 2.2** (merge/rebase before coding). Tip with only 2.1 lacks `list_access` and `ui/app/lists/[listId]/` — do not re-implement 2.2
+  - [x] Required on base: **1.2** (User / List / ListMembership), **1.3** (session cookie), **2.1** (create/rename + `owner_id`), **2.2** (`authorize_list_access` + list detail shell)
+  - [x] **2.3 / 2.4 are story-only today** (no invite runtime). Multi-member demos and tests: **seed** `ListMembership` rows directly — do not invent invite APIs inside 2.5
+  - [x] If 1.2 → 2.2 missing on the branch: **HALT** — do not invent a parallel list/auth/ACL stack
+  - [x] Creator / AD-6 sink = **`List.owner_id` only** (2.1: no `created_by` column; creator ≡ owner at create; no ownership transfer in v1)
+  - [x] Owner mutate via existing ACL action **`edit_default_split`** through `AuthorizeListAccessService` / `authorize_list_access` — do not ad-hoc `owner_id != actor` forks
+  - [x] Same PR: keep living contract in sync — `membership-acl-enforcement-sketch.md` already lists `edit_default_split`; update sketch only if codes/disclosure change
 
-- [ ] Task 1: Domain — standing default + AD-6 allocation (AC: #1–#5) — TDD first
-  - [ ] Red→green domain tests before routes/UI:
+- [x] Task 1: Domain — standing default + AD-6 allocation (AC: #1–#5) — TDD first
+  - [x] Red→green domain tests before routes/UI:
     - New list / no custom default → **even among current members** (1 member ⇒ 100%; 2 ⇒ 50/50; 3 ⇒ equal thirds)
     - Owner sets mode `percentage` with per-member shares summing to **exactly 100%** → standing default updates
     - Shares that under/over-sum 100% → rejected (exact; no float tolerance — use `Decimal`)
     - Member-but-not-owner → edit rejected; non-member → rejected
     - Apply percentage (or even) map to a concrete `Decimal` amount → floor each share to currency minor unit; leftover → **`owner_id` (list creator)** (AD-6)
     - Assert allocations sum exactly to the original amount
-  - [ ] Modes: **`even` | `percentage`** only at list-default level — never whole-line / absolute as list default (FR-10 / **2.6**)
-  - [ ] Splits are **per member** (`member_user_id` → percentage), not a single household ratio
-  - [ ] AD-6 helper takes `creator_user_id` = list `owner_id` — implement once in domain for list-default and later item-% (2.6/3.4)
-  - [ ] **Membership-change rule (documented default — not spine law; record in completion notes):**
+  - [x] Modes: **`even` | `percentage`** only at list-default level — never whole-line / absolute as list default (FR-10 / **2.6**)
+  - [x] Splits are **per member** (`member_user_id` → percentage), not a single household ratio
+  - [x] AD-6 helper takes `creator_user_id` = list `owner_id` — implement once in domain for list-default and later item-% (2.6/3.4)
+  - [x] **Membership-change rule (documented default — not spine law; record in completion notes):**
     - Mode `even`: equal shares among **current** members at apply-time
     - Mode `percentage`: stored shares must cover **exactly** the current member set and sum to 100%. On add/remove that breaks the invariant → **fall back to `even`** until the owner saves a new valid map. Do not auto-redistribute orphaned %
-  - [ ] Domain free of FastAPI / SQLAlchemy imports (AD-1); money `Decimal` only (AD-5)
+  - [x] Domain free of FastAPI / SQLAlchemy imports (AD-1); money `Decimal` only (AD-5)
 
-- [ ] Task 2: Application use-cases + persistence (AC: #1–#5)
-  - [ ] `GetListDefaultSplit` / `SetListDefaultSplit` in `api/application/` (extend `lists.py` / ports — do not fork a second list stack)
-  - [ ] Set: load list + members → `authorize_list_access(..., "edit_default_split")` → validate mode/shares → persist → commit
-  - [ ] Get: authorize **member read** (`read_list` or equivalent member-read action) — any member may read; non-member denied per 2.2 disclosure
-  - [ ] **Even today is implicit** (sole/current memberships; no `default_split_mode` column). Alembic **introduces** standing-default storage with create-time default **`even`** — this story adds durable mode + mutation, not “mutate an existing stored seed column”
-  - [ ] Suggested persistence (not spine-locked — document final columns in completion notes):
+- [x] Task 2: Application use-cases + persistence (AC: #1–#5)
+  - [x] `GetListDefaultSplit` / `SetListDefaultSplit` in `api/application/` (extend `lists.py` / ports — do not fork a second list stack)
+  - [x] Set: load list + members → `authorize_list_access(..., "edit_default_split")` → validate mode/shares → persist → commit
+  - [x] Get: authorize **member read** (`read_list` or equivalent member-read action) — any member may read; non-member denied per 2.2 disclosure
+  - [x] **Even today is implicit** (sole/current memberships; no `default_split_mode` column). Alembic **introduces** standing-default storage with create-time default **`even`** — this story adds durable mode + mutation, not “mutate an existing stored seed column”
+  - [x] Suggested persistence (not spine-locked — document final columns in completion notes):
     - List-level `default_split_mode`: `even` | `percentage`
     - Per-member share rows **or** JSON map keyed by member UUID with `NUMERIC` percentages — must round-trip exactly
-  - [ ] New Alembic revision **after** `0006_last_opened_list` — never wipe PG volume (AD-22)
-  - [ ] Extend existing `ListModel` / repositories — do **not** duplicate List/ListMembership
+  - [x] New Alembic revision **after** `0006_last_opened_list` — never wipe PG volume (AD-22)
+  - [x] Extend existing `ListModel` / repositories — do **not** duplicate List/ListMembership
 
-- [ ] Task 3: API edge — owner-only default-split mutations (AC: #1–#5)
-  - [ ] Add to existing `api/api/routes/lists.py` (prefix `/lists`):
+- [x] Task 3: API edge — owner-only default-split mutations (AC: #1–#5)
+  - [x] Add to existing `api/api/routes/lists.py` (prefix `/lists`):
     - `GET /lists/{list_id}/default-split` → `{ mode, shares: [{ user_id, percentage }], … }` (member-readable)
     - `PUT` or `PATCH /lists/{list_id}/default-split` → `{ mode: "even" }` **or** `{ mode: "percentage", shares: [{ user_id, percentage }, ...] }`
-  - [ ] Wire percent as **string** Decimal-safe values (e.g. `"50.00"`) — never JSON floats
-  - [ ] Session required (1.3) → 401 unauthenticated
-  - [ ] **Disclosure (match 2.2):** member-readable get for missing/non-member → **404** `list_not_found`; owner-denied mutate → **403** `not_list_owner`; non-member mutate → **403** `not_list_member`
-  - [ ] Sum ≠ 100% / unknown member ids → **422** with clear message
-  - [ ] Pydantic DTOs **snake_case**; keep `/health` working
-  - [ ] **Member roster for % editor:** list detail / memberships-of-self is insufficient for “all members on this list.” Prefer one of: extend `GET /lists/{list_id}` detail DTO with members, add `GET /lists/{list_id}/members` (member-readable), or return member ids on the default-split GET when mode is `even`/`percentage`. Document choice in completion notes — do not block domain tests on UI roster
+  - [x] Wire percent as **string** Decimal-safe values (e.g. `"50.00"`) — never JSON floats
+  - [x] Session required (1.3) → 401 unauthenticated
+  - [x] **Disclosure (match 2.2):** member-readable get for missing/non-member → **404** `list_not_found`; owner-denied mutate → **403** `not_list_owner`; non-member mutate → **403** `not_list_member`
+  - [x] Sum ≠ 100% / unknown member ids → **422** with clear message
+  - [x] Pydantic DTOs **snake_case**; keep `/health` working
+  - [x] **Member roster for % editor:** list detail / memberships-of-self is insufficient for “all members on this list.” Prefer one of: extend `GET /lists/{list_id}` detail DTO with members, add `GET /lists/{list_id}/members` (member-readable), or return member ids on the default-split GET when mode is `even`/`percentage`. Document choice in completion notes — do not block domain tests on UI roster
 
-- [ ] Task 4: List-scoped owner UI (AC: #1–#4)
-  - [ ] Owner control on **`ui/app/lists/[listId]/page.tsx`** (Soft-Ledger detail from 2.2) — even vs custom % per current member
-  - [ ] Live sum / disable or reject save when ≠ 100%; clear validation copy
-  - [ ] Non-owners: no edit affordance (read-only is enough)
-  - [ ] Same-origin BFF (`ui/app/api/lists/...`) — never Bearer in `localStorage`
-  - [ ] EN+ES in `ui/lib/i18n/lists.ts`; Warm Balance moss CTA, soft-not-pill corners; plain calm voice
-  - [ ] **Forbidden UI:** Settings/profile product; Account-menu split controls; FR-10 Adjust-split disclosure (**3.2**)
+- [x] Task 4: List-scoped owner UI (AC: #1–#4)
+  - [x] Owner control on **`ui/app/lists/[listId]/page.tsx`** (Soft-Ledger detail from 2.2) — even vs custom % per current member
+  - [x] Live sum / disable or reject save when ≠ 100%; clear validation copy
+  - [x] Non-owners: no edit affordance (read-only is enough)
+  - [x] Same-origin BFF (`ui/app/api/lists/...`) — never Bearer in `localStorage`
+  - [x] EN+ES in `ui/lib/i18n/lists.ts`; Warm Balance moss CTA, soft-not-pill corners; plain calm voice
+  - [x] **Forbidden UI:** Settings/profile product; Account-menu split controls; FR-10 Adjust-split disclosure (**3.2**)
 
-- [ ] Task 5: Integration verification + CI (AC: #1–#5)
-  - [ ] Postgres **16**: even after create; owner 60/40; reject 60/30; reject non-owner; AD-6 remainder on sample CRC (e.g. 100.00 / 3) → leftover on **`owner_id`**
-  - [ ] Membership-change: seed extra member under percentage mode → apply-time falls back to even (Task 1 documented default)
-  - [ ] pytest green; ui typecheck/lint; thin UI test for owner save / validation if practical
-  - [ ] Generic fixtures only — no real PII
+- [x] Task 5: Integration verification + CI (AC: #1–#5)
+  - [x] Postgres **16**: even after create; owner 60/40; reject 60/30; reject non-owner; AD-6 remainder on sample CRC (e.g. 100.00 / 3) → leftover on **`owner_id`**
+  - [x] Membership-change: seed extra member under percentage mode → apply-time falls back to even (Task 1 documented default)
+  - [x] pytest green; ui typecheck/lint; thin UI test for owner save / validation if practical
+  - [x] Generic fixtures only — no real PII
 
 ## Dev Notes
 
@@ -320,15 +324,51 @@ Follow `_bmad-output/project-context.md`. Highest-risk misses:
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Cursor Grok 4.5 (bmad-dev-story)
 
 ### Debug Log References
 
+- Compose pytest (worktree overlay): 165 passed
+- Host: `uv run ruff check` clean; `npx tsc --noEmit` clean; vitest listsClient 5 passed
+
 ### Completion Notes List
+
+- Creator / AD-6 sink = `lists.owner_id` only (no `created_by`)
+- Owner mutate via `authorize_list_access(..., "edit_default_split")`
+- Persistence: `lists.default_split_mode` + `list_default_split_shares` (Alembic `0007_list_default_split`); create-time default `even`
+- Membership-change documented default: invalid stored % map → effective `even` on get/apply until owner re-saves
+- Member roster: returned on `GET/PUT .../default-split` as `member_ids` + `shares` (no separate members endpoint)
+- Multi-member tests seed `ListMembership` directly (2.3/2.4 invite not implemented)
 
 ### File List
 
+- api/domain/default_split.py
+- api/domain/errors.py
+- api/application/lists.py
+- api/application/ports.py
+- api/adapters/persistence/models.py
+- api/adapters/persistence/repositories.py
+- api/adapters/persistence/migrations/versions/0007_list_default_split.py
+- api/api/routes/lists.py
+- api/api/schemas/lists.py
+- api/tests/test_default_split_domain.py
+- api/tests/test_default_split_integration.py
+- api/tests/test_lists_domain.py
+- ui/app/lists/DefaultSplitPanel.tsx
+- ui/app/lists/[listId]/page.tsx
+- ui/app/lists/listsClient.ts
+- ui/app/lists/listsClient.test.ts
+- ui/app/lists/lists.module.css
+- ui/app/api/lists/[listId]/default-split/route.ts
+- ui/lib/i18n/lists.ts
+- _bmad-output/implementation-artifacts/2-5-configurable-list-default-split.md
+- _bmad-output/implementation-artifacts/sprint-status.yaml
+
+## Change Log
+
+- 2026-08-06: Implemented FR-9 standing default split (even/percentage), AD-6 allocate helper, owner UI on list detail, Postgres integration tests
+
 ## Story completion status
 
-Status: ready-for-dev  
-Completion note: Ultimate context engine analysis completed — comprehensive developer guide created.
+Status: review  
+Completion note: Implementation complete — default split domain/API/UI + AD-6 allocate; ready for code-review.

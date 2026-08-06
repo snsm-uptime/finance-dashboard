@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, func
+from sqlalchemy import DateTime, ForeignKey, Numeric, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -52,6 +53,9 @@ class ListModel(Base):
     owner_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
+    default_split_mode: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="even", server_default="even"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -61,6 +65,10 @@ class ListModel(Base):
         foreign_keys=[owner_id],
     )
     memberships: Mapped[list[ListMembershipModel]] = relationship(back_populates="list")
+    default_split_shares: Mapped[list[ListDefaultSplitShareModel]] = relationship(
+        back_populates="list",
+        cascade="all, delete-orphan",
+    )
 
 
 class ListMembershipModel(Base):
@@ -81,6 +89,24 @@ class ListMembershipModel(Base):
 
     list: Mapped[ListModel] = relationship(back_populates="memberships")
     user: Mapped[UserModel] = relationship(back_populates="memberships")
+
+
+class ListDefaultSplitShareModel(Base):
+    __tablename__ = "list_default_split_shares"
+    __table_args__ = (
+        UniqueConstraint("list_id", "user_id", name="uq_list_default_split_share"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    list_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("lists.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    percentage: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
+
+    list: Mapped[ListModel] = relationship(back_populates="default_split_shares")
 
 
 class SessionModel(Base):

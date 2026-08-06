@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from uuid import UUID
+from decimal import Decimal
+from uuid import UUID, uuid4
 
 from application.lists import (
     PLACEHOLDER_BALANCE_CRC,
     ListMembershipSummary,
     ListRecord,
     MembershipRecord,
+    StoredDefaultSplit,
 )
 from application.ports import (
     ListAccessGrant,
@@ -18,6 +20,7 @@ from application.ports import (
     UserPreferencesRecord,
 )
 from application.signin import AuthUserRecord
+from domain.default_split import MODE_EVEN, MODE_PERCENTAGE
 from domain.errors import (
     DuplicateEmailError,
     ListNotFoundError,
@@ -25,11 +28,16 @@ from domain.errors import (
     NotListMemberError,
     PrincipalNotFoundError,
 )
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from adapters.persistence.models import ListMembershipModel, ListModel, UserModel
+from adapters.persistence.models import (
+    ListDefaultSplitShareModel,
+    ListMembershipModel,
+    ListModel,
+    UserModel,
+)
 
 
 class SqlAlchemySignupRepository:
@@ -229,3 +237,54 @@ class SqlAlchemyListRepository:
         if row is None:
             raise ListNotFoundError()
         return ListRecord(id=row.id, name=row.name, owner_id=row.owner_id)
+
+    def list_member_ids(self, list_id: UUID) -> list[UUID]:
+        stmt = (
+            select(ListMembershipModel.user_id)
+            .where(ListMembershipModel.list_id == list_id)
+            .order_by(ListMembershipModel.created_at.asc())
+        )
+        return list(self._session.scalars(stmt).all())
+
+    def get_stored_default_split(self, list_id: UUID) -> StoredDefaultSplit | None:
+        row = self._session.get(ListModel, list_id)
+        if row is None:
+            return None
+        mode = row.default_split_mode or MODE_EVEN
+        shares: dict[UUID, Decimal] = {}
+        if mode == MODE_PERCENTAGE:
+            share_rows = self._session.scalars(
+                select(ListDefaultSplitShareModel).where(
+                    ListDefaultSplitShareModel.list_id == list_id
+                )
+            ).all()
+            shares = {s.user_id: Decimal(str(s.percentage)) for s in share_rows}
+        return StoredDefaultSplit(mode=mode, shares=shares)
+
+    def set_default_split(
+        self,
+        list_id: UUID,
+        *,
+        mode: str,
+        shares: dict[UUID, Decimal] | None,
+    ) -> None:
+        row = self._session.get(ListModel, list_id)
+        if row is None:
+            raise ListNotFoundError()
+        row.default_split_mode = mode
+        self._session.execute(
+            delete(ListDefaultSplitShareModel).where(
+                ListDefaultSplitShareModel.list_id == list_id
+            )
+        )
+        if mode == MODE_PERCENTAGE and shares:
+            for user_id, percentage in shares.items():
+                self._session.add(
+                    ListDefaultSplitShareModel(
+                        id=uuid4(),
+                        list_id=list_id,
+                        user_id=user_id,
+                        percentage=percentage,
+                    )
+                )
+        self._session.flush()
