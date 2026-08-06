@@ -35,7 +35,8 @@ export const listsMessages = {
     errorGeneric: "Something went wrong. Try again.",
     errorInvalidName: "Enter a list name.",
     errorInvalidEmail: "Enter a valid email address.",
-    errorForbidden: "You cannot invite people to this list.",
+    errorForbidden: "You cannot rename this list.",
+    errorInviteForbidden: "You cannot invite people to this list.",
     errorUnauthorized: "Sign in again to continue.",
     errorAlreadyMember: "That person is already a member of this list.",
     errorSmtp:
@@ -76,7 +77,8 @@ export const listsMessages = {
     errorGeneric: "Algo salió mal. Inténtalo de nuevo.",
     errorInvalidName: "Escribe un nombre de lista.",
     errorInvalidEmail: "Escribe un correo válido.",
-    errorForbidden: "No puedes invitar personas a esta lista.",
+    errorForbidden: "No puedes renombrar esta lista.",
+    errorInviteForbidden: "No puedes invitar personas a esta lista.",
     errorUnauthorized: "Vuelve a iniciar sesión para continuar.",
     errorAlreadyMember: "Esa persona ya es miembro de esta lista.",
     errorSmtp:

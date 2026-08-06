@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 
 import { inviteMember, type ListsClientMessages } from "./listsClient";
 import styles from "./lists.module.css";
@@ -23,20 +23,28 @@ export function InviteForm({ listId, messages }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
   const [pending, setPending] = useState(false);
+  const pendingRef = useRef(false);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (pendingRef.current) return;
+    pendingRef.current = true;
     setError(null);
     setPending(true);
-    const result = await inviteMember(listId, email, messages);
-    setPending(false);
-    if (!result.ok) {
-      setSent(false);
-      setError(result.error);
-      return;
+    const submitted = String(new FormData(event.currentTarget).get("email") ?? email);
+    try {
+      const result = await inviteMember(listId, submitted, messages);
+      if (!result.ok) {
+        setSent(false);
+        setError(result.error);
+        return;
+      }
+      setSent(true);
+      setEmail("");
+    } finally {
+      pendingRef.current = false;
+      setPending(false);
     }
-    setSent(true);
-    setEmail("");
   }
 
   return (
@@ -67,6 +75,7 @@ export function InviteForm({ listId, messages }: Props) {
                 onChange={(e) => {
                   setEmail(e.target.value);
                   setSent(false);
+                  setError(null);
                 }}
               />
             </label>

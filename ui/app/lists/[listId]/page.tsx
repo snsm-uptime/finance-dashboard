@@ -143,7 +143,7 @@ export default async function ListDetailPage({
                 errorGeneric: t.errorGeneric,
                 errorInvalidName: t.errorInvalidName,
                 errorInvalidEmail: t.errorInvalidEmail,
-                errorForbidden: t.errorForbidden,
+                errorForbidden: t.errorInviteForbidden,
                 errorUnauthorized: t.errorUnauthorized,
                 errorAlreadyMember: t.errorAlreadyMember,
                 errorSmtp: t.errorSmtp,

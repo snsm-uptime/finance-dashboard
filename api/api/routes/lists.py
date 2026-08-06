@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import uuid
 
-from adapters.email import SmtpEmailSender, SmtpListInviteMailer, load_smtp_settings
+from adapters.email import SmtpEmailSender, load_smtp_settings
 from adapters.persistence.list_invite import SqlAlchemyListInviteTokenRepository
 from adapters.persistence.repositories import (
     SqlAlchemyAuthUserRepository,
@@ -189,15 +189,16 @@ def invite_member(
 ) -> InviteMemberResponse | JSONResponse:
     list_repo = SqlAlchemyListRepository(db)
     users = SqlAlchemyAuthUserRepository(db)
-    service = InviteMemberToListService(
-        list_repo,
-        users,
-        users,
-        SqlAlchemyListInviteTokenRepository(db),
-        SmtpListInviteMailer(SmtpEmailSender(load_smtp_settings())),
-        public_app_url=settings.public_app_url,
-    )
     try:
+        # load_smtp_settings inside try — misconfig must be 503 smtp_config_error (AC #5).
+        service = InviteMemberToListService(
+            list_repo,
+            users,
+            users,
+            SqlAlchemyListInviteTokenRepository(db),
+            SmtpEmailSender(load_smtp_settings()),
+            public_app_url=settings.public_app_url,
+        )
         result = service.execute(
             InviteMemberToListCommand(
                 actor_user_id=user_id,

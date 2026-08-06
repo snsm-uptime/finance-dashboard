@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from html import escape
 from typing import Protocol
 from uuid import UUID, uuid4
 
@@ -17,6 +18,8 @@ from domain.errors import (
 )
 from domain.list_invite import (
     INVITE_TOKEN_TTL,
+    InviteLocale,
+    InviteTemplateKind,
     build_invite_link,
     generate_raw_invite_token,
     hash_invite_token,
@@ -30,7 +33,7 @@ from application.list_access import (
     AuthorizeListAccessService,
 )
 from application.lists import ListRecord, MembershipRecord
-from application.ports import PreferencesRepository, UserPreferencesRecord
+from application.ports import EmailMessage, EmailSender, PreferencesRepository, UserPreferencesRecord
 from application.signin import AuthUserRepository
 
 
@@ -72,28 +75,6 @@ class ListInviteLookup(Protocol):
     def get_membership(self, list_id: UUID, user_id: UUID) -> MembershipRecord | None: ...
 
 
-class ListInviteEmailPort(Protocol):
-    def send_list_invite_join(
-        self,
-        *,
-        to: str,
-        link: str,
-        list_name: str,
-        inviter_display: str,
-        locale: str,
-    ) -> None: ...
-
-    def send_list_invite_signup(
-        self,
-        *,
-        to: str,
-        link: str,
-        list_name: str,
-        inviter_display: str,
-        locale: str,
-    ) -> None: ...
-
-
 @dataclass(frozen=True, slots=True)
 class InviteMemberToListCommand:
     actor_user_id: UUID
@@ -108,6 +89,96 @@ class InviteMemberToListResult:
     invite_id: UUID
 
 
+def _safe_header_text(value: str) -> str:
+    """Strip CR/LF so list names cannot inject email headers / MIME structure."""
+    return value.replace("\r", " ").replace("\n", " ")
+
+
+def build_invite_email_message(
+    *,
+    to: str,
+    link: str,
+    list_name: str,
+    inviter_display: str,
+    locale: InviteLocale,
+    kind: InviteTemplateKind,
+) -> EmailMessage:
+    """Join/signup templates × EN/ES — same EmailMessage shape as password-reset."""
+    safe_name = _safe_header_text(list_name)
+    safe_inviter = _safe_header_text(inviter_display)
+    safe_href = escape(link, quote=True)
+    safe_list_html = escape(safe_name)
+    safe_inviter_html = escape(safe_inviter)
+    ttl_days = INVITE_TOKEN_TTL.days
+
+    if locale == "es":
+        if kind == "join":
+            subject = f"Invitación a unirte a {safe_name}"
+            body_text = (
+                f"{safe_inviter} te invitó a la lista «{safe_name}» en finance-helper.\n\n"
+                f"Abre este enlace para unirte (válido {ttl_days} días):\n{link}\n\n"
+                "Si no esperabas esta invitación, puedes ignorar este correo.\n"
+            )
+            body_html = (
+                f"<p>{safe_inviter_html} te invitó a la lista «{safe_list_html}» en finance-helper.</p>"
+                f"<p>Abre este enlace para unirte (válido {ttl_days} días):</p>"
+                f'<p><a href="{safe_href}">Unirme a la lista</a></p>'
+                "<p>Si no esperabas esta invitación, puedes ignorar este correo.</p>"
+            )
+        else:
+            subject = f"Crea tu cuenta para unirte a {safe_name}"
+            body_text = (
+                f"{safe_inviter} te invitó a la lista «{safe_name}» en finance-helper.\n\n"
+                f"Crea una cuenta con este enlace para unirte (válido {ttl_days} días):\n{link}\n\n"
+                "Si no esperabas esta invitación, puedes ignorar este correo.\n"
+            )
+            body_html = (
+                f"<p>{safe_inviter_html} te invitó a la lista «{safe_list_html}» en finance-helper.</p>"
+                f"<p>Crea una cuenta con este enlace para unirte (válido {ttl_days} días):</p>"
+                f'<p><a href="{safe_href}">Crear cuenta y unirme</a></p>'
+                "<p>Si no esperabas esta invitación, puedes ignorar este correo.</p>"
+            )
+        return EmailMessage(
+            to_address=to,
+            subject=subject,
+            body_text=body_text,
+            body_html=body_html,
+        )
+
+    if kind == "join":
+        subject = f"Invitation to join {safe_name}"
+        body_text = (
+            f"{safe_inviter} invited you to the list “{safe_name}” on finance-helper.\n\n"
+            f"Open this link to join (valid for {ttl_days} days):\n{link}\n\n"
+            "If you weren’t expecting this, you can ignore this email.\n"
+        )
+        body_html = (
+            f"<p>{safe_inviter_html} invited you to the list “{safe_list_html}” on finance-helper.</p>"
+            f"<p>Open this link to join (valid for {ttl_days} days):</p>"
+            f'<p><a href="{safe_href}">Join the list</a></p>'
+            "<p>If you weren’t expecting this, you can ignore this email.</p>"
+        )
+    else:
+        subject = f"Create an account to join {safe_name}"
+        body_text = (
+            f"{safe_inviter} invited you to the list “{safe_name}” on finance-helper.\n\n"
+            f"Create an account with this link to join (valid for {ttl_days} days):\n{link}\n\n"
+            "If you weren’t expecting this, you can ignore this email.\n"
+        )
+        body_html = (
+            f"<p>{safe_inviter_html} invited you to the list “{safe_list_html}” on finance-helper.</p>"
+            f"<p>Create an account with this link to join (valid for {ttl_days} days):</p>"
+            f'<p><a href="{safe_href}">Create account and join</a></p>'
+            "<p>If you weren’t expecting this, you can ignore this email.</p>"
+        )
+    return EmailMessage(
+        to_address=to,
+        subject=subject,
+        body_text=body_text,
+        body_html=body_html,
+    )
+
+
 class InviteMemberToListService:
     """Authenticate owner → issue hashed invite token → send join or signup mail.
 
@@ -120,7 +191,7 @@ class InviteMemberToListService:
         users: AuthUserRepository,
         prefs: PreferencesRepository,
         tokens: ListInviteTokenRepository,
-        mailer: ListInviteEmailPort,
+        mailer: EmailSender,
         *,
         public_app_url: str,
     ) -> None:
@@ -186,25 +257,18 @@ class InviteMemberToListService:
             raw_token=raw,
             kind=kind,
         )
-        inviter_display = inviter.email
+
+        message = build_invite_email_message(
+            to=email,
+            link=link,
+            list_name=owned_list.name,
+            inviter_display=inviter.email,
+            locale=locale,
+            kind=kind,
+        )
 
         try:
-            if kind == "join":
-                self._mailer.send_list_invite_join(
-                    to=email,
-                    link=link,
-                    list_name=owned_list.name,
-                    inviter_display=inviter_display,
-                    locale=locale,
-                )
-            else:
-                self._mailer.send_list_invite_signup(
-                    to=email,
-                    link=link,
-                    list_name=owned_list.name,
-                    inviter_display=inviter_display,
-                    locale=locale,
-                )
+            self._mailer.send(message)
         except (SmtpConfigurationError, SmtpSendError):
             raise
         except Exception as exc:  # pragma: no cover

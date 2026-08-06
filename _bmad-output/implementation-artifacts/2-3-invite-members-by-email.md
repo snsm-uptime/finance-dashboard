@@ -4,7 +4,7 @@ baseline_commit: 2ff7acab152f917a5fa4bd930dd2d733b962fd1b
 
 # Story 2.3: Invite members by email
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -125,6 +125,24 @@ so that household peers can share expenses with me.
   - [x] Per [`story-close-overview-checklist.md`](./story-close-overview-checklist.md): paste the four-section template into Completion Notes (request path, key components, why this shape, what not to break)
   - [x] If auth/mail paths change, update [`auth-mail-interaction-map.md`](../planning-artifacts/architecture/architecture-finance-helper-2026-08-03/auth-mail-interaction-map.md) in the **same PR**
   - [x] If new list-scoped owner action lands via `authorize_list_access`, update the ACL sketch in the same PR
+
+### Review Findings
+
+- [x] [Review][Patch] Wrap `load_smtp_settings()` inside the invite route `try` so misconfig returns 503 `smtp_config_error` (not uncaught 500) — match password-reset [`api/api/routes/lists.py`:197]
+- [x] [Review][Patch] Restore rename/create `errorForbidden` copy; add invite-specific forbidden string for InviteForm [`ui/lib/i18n/lists.ts`:38]
+- [x] [Review][Patch] Move join/signup `EmailMessage` construction into application (mirror password-reset); drop `send_list_invite_*` port methods — Task 2 [`api/application/list_invite.py`:75]
+- [x] [Review][Patch] Add integration coverage: send succeeds with `EMAIL_VERIFICATION_REQUIRED=true` + unverified invitee; Ensure not invoked (AC #6 / Task 5) [`api/tests/test_list_invite_integration.py`]
+- [x] [Review][Patch] Assert SMTP 503 path leaves no lingering `list_invite_tokens` row after `db.rollback()` (AC #5 / Task 5) [`api/tests/test_list_invite_integration.py`:204]
+- [x] [Review][Patch] Guard InviteForm against double-submit before pending re-render (mirror ListsPanel `creatingRef`) [`ui/app/lists/InviteForm.tsx`:27]
+- [x] [Review][Patch] Sanitize CR/LF out of `list_name` / inviter fields used in email subject and plain-text bodies [`api/application/list_invite.py`]
+- [x] [Review][Patch] Add InviteForm smoke coverage for send / sent / error paths (Task 5 marked done without it) [`ui/app/lists/InviteForm.tsx`]
+- [x] [Review][Patch] Clear invite `error` when the email input changes (today only `sent` is cleared) [`ui/app/lists/InviteForm.tsx`:67]
+- [x] [Review][Patch] Derive “7 days” / “7 días” copy from `INVITE_TOKEN_TTL` so expiry text cannot drift [`api/application/list_invite.py`]
+- [x] [Review][Patch] Declare migration’s `(list_id, email)` index on `ListInviteTokenModel` to match live schema [`api/adapters/persistence/models.py`:141]
+- [x] [Review][Defer] Concurrent invites for same `(list_id, email)` can leave multiple unused tokens [`api/application/list_invite.py`:173] — deferred, pre-existing
+- [x] [Review][Defer] SMTP send can succeed then `get_db` commit fail, leaving emailed non-durable token [`api/application/list_invite.py`:173] — deferred, pre-existing
+- [x] [Review][Defer] BFF invite route has no fetch timeout (same as other list BFF hops) [`ui/app/api/lists/[listId]/invites/route.ts`:43] — deferred, pre-existing
+- [x] [Review][Defer] No send rate limit on `POST /lists/{id}/invites` (auth mail limited in 1.5.6; invites out of AC) [`api/api/routes/lists.py`:178] — deferred, pre-existing
 
 ## Dev Notes
 
@@ -394,7 +412,7 @@ Composer (Cursor agent)
 - **2.2 gate:** Preferred path — 2.2 already on `main`; Invite UI on `ui/app/lists/[listId]/page.tsx`; ACL via `authorize_list_access(..., invite_member)`.
 - **Token lifecycle:** `INVITE_TOKEN_TTL = 7 days`; SHA-256 hash at rest; invalidate outstanding unused invites for same `(list_id, email)`; single-use consume deferred to Story 2.4 (`claim_single_use_email_token`).
 - **Deep links (for 2.4):** registered → `/invites/accept?token=…`; unregistered → `/sign-up?invite=…`.
-- **Mail:** `SmtpListInviteMailer` builds EN/ES join+signup templates and sends via existing `EmailSender` / `SmtpEmailSender` (no second SMTP client; `EmailSender` Protocol unchanged).
+- **Mail:** `InviteMemberToListService` builds EN/ES join+signup `EmailMessage`s (application layer) and sends via existing `EmailSender` / `SmtpEmailSender` (no second SMTP client; `EmailSender` Protocol unchanged).
 - **Locale:** inviter prefs via `PreferencesRepository` + `coerce_stored_language`; null → `en`.
 - **API:** `POST /lists/{list_id}/invites` → 201 `{status, template_kind, invite_id}` | 403 `not_list_owner` / `not_list_member` | 409 `already_list_member` | 422 `invalid_invite_email` | 503 SMTP after `db.rollback()`.
 - **Verify gate:** send never calls `EnsureEmailVerifiedService`.
@@ -403,10 +421,10 @@ Composer (Cursor agent)
 ## Story-close overview — 2.3 Invite members by email
 
 **Request path:**
-browser list detail InviteForm → BFF `POST /api/lists/{id}/invites` → api `POST /lists/{id}/invites` → `InviteMemberToListService` → hash token + `SmtpListInviteMailer` → `SmtpEmailSender`
+browser list detail InviteForm → BFF `POST /api/lists/{id}/invites` → api `POST /lists/{id}/invites` → `InviteMemberToListService` → hash token + `EmailMessage` → `SmtpEmailSender`
 
 **Key components:**
-`api/domain/list_invite.py`, `api/application/list_invite.py`, `api/adapters/email/invite.py`, `api/adapters/persistence/list_invite.py` + `0007_list_invite_tokens`, `api/api/routes/lists.py`, `ui/app/lists/InviteForm.tsx`, BFF invites route
+`api/domain/list_invite.py`, `api/application/list_invite.py`, `api/adapters/persistence/list_invite.py` + `0007_list_invite_tokens`, `api/api/routes/lists.py`, `ui/app/lists/InviteForm.tsx`, BFF invites route
 
 **Why this shape:**
 Reuse 1.4 fail-loud SMTP and 2.2 `invite_member` ACL; separate invite token table so 2.4 can claim without overloading reset/verify rows.
@@ -423,7 +441,6 @@ No membership on send; no Ensure-on-send; raw token only in email; SMTP failure 
 - `api/domain/errors.py`
 - `api/application/list_invite.py`
 - `api/adapters/email/__init__.py`
-- `api/adapters/email/invite.py`
 - `api/adapters/persistence/list_invite.py`
 - `api/adapters/persistence/models.py`
 - `api/adapters/persistence/migrations/versions/0007_list_invite_tokens.py`
@@ -432,6 +449,7 @@ No membership on send; no Ensure-on-send; raw token only in email; SMTP failure 
 - `api/tests/test_list_invite_domain.py`
 - `api/tests/test_list_invite_integration.py`
 - `ui/app/lists/InviteForm.tsx`
+- `ui/app/lists/InviteForm.test.tsx`
 - `ui/app/lists/[listId]/page.tsx`
 - `ui/app/lists/listsClient.ts`
 - `ui/app/lists/listsClient.test.ts`
@@ -441,7 +459,8 @@ No membership on send; no Ensure-on-send; raw token only in email; SMTP failure 
 ### Change Log
 
 - 2026-08-06: Implemented Story 2.3 invite-by-email (token issue, dual templates EN/ES, owner ACL, list-detail UI, fail-loud SMTP).
+- 2026-08-06: Code review patches — application-layer invite `EmailMessage`, SMTP try/503, i18n split, InviteForm guards/tests, verify-gate + rollback coverage.
 
 ---
 
-**Story implementation complete — ready for code-review.**
+**Story implementation complete — code-review patches applied; status done.**

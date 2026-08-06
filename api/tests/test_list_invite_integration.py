@@ -201,7 +201,9 @@ def test_member_not_owner_invite_forbidden(client: TestClient, db_session: Sessi
     assert denied.json()["status"] != "sent" if "status" in denied.json() else True
 
 
-def test_smtp_failure_not_invite_sent(client: TestClient, mailer: CapturingMailer) -> None:
+def test_smtp_failure_not_invite_sent(
+    client: TestClient, db_session: Session, mailer: CapturingMailer
+) -> None:
     _register(client, "owner-smtp@example.com")
     created = client.post("/lists", json={"name": "Trip"})
     list_id = created.json()["id"]
@@ -216,9 +218,20 @@ def test_smtp_failure_not_invite_sent(client: TestClient, mailer: CapturingMaile
     assert "status" not in failed.json() or failed.json().get("status") != "sent"
     assert mailer.sent == []
 
+    db_session.expire_all()
+    lingering = db_session.scalar(
+        select(func.count())
+        .select_from(ListInviteTokenModel)
+        .where(ListInviteTokenModel.email == "ghost@example.com")
+    )
+    assert lingering == 0
+
 
 def test_smtp_misconfig_not_invite_sent(
-    client: TestClient, mailer: CapturingMailer, monkeypatch: pytest.MonkeyPatch
+    client: TestClient,
+    db_session: Session,
+    mailer: CapturingMailer,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from adapters.email.settings import load_smtp_settings
     from adapters.email.smtp import SmtpEmailSender
@@ -240,6 +253,88 @@ def test_smtp_misconfig_not_invite_sent(
     assert failed.status_code == 503
     assert failed.json()["code"] == "smtp_config_error"
     assert mailer.sent == []
+
+    db_session.expire_all()
+    lingering = db_session.scalar(
+        select(func.count())
+        .select_from(ListInviteTokenModel)
+        .where(ListInviteTokenModel.email == "ghost@example.com")
+    )
+    assert lingering == 0
+
+
+def test_send_ok_when_verification_required_and_invitee_unverified(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    mailer: CapturingMailer,
+) -> None:
+    """AC #6 / Task 5: send must not call Ensure; succeeds for unverified invitee."""
+    from collections.abc import Iterator
+
+    from adapters.persistence.models import UserModel
+    from api.app import create_app
+    from api.deps import get_db
+    from api.routes import auth as auth_routes
+    from api.routes import lists as lists_routes
+    from application import email_verification as ev_mod
+    from tests.integration_db import apply_base_auth_env
+
+    ensure_calls: list[object] = []
+    real_ensure = ev_mod.EnsureEmailVerifiedService
+
+    class TrackingEnsure(real_ensure):
+        def execute(self, *args, **kwargs):  # noqa: ANN002, ANN003
+            ensure_calls.append((args, kwargs))
+            raise AssertionError("EnsureEmailVerifiedService must not run on invite send")
+
+    monkeypatch.setattr(ev_mod, "EnsureEmailVerifiedService", TrackingEnsure)
+
+    apply_base_auth_env(monkeypatch)
+    monkeypatch.setenv("EMAIL_VERIFICATION_REQUIRED", "true")
+    monkeypatch.setenv("PUBLIC_APP_URL", "http://localhost:3000")
+    monkeypatch.setenv("SMTP_HOST", "smtp.test")
+    monkeypatch.setenv("SMTP_FROM", "noreply@example.com")
+
+    monkeypatch.setattr(lists_routes, "SmtpEmailSender", lambda _settings: mailer)
+    monkeypatch.setattr(auth_routes, "SmtpEmailSender", lambda _settings: mailer)
+
+    app = create_app()
+
+    def _override_db() -> Iterator[Session]:
+        yield db_session
+        db_session.flush()
+
+    app.dependency_overrides[get_db] = _override_db
+    with TestClient(app) as client:
+        _register(client, "owner-verify@example.com")
+        created = client.post("/lists", json={"name": "Gate"})
+        assert created.status_code == 201, created.text
+        list_id = created.json()["id"]
+
+        client.post("/auth/sign-out")
+        _register(client, "unverified@example.com")
+        invitee = db_session.scalar(
+            select(UserModel).where(UserModel.email == "unverified@example.com")
+        )
+        assert invitee is not None
+        assert invitee.email_verified_at is None
+
+        client.post("/auth/sign-out")
+        client.post(
+            "/auth/sign-in",
+            json={"email": "owner-verify@example.com", "password": "password1"},
+        )
+        invited = client.post(
+            f"/lists/{list_id}/invites",
+            json={"email": "unverified@example.com"},
+        )
+        assert invited.status_code == 201, invited.text
+        assert invited.json()["status"] == "sent"
+        assert invited.json()["template_kind"] == "join"
+        assert ensure_calls == []
+        assert any("Invitation to join" in m.subject for m in mailer.sent)
+
+    app.dependency_overrides.clear()
 
 
 def test_already_member_conflict(client: TestClient, db_session: Session) -> None:

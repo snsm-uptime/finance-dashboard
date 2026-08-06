@@ -209,8 +209,7 @@ Single transactional mail path from api (AD-8). Fail-loud beats silent success t
 | Layer | Path |
 |-------|------|
 | UI / BFF | `ui/app/lists/InviteForm.tsx`; `ui/app/api/lists/[listId]/invites/route.ts` |
-| Application | `api/application/list_invite.py` (`InviteMemberToListService`) |
-| Mail templates | `api/adapters/email/invite.py` (`SmtpListInviteMailer` → `EmailSender.send`) |
+| Application | `api/application/list_invite.py` (`InviteMemberToListService` + `build_invite_email_message` → `EmailSender.send`) |
 | Domain | `api/domain/list_invite.py` (`INVITE_TOKEN_TTL` = 7d); ACL `invite_member` |
 | Persistence | `api/adapters/persistence/list_invite.py` + Alembic `0007_list_invite_tokens` |
 

@@ -11,6 +11,7 @@ from application.list_invite import (
     InviteMemberToListCommand,
     InviteMemberToListService,
     ListInviteTokenRecord,
+    build_invite_email_message,
 )
 from application.lists import ListRecord, MembershipRecord
 from application.ports import EmailMessage, UserPreferencesRecord
@@ -111,19 +112,14 @@ class FakeTokens:
 
 
 @dataclass
-class CapturingInviteMailer:
-    sent: list[dict] = field(default_factory=list)
+class CapturingMailer:
+    sent: list[EmailMessage] = field(default_factory=list)
     fail: Exception | None = None
 
-    def send_list_invite_join(self, **kwargs) -> None:  # noqa: ANN003
+    def send(self, message: EmailMessage) -> None:
         if self.fail:
             raise self.fail
-        self.sent.append({"kind": "join", **kwargs})
-
-    def send_list_invite_signup(self, **kwargs) -> None:  # noqa: ANN003
-        if self.fail:
-            raise self.fail
-        self.sent.append({"kind": "signup", **kwargs})
+        self.sent.append(message)
 
 
 def _owner_setup(
@@ -150,6 +146,7 @@ def _owner_setup(
                 email=owner.email,
                 language=language,
                 theme=None,
+                last_opened_list_id=None,
             )
         },
     )
@@ -165,23 +162,30 @@ def _owner_setup(
     return lists, users, owner_id, list_id, owner
 
 
-def test_invite_member_action_is_owner_only() -> None:
-    assert normalize_list_action("invite_member") == "invite_member"
-    assert is_owner_action("invite_member")
-
-
-def test_hash_invite_token_is_stable_and_not_plaintext() -> None:
-    raw = "raw-invite-token"
-    digest = hash_invite_token(raw)
-    assert digest == hash_invite_token(raw)
-    assert digest != raw
-    assert len(digest) == 64
-
-
 def test_validate_invite_email_normalizes() -> None:
-    assert validate_invite_email("  Invitee@Example.com ") == "invitee@example.com"
+    assert validate_invite_email("  Owner@Example.COM ") == "owner@example.com"
+
+
+def test_validate_invite_email_rejects_bad() -> None:
     with pytest.raises(InvalidInviteEmailError):
         validate_invite_email("not-an-email")
+
+
+def test_invite_member_is_owner_action() -> None:
+    assert is_owner_action(normalize_list_action("invite_member"))
+
+
+def test_hash_invite_token_is_sha256_hex() -> None:
+    digest = hash_invite_token("raw-token")
+    assert len(digest) == 64
+    assert digest == hash_invite_token("raw-token")
+    assert digest != hash_invite_token("other")
+
+
+def test_locale_null_defaults_en() -> None:
+    assert resolve_invite_locale(None) == "en"
+    assert resolve_invite_locale("es") == "es"
+    assert resolve_invite_locale("en") == "en"
 
 
 def test_template_kind_registered_vs_unregistered() -> None:
@@ -189,13 +193,7 @@ def test_template_kind_registered_vs_unregistered() -> None:
     assert resolve_invite_template_kind(invitee_registered=False) == "signup"
 
 
-def test_locale_from_inviter_language() -> None:
-    assert resolve_invite_locale("es") == "es"
-    assert resolve_invite_locale("en") == "en"
-    assert resolve_invite_locale(None) == "en"
-
-
-def test_build_invite_links() -> None:
+def test_build_invite_link_paths() -> None:
     assert (
         build_invite_link(
             public_app_url="http://localhost:3000",
@@ -218,7 +216,7 @@ def test_owner_invite_registered_sends_join_and_stores_hash() -> None:
     invitee = AuthUserRecord(id=uuid4(), email="invitee@example.com", password_hash="x")
     lists, users, owner_id, list_id, _ = _owner_setup(invitee=invitee)
     tokens = FakeTokens()
-    mailer = CapturingInviteMailer()
+    mailer = CapturingMailer()
     service = InviteMemberToListService(
         lists, users, users, tokens, mailer, public_app_url="http://localhost:3000"
     )
@@ -239,15 +237,15 @@ def test_owner_invite_registered_sends_join_and_stores_hash() -> None:
     assert stored.token_hash != ""
     assert stored.used_at is None
     assert stored.expires_at > datetime.now(UTC) + INVITE_TOKEN_TTL - timedelta(minutes=1)
-    assert mailer.sent[0]["kind"] == "join"
-    assert "/invites/accept?token=" in mailer.sent[0]["link"]
-    # raw token must not equal stored hash
-    assert tokens.tokens.get(mailer.sent[0]["link"].rsplit("token=", 1)[-1]) is None
+    assert "Invitation to join" in mailer.sent[0].subject
+    assert "/invites/accept?token=" in mailer.sent[0].body_text
+    raw = mailer.sent[0].body_text.split("token=", 1)[1].split()[0]
+    assert tokens.tokens.get(raw) is None
 
 
 def test_owner_invite_unregistered_sends_signup() -> None:
     lists, users, owner_id, list_id, _ = _owner_setup()
-    mailer = CapturingInviteMailer()
+    mailer = CapturingMailer()
     service = InviteMemberToListService(
         lists, users, users, FakeTokens(), mailer, public_app_url="http://localhost:3000"
     )
@@ -261,8 +259,8 @@ def test_owner_invite_unregistered_sends_signup() -> None:
     )
 
     assert result.template_kind == "signup"
-    assert mailer.sent[0]["kind"] == "signup"
-    assert "/sign-up?invite=" in mailer.sent[0]["link"]
+    assert "Create an account" in mailer.sent[0].subject
+    assert "/sign-up?invite=" in mailer.sent[0].body_text
 
 
 def test_member_not_owner_rejected() -> None:
@@ -273,7 +271,7 @@ def test_member_not_owner_rejected() -> None:
         users,
         users,
         FakeTokens(),
-        CapturingInviteMailer(),
+        CapturingMailer(),
         public_app_url="http://localhost:3000",
     )
 
@@ -291,12 +289,13 @@ def test_non_member_rejected() -> None:
     lists, users, _, list_id, _ = _owner_setup()
     stranger = AuthUserRecord(id=uuid4(), email="stranger@example.com", password_hash="x")
     users.by_id[stranger.id] = stranger
+    users.by_email[stranger.email] = stranger
     service = InviteMemberToListService(
         lists,
         users,
         users,
         FakeTokens(),
-        CapturingInviteMailer(),
+        CapturingMailer(),
         public_app_url="http://localhost:3000",
     )
 
@@ -310,7 +309,7 @@ def test_non_member_rejected() -> None:
         )
 
 
-def test_already_member_rejected() -> None:
+def test_already_member_conflict() -> None:
     invitee = AuthUserRecord(id=uuid4(), email="invitee@example.com", password_hash="x")
     lists, users, owner_id, list_id, _ = _owner_setup(invitee=invitee)
     lists.memberships[(list_id, invitee.id)] = MembershipRecord(
@@ -321,7 +320,7 @@ def test_already_member_rejected() -> None:
         users,
         users,
         FakeTokens(),
-        CapturingInviteMailer(),
+        CapturingMailer(),
         public_app_url="http://localhost:3000",
     )
 
@@ -330,19 +329,17 @@ def test_already_member_rejected() -> None:
             InviteMemberToListCommand(
                 actor_user_id=owner_id,
                 list_id=list_id,
-                email=invitee.email,
+                email="invitee@example.com",
             )
         )
 
 
-def test_inviter_language_es_selects_spanish_mail() -> None:
+def test_inviter_locale_es_uses_spanish_template() -> None:
     lists, users, owner_id, list_id, _ = _owner_setup(language="es")
-    mailer = CapturingInviteMailer()
-    service = InviteMemberToListService(
+    mailer = CapturingMailer()
+    InviteMemberToListService(
         lists, users, users, FakeTokens(), mailer, public_app_url="http://localhost:3000"
-    )
-
-    service.execute(
+    ).execute(
         InviteMemberToListCommand(
             actor_user_id=owner_id,
             list_id=list_id,
@@ -350,13 +347,13 @@ def test_inviter_language_es_selects_spanish_mail() -> None:
         )
     )
 
-    assert mailer.sent[0]["locale"] == "es"
+    assert "Invitación" in mailer.sent[0].subject or "Crea tu cuenta" in mailer.sent[0].subject
 
 
 def test_smtp_failure_propagates_and_leaves_token_for_route_rollback() -> None:
     lists, users, owner_id, list_id, _ = _owner_setup()
     tokens = FakeTokens()
-    mailer = CapturingInviteMailer(fail=SmtpSendError())
+    mailer = CapturingMailer(fail=SmtpSendError())
     service = InviteMemberToListService(
         lists, users, users, tokens, mailer, public_app_url="http://localhost:3000"
     )
@@ -375,7 +372,7 @@ def test_smtp_failure_propagates_and_leaves_token_for_route_rollback() -> None:
 
 def test_smtp_config_failure_propagates() -> None:
     lists, users, owner_id, list_id, _ = _owner_setup()
-    mailer = CapturingInviteMailer(fail=SmtpConfigurationError())
+    mailer = CapturingMailer(fail=SmtpConfigurationError())
     service = InviteMemberToListService(
         lists, users, users, FakeTokens(), mailer, public_app_url="http://localhost:3000"
     )
@@ -393,7 +390,7 @@ def test_smtp_config_failure_propagates() -> None:
 def test_reinvite_invalidates_prior_outstanding() -> None:
     lists, users, owner_id, list_id, _ = _owner_setup()
     tokens = FakeTokens()
-    mailer = CapturingInviteMailer()
+    mailer = CapturingMailer()
     service = InviteMemberToListService(
         lists, users, users, tokens, mailer, public_app_url="http://localhost:3000"
     )
@@ -410,30 +407,36 @@ def test_reinvite_invalidates_prior_outstanding() -> None:
     assert len(unused) == 1
 
 
-def test_smtp_list_invite_mailer_renders_en_and_es() -> None:
-    from adapters.email.invite import SmtpListInviteMailer
-
-    captured: list[EmailMessage] = []
-
-    class CapturingSender:
-        def send(self, message: EmailMessage) -> None:
-            captured.append(message)
-
-    mailer = SmtpListInviteMailer(CapturingSender())
-    mailer.send_list_invite_join(
+def test_build_invite_email_renders_en_and_es_and_strips_crlf() -> None:
+    en = build_invite_email_message(
         to="a@example.com",
         link="http://x/invites/accept?token=t",
-        list_name="Home",
+        list_name="Home\nBcc: evil@x",
         inviter_display="owner@example.com",
         locale="en",
+        kind="join",
     )
-    mailer.send_list_invite_signup(
+    es = build_invite_email_message(
         to="b@example.com",
         link="http://x/sign-up?invite=t",
         list_name="Home",
         inviter_display="owner@example.com",
         locale="es",
+        kind="signup",
     )
-    assert "Invitation to join" in captured[0].subject
-    assert "Crea tu cuenta" in captured[1].subject
-    assert "Crear cuenta y unirme" in (captured[1].body_html or "")
+    assert "\n" not in en.subject
+    assert "\r" not in en.subject
+    assert "Home Bcc: evil@x" in en.subject  # newlines collapsed; no header fold
+    assert f"valid for {INVITE_TOKEN_TTL.days} days" in en.body_text
+    assert "Crea tu cuenta" in es.subject
+    assert "Crear cuenta y unirme" in (es.body_html or "")
+    assert f"válido {INVITE_TOKEN_TTL.days} días" in es.body_text
+
+
+def test_invite_service_module_does_not_call_ensure_email_verified() -> None:
+    import application.list_invite as mod
+    import inspect
+
+    source = inspect.getsource(mod)
+    assert "EnsureEmailVerified" not in source
+    assert "ensure_email_verified" not in source
