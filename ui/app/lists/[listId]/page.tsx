@@ -15,7 +15,8 @@ import type { Locale } from "@/lib/i18n/locale";
 import { fetchSession } from "@/lib/session";
 import { DefaultSplitPanel } from "../DefaultSplitPanel";
 import { InviteForm } from "../InviteForm";
-import type { DefaultSplitPayload } from "../listsClient";
+import { ManualExpenseForm } from "../ManualExpenseForm";
+import type { DefaultSplitPayload, ExpenseItem, ListMember } from "../listsClient";
 import styles from "../lists.module.css";
 
 export const dynamic = "force-dynamic";
@@ -60,6 +61,66 @@ function asDefaultSplit(data: unknown): DefaultSplitPayload | null {
   };
 }
 
+function asExpenses(data: unknown): ExpenseItem[] {
+  if (!data || typeof data !== "object") return [];
+  const rows = (data as { expenses?: unknown }).expenses;
+  if (!Array.isArray(rows)) return [];
+  const out: ExpenseItem[] = [];
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const e = row as Partial<ExpenseItem>;
+    if (
+      typeof e.id !== "string" ||
+      typeof e.description !== "string" ||
+      typeof e.amount !== "string" ||
+      typeof e.currency !== "string" ||
+      typeof e.posted_date !== "string" ||
+      typeof e.payer_id !== "string" ||
+      typeof e.provenance !== "string" ||
+      typeof e.line_type !== "string" ||
+      typeof e.created_at !== "string" ||
+      typeof e.list_id !== "string"
+    ) {
+      continue;
+    }
+    out.push(e as ExpenseItem);
+  }
+  return out;
+}
+
+/** Soft-Ledger plain CRC voice (UX-DR17) — e.g. ₡10.00 / ₡42,500. */
+function formatCrcAmount(amount: string): string {
+  const parsed = Number(amount);
+  if (!Number.isFinite(parsed)) return `₡${amount}`;
+  const formatted = parsed.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+  return `₡${formatted}`;
+}
+
+function asMembers(data: unknown): ListMember[] {
+  if (!data || typeof data !== "object") return [];
+  const rows = (data as { members?: unknown }).members;
+  if (!Array.isArray(rows)) return [];
+  const out: ListMember[] = [];
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const m = row as Partial<ListMember> & { email?: unknown };
+    if (typeof m.user_id !== "string") continue;
+    const alias =
+      typeof m.alias === "string"
+        ? m.alias
+        : m.alias === null
+          ? null
+          : typeof m.email === "string"
+            ? m.email
+            : null;
+    out.push({ user_id: m.user_id, alias });
+  }
+  return out;
+}
+
 /** Soft-Ledger list detail shell — settle first / receipts below (empty OK). */
 export default async function ListDetailPage({
   params,
@@ -80,7 +141,11 @@ export default async function ListDetailPage({
 
   let detail: DetailPayload | null = null;
   let defaultSplit: DefaultSplitPayload | null = null;
+  let expenses: ExpenseItem[] = [];
+  let members: ListMember[] = [];
   let splitLoadError = false;
+  let expensesLoadError = false;
+  let membersLoadError = false;
   let notFound = false;
   let loadError = false;
   try {
@@ -102,17 +167,32 @@ export default async function ListDetailPage({
       notFound = true;
     } else if (response.ok) {
       detail = (await response.json()) as DetailPayload;
-      const splitRes = await fetch(
-        `${getApiInternalUrl()}/lists/${encodeURIComponent(listId)}/default-split`,
-        {
+      const [splitRes, expensesRes, membersRes] = await Promise.all([
+        fetch(`${getApiInternalUrl()}/lists/${encodeURIComponent(listId)}/default-split`, {
           method: "GET",
           headers: {
             Accept: "application/json",
             ...(header ? { Cookie: header } : {}),
           },
           cache: "no-store",
-        },
-      );
+        }),
+        fetch(`${getApiInternalUrl()}/lists/${encodeURIComponent(listId)}/expenses`, {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            ...(header ? { Cookie: header } : {}),
+          },
+          cache: "no-store",
+        }),
+        fetch(`${getApiInternalUrl()}/lists/${encodeURIComponent(listId)}/members`, {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            ...(header ? { Cookie: header } : {}),
+          },
+          cache: "no-store",
+        }),
+      ]);
       if (splitRes.ok) {
         const parsed = asDefaultSplit(await splitRes.json());
         if (parsed) {
@@ -122,6 +202,19 @@ export default async function ListDetailPage({
         }
       } else {
         splitLoadError = true;
+      }
+      if (expensesRes.ok) {
+        expenses = asExpenses(await expensesRes.json());
+      } else {
+        expensesLoadError = true;
+      }
+      if (membersRes.ok) {
+        members = asMembers(await membersRes.json());
+        if (members.length === 0) {
+          membersLoadError = true;
+        }
+      } else {
+        membersLoadError = true;
       }
     } else {
       loadError = true;
@@ -167,9 +260,52 @@ export default async function ListDetailPage({
             <Hint>{t.detailHintEmpty}</Hint>
             <div className={styles.softReceipts}>
               <SectionLabel>{t.detailReceiptsTitle}</SectionLabel>
-              <ReceiptRow emptyLabel={t.detailReceiptsEmpty} />
+              {expensesLoadError ? (
+                <p className={styles.copy} role="alert">
+                  {t.loadError}
+                </p>
+              ) : expenses.length === 0 ? (
+                <ReceiptRow emptyLabel={t.detailReceiptsEmpty} />
+              ) : (
+                expenses.map((e) => (
+                  <ReceiptRow
+                    key={e.id}
+                    title={e.description}
+                    when={e.posted_date}
+                    amount={formatCrcAmount(e.amount)}
+                  />
+                ))
+              )}
             </div>
             <div className={styles.softBelow}>
+              {membersLoadError ? (
+                <p className={styles.copy} role="alert">
+                  {t.loadError}
+                </p>
+              ) : members.length > 0 ? (
+                <ManualExpenseForm
+                  listId={listId}
+                  currentUserId={session.user_id}
+                  members={members}
+                  messages={{
+                    expenseTitle: t.expenseTitle,
+                    expenseAmount: t.expenseAmount,
+                    expenseDescription: t.expenseDescription,
+                    expensePayer: t.expensePayer,
+                    expenseSubmit: t.expenseSubmit,
+                    expenseSaving: t.expenseSaving,
+                    expenseAdjustSplit: t.expenseAdjustSplit,
+                    expenseModeWhole: t.expenseModeWhole,
+                    expenseModeAbsolute: t.expenseModeAbsolute,
+                    expenseModePercentage: t.expenseModePercentage,
+                    expenseAssignee: t.expenseAssignee,
+                    errorGeneric: t.errorGeneric,
+                    errorInvalidName: t.errorInvalidName,
+                    errorForbidden: t.errorForbidden,
+                    errorUnauthorized: t.errorUnauthorized,
+                  }}
+                />
+              ) : null}
               <p className={styles.copy}>
                 <Link className={styles.link} href="/lists">
                   {t.backToLists}

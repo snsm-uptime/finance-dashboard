@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Iterator
 
 import pytest
@@ -14,6 +15,21 @@ from sqlalchemy.orm import Session
 
 def database_url() -> str | None:
     return (os.environ.get("DATABASE_URL") or "").strip() or None
+
+
+def alias_from_email(email: str) -> str:
+    """Deterministic generic alias for fixtures (alice@example.com → alice)."""
+    local = email.split("@", 1)[0].lower()
+    alias = re.sub(r"[^a-z0-9_]", "_", local)[:32]
+    return alias if len(alias) >= 3 else f"u_{alias}"
+
+
+def claim_alias(client: TestClient, email: str) -> str:
+    """List surfaces are alias-gated — every registered fixture user claims one."""
+    alias = alias_from_email(email)
+    response = client.patch("/auth/me", json={"alias": alias})
+    assert response.status_code == 200, response.text
+    return alias
 
 
 def apply_base_auth_env(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -1,4 +1,4 @@
-"""List create / rename / membership / ACL reads / invites / default split (2.1–2.5)."""
+"""List create / rename / membership / ACL reads / invites / default split / expenses."""
 
 from __future__ import annotations
 
@@ -12,6 +12,15 @@ from adapters.persistence.repositories import (
     SqlAlchemyAuthUserRepository,
     SqlAlchemyListRepository,
 )
+from application.expenses import (
+    CreateManualExpenseCommand,
+    CreateManualExpenseService,
+    ListExpensesCommand,
+    ListExpensesService,
+    ListMembersCommand,
+    ListMembersService,
+    SplitOverrideInput,
+)
 from application.list_invite import InviteMemberToListCommand, InviteMemberToListService
 from application.lists import (
     CreateOwnedListCommand,
@@ -22,8 +31,6 @@ from application.lists import (
     GetListDefaultSplitService,
     GetListDetailCommand,
     GetListDetailService,
-    GetListExpensesStubCommand,
-    GetListExpensesStubService,
     ListMembershipsCommand,
     ListMembershipsService,
     RenameListCommand,
@@ -36,6 +43,8 @@ from domain.errors import (
     InvalidDefaultSplitError,
     InvalidInviteEmailError,
     InvalidListNameError,
+    InvalidManualExpenseError,
+    InvalidSplitOverrideError,
     ListNotFoundError,
     ListWriteError,
     NotListMemberError,
@@ -49,16 +58,21 @@ from sqlalchemy.orm import Session
 
 from api.deps import get_auth_settings, get_db, require_authenticated_user
 from api.schemas.lists import (
+    CreateExpenseBody,
+    CreateExpenseResponse,
     CreateListBody,
     DefaultSplitResponse,
     DefaultSplitShareItem,
+    ExpenseItemResponse,
     InviteMemberBody,
     InviteMemberResponse,
     ListBalancesStubResponse,
     ListDetailResponse,
     ListExpensesStubResponse,
+    ListMemberItem,
     ListMembershipItem,
     ListMembershipsResponse,
+    ListMembersResponse,
     ListResponse,
     RenameListBody,
     SetDefaultSplitBody,
@@ -87,6 +101,62 @@ def _list_not_found() -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND,
         content={"detail": ListNotFoundError.MESSAGE, "code": "list_not_found"},
+    )
+
+
+def _money_str(value: Decimal) -> str:
+    return format(value, "f")
+
+
+def _expense_item(row) -> ExpenseItemResponse:
+    return ExpenseItemResponse(
+        id=row.id,
+        list_id=row.list_id,
+        amount=_money_str(row.amount),
+        currency=row.currency,
+        description=row.normalized_description,
+        payer_id=row.payer_id,
+        provenance=row.provenance,
+        line_type=row.line_type,
+        posted_date=row.posted_date.isoformat(),
+        created_at=row.created_at,
+    )
+
+
+def _parse_split_override(body: CreateExpenseBody) -> SplitOverrideInput | None | JSONResponse:
+    if body.split_override is None:
+        return None
+    ov = body.split_override
+    amounts = None
+    percentages = None
+    try:
+        if ov.amounts is not None:
+            amounts = {}
+            for k, v in ov.amounts.items():
+                parsed = Decimal(v)
+                if not parsed.is_finite():
+                    raise InvalidOperation
+                amounts[k] = parsed
+        if ov.percentages is not None:
+            percentages = {}
+            for k, v in ov.percentages.items():
+                parsed = Decimal(v)
+                if not parsed.is_finite():
+                    raise InvalidOperation
+                percentages[k] = parsed
+    except (InvalidOperation, ValueError):
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            content={
+                "detail": "Money and percentage values must be exact decimal strings.",
+                "code": "invalid_split_override",
+            },
+        )
+    return SplitOverrideInput(
+        kind=ov.kind,
+        assignee_id=ov.assignee_id,
+        amounts=amounts,
+        percentages=percentages,
     )
 
 
@@ -180,9 +250,7 @@ def get_list_default_split(
 ) -> DefaultSplitResponse | JSONResponse:
     service = GetListDefaultSplitService(SqlAlchemyListRepository(db))
     try:
-        view = service.execute(
-            GetListDefaultSplitCommand(actor_user_id=user_id, list_id=list_id)
-        )
+        view = service.execute(GetListDefaultSplitCommand(actor_user_id=user_id, list_id=list_id))
     except ListNotFoundError:
         return _list_not_found()
     except InvalidDefaultSplitError as exc:
@@ -244,17 +312,98 @@ def put_list_default_split(
 
 
 @router.get("/{list_id}/expenses", response_model=ListExpensesStubResponse)
-def get_list_expenses_stub(
+def get_list_expenses(
     list_id: uuid.UUID,
     user_id: uuid.UUID = Depends(require_authenticated_user),
     db: Session = Depends(get_db),
 ) -> ListExpensesStubResponse | JSONResponse:
-    service = GetListExpensesStubService(SqlAlchemyListRepository(db))
+    service = ListExpensesService(SqlAlchemyListRepository(db))
     try:
-        result = service.execute(GetListExpensesStubCommand(actor_user_id=user_id, list_id=list_id))
+        result = service.execute(ListExpensesCommand(actor_user_id=user_id, list_id=list_id))
     except ListNotFoundError:
         return _list_not_found()
-    return ListExpensesStubResponse(list_id=result.list_id, expenses=list(result.expenses))
+    return ListExpensesStubResponse(
+        list_id=result.list_id,
+        expenses=[_expense_item(row) for row in result.expenses],
+    )
+
+
+@router.post(
+    "/{list_id}/expenses",
+    response_model=CreateExpenseResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_list_expense(
+    list_id: uuid.UUID,
+    body: CreateExpenseBody,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> CreateExpenseResponse | JSONResponse:
+    parsed_override = _parse_split_override(body)
+    if isinstance(parsed_override, JSONResponse):
+        return parsed_override
+
+    service = CreateManualExpenseService(SqlAlchemyListRepository(db))
+    try:
+        created = service.execute(
+            CreateManualExpenseCommand(
+                actor_user_id=user_id,
+                list_id=list_id,
+                amount=body.amount,
+                currency=body.currency,
+                description=body.description,
+                payer_id=body.payer_id,
+                split_override=parsed_override,
+            )
+        )
+    except InvalidManualExpenseError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            content={"detail": str(exc), "code": "invalid_manual_expense"},
+        )
+    except InvalidSplitOverrideError as exc:
+        # Nested savepoint in CreateManualExpenseService undoes the entry.
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            content={"detail": str(exc), "code": "invalid_split_override"},
+        )
+    except (ListNotFoundError, NotListMemberError):
+        return _access_denied()
+
+    logger.info(
+        "manual_expense_created list_id=%s entry_id=%s provenance=%s",
+        list_id,
+        created.id,
+        created.provenance,
+    )
+    return CreateExpenseResponse(
+        id=created.id,
+        list_id=created.list_id,
+        amount=_money_str(created.amount),
+        currency=created.currency,
+        description=created.normalized_description,
+        payer_id=created.payer_id,
+        provenance="hand",
+        line_type=created.line_type,
+        posted_date=created.posted_date.isoformat(),
+        created_at=created.created_at,
+    )
+
+
+@router.get("/{list_id}/members", response_model=ListMembersResponse)
+def get_list_members(
+    list_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> ListMembersResponse | JSONResponse:
+    service = ListMembersService(SqlAlchemyListRepository(db))
+    try:
+        result = service.execute(ListMembersCommand(actor_user_id=user_id, list_id=list_id))
+    except ListNotFoundError:
+        return _list_not_found()
+    return ListMembersResponse(
+        members=[ListMemberItem(user_id=m.user_id, alias=m.alias) for m in result.members]
+    )
 
 
 @router.get("/{list_id}/balances", response_model=ListBalancesStubResponse)

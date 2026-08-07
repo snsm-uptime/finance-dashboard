@@ -5,8 +5,11 @@ from __future__ import annotations
 import logging
 
 from application.rate_limit import SlidingWindowRateLimiter
-from fastapi import FastAPI
+from domain.errors import AliasRequiredError
+from fastapi import Depends, FastAPI, Request, status
+from fastapi.responses import JSONResponse
 
+from api.deps import require_user_alias
 from api.routes.auth import router as auth_router
 from api.routes.health import router as health_router
 from api.routes.invites import router as invites_router
@@ -24,9 +27,18 @@ def create_app() -> FastAPI:
     application = FastAPI(title="finance-helper-api", version="0.1.0")
     application.state.auth_settings = load_auth_settings()
     application.state.rate_limiter = SlidingWindowRateLimiter()
+
+    @application.exception_handler(AliasRequiredError)
+    async def _alias_required_handler(_: Request, exc: AliasRequiredError) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={"detail": str(exc), "code": AliasRequiredError.CODE},
+        )
+
     application.include_router(health_router)
     application.include_router(auth_router)
-    application.include_router(lists_router)
-    application.include_router(splits_router)
+    # List chrome needs a person label; invites/auth stay open so the alias can be claimed.
+    application.include_router(lists_router, dependencies=[Depends(require_user_alias)])
+    application.include_router(splits_router, dependencies=[Depends(require_user_alias)])
     application.include_router(invites_router)
     return application

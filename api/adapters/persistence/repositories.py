@@ -23,6 +23,8 @@ from application.signin import AuthUserRecord
 from application.splits import AllocatableSubject, StoredSplitOverride
 from domain.default_split import MODE_EVEN, MODE_PERCENTAGE, validate_percentage_shares
 from domain.errors import (
+    AliasAlreadySetError,
+    AliasTakenError,
     DuplicateEmailError,
     InvalidDefaultSplitError,
     ListNotFoundError,
@@ -48,6 +50,17 @@ from adapters.persistence.models import (
     SplitOverrideModel,
     UserModel,
 )
+
+
+def _preferences_record(row: UserModel) -> UserPreferencesRecord:
+    return UserPreferencesRecord(
+        id=row.id,
+        email=row.email,
+        language=row.language,
+        theme=row.theme,
+        last_opened_list_id=row.last_opened_list_id,
+        alias=row.alias,
+    )
 
 
 class SqlAlchemySignupRepository:
@@ -115,13 +128,23 @@ class SqlAlchemyAuthUserRepository:
         row = self._session.get(UserModel, user_id)
         if row is None:
             return None
-        return UserPreferencesRecord(
-            id=row.id,
-            email=row.email,
-            language=row.language,
-            theme=row.theme,
-            last_opened_list_id=row.last_opened_list_id,
-        )
+        return _preferences_record(row)
+
+    def claim_alias(self, user_id: UUID, alias: str) -> UserPreferencesRecord:
+        """Set-once claim; the lower(alias) unique index is the race arbiter."""
+        row = self._session.get(UserModel, user_id)
+        if row is None:
+            raise PrincipalNotFoundError()
+        if row.alias:
+            raise AliasAlreadySetError()
+        row.alias = alias
+        try:
+            # Savepoint so a losing race does not poison the outer transaction.
+            with self._session.begin_nested():
+                self._session.flush()
+        except IntegrityError as exc:
+            raise AliasTakenError() from exc
+        return _preferences_record(row)
 
     def update_preferences(
         self,
@@ -149,13 +172,7 @@ class SqlAlchemyAuthUserRepository:
             if last_opened_list_id is not None:
                 raise NotListMemberError() from exc
             raise
-        return UserPreferencesRecord(
-            id=row.id,
-            email=row.email,
-            language=row.language,
-            theme=row.theme,
-            last_opened_list_id=row.last_opened_list_id,
-        )
+        return _preferences_record(row)
 
 
 class SqlAlchemyListRepository:
@@ -284,6 +301,10 @@ class SqlAlchemyListRepository:
         )
         return list(self._session.scalars(stmt).all())
 
+    def atomic(self):
+        """Nested savepoint — rolls back create+override without outer session.rollback()."""
+        return self._session.begin_nested()
+
     def get_stored_default_split(self, list_id: UUID) -> StoredDefaultSplit | None:
         row = self._session.get(ListModel, list_id)
         if row is None:
@@ -336,6 +357,110 @@ class SqlAlchemyListRepository:
             currency=row.currency,
             receipt_id=row.receipt_id,
         )
+
+    def create_ledger_entry(
+        self,
+        *,
+        entry_id: UUID,
+        list_id: UUID,
+        draft,
+    ):
+        from datetime import UTC, date as date_cls, datetime
+
+        from application.expenses import LedgerEntryRecord
+        from domain.expenses import ManualExpenseDraft
+
+        assert isinstance(draft, ManualExpenseDraft)
+        posted = date_cls.fromisoformat(draft.posted_date)
+        # Set created_at in app code — Postgres now() is transaction-scoped and
+        # collapses newest-first ordering when multiple creates share a test txn.
+        created_at = datetime.now(UTC)
+        row = LedgerEntryModel(
+            id=entry_id,
+            list_id=list_id,
+            amount=draft.amount,
+            currency=draft.currency,
+            normalized_description=draft.normalized_description,
+            payer_id=draft.payer_id,
+            provenance=draft.provenance,
+            line_type=draft.line_type,
+            posted_date=posted,
+            receipt_id=None,
+            product_id=None,
+            external_ref=None,
+            created_at=created_at,
+        )
+        self._session.add(row)
+        self._session.flush()  # make id readable for split override attach
+        return LedgerEntryRecord(
+            id=row.id,
+            list_id=row.list_id,
+            amount=Decimal(str(row.amount)),
+            currency=row.currency,
+            normalized_description=row.normalized_description or "",
+            payer_id=row.payer_id,
+            provenance=row.provenance or "",
+            line_type=row.line_type or "",
+            posted_date=row.posted_date,
+            created_at=row.created_at,
+            receipt_id=row.receipt_id,
+            product_id=row.product_id,
+            external_ref=row.external_ref,
+        )
+
+    def list_ledger_entries(self, list_id: UUID):
+        from application.expenses import LedgerEntryRecord
+
+        stmt = (
+            select(LedgerEntryModel)
+            .where(LedgerEntryModel.list_id == list_id)
+            .order_by(LedgerEntryModel.created_at.desc(), LedgerEntryModel.id.desc())
+        )
+        rows = self._session.scalars(stmt).all()
+        result: list[LedgerEntryRecord] = []
+        for row in rows:
+            if (
+                row.normalized_description is None
+                or row.payer_id is None
+                or row.provenance is None
+                or row.line_type is None
+                or row.posted_date is None
+            ):
+                # Skip incomplete stub rows from pre-3.2 seeds (tests only).
+                continue
+            result.append(
+                LedgerEntryRecord(
+                    id=row.id,
+                    list_id=row.list_id,
+                    amount=Decimal(str(row.amount)),
+                    currency=row.currency,
+                    normalized_description=row.normalized_description,
+                    payer_id=row.payer_id,
+                    provenance=row.provenance,
+                    line_type=row.line_type,
+                    posted_date=row.posted_date,
+                    created_at=row.created_at,
+                    receipt_id=row.receipt_id,
+                    product_id=row.product_id,
+                    external_ref=row.external_ref,
+                )
+            )
+        return result
+
+    def list_members_with_alias(self, list_id: UUID):
+        """Roster labels are aliases — email is an identity surface, never a label."""
+        from application.expenses import ListMemberView
+
+        stmt = (
+            select(ListMembershipModel.user_id, UserModel.alias)
+            .join(UserModel, UserModel.id == ListMembershipModel.user_id)
+            .where(ListMembershipModel.list_id == list_id)
+            .order_by(ListMembershipModel.created_at.asc())
+        )
+        return [
+            ListMemberView(user_id=user_id, alias=alias)
+            for user_id, alias in self._session.execute(stmt).all()
+        ]
 
     def get_receipt(self, list_id: UUID, receipt_id: UUID) -> AllocatableSubject | None:
         row = self._session.get(ReceiptModel, receipt_id)

@@ -97,6 +97,9 @@ class FakeListRepo:
             raise ListNotFoundError()
         return row
 
+    def list_ledger_entries(self, list_id: UUID) -> list:
+        return []
+
 
 @dataclass
 class FakePrefsRepo:
@@ -135,9 +138,7 @@ def _seed_owned(repo: FakeListRepo, *, owner: UUID, name: str = "Household") -> 
     list_id = uuid4()
     repo.create_owned_list(
         owned_list=NewListRecord(id=list_id, name=name, owner_id=owner),
-        membership=NewMembershipRecord(
-            id=uuid4(), list_id=list_id, user_id=owner, role="owner"
-        ),
+        membership=NewMembershipRecord(id=uuid4(), list_id=list_id, user_id=owner, role="owner"),
     )
     return list_id
 
@@ -196,9 +197,7 @@ def test_unknown_action_denied() -> None:
     list_id = _seed_owned(repo, owner=owner)
     with pytest.raises(NotListMemberError):
         AuthorizeListAccessService(repo).execute(
-            AuthorizeListAccessCommand(
-                acting_user_id=owner, list_id=list_id, action="admin_bypass"
-            )
+            AuthorizeListAccessCommand(acting_user_id=owner, list_id=list_id, action="admin_bypass")
         )
 
 
@@ -281,9 +280,7 @@ def test_stale_last_opened_read_list_fails_closed() -> None:
     # former never had membership — simulates lost membership / stale last-opened
     with pytest.raises(ListNotFoundError):
         AuthorizeListAccessService(repo).execute(
-            AuthorizeListAccessCommand(
-                acting_user_id=former, list_id=list_id, action="read_list"
-            )
+            AuthorizeListAccessCommand(acting_user_id=former, list_id=list_id, action="read_list")
         )
 
 
@@ -295,9 +292,7 @@ def test_owner_action_member_non_owner_denied() -> None:
     repo.memberships.append(MembershipRecord(list_id=list_id, user_id=member, role="member"))
     with pytest.raises(NotListOwnerError):
         AuthorizeListAccessService(repo).execute(
-            AuthorizeListAccessCommand(
-                acting_user_id=member, list_id=list_id, action="rename_list"
-            )
+            AuthorizeListAccessCommand(acting_user_id=member, list_id=list_id, action="rename_list")
         )
 
 
@@ -306,8 +301,6 @@ def test_read_expenses_alias_normalizes() -> None:
     owner = uuid4()
     list_id = _seed_owned(repo, owner=owner)
     grant = AuthorizeListAccessService(repo).execute(
-        AuthorizeListAccessCommand(
-            acting_user_id=owner, list_id=list_id, action="read_expenses"
-        )
+        AuthorizeListAccessCommand(acting_user_id=owner, list_id=list_id, action="read_expenses")
     )
     assert grant.action == "read_ledger"

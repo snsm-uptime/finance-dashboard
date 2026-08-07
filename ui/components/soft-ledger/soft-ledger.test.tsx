@@ -15,6 +15,7 @@ import { Hint } from "./Hint";
 import { PrimaryButton } from "./PrimaryButton";
 import { ReceiptRow } from "./ReceiptRow";
 import { SectionLabel } from "./SectionLabel";
+import { SoftLedgerSelect } from "./Select";
 import { TabBar } from "./TabBar";
 import { TopNav } from "./TopNav";
 
@@ -52,6 +53,7 @@ vi.mock("./ReceiptRow.module.css", mockCssModules);
 vi.mock("./SectionLabel.module.css", mockCssModules);
 vi.mock("./TabBar.module.css", mockCssModules);
 vi.mock("./TopNav.module.css", mockCssModules);
+vi.mock("./Select.module.css", mockCssModules);
 
 describe("Soft-Ledger primitives", () => {
   let host: HTMLDivElement;
@@ -148,5 +150,36 @@ describe("Soft-Ledger primitives", () => {
     expect(css).toContain(":focus-visible");
     expect(css).not.toMatch(/border-radius:\s*9999px/);
     expect(css).not.toContain("rounded-full");
+  });
+
+  it("SoftLedgerSelect opens a listbox and chooses an option", () => {
+    const onChange = vi.fn();
+    act(() => {
+      root.render(
+        <SoftLedgerSelect
+          value="a"
+          options={[
+            { value: "a", label: "Alice" },
+            { value: "b", label: "Bob" },
+          ]}
+          onChange={onChange}
+          aria-label="Member"
+        />,
+      );
+    });
+    const trigger = host.querySelector("button[aria-haspopup='listbox']") as HTMLButtonElement;
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    act(() => {
+      trigger.click();
+    });
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(host.querySelector("[role='listbox']")).not.toBeNull();
+    const bob = Array.from(host.querySelectorAll("[role='option']")).find(
+      (el) => el.textContent === "Bob",
+    ) as HTMLElement;
+    act(() => {
+      bob.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    });
+    expect(onChange).toHaveBeenCalledWith("b");
   });
 });

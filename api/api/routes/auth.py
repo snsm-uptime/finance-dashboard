@@ -38,6 +38,8 @@ from application.ports import PasswordHasher, PreferencesRepository, SessionStor
 from application.preferences import (
     GetMePreferencesCommand,
     GetMePreferencesService,
+    SetAliasCommand,
+    SetAliasService,
     UpdatePreferencesCommand,
     UpdatePreferencesService,
 )
@@ -45,8 +47,11 @@ from application.rate_limit import RateLimitPolicy, SlidingWindowRateLimiter
 from application.signin import SignInCommand, SignInService
 from application.signup import SignupCommand, SignUpService
 from domain.errors import (
+    AliasAlreadySetError,
+    AliasTakenError,
     DuplicateEmailError,
     EmailNotVerifiedError,
+    InvalidAliasError,
     InvalidCredentialsError,
     InvalidInviteTokenError,
     InvalidPreferencesError,
@@ -129,6 +134,18 @@ def _clear_session_cookie(response: Response, settings: AuthSettings) -> None:
         httponly=True,
         secure=settings.session_cookie_secure,
         samesite=settings.session_cookie_samesite,  # type: ignore[arg-type]
+    )
+
+
+def _me_response(result) -> MeResponse:
+    return MeResponse(
+        authenticated=True,
+        user_id=result.user_id,
+        email=result.email,
+        alias=result.alias,
+        language=result.language,
+        theme=result.theme,
+        last_opened_list_id=result.last_opened_list_id,
     )
 
 
@@ -215,14 +232,7 @@ def current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             content={"detail": "Not authenticated.", "code": "unauthenticated"},
         )
-    return MeResponse(
-        authenticated=True,
-        user_id=result.user_id,
-        email=result.email,
-        language=result.language,
-        theme=result.theme,
-        last_opened_list_id=result.last_opened_list_id,
-    )
+    return _me_response(result)
 
 
 @router.patch("/me", response_model=MeResponse)
@@ -232,9 +242,14 @@ def patch_current_user(
     user_id: uuid.UUID = Depends(require_authenticated_user),
     db: Session = Depends(get_db),
 ) -> MeResponse | JSONResponse:
-    """Persist language/theme/last-opened on the account (source of truth — not device-only)."""
+    """Persist language/theme/last-opened/initial alias on the account (server SoT)."""
     wrote_prefs = body.language is not None or body.theme is not None
     try:
+        if body.alias is not None:
+            # Initial claim only — SetAliasService refuses a change once stored.
+            SetAliasService(prefs).execute(
+                SetAliasCommand(user_id=user_id, alias=body.alias)
+            )
         if body.last_opened_list_id is not None:
             SetLastOpenedListService(
                 SqlAlchemyListRepository(db),
@@ -257,6 +272,21 @@ def patch_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             content={"detail": NotListMemberError.MESSAGE, "code": "not_list_member"},
         )
+    except InvalidAliasError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            content={"detail": str(exc), "code": InvalidAliasError.CODE},
+        )
+    except AliasTakenError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"detail": str(exc), "code": AliasTakenError.CODE},
+        )
+    except AliasAlreadySetError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"detail": str(exc), "code": AliasAlreadySetError.CODE},
+        )
     except InvalidPreferencesError as exc:
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -267,16 +297,11 @@ def patch_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             content={"detail": "Not authenticated.", "code": "unauthenticated"},
         )
+    if body.alias is not None:
+        logger.info("user_alias_set user_id=%s", user_id)
     if wrote_prefs or body.last_opened_list_id is not None:
         logger.info("user_preferences_updated user_id=%s", user_id)
-    return MeResponse(
-        authenticated=True,
-        user_id=result.user_id,
-        email=result.email,
-        language=result.language,
-        theme=result.theme,
-        last_opened_list_id=result.last_opened_list_id,
-    )
+    return _me_response(result)
 
 
 @router.post(

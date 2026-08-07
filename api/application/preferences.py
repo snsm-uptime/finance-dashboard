@@ -6,6 +6,7 @@ import logging
 from dataclasses import dataclass
 from uuid import UUID
 
+from domain.alias import validate_alias
 from domain.errors import PrincipalNotFoundError
 from domain.preferences import (
     coerce_stored_language,
@@ -24,6 +25,8 @@ __all__ = [
     "GetMePreferencesService",
     "MePreferencesResult",
     "PreferencesRepository",
+    "SetAliasCommand",
+    "SetAliasService",
     "UpdatePreferencesCommand",
     "UpdatePreferencesService",
     "UserPreferencesRecord",
@@ -42,6 +45,15 @@ class MePreferencesResult:
     language: str | None
     theme: str | None
     last_opened_list_id: UUID | None
+    alias: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SetAliasCommand:
+    """Initial alias claim only — rename lands with the deferred account-menu story."""
+
+    user_id: UUID
+    alias: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +86,7 @@ def _to_result(row: UserPreferencesRecord) -> MePreferencesResult:
         language=_coerce_language(row.language),
         theme=_coerce_theme(row.theme),
         last_opened_list_id=row.last_opened_list_id,
+        alias=row.alias,
     )
 
 
@@ -85,6 +98,18 @@ class GetMePreferencesService:
         row = self._repo.get_preferences(command.user_id)
         if row is None:
             raise PrincipalNotFoundError()
+        return _to_result(row)
+
+
+class SetAliasService:
+    """Validate then claim; the repository translates the unique race to alias_taken."""
+
+    def __init__(self, repo: PreferencesRepository) -> None:
+        self._repo = repo
+
+    def execute(self, command: SetAliasCommand) -> MePreferencesResult:
+        alias = validate_alias(command.alias)
+        row = self._repo.claim_alias(command.user_id, alias)
         return _to_result(row)
 
 

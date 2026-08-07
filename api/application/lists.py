@@ -265,7 +265,7 @@ class GetListDetailService:
 
 
 class GetListExpensesStubService:
-    """Empty expenses collection stub — authorize_list_access(read_expenses)."""
+    """Expenses collection — authorize_list_access(read_expenses); newest-first."""
 
     def __init__(self, repo: ListRepository) -> None:
         self._repo = repo
@@ -279,7 +279,8 @@ class GetListExpensesStubService:
             )
         )
         self._repo.get_list_with_grant(grant, command.list_id)
-        return ListExpensesStub(list_id=command.list_id, expenses=())
+        rows = self._repo.list_ledger_entries(command.list_id)  # type: ignore[attr-defined]
+        return ListExpensesStub(list_id=command.list_id, expenses=tuple(rows))
 
 
 class GetListBalancesStubService:
@@ -401,9 +402,7 @@ class SetListDefaultSplitService:
                     "Percentage mode requires a share for each current member."
                 )
             validated = validate_percentage_shares(members, command.shares)
-            self._repo.set_default_split(
-                command.list_id, mode=MODE_PERCENTAGE, shares=validated
-            )
+            self._repo.set_default_split(command.list_id, mode=MODE_PERCENTAGE, shares=validated)
         else:
             raise InvalidDefaultSplitError("Default split mode must be even or percentage.")
 

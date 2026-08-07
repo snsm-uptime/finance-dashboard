@@ -299,3 +299,193 @@ export async function saveDefaultSplit(
   if (!data) return { ok: false, error: messages.errorGeneric };
   return { ok: true, split: data };
 }
+
+export type ListMember = {
+  user_id: string;
+  alias: string | null;
+};
+
+export type ExpenseItem = {
+  id: string;
+  list_id: string;
+  amount: string;
+  currency: string;
+  description: string;
+  payer_id: string;
+  provenance: string;
+  line_type: string;
+  posted_date: string;
+  created_at: string;
+};
+
+export type CreateExpenseBody = {
+  amount: string;
+  currency: string;
+  description: string;
+  payer_id: string;
+  split_override?: {
+    kind: "whole_assignee" | "absolute_amounts" | "percentage";
+    assignee_id?: string;
+    amounts?: Record<string, string>;
+    percentages?: Record<string, string>;
+  };
+};
+
+type OkExpense = { ok: true; expense: ExpenseItem };
+type OkExpenses = { ok: true; expenses: ExpenseItem[] };
+type OkMembers = { ok: true; members: ListMember[] };
+
+function detailOrMapped(
+  status: number,
+  body: { detail?: unknown; code?: unknown } | null,
+  messages: ListsClientMessages,
+): string {
+  const code = typeof body?.code === "string" ? body.code : "";
+  if (
+    status === 422 &&
+    (code === "invalid_split_override" ||
+      code === "invalid_manual_expense" ||
+      typeof body?.detail === "string")
+  ) {
+    if (typeof body?.detail === "string" && body.detail.trim()) {
+      return body.detail;
+    }
+  }
+  return mapError(status, body, messages);
+}
+
+function asExpense(data: unknown): ExpenseItem | null {
+  if (!data || typeof data !== "object") return null;
+  const row = data as Partial<ExpenseItem>;
+  if (
+    typeof row.id !== "string" ||
+    typeof row.list_id !== "string" ||
+    typeof row.amount !== "string" ||
+    typeof row.currency !== "string" ||
+    typeof row.description !== "string" ||
+    typeof row.payer_id !== "string" ||
+    typeof row.provenance !== "string" ||
+    typeof row.line_type !== "string" ||
+    typeof row.posted_date !== "string" ||
+    typeof row.created_at !== "string"
+  ) {
+    return null;
+  }
+  return row as ExpenseItem;
+}
+
+export async function fetchExpenses(
+  listId: string,
+  messages: ListsClientMessages,
+): Promise<OkExpenses | ErrorResult> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/lists/${encodeURIComponent(listId)}/expenses`, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+    });
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  if (!response.ok) {
+    const body = (await parseJson(response)) as {
+      detail?: unknown;
+      code?: unknown;
+    } | null;
+    return { ok: false, error: mapError(response.status, body, messages) };
+  }
+  const data = (await parseJson(response)) as { expenses?: unknown } | null;
+  if (!data || !Array.isArray(data.expenses)) {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  const expenses: ExpenseItem[] = [];
+  for (const row of data.expenses) {
+    const parsed = asExpense(row);
+    if (!parsed) return { ok: false, error: messages.errorGeneric };
+    expenses.push(parsed);
+  }
+  return { ok: true, expenses };
+}
+
+export async function createExpense(
+  listId: string,
+  body: CreateExpenseBody,
+  messages: ListsClientMessages,
+): Promise<OkExpense | ErrorResult> {
+  const payload = {
+    amount: body.amount,
+    currency: body.currency,
+    description: body.description,
+    payer_id: body.payer_id,
+    ...(body.split_override ? { split_override: body.split_override } : {}),
+  };
+  let response: Response;
+  try {
+    response = await fetch(`/api/lists/${encodeURIComponent(listId)}/expenses`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  if (!response.ok) {
+    const parsed = (await parseJson(response)) as {
+      detail?: unknown;
+      code?: unknown;
+    } | null;
+    return { ok: false, error: detailOrMapped(response.status, parsed, messages) };
+  }
+  const expense = asExpense(await parseJson(response));
+  if (!expense) return { ok: false, error: messages.errorGeneric };
+  return { ok: true, expense };
+}
+
+export async function fetchListMembers(
+  listId: string,
+  messages: ListsClientMessages,
+): Promise<OkMembers | ErrorResult> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/lists/${encodeURIComponent(listId)}/members`, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+    });
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  if (!response.ok) {
+    const body = (await parseJson(response)) as {
+      detail?: unknown;
+      code?: unknown;
+    } | null;
+    return { ok: false, error: mapError(response.status, body, messages) };
+  }
+  const data = (await parseJson(response)) as { members?: unknown } | null;
+  if (!data || !Array.isArray(data.members)) {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  const members: ListMember[] = [];
+  for (const row of data.members) {
+    if (!row || typeof row !== "object") {
+      return { ok: false, error: messages.errorGeneric };
+    }
+    const m = row as Partial<ListMember> & { email?: unknown };
+    if (typeof m.user_id !== "string") {
+      return { ok: false, error: messages.errorGeneric };
+    }
+    const alias =
+      typeof m.alias === "string"
+        ? m.alias
+        : m.alias === null
+          ? null
+          : typeof m.email === "string"
+            ? m.email
+            : null;
+    members.push({ user_id: m.user_id, alias });
+  }
+  return { ok: true, members };
+}
