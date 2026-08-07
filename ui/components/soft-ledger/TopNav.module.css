@@ -1,0 +1,31 @@
+.nav {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--nav-x);
+  background: transparent;
+  box-shadow: none;
+}
+
+.brand {
+  margin: 0;
+  font-family: var(--type-brand-face);
+  font-size: var(--type-brand-size);
+  font-weight: var(--type-brand-weight);
+  letter-spacing: var(--type-brand-tracking);
+  color: var(--muted);
+}
+
+.listTitle {
+  margin: 0;
+  font-family: var(--type-list-title-face);
+  font-size: var(--type-list-title-size);
+  font-weight: var(--type-list-title-weight);
+  color: var(--foreground);
+  text-align: right;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

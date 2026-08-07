@@ -1,0 +1,28 @@
+.button {
+  margin: 0;
+  padding: 9px 12px;
+  border: none;
+  border-radius: var(--rounded-sm);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-family: var(--type-button-face);
+  font-size: var(--type-button-size);
+  font-weight: var(--type-button-weight);
+  line-height: 1.2;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 2px;
+}
+
+.button:not(:disabled):hover {
+  filter: brightness(1.05);
+}

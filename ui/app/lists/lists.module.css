@@ -284,11 +284,11 @@
 }
 
 .balanceOwe .balanceAmount {
-  color: #8b3a2a;
+  color: var(--owe);
 }
 
 .balanceOwed .balanceAmount {
-  color: var(--accent);
+  color: var(--owed);
 }
 
 .balanceZero .balanceAmount {
@@ -298,6 +298,42 @@
 .rowHint {
   margin: 0.35rem 0 0;
   font-size: 0.85rem;
+}
+
+.softMain {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding: 0;
+  margin: 0;
+  background: var(--background);
+  font-family: var(--font-ui), system-ui, sans-serif;
+  box-shadow: none;
+}
+
+.softBody {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding-bottom: var(--space-4);
+  min-height: 0;
+}
+
+.softReceipts {
+  margin: var(--space-2) var(--page-gutter) 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.softBelow {
+  margin: var(--space-6) var(--page-gutter) 0;
+  max-width: 36rem;
+}
+
+.softBack {
+  margin: var(--space-4) var(--page-gutter) 0;
 }
 
 .detailSection {

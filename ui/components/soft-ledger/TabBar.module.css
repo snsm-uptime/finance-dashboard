@@ -1,0 +1,30 @@
+.bar {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  margin-top: auto;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  box-shadow: none;
+}
+
+.tab,
+.tabActive {
+  display: block;
+  text-align: center;
+  padding: var(--space-3) var(--space-1);
+  font-family: var(--type-tab-face);
+  font-size: var(--type-tab-size);
+  font-weight: var(--type-tab-weight);
+  text-decoration: none;
+  color: var(--muted);
+}
+
+.tab:focus-visible,
+.tabActive:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 2px;
+}
+
+.tabActive {
+  color: var(--accent);
+}

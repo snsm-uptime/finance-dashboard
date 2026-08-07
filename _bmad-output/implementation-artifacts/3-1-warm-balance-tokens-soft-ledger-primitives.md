@@ -4,7 +4,7 @@ baseline_commit: 4f6ab9a3e8103c38ef65e33255e33524af8aaa5b
 
 # Story 3.1: Warm Balance tokens + Soft-Ledger primitives
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -30,20 +30,20 @@ so that settle-up and receipts look like finance-helper—not kit defaults.
 
 ## Tasks / Subtasks
 
-- [ ] Task 0: Confirm hard prerequisites (do not invent parallel stacks)
-  - [ ] **Branch from `main` at `baseline_commit`** (`4f6ab9a…`) — **not** from `feat/2/2-6-…` or a dirty Epic 2 WIP tree. Branch name: `feat/3/3-1-warm-balance-tokens-soft-ledger-primitives` (AD-13); one story per branch
-  - [ ] **Mandatory reads before coding:**
+- [x] Task 0: Confirm hard prerequisites (do not invent parallel stacks)
+  - [x] **Branch from `main` at `baseline_commit`** (`4f6ab9a…`) — **not** from `feat/2/2-6-…` or a dirty Epic 2 WIP tree. Branch name: `feat/3/3-1-warm-balance-tokens-soft-ledger-primitives` (AD-13); one story per branch
+  - [x] **Mandatory reads before coding:**
     - [`DESIGN.md`](../planning-artifacts/ux-designs/ux-finance-helper-2026-08-03/DESIGN.md) frontmatter (colors, typography, rounded, spacing, components) — **binding token/anatomy source**
     - [`.working/directions-2-warm-balance.html`](../planning-artifacts/ux-designs/ux-finance-helper-2026-08-03/.working/directions-2-warm-balance.html) panel **Soft-Ledger hybrid**
     - [`mockups/list-settle.html`](../planning-artifacts/ux-designs/ux-finance-helper-2026-08-03/mockups/list-settle.html) — promoted settle composition
     - [`project-context.md`](../project-context.md) AD-12 / Warm Balance rules
-  - [ ] Story **1.6** theme (Light / Dark / System) already owns preference persistence + FOUC — **reuse** `PreferencesProvider`; do not fork a second theme store. Theme UI stays on `/account` via `AccountMenu` — do **not** nest Appearance controls in Soft-Ledger chrome
-  - [ ] Soft-Ledger list detail shell already lives at `ui/app/lists/[listId]/page.tsx` (Story 2.2+) — **compose** primitives into this page; do not invent `(authenticated)/lists/…` or a parallel demo route as the sole acceptance surface
-  - [ ] Preserve Invite (`InviteForm`) + Default split (`DefaultSplitPanel`) on list detail — Soft-Ledger layout composes **around** them; do **not** restyle/refactor those panels in this story
-  - [ ] **Scope gate:** this story is **UI-only**. No `api/domain`, no Alembic, no expense write APIs, no settle math, no Adjust-split UI. Story 2.6 is orthogonal (domain/API); 3.1 does not depend on it
+  - [x] Story **1.6** theme (Light / Dark / System) already owns preference persistence + FOUC — **reuse** `PreferencesProvider`; do not fork a second theme store. Theme UI stays on `/account` via `AccountMenu` — do **not** nest Appearance controls in Soft-Ledger chrome
+  - [x] Soft-Ledger list detail shell already lives at `ui/app/lists/[listId]/page.tsx` (Story 2.2+) — **compose** primitives into this page; do not invent `(authenticated)/lists/…` or a parallel demo route as the sole acceptance surface
+  - [x] Preserve Invite (`InviteForm`) + Default split (`DefaultSplitPanel`) on list detail — Soft-Ledger layout composes **around** them; do **not** restyle/refactor those panels in this story
+  - [x] **Scope gate:** this story is **UI-only**. No `api/domain`, no Alembic, no expense write APIs, no settle math, no Adjust-split UI. Story 2.6 is orthogonal (domain/API); 3.1 does not depend on it
 
-- [ ] Task 1: Complete Warm Balance + Soft-Ledger design tokens (AC: #1)
-  - [ ] **Colors already largely correct** in `ui/app/globals.css` as `--wb-*` + legacy aliases (`--background`, `--surface`, `--foreground`, `--muted`, `--border`, `--accent`, `--on-accent`, `--owe`, `--owed`) for `:root`, `html.dark`, and System (`prefers-color-scheme` when no `.light`/`.dark`). **Do not re-pick hexes** — match DESIGN.md exactly:
+- [x] Task 1: Complete Warm Balance + Soft-Ledger design tokens (AC: #1)
+  - [x] **Colors already largely correct** in `ui/app/globals.css` as `--wb-*` + legacy aliases (`--background`, `--surface`, `--foreground`, `--muted`, `--border`, `--accent`, `--on-accent`, `--owe`, `--owed`) for `:root`, `html.dark`, and System (`prefers-color-scheme` when no `.light`/`.dark`). **Do not re-pick hexes** — match DESIGN.md exactly:
     | Role | Light | Dark |
     |------|-------|------|
     | background | `#F7F3EC` | `#17140F` |
@@ -55,9 +55,9 @@ so that settle-up and receipts look like finance-helper—not kit defaults.
     | on-accent | `#FFFCF7` | `#17140F` |
     | owe | `#A04936` | `#D48B78` |
     | owed | `#2F6E48` | `#7EC794` |
-  - [ ] **Add** Soft-Ledger spacing CSS vars (4px rhythm + named locks): `--space-1`…`--space-6` (4/8/10/12/14/16px), `--strip-inset: 10px`, `--page-gutter: 10px`, `--nav-x: 14px`, `--row-y: 9px`
-  - [ ] **Add** shape vars: `--rounded-sm: 8px`, `--rounded-md: 10px`, `--rounded-lg: 12px` (`--rounded-full` reserved — **never** use for primary CTAs)
-  - [ ] **Add type roles as a 1:1 map from DESIGN.md `typography.*`** — no freestyle type scale. Each role must encode face (`--font-brand` Petrona or `--font-ui` Manrope), `font-size`, `font-weight` (including awkward `550` where DESIGN says so), `letter-spacing`, and `line-height` when specified:
+  - [x] **Add** Soft-Ledger spacing CSS vars (4px rhythm + named locks): `--space-1`…`--space-6` (4/8/10/12/14/16px), `--strip-inset: 10px`, `--page-gutter: 10px`, `--nav-x: 14px`, `--row-y: 9px`
+  - [x] **Add** shape vars: `--rounded-sm: 8px`, `--rounded-md: 10px`, `--rounded-lg: 12px` (`--rounded-full` reserved — **never** use for primary CTAs)
+  - [x] **Add type roles as a 1:1 map from DESIGN.md `typography.*`** — no freestyle type scale. Each role must encode face (`--font-brand` Petrona or `--font-ui` Manrope), `font-size`, `font-weight` (including awkward `550` where DESIGN says so), `letter-spacing`, and `line-height` when specified:
     | Role | Face | Size | Weight | Tracking / line-height |
     |------|------|------|--------|-------------------------|
     | brand | Petrona | 0.66rem | 500 | tracking 0.03em |
@@ -70,11 +70,11 @@ so that settle-up and receipts look like finance-helper—not kit defaults.
     | amount-inline | Petrona | 0.74rem | 500 | — |
     | button | Manrope | 0.66rem | 550 | — |
     | tab | Manrope | 0.58rem | 500 | — |
-  - [ ] Money surfaces: `font-variant-numeric: tabular-nums`; hierarchy **amount ≫ who ≫ row**
-  - [ ] Fonts: keep existing `next/font/google` Manrope (`--font-ui`) + Petrona (`--font-brand`) in `ui/app/layout.tsx` — already self-hosted; do **not** load Inter/Roboto as brand; do **not** add Tailwind just for fonts
+  - [x] Money surfaces: `font-variant-numeric: tabular-nums`; hierarchy **amount ≫ who ≫ row**
+  - [x] Fonts: keep existing `next/font/google` Manrope (`--font-ui`) + Petrona (`--font-brand`) in `ui/app/layout.tsx` — already self-hosted; do **not** load Inter/Roboto as brand; do **not** add Tailwind just for fonts
 
-- [ ] Task 2: Soft-Ledger component primitives (AC: #2)
-  - [ ] Create package under `ui/components/soft-ledger/` (CSS modules; no Tailwind/shadcn):
+- [x] Task 2: Soft-Ledger component primitives (AC: #2)
+  - [x] Create package under `ui/components/soft-ledger/` (CSS modules; no Tailwind/shadcn):
     - `BalanceStrip.tsx` — surface island, 1px border, `rounded.md`, `strip-inset` margins; who-line (muted) + hero amount (owe/owed polarity props + **text** polarity, not color-only); optional CTA slot (omit OK for empty/J2 pattern)
     - `ReceiptRow.tsx` — title/when left, amount right; bottom hairline; airier `row-y`; amounts muted
     - `SectionLabel.tsx` — uppercase muted section label
@@ -82,40 +82,48 @@ so that settle-up and receipts look like finance-helper—not kit defaults.
     - `TabBar.tsx` — List / Upload / Account; inactive muted / active accent; surface + top border
     - `Hint.tsx` — muted under strip; same inset as strip
     - `PrimaryButton.tsx` — moss accent + on-accent; `rounded.sm` (8px); padding `9px 12px` — **not** pill
-  - [ ] **A11y pins (WCAG 2.2 AA floor):** TabBar = `<nav aria-label="…">` with three links (or buttons); active tab uses `aria-current="page"`; strip who-line + amount remain readable without relying on color alone (text establishes polarity); do not invent focus-trapped disabled junk
-  - [ ] Depth: canvas (`--background`) vs surface (`--surface`) only — **no** drop-shadow hierarchy (UX-DR21)
-  - [ ] Props: accept empty/placeholder content; do **not** fetch settle balances or invent client share math
-  - [ ] Leave vertical room under strip/hint for future incomplete disclosure (Story 3.6 / UX-DR8) — never place chrome over the hero amount
-  - [ ] **PrimaryButton mount rule:** ship the component + package anatomy tests (satisfies AC #2 “Primary button”). On empty settle list detail, **omit** the strip CTA (DESIGN allows omit for balances-only / J2). Do **not** invent a “Mark settled” / settlement-recording label (AD-21). Story 3.2+ will reuse the button for real actions
+  - [x] **A11y pins (WCAG 2.2 AA floor):** TabBar = `<nav aria-label="…">` with three links (or buttons); active tab uses `aria-current="page"`; strip who-line + amount remain readable without relying on color alone (text establishes polarity); do not invent focus-trapped disabled junk
+  - [x] Depth: canvas (`--background`) vs surface (`--surface`) only — **no** drop-shadow hierarchy (UX-DR21)
+  - [x] Props: accept empty/placeholder content; do **not** fetch settle balances or invent client share math
+  - [x] Leave vertical room under strip/hint for future incomplete disclosure (Story 3.6 / UX-DR8) — never place chrome over the hero amount
+  - [x] **PrimaryButton mount rule:** ship the component + package anatomy tests (satisfies AC #2 “Primary button”). On empty settle list detail, **omit** the strip CTA (DESIGN allows omit for balances-only / J2). Do **not** invent a “Mark settled” / settlement-recording label (AD-21). Story 3.2+ will reuse the button for real actions
 
-- [ ] Task 3: Mount primitives on live list chrome (AC: #2)
-  - [ ] Rewire `ui/app/lists/[listId]/page.tsx`:
+- [x] Task 3: Mount primitives on live list chrome (AC: #2)
+  - [x] Rewire `ui/app/lists/[listId]/page.tsx`:
     - Replace header `AccountNavLink` + ad-hoc brand/title block with Soft-Ledger `TopNav` (brand + list title only)
     - Mount `BalanceStrip` (empty settle OK) + `Hint` + `SectionLabel` + empty `ReceiptRow` state + `TabBar`
     - Keep Invite + DefaultSplit **below/around** Soft-Ledger chrome without deleting or restyling them this story
-  - [ ] **Tab destinations (locked):**
+  - [x] **Tab destinations (locked):**
     | Tab | On list detail (`/lists/[listId]`) | Notes |
     |-----|--------------------------------------|-------|
     | List | `href=/lists/{listId}`; **active** (`aria-current="page"`) | Do **not** default List-tab to homepage `/lists` while viewing detail |
     | Upload | `href=/upload` | Existing Epic 4 stub page already auth-gated — structure only; **no** ingest UI; do **not** invent a disabled dead-end |
     | Account | `href=/account` | Replaces header `AccountNavLink`; theme Light/Dark/System stays inside Account page `AccountMenu` |
-  - [ ] Homepage: “All lists” / back control may still link to `/lists`; Lists homepage may mark List tab active and link Upload/Account the same way when TabBar is shared
-  - [ ] Homepage polarity fix in `ui/app/lists/lists.module.css` **only these balance selectors** (keep `balanceTone()` helper):
+  - [x] Homepage: “All lists” / back control may still link to `/lists`; Lists homepage may mark List tab active and link Upload/Account the same way when TabBar is shared
+  - [x] Homepage polarity fix in `ui/app/lists/lists.module.css` **only these balance selectors** (keep `balanceTone()` helper):
     - `.balanceOwe .balanceAmount` — change `#8b3a2a` → `var(--owe)`
     - `.balanceOwed .balanceAmount` — change `var(--accent)` → `var(--owed)`
     - Do **not** silently remap form `.error { color: #8b3a2a }` to `--owe` unless you intentionally decide errors should share owe token (out of scope; leave error styling alone)
-  - [ ] **i18n reuse (locked):** extend `ui/lib/i18n/lists.ts` — reuse existing `brand`, `uploadLink`, `detailSettle*`, `detailReceipts*`, `backToLists`, balance polarity strings. Account tab label = `accountCopy(locale).navAccount` from `ui/lib/i18n/account.ts`. Add only missing keys (e.g. List tab label, Hint empty copy) in `lists.ts` — **no** parallel `softLedger.ts` i18n tree
-  - [ ] Manual check: Light / Dark / System from Account menu flips token sets (Story 1.6 FOUC + `html.dark` / `html.light`)
+  - [x] **i18n reuse (locked):** extend `ui/lib/i18n/lists.ts` — reuse existing `brand`, `uploadLink`, `detailSettle*`, `detailReceipts*`, `backToLists`, balance polarity strings. Account tab label = `accountCopy(locale).navAccount` from `ui/lib/i18n/account.ts`. Add only missing keys (e.g. List tab label, Hint empty copy) in `lists.ts` — **no** parallel `softLedger.ts` i18n tree
+  - [x] Manual check: Light / Dark / System from Account menu flips token sets (Story 1.6 FOUC + `html.dark` / `html.light`)
 
-- [ ] Task 4: Tests + CI (AC: #1–#2)
-  - [ ] UI test-after (vitest + jsdom — match `AccountMenu.test.tsx` / `InviteForm.test.tsx` patterns):
+- [x] Task 4: Tests + CI (AC: #1–#2)
+  - [x] UI test-after (vitest + jsdom — match `AccountMenu.test.tsx` / `InviteForm.test.tsx` patterns):
     - Soft-Ledger primitives: DOM structure, labels, TabBar `aria-current`, strip who + amount roles/text
     - `PrimaryButton` module CSS uses `var(--rounded-sm)` / `8px` — assert **module source / class rule ≠ `9999px`** (do **not** assert `getComputedStyle` CSS custom properties from `globals.css` — Vitest/jsdom does not load those reliably here)
     - Homepage: `balanceTone()` still maps negative → owe, positive → owed, zero → zero; optional assert module CSS source contains `var(--owe)` / `var(--owed)` on the balance selectors above
-  - [ ] `npm run typecheck` + `npm run lint` + `npm test` (+ `npm run test:coverage`) in `ui/` green
-  - [ ] **Coverage floor (pinned):** `ui/vitest.config.mts` thresholds are **60%** on configured `include` only (`lib/**/*.ts`, `app/api/**/*.ts`). Soft-Ledger under `components/` does **not** count toward that floor — do not claim Soft-Ledger tests satisfy coverage. Keep floor green; do not lower thresholds
-  - [ ] No Playwright required for this story (AD-15)
-  - [ ] No api pytest changes expected — if accidentally touched, revert
+  - [x] `npm run typecheck` + `npm run lint` + `npm test` (+ `npm run test:coverage`) in `ui/` green
+  - [x] **Coverage floor (pinned):** `ui/vitest.config.mts` thresholds are **60%** on configured `include` only (`lib/**/*.ts`, `app/api/**/*.ts`). Soft-Ledger under `components/` does **not** count toward that floor — do not claim Soft-Ledger tests satisfy coverage. Keep floor green; do not lower thresholds
+  - [x] No Playwright required for this story (AD-15)
+  - [x] No api pytest changes expected — if accidentally touched, revert
+
+### Review Findings
+
+- [x] [Review][Patch] AcceptInvitePanel pending/error race after lint fix — Restoring initial `pending` from props and removing `setPending(true)` / `setError(null)` on effect entry can show `acceptSuccess` while accept is in flight and leave stale errors across token/auth re-runs. [ui/app/invites/accept/AcceptInvitePanel.tsx:23]
+- [x] [Review][Patch] Soft-Ledger interactive chrome missing `:focus-visible` — TabBar links and PrimaryButton lack a visible focus affordance despite WCAG 2.2 AA floor. [ui/components/soft-ledger/TabBar.module.css:1]
+- [x] [Review][Patch] TabBar `aria-label` default is English-only `"Primary"` — Not wired through lists i18n; ES sessions get an EN landmark. [ui/components/soft-ledger/TabBar.tsx:26]
+- [x] [Review][Patch] Error/notFound TopNav shows brand twice — `navTitle` falls back to `t.brand` when list name is missing. [ui/app/lists/[listId]/page.tsx:135]
+- [x] [Review][Patch] Success path heading outline weak — TopNav brand/list title are `<p>`; only receipts SectionLabel is `h2`, so list detail lacks a clear page heading for the loaded list. [ui/components/soft-ledger/TopNav.tsx:10]
 
 ## Dev Notes
 
@@ -256,16 +264,56 @@ Follow `_bmad-output/project-context.md`: Warm Balance / Soft-Ledger from spines
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Composer (Cursor agent)
 
 ### Debug Log References
 
+- Coverage floor was below 60% due to untested Epic 2 BFF routes under `ui/app/api/lists/**` and `ui/app/api/invites/**`; restored with smoke tests (thresholds unchanged).
+- Pre-existing `AcceptInvitePanel` `react-hooks/set-state-in-effect` lint error blocked `npm run lint`; initialized `pending` from props instead of sync setState in effect.
+
 ### Completion Notes List
+
+- Soft-Ledger spacing / shape / type-role CSS vars added to `globals.css`; Warm Balance hexes unchanged.
+- New `ui/components/soft-ledger/` primitives (BalanceStrip, ReceiptRow, SectionLabel, TopNav, TabBar, Hint, PrimaryButton) with CSS modules; no Tailwind/shadcn.
+- List detail rewired to Soft-Ledger chrome; Account chrome moved to TabBar → `/account`; Invite + DefaultSplit preserved below.
+- Homepage owe/owed amount colors use `var(--owe)` / `var(--owed)`.
+- Vitest: Soft-Ledger anatomy + PrimaryButton not-pill + homepage polarity CSS source checks; BFF smoke tests for coverage floor.
+- `npm run typecheck`, `lint` (warnings only), `test` (92), `test:coverage` (~91% stmts) green.
 
 ### File List
 
+- ui/app/globals.css
+- ui/app/lists/[listId]/page.tsx
+- ui/app/lists/lists.module.css
+- ui/app/lists/lists.module.balance-tokens.test.ts
+- ui/lib/i18n/lists.ts
+- ui/components/soft-ledger/BalanceStrip.tsx
+- ui/components/soft-ledger/BalanceStrip.module.css
+- ui/components/soft-ledger/ReceiptRow.tsx
+- ui/components/soft-ledger/ReceiptRow.module.css
+- ui/components/soft-ledger/SectionLabel.tsx
+- ui/components/soft-ledger/SectionLabel.module.css
+- ui/components/soft-ledger/TopNav.tsx
+- ui/components/soft-ledger/TopNav.module.css
+- ui/components/soft-ledger/TabBar.tsx
+- ui/components/soft-ledger/TabBar.module.css
+- ui/components/soft-ledger/Hint.tsx
+- ui/components/soft-ledger/Hint.module.css
+- ui/components/soft-ledger/PrimaryButton.tsx
+- ui/components/soft-ledger/PrimaryButton.module.css
+- ui/components/soft-ledger/soft-ledger.test.tsx
+- ui/app/api/lists-invites.bff.test.ts
+- ui/app/invites/accept/AcceptInvitePanel.tsx
+- _bmad-output/implementation-artifacts/sprint-status.yaml
+- _bmad-output/implementation-artifacts/3-1-warm-balance-tokens-soft-ledger-primitives.md
+
+### Change Log
+
+- 2026-08-06: Implemented Warm Balance Soft-Ledger tokens, primitives, list-detail mount, tests; story → review.
+- 2026-08-06: Code review patches applied (invite pending race, focus-visible, TabBar i18n aria, TopNav h1/error title); story → done.
+
 ## Story completion status
 
-Status: **ready-for-dev**
+Status: **done**
 
-Completion note: Ultimate context engine analysis completed; post-create validation applied (TabBar/TopNav IA, type matrix, i18n reuse, a11y, test realism, baseline_commit).
+Completion note: Soft-Ledger / Warm Balance UI system landed on list detail; AC #1–#2 covered; code-review patches applied; UI quality gates green.

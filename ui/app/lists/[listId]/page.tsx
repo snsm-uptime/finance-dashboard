@@ -2,8 +2,14 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { AccountNavLink } from "@/components/AccountNavLink";
+import { BalanceStrip } from "@/components/soft-ledger/BalanceStrip";
+import { Hint } from "@/components/soft-ledger/Hint";
+import { ReceiptRow } from "@/components/soft-ledger/ReceiptRow";
+import { SectionLabel } from "@/components/soft-ledger/SectionLabel";
+import { TabBar } from "@/components/soft-ledger/TabBar";
+import { TopNav } from "@/components/soft-ledger/TopNav";
 import { getApiInternalUrl } from "@/lib/api";
+import { accountCopy } from "@/lib/i18n/account";
 import { listsMessages } from "@/lib/i18n/lists";
 import type { Locale } from "@/lib/i18n/locale";
 import { fetchSession } from "@/lib/session";
@@ -69,6 +75,7 @@ export default async function ListDetailPage({
   const jar = await cookies();
   const locale = resolvePageLocale(jar.get("fh_lang_cache")?.value);
   const t = listsMessages[locale];
+  const account = accountCopy(locale);
   const header = await cookieHeader();
 
   let detail: DetailPayload | null = null;
@@ -125,105 +132,108 @@ export default async function ListDetailPage({
 
   const listTitle = detail?.name;
   const isOwner = Boolean(detail?.owner_id && detail.owner_id === session.user_id);
+  const showSoftChrome = Boolean(listTitle) && !notFound && !loadError;
+  const navTitle = showSoftChrome ? (listTitle as string) : "";
 
   return (
-    <main className={styles.main}>
-      <div className={styles.header}>
-        <div className={styles.detailNavBrand}>
-          <p className={styles.brand}>{t.brand}</p>
-          {listTitle ? (
-            <p className={styles.detailNavTitle}>{listTitle}</p>
-          ) : null}
-        </div>
-        <AccountNavLink />
-      </div>
-      {notFound ? (
-        <>
-          <h1 className={styles.title}>{t.detailNotFound}</h1>
-          <p className={styles.copy}>
-            <Link className={styles.link} href="/lists">
-              {t.backToLists}
-            </Link>
-          </p>
-        </>
-      ) : loadError || !listTitle ? (
-        <>
-          <h1 className={styles.title}>{t.loadError}</h1>
-          <p className={styles.copy}>
-            <Link className={styles.link} href="/lists">
-              {t.backToLists}
-            </Link>
-          </p>
-        </>
-      ) : (
-        <>
-          <p className={styles.copy}>
-            <Link className={styles.link} href="/lists">
-              {t.backToLists}
-            </Link>
-          </p>
-          <section className={styles.detailSection} aria-labelledby="settle-heading">
-            <h2 id="settle-heading" className={styles.sectionTitle}>
-              {t.detailSettleTitle}
-            </h2>
-            <p className={styles.copy}>{t.detailSettleEmpty}</p>
-          </section>
-          <section
-            className={styles.detailSection}
-            aria-labelledby="receipts-heading"
-          >
-            <h2 id="receipts-heading" className={styles.sectionTitle}>
-              {t.detailReceiptsTitle}
-            </h2>
-            <p className={styles.copy}>{t.detailReceiptsEmpty}</p>
-          </section>
-          {isOwner ? (
-            <InviteForm
-              listId={listId}
-              messages={{
-                inviteTitle: t.inviteTitle,
-                inviteLabel: t.inviteLabel,
-                inviteSubmit: t.inviteSubmit,
-                inviteSending: t.inviteSending,
-                inviteSent: t.inviteSent,
-                errorGeneric: t.errorGeneric,
-                errorInvalidName: t.errorInvalidName,
-                errorInvalidEmail: t.errorInvalidEmail,
-                errorForbidden: t.errorInviteForbidden,
-                errorUnauthorized: t.errorUnauthorized,
-                errorAlreadyMember: t.errorAlreadyMember,
-                errorSmtp: t.errorSmtp,
-              }}
-            />
-          ) : null}
-          {splitLoadError ? (
-            <p className={styles.copy} role="alert">
-              {t.errorDefaultSplitLoad}
+    <main className={styles.softMain}>
+      <TopNav brand={t.brand} listTitle={navTitle} />
+      <div className={styles.softBody}>
+        {notFound ? (
+          <>
+            <h1 className={styles.title}>{t.detailNotFound}</h1>
+            <p className={`${styles.copy} ${styles.softBack}`}>
+              <Link className={styles.link} href="/lists">
+                {t.backToLists}
+              </Link>
             </p>
-          ) : null}
-          {defaultSplit ? (
-            <DefaultSplitPanel
-              listId={listId}
-              isOwner={isOwner}
-              initial={defaultSplit}
-              messages={{
-                errorGeneric: t.errorGeneric,
-                errorInvalidName: t.errorInvalidName,
-                errorForbidden: t.errorForbidden,
-                errorUnauthorized: t.errorUnauthorized,
-                defaultSplitTitle: t.defaultSplitTitle,
-                defaultSplitEven: t.defaultSplitEven,
-                defaultSplitCustom: t.defaultSplitCustom,
-                defaultSplitSum: t.defaultSplitSum,
-                defaultSplitSave: t.defaultSplitSave,
-                defaultSplitSaving: t.defaultSplitSaving,
-                defaultSplitReadOnly: t.defaultSplitReadOnly,
-                errorInvalidSplit: t.errorInvalidSplit,
-              }}
+          </>
+        ) : !showSoftChrome ? (
+          <>
+            <h1 className={styles.title}>{t.loadError}</h1>
+            <p className={`${styles.copy} ${styles.softBack}`}>
+              <Link className={styles.link} href="/lists">
+                {t.backToLists}
+              </Link>
+            </p>
+          </>
+        ) : (
+          <>
+            <BalanceStrip
+              who={t.detailSettleEmpty}
+              amount="—"
+              polarity="neutral"
             />
-          ) : null}
-        </>
-      )}
+            <Hint>{t.detailHintEmpty}</Hint>
+            <div className={styles.softReceipts}>
+              <SectionLabel>{t.detailReceiptsTitle}</SectionLabel>
+              <ReceiptRow emptyLabel={t.detailReceiptsEmpty} />
+            </div>
+            <div className={styles.softBelow}>
+              <p className={styles.copy}>
+                <Link className={styles.link} href="/lists">
+                  {t.backToLists}
+                </Link>
+              </p>
+              {isOwner ? (
+                <InviteForm
+                  listId={listId}
+                  messages={{
+                    inviteTitle: t.inviteTitle,
+                    inviteLabel: t.inviteLabel,
+                    inviteSubmit: t.inviteSubmit,
+                    inviteSending: t.inviteSending,
+                    inviteSent: t.inviteSent,
+                    errorGeneric: t.errorGeneric,
+                    errorInvalidName: t.errorInvalidName,
+                    errorInvalidEmail: t.errorInvalidEmail,
+                    errorForbidden: t.errorInviteForbidden,
+                    errorUnauthorized: t.errorUnauthorized,
+                    errorAlreadyMember: t.errorAlreadyMember,
+                    errorSmtp: t.errorSmtp,
+                  }}
+                />
+              ) : null}
+              {splitLoadError ? (
+                <p className={styles.copy} role="alert">
+                  {t.errorDefaultSplitLoad}
+                </p>
+              ) : null}
+              {defaultSplit ? (
+                <DefaultSplitPanel
+                  listId={listId}
+                  isOwner={isOwner}
+                  initial={defaultSplit}
+                  messages={{
+                    errorGeneric: t.errorGeneric,
+                    errorInvalidName: t.errorInvalidName,
+                    errorForbidden: t.errorForbidden,
+                    errorUnauthorized: t.errorUnauthorized,
+                    defaultSplitTitle: t.defaultSplitTitle,
+                    defaultSplitEven: t.defaultSplitEven,
+                    defaultSplitCustom: t.defaultSplitCustom,
+                    defaultSplitSum: t.defaultSplitSum,
+                    defaultSplitSave: t.defaultSplitSave,
+                    defaultSplitSaving: t.defaultSplitSaving,
+                    defaultSplitReadOnly: t.defaultSplitReadOnly,
+                    errorInvalidSplit: t.errorInvalidSplit,
+                  }}
+                />
+              ) : null}
+            </div>
+          </>
+        )}
+      </div>
+      <TabBar
+        listHref={`/lists/${encodeURIComponent(listId)}`}
+        uploadHref="/upload"
+        accountHref="/account"
+        listLabel={t.tabList}
+        uploadLabel={t.uploadLink}
+        accountLabel={account.navAccount}
+        ariaLabel={t.tabNavAria}
+        active="list"
+      />
     </main>
   );
 }
