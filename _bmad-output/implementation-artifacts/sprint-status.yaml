@@ -76,7 +76,7 @@ development_status:
   2-3-invite-members-by-email: done
   2-4-invitee-signup-lands-on-inviting-list: done
   2-5-configurable-list-default-split: done
-  2-6-item-and-receipt-split-overrides-domain-api: ready-for-dev
+  2-6-item-and-receipt-split-overrides-domain-api: done
   epic-2-retrospective: optional
 
   epic-3: in-progress

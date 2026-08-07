@@ -11,6 +11,7 @@ from api.routes.auth import router as auth_router
 from api.routes.health import router as health_router
 from api.routes.invites import router as invites_router
 from api.routes.lists import router as lists_router
+from api.routes.splits import router as splits_router
 from api.settings import load_auth_settings
 
 logging.basicConfig(
@@ -26,5 +27,6 @@ def create_app() -> FastAPI:
     application.include_router(health_router)
     application.include_router(auth_router)
     application.include_router(lists_router)
+    application.include_router(splits_router)
     application.include_router(invites_router)
     return application

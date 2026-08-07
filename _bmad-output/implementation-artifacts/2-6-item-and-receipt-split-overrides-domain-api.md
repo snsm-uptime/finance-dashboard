@@ -1,6 +1,10 @@
+---
+baseline_commit: 4f6ab9a3e8103c38ef65e33255e33524af8aaa5b
+---
+
 # Story 2.6: Item and receipt split overrides (domain + API)
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -36,17 +40,17 @@ so that Epic 3 settle-up and the Adjust-split UI can consume a stable share-allo
 
 ## Tasks / Subtasks
 
-- [ ] Task 0: Confirm hard prerequisites (do not invent parallel stacks)
-  - [ ] **1.1** Compose `db`/`api`/`ui`, hex layout, Alembic, `/health`, lockfiles, CI
-  - [ ] **1.2 / 2.1** User + List + ListMembership; durable **`created_by` / list creator** ≡ owner at creation (no ownership transfer in v1); even-split **seed** on create
-  - [ ] **1.3** Session cookie auth + protected routes; same-origin BFF/proxy
-  - [ ] **2.2** Membership ACL port (`authorize_list_access` / equivalent) — repos require `acting_user_id`
-  - [ ] **2.5 Configurable list default split (HARD)** — even | percentage standing default; owner-only mutate; member-readable get; shared AD-6 apply helper; membership-change → even fallback when % map invalid. **If 2.5 implementation missing: stop**
-  - [ ] Reuse 2.5 completion notes for `default_split_mode`, share map shape, apply/remainder helper module path, ACL action names — **never re-decide or fork a second allocator**
-  - [ ] If any hard prerequisite is incomplete: **stop** — one story per branch
+- [x] Task 0: Confirm hard prerequisites (do not invent parallel stacks)
+  - [x] **1.1** Compose `db`/`api`/`ui`, hex layout, Alembic, `/health`, lockfiles, CI
+  - [x] **1.2 / 2.1** User + List + ListMembership; durable **`created_by` / list creator** ≡ owner at creation (no ownership transfer in v1); even-split **seed** on create
+  - [x] **1.3** Session cookie auth + protected routes; same-origin BFF/proxy
+  - [x] **2.2** Membership ACL port (`authorize_list_access` / equivalent) — repos require `acting_user_id`
+  - [x] **2.5 Configurable list default split (HARD)** — even | percentage standing default; owner-only mutate; member-readable get; shared AD-6 apply helper; membership-change → even fallback when % map invalid. **If 2.5 implementation missing: stop**
+  - [x] Reuse 2.5 completion notes for `default_split_mode`, share map shape, apply/remainder helper module path, ACL action names — **never re-decide or fork a second allocator**
+  - [x] If any hard prerequisite is incomplete: **stop** — one story per branch
 
-- [ ] Task 1: Domain — share-allocation engine (AC: #1–#4) — TDD first (AD-15)
-  - [ ] Red→green **before** routes/persistence:
+- [x] Task 1: Domain — share-allocation engine (AC: #1–#4) — TDD first (AD-15)
+  - [x] Red→green **before** routes/persistence:
     - No override → resolve to **list default** (even or standing %) and allocate (AC #1 / FR-10)
     - Whole-line / whole-receipt → assignee gets **100%** of total (AC #2)
     - Absolute amounts → accept iff `sum(amounts) == total` (Decimal equality); else reject (AC #3)
@@ -54,33 +58,33 @@ so that Epic 3 settle-up and the Adjust-split UI can consume a stable share-allo
     - Percentages ≠ 100% → reject (no silent clamp)
     - Creator not in member set / empty members / zero or negative total → reject with clear domain errors
     - N-member lists (2+) — never hardcode two-party math
-  - [ ] **Reuse** `apply_percentage_split` / equivalent from **2.5** — single domain applicator for list-default and item/receipt % overrides; do not copy-paste remainder logic
-  - [ ] Pure domain types (names may vary; keep snake_case on wire later):
+  - [x] **Reuse** `apply_percentage_split` / equivalent from **2.5** — single domain applicator for list-default and item/receipt % overrides; do not copy-paste remainder logic
+  - [x] Pure domain types (names may vary; keep snake_case on wire later):
     - `SplitKind`: `list_default` | `whole_assignee` | `absolute_amounts` | `percentage`
     - `SplitSpec` / override payload: kind + member→share map (percent or absolute) or single `assignee_id`
     - `ShareAllocation`: `{ member_id, amount: Decimal, currency }` — **stable output** for Epic 3 settle-up
-  - [ ] **Resolution order (must be one function):**  
+  - [x] **Resolution order (must be one function):**  
     `item_override` → else `receipt_override` → else `list_default`  
     Document in completion notes. Item-level overrides are highest precedence and must survive later list reassignment (Story 5.5 consumes this).
-  - [ ] **Receipt vs item:** `subject_kind=item` attaches to one ledger line’s amount; `subject_kind=receipt` attaches to a receipt/group subject whose total is the receipt total (sum of child lines **or** an explicit receipt amount — pick one, document for 3.2/4.x). Whole-receipt assignee = 100% of that receipt total.
-  - [ ] **AD-6 scope (binding — close Pair 9 ambiguity):** Remainder → **list creator** for **both** list-default **and** item/receipt **percentage** splits. Absolute overrides never use remainder logic (exact sum or reject). **Payer is never the remainder sink** in v1.
-  - [ ] Money: `Decimal` only — construct from strings; `quantize` to currency minor unit with `ROUND_DOWN` / floor for percentage shares; assert `sum(allocations) == total` after remainder assignment. **Never `float`.**
-  - [ ] Domain free of FastAPI / SQLAlchemy / pdfplumber (AD-1)
+  - [x] **Receipt vs item:** `subject_kind=item` attaches to one ledger line’s amount; `subject_kind=receipt` attaches to a receipt/group subject whose total is the receipt total (sum of child lines **or** an explicit receipt amount — pick one, document for 3.2/4.x). Whole-receipt assignee = 100% of that receipt total.
+  - [x] **AD-6 scope (binding — close Pair 9 ambiguity):** Remainder → **list creator** for **both** list-default **and** item/receipt **percentage** splits. Absolute overrides never use remainder logic (exact sum or reject). **Payer is never the remainder sink** in v1.
+  - [x] Money: `Decimal` only — construct from strings; `quantize` to currency minor unit with `ROUND_DOWN` / floor for percentage shares; assert `sum(allocations) == total` after remainder assignment. **Never `float`.**
+  - [x] Domain free of FastAPI / SQLAlchemy / pdfplumber (AD-1)
 
-- [ ] Task 2: Persistence — override storage + minimal allocatable subject (AC: #1–#4)
-  - [ ] Architecture ER has `LEDGER_ENTRY` but **no** share-allocation / override entity — design additive tables under `adapters/persistence/` (Alembic only; never auto-create on startup)
-  - [ ] Recommended shape (adjust names to match 2.5/3.x if already chosen; document):
+- [x] Task 2: Persistence — override storage + minimal allocatable subject (AC: #1–#4)
+  - [x] Architecture ER has `LEDGER_ENTRY` but **no** share-allocation / override entity — design additive tables under `adapters/persistence/` (Alembic only; never auto-create on startup)
+  - [x] Recommended shape (adjust names to match 2.5/3.x if already chosen; document):
     - Minimal **`ledger_entry`** (or equivalent) stub: UUID PK; `list_id`; `amount NUMERIC`; ISO 4217 `currency`; optional `receipt_id` / `receipt_group_id` for receipt-scoped overrides; timestamps. **Do not** implement full manual-expense fields here (payer, description, origin, `hand` provenance = **Story 3.2**)
     - **`split_override`**: UUID PK; `list_id`; `subject_kind` (`item`|`receipt`); `subject_id`; `kind` (`whole_assignee`|`absolute_amounts`|`percentage`); payload (assignee_id **or** member→percent/amount JSON/`NUMERIC` rows); `set_by_user_id`; timestamps. Unique `(subject_kind, subject_id)` (one active override per subject)
-  - [ ] Persist **configuration** (override spec), not only computed cents — recomputation must stay deterministic when members/total/list-default change rules are applied at compute time
-  - [ ] Extend existing List / Membership / default-split models — **never** fork a second List entity
-  - [ ] Generic fixture vocabulary only — no personal names / real IBANs
+  - [x] Persist **configuration** (override spec), not only computed cents — recomputation must stay deterministic when members/total/list-default change rules are applied at compute time
+  - [x] Extend existing List / Membership / default-split models — **never** fork a second List entity
+  - [x] Generic fixture vocabulary only — no personal names / real IBANs
 
-- [ ] Task 3: Application use-cases + API (AC: #1–#5) — **no UI**
-  - [ ] Use-cases (names may vary): `SetSplitOverride`, `ClearSplitOverride`, `GetSplitOverride`, `ComputeShareAllocations` (or compute on read)
-  - [ ] **Who may set overrides:** any **list member** (FR-8 / FR-10) — **not** owner-only. Contrast with Story **2.5** standing default (owner-only). Extend ACL with member write action; non-member → **403** (match 2.1/2.2 policy)
-  - [ ] Assignee / absolute / percentage member ids must be **current list members** — reject unknown/non-member ids
-  - [ ] Recommended routes (snake_case DTOs; money amounts as **strings**):
+- [x] Task 3: Application use-cases + API (AC: #1–#5) — **no UI**
+  - [x] Use-cases (names may vary): `SetSplitOverride`, `ClearSplitOverride`, `GetSplitOverride`, `ComputeShareAllocations` (or compute on read)
+  - [x] **Who may set overrides:** any **list member** (FR-8 / FR-10) — **not** owner-only. Contrast with Story **2.5** standing default (owner-only). Extend ACL with member write action; non-member → **403** (match 2.1/2.2 policy)
+  - [x] Assignee / absolute / percentage member ids must be **current list members** — reject unknown/non-member ids
+  - [x] Recommended routes (snake_case DTOs; money amounts as **strings**):
     ```text
     PUT    /api/lists/{list_id}/subjects/{subject_kind}/{subject_id}/split-override
            body: { kind, assignee_id? } | { kind, amounts: { member_id: "123.45", ... } }
@@ -91,16 +95,31 @@ so that Epic 3 settle-up and the Adjust-split UI can consume a stable share-allo
            → { allocations: [{ member_id, amount, currency }], resolved_from: item|receipt|list_default }
     ```
     Alternate nesting under `/ledger-entries/...` is fine if documented for Story 3.2 — **one** consistent convention.
-  - [ ] Validation failures → structured JSON 4xx (fail-loud); never coerce under/over-allocated % or absolute sums
-  - [ ] Auth: session cookie from 1.3 — same issuer; same-origin only; never Bearer in `localStorage`
-  - [ ] **Anti-scope UI:** no Adjust-split disclosure, no manual-expense form, no settle-up math UI (AC #5 / Story 3.2)
+  - [x] Validation failures → structured JSON 4xx (fail-loud); never coerce under/over-allocated % or absolute sums
+  - [x] Auth: session cookie from 1.3 — same issuer; same-origin only; never Bearer in `localStorage`
+  - [x] **Anti-scope UI:** no Adjust-split disclosure, no manual-expense form, no settle-up math UI (AC #5 / Story 3.2)
 
-- [ ] Task 4: Tests (AC: #1–#5)
-  - [ ] Domain TDD (AD-15): all Task 1 cases including ₡100 / 3-way even remainder → creator; 60/40 on odd subunit; absolute sum mismatch reject; % ≠ 100 reject; resolution chain item > receipt > list_default
-  - [ ] Integration on **Postgres 16**: member sets each override kind → GET allocations match; non-member denied; clear override → falls back to list default; owner-only default from 2.5 still used when no override
-  - [ ] Money asserts use `Decimal` — never float
-  - [ ] No UI tests required for Adjust-split (out of scope); keep api pytest green in CI
-  - [ ] Fixtures: `creator@example.com`, `member-a@example.com`, `member-b@example.com` — generic only
+- [x] Task 4: Tests (AC: #1–#5)
+  - [x] Domain TDD (AD-15): all Task 1 cases including ₡100 / 3-way even remainder → creator; 60/40 on odd subunit; absolute sum mismatch reject; % ≠ 100 reject; resolution chain item > receipt > list_default
+  - [x] Integration on **Postgres 16**: member sets each override kind → GET allocations match; non-member denied; clear override → falls back to list default; owner-only default from 2.5 still used when no override
+  - [x] Money asserts use `Decimal` — never float
+  - [x] No UI tests required for Adjust-split (out of scope); keep api pytest green in CI
+  - [x] Fixtures: `creator@example.com`, `member-a@example.com`, `member-b@example.com` — generic only
+
+### Review Findings
+
+- [x] [Review][Decision] Receipt-level `absolute_amounts` on child item allocations — Resolved: (A) ignore receipt absolute when allocating items (fall through to list_default). Absolute receipt overrides still apply for `subject_kind=receipt`.
+- [x] [Review][Patch] When allocating an item, skip receipt overrides of kind `absolute_amounts` (decision A) [`api/application/splits.py:305`]
+- [x] [Review][Patch] Re-validate stored overrides against current membership on allocate — stale whole/absolute silently under-allocate; stale percentage KeyErrors → 500 [`api/domain/splits.py:176`]
+- [x] [Review][Patch] Replace money `assert` with raise; assert returned allocations sum to total [`api/domain/splits.py:203`]
+- [x] [Review][Patch] Reject non-finite Decimal strings (NaN/Infinity) before domain work [`api/api/routes/splits.py:96`]
+- [x] [Review][Patch] Quantize or reject absolute amounts that exceed currency minor units [`api/domain/splits.py:125`]
+- [x] [Review][Patch] Scope upsert SELECT by list_id + handle unique IntegrityError race [`api/adapters/persistence/repositories.py:375`]
+- [x] [Review][Patch] Advance `updated_at` on override upsert [`api/adapters/persistence/models.py:265`]
+- [x] [Review][Patch] Tests: GET override; clear → list_default fallback; membership-change revalidation; NaN 422; receipt-absolute ignored on item [`api/tests/test_split_override_api.py`]
+- [x] [Review][Defer] Item override survival across list reassignment — deferred, pre-existing — Story 5.5 must migrate/re-key overrides with the ledger subject [`api/adapters/persistence/models.py`]
+- [x] [Review][Defer] Hardcoded `currency_exponent=2` — deferred, pre-existing — v1 CRC/USD only; ISO minor units later [`api/application/splits.py`]
+- [x] [Review][Defer] Settle double-count if summing receipt + item allocations — deferred, pre-existing — Epic 3.4 settle must choose one subject grain [`api/application/splits.py`]
 
 ## Dev Notes
 
@@ -307,13 +326,45 @@ Recent commits are planning/BMAD story-context artifacts; application code may s
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Composer (Cursor agent router)
 
 ### Debug Log References
 
+- Compose test overlay: `docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm api pytest -q` → 226 passed
+- Host DB IP unreachable (no published 5432); integration validated via Compose network
+
 ### Completion Notes List
 
+- Reused 2.5 helpers: `allocate_percentage_shares`, `allocate_even_shares`, `resolve_effective_default`, `validate_percentage_shares` from `api/domain/default_split.py` — no forked remainder logic
+- **Resolution order:** `item_override` → else `receipt_override` → else `list_default` via `resolve_override_source` / `compute_share_allocations`
+- **Receipt total:** explicit `receipts.amount` (not sum of child ledger lines) — documented for Stories 3.2 / 4.x
+- **LEDGER_ENTRY mapping:** `ledger_entries` is the minimal allocatable item stub; expands in 3.2 with payer/description/origin/`hand`
+- ACL: `set_split_override` alias → `write_ledger` (member write); GET uses `read_ledger` (404 for non-member); contrast owner-only `edit_default_split`
+- Creator / AD-6 sink = `lists.owner_id`
+- UI untouched (AC #5)
+
 ### File List
+
+- api/domain/splits.py
+- api/domain/errors.py
+- api/domain/list_access.py
+- api/application/splits.py
+- api/adapters/persistence/models.py
+- api/adapters/persistence/repositories.py
+- api/adapters/persistence/migrations/versions/0009_split_overrides.py
+- api/api/routes/splits.py
+- api/api/schemas/splits.py
+- api/api/app.py
+- api/tests/test_share_allocations_domain.py
+- api/tests/test_split_override_api.py
+- _bmad-output/planning-artifacts/architecture/architecture-finance-helper-2026-08-03/membership-acl-enforcement-sketch.md
+- _bmad-output/implementation-artifacts/2-6-item-and-receipt-split-overrides-domain-api.md
+- _bmad-output/implementation-artifacts/sprint-status.yaml
+
+## Change Log
+
+- 2026-08-06: Implemented FR-10 item/receipt split overrides (domain + API), AD-6 reuse from 2.5, Alembic stubs, Postgres integration tests; status → review
+- 2026-08-06: Code review patches — membership revalidation, receipt-absolute item skip, NaN guard, upsert race, updated_at; status → done
 
 ---
 
