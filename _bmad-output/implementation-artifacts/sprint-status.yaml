@@ -1,5 +1,5 @@
 # generated: 2026-08-03T22:46:31
-# last_updated: 2026-08-06T23:00:00
+# last_updated: 2026-08-07T05:10:00
 
 # project: finance-dashboard
 # project_key: NOKEY
@@ -42,7 +42,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-03T22:46:31
-last_updated: 2026-08-06T23:00:00
+last_updated: 2026-08-07T05:10:00
 project: finance-dashboard
 project_key: NOKEY
 tracking_system: file-system
@@ -80,7 +80,7 @@ development_status:
   epic-2-retrospective: optional
 
   epic-3: in-progress
-  3-1-warm-balance-tokens-soft-ledger-primitives: ready-for-dev
+  3-1-warm-balance-tokens-soft-ledger-primitives: done
   3-2-manual-expense-with-payer-adjust-split-ui: backlog
   3-3-shared-expenses-view-strip-receipt-list: backlog
   3-4-settle-up-from-shares-payer-and-line-types: backlog

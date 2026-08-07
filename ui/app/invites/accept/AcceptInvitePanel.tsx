@@ -20,14 +20,18 @@ export function AcceptInvitePanel({ locale, token, authenticated }: Props) {
   const router = useRouter();
   const t = inviteMessages[locale];
   const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const [pending, setPending] = useState(() => authenticated && Boolean(token));
   const [needsVerify, setNeedsVerify] = useState(false);
 
   useEffect(() => {
     if (!authenticated || !token) return;
     let cancelled = false;
+    // Accept lifecycle is effect-driven (token + session). Reset UI before the request.
+    /* eslint-disable react-hooks/set-state-in-effect -- intentional accept kickoff */
     setPending(true);
     setError(null);
+    setNeedsVerify(false);
+    /* eslint-enable react-hooks/set-state-in-effect */
     (async () => {
       const result = await acceptInvite(token, {
         errorExpired: t.errorExpired,
@@ -63,7 +67,6 @@ export function AcceptInvitePanel({ locale, token, authenticated }: Props) {
     })();
     return () => {
       cancelled = true;
-      setPending(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per token when signed in
   }, [authenticated, token]);
