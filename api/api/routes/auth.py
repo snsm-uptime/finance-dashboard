@@ -246,8 +246,9 @@ def patch_current_user(
     wrote_prefs = body.language is not None or body.theme is not None
     try:
         # Prefs / last-opened first; claim alias last so a later failure cannot
-        # leave a set-once alias committed under an error JSON response
-        # (get_db commits whenever the handler returns without raising).
+        # leave a set-once alias under an error JSON response (get_db commits on
+        # return). Do not session.rollback() here — integration tests share an
+        # outer transaction, and unique races already use a nested savepoint.
         if body.last_opened_list_id is not None:
             SetLastOpenedListService(
                 SqlAlchemyListRepository(db),
@@ -271,37 +272,31 @@ def patch_current_user(
                 SetAliasCommand(user_id=user_id, alias=body.alias)
             )
     except NotListMemberError:
-        db.rollback()
         return JSONResponse(
             status_code=status.HTTP_403_FORBIDDEN,
             content={"detail": NotListMemberError.MESSAGE, "code": "not_list_member"},
         )
     except InvalidAliasError as exc:
-        db.rollback()
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             content={"detail": str(exc), "code": InvalidAliasError.CODE},
         )
     except AliasTakenError as exc:
-        db.rollback()
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
             content={"detail": str(exc), "code": AliasTakenError.CODE},
         )
     except AliasAlreadySetError as exc:
-        db.rollback()
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
             content={"detail": str(exc), "code": AliasAlreadySetError.CODE},
         )
     except InvalidPreferencesError as exc:
-        db.rollback()
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
             content={"detail": str(exc), "code": "invalid_preferences"},
         )
     except PrincipalNotFoundError:
-        db.rollback()
         return JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
             content={"detail": "Not authenticated.", "code": "unauthenticated"},
