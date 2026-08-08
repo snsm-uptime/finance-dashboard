@@ -1,0 +1,223 @@
+"""Manual expense create + list use-cases (Story 3.2 / FR-21)."""
+
+from __future__ import annotations
+
+from contextlib import AbstractContextManager
+from dataclasses import dataclass
+from datetime import date, datetime
+from decimal import Decimal
+from typing import Protocol
+from uuid import UUID, uuid4
+
+from domain.errors import InvalidManualExpenseError, ListNotFoundError
+from domain.expenses import ManualExpenseDraft, validate_manual_expense
+from domain.splits import SUBJECT_ITEM
+
+from application.list_access import (
+    AuthorizeListAccessCommand,
+    AuthorizeListAccessService,
+)
+from application.lists import ListRecord
+from application.splits import (
+    SetSplitOverrideCommand,
+    SetSplitOverrideService,
+    SplitRepository,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class LedgerEntryRecord:
+    id: UUID
+    list_id: UUID
+    amount: Decimal
+    currency: str
+    normalized_description: str
+    payer_id: UUID
+    provenance: str
+    line_type: str
+    posted_date: date
+    created_at: datetime
+    receipt_id: UUID | None = None
+    product_id: UUID | None = None
+    external_ref: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ListMemberView:
+    user_id: UUID
+    # Null only for accounts that have not passed the alias gate yet.
+    alias: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class SplitOverrideInput:
+    kind: str
+    assignee_id: UUID | None = None
+    amounts: dict[UUID, Decimal] | None = None
+    percentages: dict[UUID, Decimal] | None = None
+
+
+class ExpenseRepository(Protocol):
+    def get_list(self, list_id: UUID) -> ListRecord | None: ...
+
+    def list_member_ids(self, list_id: UUID) -> list[UUID]: ...
+
+    def get_membership(self, list_id: UUID, user_id: UUID): ...
+
+    def get_list_with_grant(self, grant, list_id: UUID) -> ListRecord: ...
+
+    def create_ledger_entry(
+        self,
+        *,
+        entry_id: UUID,
+        list_id: UUID,
+        draft: ManualExpenseDraft,
+    ) -> LedgerEntryRecord: ...
+
+    def list_ledger_entries(self, list_id: UUID) -> list[LedgerEntryRecord]: ...
+
+    def list_members_with_alias(self, list_id: UUID) -> list[ListMemberView]: ...
+
+    def atomic(self) -> AbstractContextManager[None]:
+        """Savepoint so create+override failures do not need a full session rollback."""
+        ...
+
+
+@dataclass(frozen=True, slots=True)
+class CreateManualExpenseCommand:
+    actor_user_id: UUID
+    list_id: UUID
+    amount: str
+    currency: str
+    description: str
+    payer_id: UUID
+    split_override: SplitOverrideInput | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ListExpensesCommand:
+    actor_user_id: UUID
+    list_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class ListExpensesResult:
+    list_id: UUID
+    expenses: tuple[LedgerEntryRecord, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ListMembersCommand:
+    actor_user_id: UUID
+    list_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class ListMembersResult:
+    list_id: UUID
+    members: tuple[ListMemberView, ...]
+
+
+class CreateManualExpenseService:
+    """Create a hand ledger entry; optionally attach item split override in one txn."""
+
+    def __init__(self, repo: ExpenseRepository) -> None:
+        self._repo = repo
+
+    def execute(self, command: CreateManualExpenseCommand) -> LedgerEntryRecord:
+        AuthorizeListAccessService(self._repo).execute(
+            AuthorizeListAccessCommand(
+                acting_user_id=command.actor_user_id,
+                list_id=command.list_id,
+                action="write_expense",
+            )
+        )
+        members = self._repo.list_member_ids(command.list_id)
+        draft = validate_manual_expense(
+            amount=command.amount,
+            currency=command.currency,
+            description=command.description,
+            payer_id=command.payer_id,
+            member_ids=members,
+        )
+        entry_id = uuid4()
+        if not hasattr(self._repo, "atomic") or not callable(self._repo.atomic):
+            raise TypeError("Expense repository must provide atomic() savepoints.")
+        with self._repo.atomic():
+            created = self._repo.create_ledger_entry(
+                entry_id=entry_id,
+                list_id=command.list_id,
+                draft=draft,
+            )
+            if command.split_override is not None:
+                # Reuse SetSplitOverride — do not invent a second allocator.
+                SetSplitOverrideService(self._repo).execute(  # type: ignore[arg-type]
+                    SetSplitOverrideCommand(
+                        actor_user_id=command.actor_user_id,
+                        list_id=command.list_id,
+                        subject_kind=SUBJECT_ITEM,
+                        subject_id=created.id,
+                        kind=command.split_override.kind,
+                        assignee_id=command.split_override.assignee_id,
+                        amounts=command.split_override.amounts,
+                        percentages=command.split_override.percentages,
+                    )
+                )
+            return created
+
+
+class ListExpensesService:
+    """Newest-first expenses for Soft-Ledger — authorize_list_access(read_expenses)."""
+
+    def __init__(self, repo: ExpenseRepository) -> None:
+        self._repo = repo
+
+    def execute(self, command: ListExpensesCommand) -> ListExpensesResult:
+        grant = AuthorizeListAccessService(self._repo).execute(
+            AuthorizeListAccessCommand(
+                acting_user_id=command.actor_user_id,
+                list_id=command.list_id,
+                action="read_expenses",
+            )
+        )
+        self._repo.get_list_with_grant(grant, command.list_id)
+        rows = self._repo.list_ledger_entries(command.list_id)
+        return ListExpensesResult(list_id=command.list_id, expenses=tuple(rows))
+
+
+class ListMembersService:
+    """Member roster for payer/split pickers — authorize_list_access(read_list)."""
+
+    def __init__(self, repo: ExpenseRepository) -> None:
+        self._repo = repo
+
+    def execute(self, command: ListMembersCommand) -> ListMembersResult:
+        grant = AuthorizeListAccessService(self._repo).execute(
+            AuthorizeListAccessCommand(
+                acting_user_id=command.actor_user_id,
+                list_id=command.list_id,
+                action="read_list",
+            )
+        )
+        self._repo.get_list_with_grant(grant, command.list_id)
+        members = self._repo.list_members_with_alias(command.list_id)
+        return ListMembersResult(list_id=command.list_id, members=tuple(members))
+
+
+__all__ = [
+    "CreateManualExpenseCommand",
+    "CreateManualExpenseService",
+    "ExpenseRepository",
+    "InvalidManualExpenseError",
+    "LedgerEntryRecord",
+    "ListExpensesCommand",
+    "ListExpensesResult",
+    "ListExpensesService",
+    "ListMemberView",
+    "ListMembersCommand",
+    "ListMembersResult",
+    "ListMembersService",
+    "SplitOverrideInput",
+    "SplitRepository",
+    "ListNotFoundError",
+]

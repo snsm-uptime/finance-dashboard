@@ -168,3 +168,75 @@ describe("default split client", () => {
     }
   });
 });
+
+describe("expense client", () => {
+  it("surfaces API detail for invalid_split_override", async () => {
+    const { createExpense } = await import("./listsClient");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 422,
+        json: async () => ({
+          code: "invalid_split_override",
+          detail: "Percentages must sum to exactly 100.",
+        }),
+      }),
+    );
+
+    const result = await createExpense(
+      "list-1",
+      {
+        amount: "10.00",
+        currency: "CRC",
+        description: "X",
+        payer_id: "u1",
+        split_override: { kind: "percentage", percentages: { u1: "40" } },
+      },
+      messages,
+    );
+    expect(result).toEqual({
+      ok: false,
+      error: "Percentages must sum to exactly 100.",
+    });
+  });
+
+  it("createExpense returns parsed expense on 201", async () => {
+    const { createExpense } = await import("./listsClient");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 201,
+        json: async () => ({
+          id: "e1",
+          list_id: "l1",
+          amount: "10.00",
+          currency: "CRC",
+          description: "Coffee",
+          payer_id: "u1",
+          provenance: "hand",
+          line_type: "purchase",
+          posted_date: "2026-08-06",
+          created_at: "2026-08-06T12:00:00Z",
+        }),
+      }),
+    );
+
+    const result = await createExpense(
+      "l1",
+      {
+        amount: "10.00",
+        currency: "CRC",
+        description: "Coffee",
+        payer_id: "u1",
+      },
+      messages,
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.expense.description).toBe("Coffee");
+      expect(result.expense.provenance).toBe("hand");
+    }
+  });
+});

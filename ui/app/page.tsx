@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { RedirectIfAuthenticated } from "@/components/RedirectIfAuthenticated";
+import { requireAlias } from "@/lib/alias";
 import { resolveServerAuthenticatedLanding } from "@/lib/serverLanding";
 import { fetchSession } from "@/lib/session";
 import styles from "./page.module.css";
@@ -11,7 +12,10 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   const session = await fetchSession();
   if (session) {
-    redirect(await resolveServerAuthenticatedLanding());
+    const destination = await resolveServerAuthenticatedLanding();
+    // First signed-in visit (verify-off) must claim an alias before list chrome.
+    await requireAlias(destination);
+    redirect(destination);
   }
 
   return (

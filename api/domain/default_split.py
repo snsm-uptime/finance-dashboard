@@ -56,9 +56,7 @@ def validate_percentage_shares(
             raise InvalidDefaultSplitError("Percentages cannot be negative.")
         quantized = pct.quantize(PERCENT_QUANTUM)
         if quantized != pct:
-            raise InvalidDefaultSplitError(
-                "Percentages may have at most two decimal places."
-            )
+            raise InvalidDefaultSplitError("Percentages may have at most two decimal places.")
         normalized[user_id] = quantized
 
     if set(normalized.keys()) != members:
@@ -111,9 +109,7 @@ def allocate_percentage_shares(
     if currency_exponent < 0:
         raise InvalidDefaultSplitError("Currency exponent cannot be negative.")
 
-    member_ids = [
-        (raw_id if isinstance(raw_id, UUID) else UUID(str(raw_id))) for raw_id in shares
-    ]
+    member_ids = [(raw_id if isinstance(raw_id, UUID) else UUID(str(raw_id))) for raw_id in shares]
     normalized = validate_percentage_shares(member_ids, shares)
     if creator_user_id not in normalized:
         raise InvalidDefaultSplitError("List creator must be included in the share map.")

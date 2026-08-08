@@ -288,9 +288,7 @@ def test_owner_sets_percentage_default() -> None:
         CreateOwnedListCommand(actor_user_id=owner, name="Household")
     )
     list_id = next(iter(repo.lists))
-    repo.memberships.append(
-        MembershipRecord(list_id=list_id, user_id=member, role="member")
-    )
+    repo.memberships.append(MembershipRecord(list_id=list_id, user_id=member, role="member"))
     view = SetListDefaultSplitService(repo).execute(
         SetListDefaultSplitCommand(
             actor_user_id=owner,
@@ -313,9 +311,7 @@ def test_set_percentage_rejects_bad_sum() -> None:
         CreateOwnedListCommand(actor_user_id=owner, name="Household")
     )
     list_id = next(iter(repo.lists))
-    repo.memberships.append(
-        MembershipRecord(list_id=list_id, user_id=member, role="member")
-    )
+    repo.memberships.append(MembershipRecord(list_id=list_id, user_id=member, role="member"))
     with pytest.raises(InvalidDefaultSplitError):
         SetListDefaultSplitService(repo).execute(
             SetListDefaultSplitCommand(
@@ -335,9 +331,7 @@ def test_non_owner_cannot_set_default_split() -> None:
         CreateOwnedListCommand(actor_user_id=owner, name="Household")
     )
     list_id = next(iter(repo.lists))
-    repo.memberships.append(
-        MembershipRecord(list_id=list_id, user_id=member, role="member")
-    )
+    repo.memberships.append(MembershipRecord(list_id=list_id, user_id=member, role="member"))
     with pytest.raises(NotListOwnerError):
         SetListDefaultSplitService(repo).execute(
             SetListDefaultSplitCommand(
@@ -357,9 +351,7 @@ def test_membership_change_falls_back_to_even_on_get() -> None:
         CreateOwnedListCommand(actor_user_id=owner, name="Household")
     )
     list_id = next(iter(repo.lists))
-    repo.memberships.append(
-        MembershipRecord(list_id=list_id, user_id=member, role="member")
-    )
+    repo.memberships.append(MembershipRecord(list_id=list_id, user_id=member, role="member"))
     SetListDefaultSplitService(repo).execute(
         SetListDefaultSplitCommand(
             actor_user_id=owner,
@@ -368,9 +360,7 @@ def test_membership_change_falls_back_to_even_on_get() -> None:
             shares={owner: Decimal("60.00"), member: Decimal("40.00")},
         )
     )
-    repo.memberships.append(
-        MembershipRecord(list_id=list_id, user_id=extra, role="member")
-    )
+    repo.memberships.append(MembershipRecord(list_id=list_id, user_id=extra, role="member"))
     view = GetListDefaultSplitService(repo).execute(
         GetListDefaultSplitCommand(actor_user_id=owner, list_id=list_id)
     )

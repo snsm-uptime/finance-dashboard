@@ -3,10 +3,21 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Index, Numeric, String, UniqueConstraint, func
+from sqlalchemy import (
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -15,9 +26,12 @@ from adapters.persistence.base import Base
 
 class UserModel(Base):
     __tablename__ = "users"
+    # Aliases are compared case-insensitively; the DB owns that invariant.
+    __table_args__ = (Index("uq_users_alias_lower", text("lower(alias)"), unique=True),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False, index=True)
+    alias: Mapped[str | None] = mapped_column(String(32), nullable=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     email_verified_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -214,7 +228,7 @@ class ReceiptModel(Base):
 
 
 class LedgerEntryModel(Base):
-    """Minimal LEDGER_ENTRY stub for allocatable item subjects (Story 3.2 expands fields)."""
+    """LEDGER_ENTRY — hand-row subset for manual create (Story 3.2); parser fills later."""
 
     __tablename__ = "ledger_entries"
 
@@ -230,6 +244,20 @@ class LedgerEntryModel(Base):
         nullable=True,
         index=True,
     )
+    # AD-16 hand subset — wire alias `description` maps at HTTP edge only.
+    normalized_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    payer_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    provenance: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    line_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    posted_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # Import stubs — no FK; cards/origin land in Epic 4 (do not add origin_* here).
+    product_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    external_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

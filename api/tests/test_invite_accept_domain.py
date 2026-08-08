@@ -188,23 +188,15 @@ def _invite(
 
 def test_assert_invite_token_redeemable_rejects_used_and_expired() -> None:
     now = datetime.now(UTC)
-    assert_invite_token_redeemable(
-        used_at=None, expires_at=now + timedelta(hours=1), now=now
-    )
+    assert_invite_token_redeemable(used_at=None, expires_at=now + timedelta(hours=1), now=now)
     with pytest.raises(InvalidInviteTokenError):
-        assert_invite_token_redeemable(
-            used_at=now, expires_at=now + timedelta(hours=1), now=now
-        )
+        assert_invite_token_redeemable(used_at=now, expires_at=now + timedelta(hours=1), now=now)
     with pytest.raises(InvalidInviteTokenError):
-        assert_invite_token_redeemable(
-            used_at=None, expires_at=now - timedelta(seconds=1), now=now
-        )
+        assert_invite_token_redeemable(used_at=None, expires_at=now - timedelta(seconds=1), now=now)
 
 
 def test_assert_invite_email_bind_normalizes_case() -> None:
-    assert_invite_email_bind(
-        invitee_email="Invitee@Example.com", actor_email="invitee@example.com"
-    )
+    assert_invite_email_bind(invitee_email="Invitee@Example.com", actor_email="invitee@example.com")
     with pytest.raises(InviteEmailMismatchError):
         assert_invite_email_bind(
             invitee_email="invitee@example.com", actor_email="other@example.com"

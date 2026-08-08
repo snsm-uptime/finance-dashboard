@@ -12,7 +12,7 @@ from adapters.persistence.models import ListMembershipModel, ListModel
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from tests.integration_db import database_url
+from tests.integration_db import claim_alias, database_url
 
 pytestmark = pytest.mark.skipif(
     database_url() is None,
@@ -26,6 +26,7 @@ def _register(client: TestClient, email: str) -> None:
         json={"email": email, "password": "password1"},
     )
     assert response.status_code == 201, response.text
+    claim_alias(client, email)
 
 
 def test_unauthenticated_create_and_rename_rejected(client: TestClient) -> None:

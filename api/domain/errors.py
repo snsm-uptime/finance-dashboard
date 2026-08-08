@@ -116,6 +116,46 @@ class InvalidPreferencesError(DomainError):
         super().__init__(detail or self.MESSAGE)
 
 
+class InvalidAliasError(DomainError):
+    """Raised when an alias fails length/charset validation."""
+
+    MESSAGE = "Alias must be 3-32 characters using lowercase letters, numbers, and underscores."
+    CODE = "invalid_alias"
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(detail or self.MESSAGE)
+
+
+class AliasTakenError(DomainError):
+    """Raised when the requested alias is already claimed (case-insensitive)."""
+
+    MESSAGE = "That alias is taken. Try another one."
+    CODE = "alias_taken"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
+class AliasAlreadySetError(DomainError):
+    """Raised when an account with an alias attempts to change it (rename is deferred)."""
+
+    MESSAGE = "Your alias is already set and cannot be changed yet."
+    CODE = "alias_already_set"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
+class AliasRequiredError(DomainError):
+    """Raised when an authenticated user without an alias touches list surfaces."""
+
+    MESSAGE = "Choose an alias before using lists."
+    CODE = "alias_required"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
 class InvalidListNameError(DomainError):
     """Raised when a list name is empty or whitespace-only."""
 
@@ -174,6 +214,15 @@ class InvalidSplitOverrideError(DomainError):
     """Raised when item/receipt split override or allocation input is invalid (FR-10)."""
 
     MESSAGE = "Split override is invalid."
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(detail or self.MESSAGE)
+
+
+class InvalidManualExpenseError(DomainError):
+    """Raised when manual expense create input fails validation (FR-21)."""
+
+    MESSAGE = "Manual expense is invalid."
 
     def __init__(self, detail: str | None = None) -> None:
         super().__init__(detail or self.MESSAGE)

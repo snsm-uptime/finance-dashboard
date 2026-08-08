@@ -16,7 +16,7 @@ from domain.list_invite import hash_invite_token
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
-from tests.integration_db import database_url, make_client
+from tests.integration_db import claim_alias, database_url, make_client
 
 pytestmark = pytest.mark.skipif(
     database_url() is None,
@@ -61,6 +61,7 @@ def _register(client: TestClient, email: str) -> None:
         json={"email": email, "password": "password1"},
     )
     assert response.status_code == 201, response.text
+    claim_alias(client, email)
 
 
 def _extract_raw_from_link(body: str) -> str:

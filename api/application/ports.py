@@ -42,6 +42,7 @@ class UserPreferencesRecord:
     language: str | None
     theme: str | None
     last_opened_list_id: UUID | None = None
+    alias: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,6 +93,14 @@ class PreferencesRepository(Protocol):
         last_opened_list_id: UUID | None = None,
         clear_last_opened_list_id: bool = False,
     ) -> UserPreferencesRecord: ...
+
+    def claim_alias(self, user_id: UUID, alias: str) -> UserPreferencesRecord:
+        """Claim a normalized alias for a user that has none.
+
+        Raises AliasAlreadySetError when one is stored (rename is deferred) and
+        AliasTakenError when the case-insensitive unique index rejects the write.
+        """
+        ...
 
 
 class SignupRepository(Protocol):

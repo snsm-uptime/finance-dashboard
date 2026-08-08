@@ -79,7 +79,7 @@ describe("lists / invites BFF smoke (coverage floor)", () => {
     expect(patchRes.status).toBe(200);
   });
 
-  it("GET balances / expenses / default-split forward", async () => {
+  it("GET balances / expenses / default-split / members forward", async () => {
     const ctx = { params: Promise.resolve({ listId: "l1" }) };
     const request = new Request("http://localhost/api/lists/l1/x", {
       headers: { cookie: "fh_session=tok" },
@@ -94,6 +94,9 @@ describe("lists / invites BFF smoke (coverage floor)", () => {
     const split = await import("@/app/api/lists/[listId]/default-split/route");
     expect((await split.GET(request, ctx)).status).toBe(200);
 
+    const members = await import("@/app/api/lists/[listId]/members/route");
+    expect((await members.GET(request, ctx)).status).toBe(200);
+
     const putRes = await split.PUT(
       new Request("http://localhost/api/lists/l1/default-split", {
         method: "PUT",
@@ -106,6 +109,31 @@ describe("lists / invites BFF smoke (coverage floor)", () => {
       ctx,
     );
     expect(putRes.status).toBe(200);
+  });
+
+  it("POST /api/lists/[listId]/expenses forwards body", async () => {
+    const expenses = await import("@/app/api/lists/[listId]/expenses/route");
+    const response = await expenses.POST(
+      new Request("http://localhost/api/lists/l1/expenses", {
+        method: "POST",
+        headers: {
+          cookie: "fh_session=tok",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          amount: "10.00",
+          currency: "CRC",
+          description: "Coffee",
+          payer_id: "u1",
+        }),
+      }) as never,
+      { params: Promise.resolve({ listId: "l1" }) },
+    );
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test:8000/lists/l1/expenses",
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 
   it("POST /api/lists/[listId]/invites forwards email", async () => {

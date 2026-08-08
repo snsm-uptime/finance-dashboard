@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { AccountNavLink } from "@/components/AccountNavLink";
+import { requireAlias } from "@/lib/alias";
 import { getApiInternalUrl } from "@/lib/api";
 import { listsMessages } from "@/lib/i18n/lists";
 import type { Locale } from "@/lib/i18n/locale";
@@ -52,6 +53,8 @@ export default async function ListsPage() {
   if (!session) {
     redirect("/sign-in?returnTo=/lists");
   }
+  // No list chrome without an alias — redirects to setup on first signed-in visit.
+  await requireAlias("/lists");
 
   const jar = await cookies();
   const locale = resolvePageLocale(jar.get("fh_lang_cache")?.value);

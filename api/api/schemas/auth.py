@@ -41,6 +41,7 @@ class MeResponse(BaseModel):
     authenticated: bool = True
     user_id: UUID
     email: str
+    alias: str | None = None
     language: str | None = None
     theme: str | None = None
     last_opened_list_id: UUID | None = None
@@ -50,6 +51,9 @@ class PatchMeBody(BaseModel):
     language: Literal["en", "es"] | None = None
     theme: Literal["light", "dark", "system"] | None = None
     last_opened_list_id: UUID | None = None
+    # Wide wire bound so length/charset failures answer with `invalid_alias`
+    # from the domain instead of an unlabelled pydantic 422.
+    alias: str | None = Field(default=None, max_length=255)
 
 
 class PasswordResetRequestBody(BaseModel):

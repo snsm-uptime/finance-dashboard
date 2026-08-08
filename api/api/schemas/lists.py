@@ -1,12 +1,15 @@
-"""Pydantic DTOs for list create / rename / membership / detail / default split."""
+"""Pydantic DTOs for list create / rename / membership / detail / default split / expenses."""
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
 from domain.lists import LIST_NAME_MAX_LENGTH
 from pydantic import BaseModel, Field
+
+from api.schemas.splits import SetSplitOverrideBody
 
 
 class CreateListBody(BaseModel):
@@ -43,9 +46,54 @@ class ListDetailResponse(BaseModel):
     owner_id: UUID
 
 
+class ExpenseItemResponse(BaseModel):
+    id: UUID
+    list_id: UUID
+    amount: str
+    currency: str
+    description: str
+    payer_id: UUID
+    provenance: Literal["hand", "parser"]
+    line_type: str
+    posted_date: str
+    created_at: datetime
+
+
 class ListExpensesStubResponse(BaseModel):
     list_id: UUID
-    expenses: list[object] = Field(default_factory=list)
+    expenses: list[ExpenseItemResponse] = Field(default_factory=list)
+
+
+class CreateExpenseBody(BaseModel):
+    amount: str
+    currency: str = "CRC"
+    description: str
+    payer_id: UUID
+    split_override: SetSplitOverrideBody | None = None
+
+
+class CreateExpenseResponse(BaseModel):
+    id: UUID
+    list_id: UUID
+    amount: str
+    currency: str
+    description: str
+    payer_id: UUID
+    provenance: Literal["hand"]
+    line_type: str
+    posted_date: str
+    created_at: datetime
+
+
+class ListMemberItem(BaseModel):
+    """Roster label is the alias — email never leaves the invite/auth surfaces."""
+
+    user_id: UUID
+    alias: str | None = None
+
+
+class ListMembersResponse(BaseModel):
+    members: list[ListMemberItem]
 
 
 class ListBalancesStubResponse(BaseModel):

@@ -54,8 +54,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index(
-        "ix_list_invite_tokens_inviter_user_id", table_name="list_invite_tokens"
-    )
+    op.drop_index("ix_list_invite_tokens_inviter_user_id", table_name="list_invite_tokens")
     op.drop_index("ix_list_invite_tokens_list_id_email", table_name="list_invite_tokens")
     op.drop_table("list_invite_tokens")

@@ -127,7 +127,8 @@ def build_invite_email_message(
                 "Si no esperabas esta invitación, puedes ignorar este correo.\n"
             )
             body_html = (
-                f"<p>{safe_inviter_html} te invitó a la lista «{safe_list_html}» en finance-helper.</p>"
+                f"<p>{safe_inviter_html} te invitó a la lista «{safe_list_html}» "
+                "en finance-helper.</p>"
                 f"<p>Abre este enlace para unirte (válido {ttl_days} días):</p>"
                 f'<p><a href="{safe_href}">Unirme a la lista</a></p>'
                 "<p>Si no esperabas esta invitación, puedes ignorar este correo.</p>"
@@ -140,7 +141,8 @@ def build_invite_email_message(
                 "Si no esperabas esta invitación, puedes ignorar este correo.\n"
             )
             body_html = (
-                f"<p>{safe_inviter_html} te invitó a la lista «{safe_list_html}» en finance-helper.</p>"
+                f"<p>{safe_inviter_html} te invitó a la lista «{safe_list_html}» "
+                "en finance-helper.</p>"
                 f"<p>Crea una cuenta con este enlace para unirte (válido {ttl_days} días):</p>"
                 f'<p><a href="{safe_href}">Crear cuenta y unirme</a></p>'
                 "<p>Si no esperabas esta invitación, puedes ignorar este correo.</p>"
@@ -160,7 +162,8 @@ def build_invite_email_message(
             "If you weren’t expecting this, you can ignore this email.\n"
         )
         body_html = (
-            f"<p>{safe_inviter_html} invited you to the list “{safe_list_html}” on finance-helper.</p>"
+            f"<p>{safe_inviter_html} invited you to the list “{safe_list_html}” "
+            "on finance-helper.</p>"
             f"<p>Open this link to join (valid for {ttl_days} days):</p>"
             f'<p><a href="{safe_href}">Join the list</a></p>'
             "<p>If you weren’t expecting this, you can ignore this email.</p>"
@@ -173,7 +176,8 @@ def build_invite_email_message(
             "If you weren’t expecting this, you can ignore this email.\n"
         )
         body_html = (
-            f"<p>{safe_inviter_html} invited you to the list “{safe_list_html}” on finance-helper.</p>"
+            f"<p>{safe_inviter_html} invited you to the list “{safe_list_html}” "
+            "on finance-helper.</p>"
             f"<p>Create an account with this link to join (valid for {ttl_days} days):</p>"
             f'<p><a href="{safe_href}">Create account and join</a></p>'
             "<p>If you weren’t expecting this, you can ignore this email.</p>"
