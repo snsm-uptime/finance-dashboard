@@ -61,9 +61,7 @@ def validate_manual_expense(
         raise InvalidManualExpenseError("Amount is too large.")
     quantized = parsed.quantize(CRC_AMOUNT_QUANTUM)
     if quantized != parsed:
-        raise InvalidManualExpenseError(
-            "Amount may have at most two decimal places for CRC."
-        )
+        raise InvalidManualExpenseError("Amount may have at most two decimal places for CRC.")
 
     normalized = (description or "").strip()
     if not normalized:

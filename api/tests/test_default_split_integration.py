@@ -107,9 +107,7 @@ def test_even_default_after_create_and_owner_percentage(
     assert row.default_split_mode == "percentage"
 
 
-def test_non_owner_cannot_edit_default_split(
-    client: TestClient, db_session: Session
-) -> None:
+def test_non_owner_cannot_edit_default_split(client: TestClient, db_session: Session) -> None:
     _register(client, "owner-acl@example.com")
     created = client.post("/lists", json={"name": "Shared"})
     list_id = created.json()["id"]
@@ -174,9 +172,7 @@ def test_membership_change_falls_back_to_even_on_read(
     db_session.add(member)
     db_session.flush()
     db_session.add(
-        ListMembershipModel(
-            id=uuid4(), list_id=list_id, user_id=member.id, role="member"
-        )
+        ListMembershipModel(id=uuid4(), list_id=list_id, user_id=member.id, role="member")
     )
     db_session.flush()
 
@@ -196,9 +192,7 @@ def test_membership_change_falls_back_to_even_on_read(
     db_session.add(extra)
     db_session.flush()
     db_session.add(
-        ListMembershipModel(
-            id=uuid4(), list_id=list_id, user_id=extra.id, role="member"
-        )
+        ListMembershipModel(id=uuid4(), list_id=list_id, user_id=extra.id, role="member")
     )
     db_session.flush()
 

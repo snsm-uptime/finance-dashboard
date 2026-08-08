@@ -178,9 +178,7 @@ def test_registered_accept_creates_membership(
     )
 
 
-def test_bad_token_leaves_membership_unchanged(
-    client: TestClient, db_session: Session
-) -> None:
+def test_bad_token_leaves_membership_unchanged(client: TestClient, db_session: Session) -> None:
     _register(client, "owner@example.com")
     created = client.post("/lists", json={"name": "Household"})
     list_id = created.json()["id"]

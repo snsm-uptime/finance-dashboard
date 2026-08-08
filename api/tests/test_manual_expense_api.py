@@ -185,9 +185,7 @@ def test_non_crc_rejected(client: TestClient) -> None:
     assert bad.json()["code"] == "invalid_manual_expense"
 
 
-def test_list_members_roster_labels_with_alias(
-    client: TestClient, db_session: Session
-) -> None:
+def test_list_members_roster_labels_with_alias(client: TestClient, db_session: Session) -> None:
     from uuid import UUID
 
     from adapters.persistence.models import ListMembershipModel
