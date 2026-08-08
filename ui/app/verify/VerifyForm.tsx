@@ -22,10 +22,15 @@ export function VerifyForm({ locale, token, returnTo }: Props) {
   const [pendingResend, setPendingResend] = useState(false);
 
   // Reuse sign-in sanitizer; unsafe values become "/" — fall back to lists for verify.
+  // Success routes through /alias so a verified account picks a display alias
+  // before any list chrome; /alias passes straight through once one is set.
   const continueHref = (() => {
-    if (!returnTo) return "/lists";
-    const safe = safeReturnTo(returnTo);
-    return safe === "/" ? "/lists" : safe;
+    const destination = (() => {
+      if (!returnTo) return "/lists";
+      const safe = safeReturnTo(returnTo);
+      return safe === "/" ? "/lists" : safe;
+    })();
+    return `/alias?returnTo=${encodeURIComponent(destination)}`;
   })();
 
   const canConfirm = useMemo(

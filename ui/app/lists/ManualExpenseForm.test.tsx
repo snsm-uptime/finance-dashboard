@@ -293,6 +293,53 @@ describe("ManualExpenseForm", () => {
     expect(container.textContent).toContain("Percentages must sum to exactly 100.");
   });
 
+  it("labels payer and assignee options with aliases, never emails", async () => {
+    await act(async () => {
+      root.render(
+        <ManualExpenseForm
+          listId="list-1"
+          currentUserId="user-a"
+          members={members}
+          messages={messages}
+        />,
+      );
+    });
+
+    const details = container.querySelector("details") as HTMLDetailsElement;
+    await act(async () => {
+      details.open = true;
+      details.dispatchEvent(new Event("toggle", { bubbles: true }));
+    });
+
+    const optionLabels = Array.from(container.querySelectorAll("option")).map(
+      (o) => o.textContent,
+    );
+    expect(optionLabels).toContain("alice");
+    expect(optionLabels).toContain("bob");
+    expect(container.textContent).not.toContain("@");
+  });
+
+  it("falls back to a short id when a member has no alias yet", async () => {
+    await act(async () => {
+      root.render(
+        <ManualExpenseForm
+          listId="list-1"
+          currentUserId="user-a"
+          members={[
+            { user_id: "user-a", alias: "alice" },
+            { user_id: "0123456789abcdef", alias: null },
+          ]}
+          messages={messages}
+        />,
+      );
+    });
+
+    const optionLabels = Array.from(container.querySelectorAll("option")).map(
+      (o) => o.textContent,
+    );
+    expect(optionLabels).toContain("01234567…");
+  });
+
   it("submit control is a PrimaryButton (type=submit)", async () => {
     await act(async () => {
       root.render(

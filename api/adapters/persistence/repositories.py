@@ -131,16 +131,20 @@ class SqlAlchemyAuthUserRepository:
         return _preferences_record(row)
 
     def claim_alias(self, user_id: UUID, alias: str) -> UserPreferencesRecord:
-        """Set-once claim; the lower(alias) unique index is the race arbiter."""
-        row = self._session.get(UserModel, user_id)
+        """Set-once claim; row lock + lower(alias) unique index arbitrate races."""
+        row = self._session.scalar(
+            select(UserModel).where(UserModel.id == user_id).with_for_update()
+        )
         if row is None:
             raise PrincipalNotFoundError()
         if row.alias:
             raise AliasAlreadySetError()
-        row.alias = alias
         try:
-            # Savepoint so a losing race does not poison the outer transaction.
+            # Assign inside the savepoint — begin_nested() autoflushes pending
+            # state, which would push the UPDATE outside the savepoint and
+            # poison the outer transaction when the unique index rejects it.
             with self._session.begin_nested():
+                row.alias = alias
                 self._session.flush()
         except IntegrityError as exc:
             raise AliasTakenError() from exc

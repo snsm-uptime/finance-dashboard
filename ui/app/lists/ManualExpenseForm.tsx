@@ -8,6 +8,7 @@ import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
 
 import {
   createExpense,
+  memberLabel,
   type CreateExpenseBody,
   type ListMember,
   type ListsClientMessages,
@@ -65,7 +66,7 @@ export function ManualExpenseForm({
   const errorId = `${baseId}-error`;
   const memberOptions = members.map((m) => ({
     value: m.user_id,
-    label: m.alias ?? m.user_id.slice(0, 8),
+    label: memberLabel(m),
   }));
 
   const [amount, setAmount] = useState("");
@@ -283,7 +284,7 @@ export function ManualExpenseForm({
                 {members.map((m) => (
                   <div key={m.user_id} className={styles.memberRow}>
                     <label className={styles.label} htmlFor={`${baseId}-abs-${m.user_id}`}>
-                      {m.alias ?? m.user_id.slice(0, 8)}
+                      {memberLabel(m)}
                     </label>
                     <input
                       id={`${baseId}-abs-${m.user_id}`}
@@ -308,7 +309,7 @@ export function ManualExpenseForm({
                 {members.map((m) => (
                   <div key={m.user_id} className={styles.memberRow}>
                     <label className={styles.label} htmlFor={`${baseId}-pct-${m.user_id}`}>
-                      {m.alias ?? m.user_id.slice(0, 8)}
+                      {memberLabel(m)}
                     </label>
                     <input
                       id={`${baseId}-pct-${m.user_id}`}

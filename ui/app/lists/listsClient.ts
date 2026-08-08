@@ -302,8 +302,17 @@ export async function saveDefaultSplit(
 
 export type ListMember = {
   user_id: string;
+  /** Null only while a member has not passed the alias gate yet. */
   alias: string | null;
 };
+
+/**
+ * Person label for rosters and pickers. Email is an identity surface and is
+ * never a label, so a member still missing an alias falls back to a short id.
+ */
+export function memberLabel(member: ListMember): string {
+  return member.alias ?? `${member.user_id.slice(0, 8)}…`;
+}
 
 export type ExpenseItem = {
   id: string;
@@ -473,19 +482,14 @@ export async function fetchListMembers(
     if (!row || typeof row !== "object") {
       return { ok: false, error: messages.errorGeneric };
     }
-    const m = row as Partial<ListMember> & { email?: unknown };
+    const m = row as { user_id?: unknown; alias?: unknown };
     if (typeof m.user_id !== "string") {
       return { ok: false, error: messages.errorGeneric };
     }
-    const alias =
-      typeof m.alias === "string"
-        ? m.alias
-        : m.alias === null
-          ? null
-          : typeof m.email === "string"
-            ? m.email
-            : null;
-    members.push({ user_id: m.user_id, alias });
+    members.push({
+      user_id: m.user_id,
+      alias: typeof m.alias === "string" && m.alias ? m.alias : null,
+    });
   }
   return { ok: true, members };
 }

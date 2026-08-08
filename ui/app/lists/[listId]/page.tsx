@@ -8,6 +8,7 @@ import { ReceiptRow } from "@/components/soft-ledger/ReceiptRow";
 import { SectionLabel } from "@/components/soft-ledger/SectionLabel";
 import { TabBar } from "@/components/soft-ledger/TabBar";
 import { TopNav } from "@/components/soft-ledger/TopNav";
+import { requireAlias } from "@/lib/alias";
 import { getApiInternalUrl } from "@/lib/api";
 import { accountCopy } from "@/lib/i18n/account";
 import { listsMessages } from "@/lib/i18n/lists";
@@ -106,17 +107,12 @@ function asMembers(data: unknown): ListMember[] {
   const out: ListMember[] = [];
   for (const row of rows) {
     if (!row || typeof row !== "object") continue;
-    const m = row as Partial<ListMember> & { email?: unknown };
+    const m = row as { user_id?: unknown; alias?: unknown };
     if (typeof m.user_id !== "string") continue;
-    const alias =
-      typeof m.alias === "string"
-        ? m.alias
-        : m.alias === null
-          ? null
-          : typeof m.email === "string"
-            ? m.email
-            : null;
-    out.push({ user_id: m.user_id, alias });
+    out.push({
+      user_id: m.user_id,
+      alias: typeof m.alias === "string" && m.alias ? m.alias : null,
+    });
   }
   return out;
 }
@@ -132,6 +128,7 @@ export default async function ListDetailPage({
   if (!session) {
     redirect(`/sign-in?returnTo=/lists/${encodeURIComponent(listId)}`);
   }
+  await requireAlias(`/lists/${listId}`);
 
   const jar = await cookies();
   const locale = resolvePageLocale(jar.get("fh_lang_cache")?.value);

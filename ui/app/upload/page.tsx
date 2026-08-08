@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { AccountNavLink } from "@/components/AccountNavLink";
+import { requireAlias } from "@/lib/alias";
 import { fetchSession } from "@/lib/session";
 import styles from "../lists/lists.module.css";
 
@@ -13,6 +14,7 @@ export default async function UploadPage() {
   if (!session) {
     redirect("/sign-in?returnTo=/upload");
   }
+  await requireAlias("/upload");
 
   return (
     <main className={styles.main}>

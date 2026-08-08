@@ -96,3 +96,24 @@ def test_alias_gate_does_not_block_account_surfaces(client: TestClient) -> None:
 def test_alias_claim_requires_authentication(client: TestClient) -> None:
     response = client.patch("/auth/me", json={"alias": "nobody"})
     assert response.status_code == 401
+
+
+def test_failed_combined_patch_does_not_leave_set_once_alias(client: TestClient) -> None:
+    """last_opened failure must not commit a set-once alias under the error."""
+    import uuid
+
+    _register(client, "gina-partial@example.com")
+    foreign_list = str(uuid.uuid4())
+
+    failed = client.patch(
+        "/auth/me",
+        json={"alias": "gina", "last_opened_list_id": foreign_list},
+    )
+    assert failed.status_code == 403, failed.text
+    assert failed.json()["code"] == "not_list_member"
+    assert client.get("/auth/me").json()["alias"] is None
+
+    # Claim still works on a clean follow-up.
+    ok = client.patch("/auth/me", json={"alias": "gina"})
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["alias"] == "gina"

@@ -124,3 +124,23 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-2-user-alias-display.md`
   summary: Account-menu edit of user alias after initial set
   evidence: Split from alias display intent to keep first ship = set-once gate + 3.2 roster labels; edit deferred as independently shippable
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-2-user-alias-display.md`
+  summary: Invite-accepted members can appear on roster with null alias (UUID label) until they complete setup
+  evidence: Review — invites router and signup still mint membership before alias claim; gate blocks their chrome but not other members seeing them
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-2-user-alias-display.md`
+  summary: fetchMe treats upstream/network failures like signed-out and redirects to sign-in
+  evidence: Review — requireAlias cannot distinguish 401 from 5xx/offline
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-2-user-alias-display.md`
+  summary: Alias setup locale uses Accept-Language only, ignoring fh_lang_cache
+  evidence: Review — list chrome and alias setup can disagree on ES/EN until prefs loaded
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-2-user-alias-display.md`
+  summary: No rate limit or reserved-name list on alias claims
+  evidence: Review — global unique slugs are probeable/squattable without throttling or blocked words
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-2-user-alias-display.md`
+  summary: No dedicated test that POST /auth/verify/confirm never mutates alias
+  evidence: Review — design says verify-only; locked only by absence of call sites today
