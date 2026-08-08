@@ -369,7 +369,8 @@ class SqlAlchemyListRepository:
         list_id: UUID,
         draft,
     ):
-        from datetime import UTC, date as date_cls, datetime
+        from datetime import UTC, datetime
+        from datetime import date as date_cls
 
         from application.expenses import LedgerEntryRecord
         from domain.expenses import ManualExpenseDraft
