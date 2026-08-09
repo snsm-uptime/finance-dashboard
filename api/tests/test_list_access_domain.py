@@ -100,6 +100,19 @@ class FakeListRepo:
     def list_ledger_entries(self, list_id: UUID) -> list:
         return []
 
+    def list_members_with_alias(self, list_id: UUID) -> list:
+        return [
+            type("ListMemberView", (), {"user_id": m.user_id, "alias": None})()
+            for m in self.memberships
+            if m.list_id == list_id
+        ]
+
+    def get_stored_default_split(self, list_id: UUID):
+        return None
+
+    def get_split_override(self, list_id: UUID, subject_kind: str, receipt_id: UUID):
+        return None
+
 
 @dataclass
 class FakePrefsRepo:
