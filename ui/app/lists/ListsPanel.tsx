@@ -269,59 +269,60 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
                   : t.balanceZero;
             return (
               <li key={list.id} className={styles.row}>
-                <div className={styles.rowHead}>
-                  <div className={styles.listPrimary}>
-                    <div className={styles.nameRow}>
-                      {isEditing ? (
-                        <input
-                          ref={renameInputRef}
-                          className={styles.listNameEdit}
-                          type="text"
-                          value={draft}
-                          placeholder={list.name}
-                          aria-label={t.renameAria}
-                          onChange={(e) =>
-                            setRenameDrafts((prev) => ({
-                              ...prev,
-                              [list.id]: e.target.value,
-                            }))
-                          }
-                          onBlur={() => cancelRename(list.id)}
-                          onKeyDown={(e) => onRenameKeyDown(e, list)}
-                          maxLength={200}
-                          autoComplete="off"
-                          disabled={renamingId === list.id}
-                        />
-                      ) : (
-                        <>
-                          <button
-                            type="button"
-                            className={styles.listNameButton}
-                            onClick={() => void openList(list)}
-                            disabled={anyOpening}
-                          >
-                            <span className={styles.listName}>{list.name}</span>
-                          </button>
-                          {isOwner ? (
-                            <button
-                              type="button"
-                              className={styles.renameIcon}
-                              aria-label={t.renameAria}
-                              onClick={() => startRename(list)}
-                              disabled={anyOpening || renamingId !== null}
-                            >
-                              <PencilIcon />
-                            </button>
-                          ) : null}
-                        </>
-                      )}
-                    </div>
+                {isEditing ? (
+                  <div className={styles.cardBody}>
+                    <input
+                      ref={renameInputRef}
+                      className={styles.listNameEdit}
+                      type="text"
+                      value={draft}
+                      placeholder={list.name}
+                      aria-label={t.renameAria}
+                      onChange={(e) =>
+                        setRenameDrafts((prev) => ({
+                          ...prev,
+                          [list.id]: e.target.value,
+                        }))
+                      }
+                      onBlur={() => cancelRename(list.id)}
+                      onKeyDown={(e) => onRenameKeyDown(e, list)}
+                      maxLength={200}
+                      autoComplete="off"
+                      disabled={renamingId === list.id}
+                    />
+                    <span className={styles.badge}>
+                      {isOwner ? t.ownedBadge : t.memberBadge}
+                    </span>
+                    <span className={styles.cardDivider} aria-hidden="true" />
+                    <span
+                      className={`${styles.balance} ${
+                        tone === "owe"
+                          ? styles.balanceOwe
+                          : tone === "owed"
+                            ? styles.balanceOwed
+                            : styles.balanceZero
+                      }`}
+                    >
+                      <span className={styles.balanceToken}>{balanceLabel}</span>
+                      <span className={styles.balanceAmount}>
+                        {list.balance_crc ?? "0"}
+                      </span>
+                    </span>
+                  </div>
+                ) : (
+                  <>
                     <button
                       type="button"
-                      className={styles.balanceButton}
+                      className={styles.cardButton}
                       onClick={() => void openList(list)}
-                      disabled={anyOpening || isEditing}
+                      disabled={anyOpening}
+                      aria-label={`${t.openLink}: ${list.name}`}
                     >
+                      <span className={styles.listName}>{list.name}</span>
+                      <span className={styles.badge}>
+                        {isOwner ? t.ownedBadge : t.memberBadge}
+                      </span>
+                      <span className={styles.cardDivider} aria-hidden="true" />
                       <span
                         className={`${styles.balance} ${
                           tone === "owe"
@@ -337,26 +338,24 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
                         </span>
                       </span>
                     </button>
-                  </div>
-                  <span className={styles.badge}>
-                    {isOwner ? t.ownedBadge : t.memberBadge}
-                  </span>
-                </div>
+                    {isOwner ? (
+                      <button
+                        type="button"
+                        className={styles.renameIcon}
+                        aria-label={t.renameAria}
+                        onClick={() => startRename(list)}
+                        disabled={anyOpening || renamingId !== null}
+                      >
+                        <PencilIcon />
+                      </button>
+                    ) : null}
+                  </>
+                )}
                 {renameErrors[list.id] ? (
-                  <p className={styles.error} role="alert">
+                  <p className={`${styles.error} ${styles.cardError}`} role="alert">
                     {renameErrors[list.id]}
                   </p>
                 ) : null}
-                <p className={styles.rowHint}>
-                  <button
-                    type="button"
-                    className={styles.linkButton}
-                    onClick={() => void openList(list)}
-                    disabled={anyOpening || isEditing}
-                  >
-                    {t.openLink}
-                  </button>
-                </p>
               </li>
             );
           })}
