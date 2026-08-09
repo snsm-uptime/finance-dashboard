@@ -88,6 +88,15 @@
   flex: 1 0 100%;
 }
 
+/* Keeps invite sheet height stable when an error alert mounts (≈3 wrapped lines). */
+.inviteErrorSlot {
+  min-height: calc(0.9rem * 1.45 * 3 + 1rem);
+}
+
+.inviteErrorSlot .error {
+  margin-bottom: 0;
+}
+
 .panel {
   width: 100%;
   margin: 0 0 1.5rem;
@@ -420,9 +429,113 @@
   box-shadow: none;
 }
 
-.softBelow {
+/* Soft-Ledger list detail: settle/receipts lead on phone; sidebar left from md. */
+.detailLayout {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.detailPrimary {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.detailSidebar {
+  display: none;
+  flex-direction: column;
+  gap: var(--space-6);
   margin: var(--space-6) var(--page-gutter) 0;
   max-width: 36rem;
+  min-width: 0;
+}
+
+.detailSidebar > :last-child {
+  margin-bottom: 0;
+}
+
+.mobileBack {
+  margin: var(--space-6) var(--page-gutter) 0;
+}
+
+@media (min-width: 768px) {
+  /* Lock Soft-Ledger shell to the viewport — only the receipts list scrolls. */
+  .softMain {
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100vh;
+    max-height: 100dvh;
+    overflow: hidden;
+  }
+
+  .softBody {
+    overflow: hidden;
+    padding-bottom: 0;
+  }
+
+  .detailLayout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    gap: var(--space-6);
+    align-items: stretch;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    padding: var(--space-2) var(--page-gutter) 0;
+  }
+
+  .detailSidebar {
+    display: flex;
+    grid-column: 1;
+    grid-row: 1;
+    margin: 0;
+    max-width: none;
+    min-height: 0;
+    gap: var(--space-4);
+    /* Escape hatch only — page chrome stays fixed; receipts are the intended scroll. */
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .detailSidebar :global(section) {
+    margin-bottom: 0;
+  }
+
+  .detailSidebar :global(form) {
+    margin-bottom: 0;
+    max-width: none;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .detailPrimary {
+    grid-column: 2;
+    grid-row: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .detailPrimary > :not(.softReceipts) {
+    flex-shrink: 0;
+  }
+
+  .detailPrimary .softReceipts {
+    flex: 1 1 auto;
+    min-height: 0;
+    margin-inline: var(--strip-inset);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .mobileBack {
+    display: none;
+  }
 }
 
 .softBack {
