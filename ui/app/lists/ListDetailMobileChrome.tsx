@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -101,13 +102,18 @@ function Sheet({
   const [mounted, setMounted] = useState(false);
   const [visible, setVisible] = useState(false);
 
+  useLayoutEffect(() => {
+    if (open) {
+      setMounted(true);
+    }
+  }, [open]);
+
   useEffect(() => {
     if (!open) {
       setVisible(false);
       const hide = window.setTimeout(() => setMounted(false), 280);
       return () => window.clearTimeout(hide);
     }
-    setMounted(true);
     const show = window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => setVisible(true));
     });
