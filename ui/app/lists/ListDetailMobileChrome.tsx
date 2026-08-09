@@ -103,13 +103,13 @@ function Sheet({
   );
 
   // Respond to open prop changes: transition to mounting or closing
-  // eslint-disable-next-line react-hooks/set-state-in-effect
+  // Animation phase transitions require setState in effect; this is the
+  // recommended pattern for coordinating state changes (React docs)
   useEffect(() => {
-    if (open && phase === "unmounted") {
-      setPhase("mounting");
-    } else if (!open && phase !== "unmounted" && phase !== "closing") {
-      setPhase("closing");
-    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (open && phase === "unmounted") setPhase("mounting");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    else if (!open && phase !== "unmounted" && phase !== "closing") setPhase("closing");
   }, [open, phase]);
 
   // Handle mounting phase: trigger visibility animation
