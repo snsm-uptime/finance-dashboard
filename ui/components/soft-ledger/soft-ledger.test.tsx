@@ -93,6 +93,25 @@ describe("Soft-Ledger primitives", () => {
     expect(host.querySelector("[class*='amountOwe'], .amountOwe")).toBeTruthy();
   });
 
+  it("renders BalanceStrip with owed polarity", () => {
+    act(() => {
+      root.render(
+        <BalanceStrip who="You’re owed" amount="₡10,000" polarity="owed" />,
+      );
+    });
+    expect(host.textContent).toContain("You’re owed");
+    expect(host.textContent).toContain("₡10,000");
+    expect(host.querySelector("[class*='amountOwed'], .amountOwed")).toBeTruthy();
+  });
+
+  it("renders BalanceStrip with neutral polarity (default)", () => {
+    act(() => {
+      root.render(<BalanceStrip who="Settled" amount="₡0" />);
+    });
+    expect(host.textContent).toContain("Settled");
+    expect(host.querySelector("[class*='amountNeutral'], .amountNeutral")).toBeTruthy();
+  });
+
   it("renders Hint and SectionLabel and empty ReceiptRow", () => {
     act(() => {
       root.render(

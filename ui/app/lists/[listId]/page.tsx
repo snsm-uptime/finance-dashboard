@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { BalanceStrip } from "@/components/soft-ledger/BalanceStrip";
+import { BalanceStrip, type BalancePolarity } from "@/components/soft-ledger/BalanceStrip";
 import { Hint } from "@/components/soft-ledger/Hint";
 import { ReceiptRow } from "@/components/soft-ledger/ReceiptRow";
 import { SectionLabel } from "@/components/soft-ledger/SectionLabel";
@@ -17,7 +17,7 @@ import { fetchSession } from "@/lib/session";
 import { DefaultSplitPanel } from "../DefaultSplitPanel";
 import { InviteForm } from "../InviteForm";
 import { ManualExpenseForm } from "../ManualExpenseForm";
-import type { DefaultSplitPayload, ExpenseItem, ListMember } from "../listsClient";
+import { balanceTone, type DefaultSplitPayload, type ExpenseItem, type ListMember } from "../listsClient";
 import styles from "../lists.module.css";
 
 export const dynamic = "force-dynamic";
@@ -62,6 +62,24 @@ function asDefaultSplit(data: unknown): DefaultSplitPayload | null {
   };
 }
 
+type BalancesPayload = {
+  list_id: string;
+  balance_crc: string;
+};
+
+function asBalances(data: unknown): BalancesPayload | null {
+  if (!data || typeof data !== "object") return null;
+  const row = data as Partial<BalancesPayload>;
+  if (typeof row.list_id !== "string") {
+    return null;
+  }
+  const balanceCrc = typeof row.balance_crc === "string" ? row.balance_crc : String(row.balance_crc);
+  if (!balanceCrc || balanceCrc === "undefined") {
+    return null;
+  }
+  return { list_id: row.list_id, balance_crc: balanceCrc };
+}
+
 function asExpenses(data: unknown): ExpenseItem[] {
   if (!data || typeof data !== "object") return [];
   const rows = (data as { expenses?: unknown }).expenses;
@@ -98,6 +116,43 @@ function formatCrcAmount(amount: string): string {
     maximumFractionDigits: 2,
   });
   return `₡${formatted}`;
+}
+
+type BalanceStripMessages = {
+  detailSettleEmpty: string;
+  balanceOwe: string;
+  balanceOwed: string;
+  balanceZero: string;
+  loadError: string;
+};
+
+type BalanceStripState = {
+  who: string;
+  amount: string;
+  polarity: BalancePolarity;
+};
+
+/**
+ * Tone→props mapping for the settle strip (Story 3.3 state machine).
+ * A failed fetch always wins over "empty"; those are distinct claims.
+ */
+export function balanceStripPropsFrom(
+  hasExpenses: boolean,
+  balancesLoadError: boolean,
+  balanceCrc: string | undefined,
+  t: BalanceStripMessages,
+): BalanceStripState {
+  if (balancesLoadError) {
+    return { who: t.loadError, amount: "—", polarity: "neutral" };
+  }
+  if (!hasExpenses) {
+    return { who: t.detailSettleEmpty, amount: "—", polarity: "neutral" };
+  }
+  const amount = formatCrcAmount(balanceCrc?.trim() || "0");
+  const tone = balanceTone(balanceCrc);
+  if (tone === "owe") return { who: t.balanceOwe, amount, polarity: "owe" };
+  if (tone === "owed") return { who: t.balanceOwed, amount, polarity: "owed" };
+  return { who: t.balanceZero, amount, polarity: "neutral" };
 }
 
 function asMembers(data: unknown): ListMember[] {
@@ -140,9 +195,11 @@ export default async function ListDetailPage({
   let defaultSplit: DefaultSplitPayload | null = null;
   let expenses: ExpenseItem[] = [];
   let members: ListMember[] = [];
+  let balances: BalancesPayload | null = null;
   let splitLoadError = false;
   let expensesLoadError = false;
   let membersLoadError = false;
+  let balancesLoadError = false;
   let notFound = false;
   let loadError = false;
   try {
@@ -164,7 +221,7 @@ export default async function ListDetailPage({
       notFound = true;
     } else if (response.ok) {
       detail = (await response.json()) as DetailPayload;
-      const [splitRes, expensesRes, membersRes] = await Promise.all([
+      const [splitRes, expensesRes, membersRes, balancesRes] = await Promise.all([
         fetch(`${getApiInternalUrl()}/lists/${encodeURIComponent(listId)}/default-split`, {
           method: "GET",
           headers: {
@@ -182,6 +239,14 @@ export default async function ListDetailPage({
           cache: "no-store",
         }),
         fetch(`${getApiInternalUrl()}/lists/${encodeURIComponent(listId)}/members`, {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            ...(header ? { Cookie: header } : {}),
+          },
+          cache: "no-store",
+        }),
+        fetch(`${getApiInternalUrl()}/lists/${encodeURIComponent(listId)}/balances`, {
           method: "GET",
           headers: {
             Accept: "application/json",
@@ -213,6 +278,20 @@ export default async function ListDetailPage({
       } else {
         membersLoadError = true;
       }
+      if (balancesRes.ok) {
+        try {
+          const parsedBalances = asBalances(await balancesRes.json());
+          if (parsedBalances) {
+            balances = parsedBalances;
+          } else {
+            balancesLoadError = true;
+          }
+        } catch {
+          balancesLoadError = true;
+        }
+      } else {
+        balancesLoadError = true;
+      }
     } else {
       loadError = true;
     }
@@ -224,6 +303,12 @@ export default async function ListDetailPage({
   const isOwner = Boolean(detail?.owner_id && detail.owner_id === session.user_id);
   const showSoftChrome = Boolean(listTitle) && !notFound && !loadError;
   const navTitle = showSoftChrome ? (listTitle as string) : "";
+  const stripProps = balanceStripPropsFrom(
+    expenses.length > 0,
+    balancesLoadError,
+    balances?.balance_crc,
+    t,
+  );
 
   return (
     <main className={styles.softMain}>
@@ -250,11 +335,11 @@ export default async function ListDetailPage({
         ) : (
           <>
             <BalanceStrip
-              who={t.detailSettleEmpty}
-              amount="—"
-              polarity="neutral"
+              who={stripProps.who}
+              amount={stripProps.amount}
+              polarity={stripProps.polarity}
             />
-            <Hint>{t.detailHintEmpty}</Hint>
+            {expenses.length === 0 && !expensesLoadError ? <Hint>{t.detailHintEmpty}</Hint> : null}
             <div className={styles.softReceipts}>
               <SectionLabel>{t.detailReceiptsTitle}</SectionLabel>
               {expensesLoadError ? (
