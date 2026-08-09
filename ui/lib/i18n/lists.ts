@@ -63,6 +63,9 @@ export const listsMessages = {
     expenseModeAbsolute: "Exact amounts",
     expenseModePercentage: "Percentages",
     expenseAssignee: "Assignee",
+    mobileAddExpenseAria: "Add expense",
+    mobileInviteAria: "Invite someone",
+    mobileSheetClose: "Close",
   },
   es: {
     brand: "finance-helper",
@@ -128,6 +131,9 @@ export const listsMessages = {
     expenseModeAbsolute: "Montos exactos",
     expenseModePercentage: "Porcentajes",
     expenseAssignee: "Asignado",
+    mobileAddExpenseAria: "Agregar gasto",
+    mobileInviteAria: "Invitar a alguien",
+    mobileSheetClose: "Cerrar",
   },
 } as const;
 

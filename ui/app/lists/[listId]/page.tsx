@@ -16,6 +16,7 @@ import type { Locale } from "@/lib/i18n/locale";
 import { fetchSession } from "@/lib/session";
 import { DefaultSplitPanel } from "../DefaultSplitPanel";
 import { InviteForm } from "../InviteForm";
+import { ListDetailMobileChrome } from "../ListDetailMobileChrome";
 import { ManualExpenseForm } from "../ManualExpenseForm";
 import { balanceTone, type DefaultSplitPayload, type ExpenseItem, type ListMember } from "../listsClient";
 import styles from "../lists.module.css";
@@ -333,33 +334,42 @@ export default async function ListDetailPage({
             </p>
           </>
         ) : (
-          <>
-            <BalanceStrip
-              who={stripProps.who}
-              amount={stripProps.amount}
-              polarity={stripProps.polarity}
-            />
-            {expenses.length === 0 && !expensesLoadError ? <Hint>{t.detailHintEmpty}</Hint> : null}
-            <div className={styles.softReceipts}>
-              <SectionLabel>{t.detailReceiptsTitle}</SectionLabel>
-              {expensesLoadError ? (
-                <p className={styles.copy} role="alert">
-                  {t.loadError}
-                </p>
-              ) : expenses.length === 0 ? (
-                <ReceiptRow emptyLabel={t.detailReceiptsEmpty} />
-              ) : (
-                expenses.map((e) => (
-                  <ReceiptRow
-                    key={e.id}
-                    title={e.description}
-                    when={e.posted_date}
-                    amount={formatCrcAmount(e.amount)}
-                  />
-                ))
-              )}
+          <div className={styles.detailLayout}>
+            <div className={styles.detailPrimary}>
+              <BalanceStrip
+                who={stripProps.who}
+                amount={stripProps.amount}
+                polarity={stripProps.polarity}
+              />
+              {expenses.length === 0 && !expensesLoadError ? (
+                <Hint>{t.detailHintEmpty}</Hint>
+              ) : null}
+              <div className={styles.softReceipts}>
+                <SectionLabel>{t.detailReceiptsTitle}</SectionLabel>
+                {expensesLoadError ? (
+                  <p className={styles.copy} role="alert">
+                    {t.loadError}
+                  </p>
+                ) : expenses.length === 0 ? (
+                  <ReceiptRow emptyLabel={t.detailReceiptsEmpty} />
+                ) : (
+                  expenses.map((e) => (
+                    <ReceiptRow
+                      key={e.id}
+                      title={e.description}
+                      when={e.posted_date}
+                      amount={formatCrcAmount(e.amount)}
+                    />
+                  ))
+                )}
+              </div>
+              <p className={`${styles.copy} ${styles.mobileBack}`}>
+                <Link className={styles.link} href="/lists">
+                  {t.backToLists}
+                </Link>
+              </p>
             </div>
-            <div className={styles.softBelow}>
+            <aside className={styles.detailSidebar}>
               {membersLoadError ? (
                 <p className={styles.copy} role="alert">
                   {t.loadError}
@@ -388,11 +398,6 @@ export default async function ListDetailPage({
                   }}
                 />
               ) : null}
-              <p className={styles.copy}>
-                <Link className={styles.link} href="/lists">
-                  {t.backToLists}
-                </Link>
-              </p>
               {isOwner ? (
                 <InviteForm
                   listId={listId}
@@ -412,12 +417,12 @@ export default async function ListDetailPage({
                   }}
                 />
               ) : null}
-              {splitLoadError ? (
+              {isOwner && splitLoadError ? (
                 <p className={styles.copy} role="alert">
                   {t.errorDefaultSplitLoad}
                 </p>
               ) : null}
-              {defaultSplit ? (
+              {isOwner && defaultSplit ? (
                 <DefaultSplitPanel
                   listId={listId}
                   isOwner={isOwner}
@@ -438,8 +443,54 @@ export default async function ListDetailPage({
                   }}
                 />
               ) : null}
-            </div>
-          </>
+              <p className={styles.copy}>
+                <Link className={styles.link} href="/lists">
+                  {t.backToLists}
+                </Link>
+              </p>
+            </aside>
+            <ListDetailMobileChrome
+              listId={listId}
+              currentUserId={session.user_id}
+              members={members}
+              canAddExpense={!membersLoadError && members.length > 0}
+              canInvite={isOwner}
+              expenseMessages={{
+                expenseTitle: t.expenseTitle,
+                expenseAmount: t.expenseAmount,
+                expenseDescription: t.expenseDescription,
+                expensePayer: t.expensePayer,
+                expenseSubmit: t.expenseSubmit,
+                expenseSaving: t.expenseSaving,
+                expenseAdjustSplit: t.expenseAdjustSplit,
+                expenseModeWhole: t.expenseModeWhole,
+                expenseModeAbsolute: t.expenseModeAbsolute,
+                expenseModePercentage: t.expenseModePercentage,
+                expenseAssignee: t.expenseAssignee,
+                errorGeneric: t.errorGeneric,
+                errorInvalidName: t.errorInvalidName,
+                errorForbidden: t.errorForbidden,
+                errorUnauthorized: t.errorUnauthorized,
+              }}
+              inviteMessages={{
+                inviteTitle: t.inviteTitle,
+                inviteLabel: t.inviteLabel,
+                inviteSubmit: t.inviteSubmit,
+                inviteSending: t.inviteSending,
+                inviteSent: t.inviteSent,
+                errorGeneric: t.errorGeneric,
+                errorInvalidName: t.errorInvalidName,
+                errorInvalidEmail: t.errorInvalidEmail,
+                errorForbidden: t.errorInviteForbidden,
+                errorUnauthorized: t.errorUnauthorized,
+                errorAlreadyMember: t.errorAlreadyMember,
+                errorSmtp: t.errorSmtp,
+              }}
+              addExpenseAria={t.mobileAddExpenseAria}
+              inviteAria={t.mobileInviteAria}
+              closeLabel={t.mobileSheetClose}
+            />
+          </div>
         )}
       </div>
       <TabBar

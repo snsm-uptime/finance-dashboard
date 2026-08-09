@@ -42,7 +42,7 @@ const messages = {
 };
 
 async function setEmailAndSubmit(container: HTMLElement, email: string) {
-  const input = container.querySelector("#invite-email") as HTMLInputElement;
+  const input = container.querySelector('input[name="email"]') as HTMLInputElement;
   const form = container.querySelector("form") as HTMLFormElement;
   await act(async () => {
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
@@ -122,7 +122,7 @@ describe("InviteForm", () => {
     await setEmailAndSubmit(container, "peer@example.com");
     expect(container.querySelector('[role="alert"]')).not.toBeNull();
 
-    const input = container.querySelector("#invite-email") as HTMLInputElement;
+    const input = container.querySelector('input[name="email"]') as HTMLInputElement;
     await act(async () => {
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
       setter?.call(input, "other@example.com");

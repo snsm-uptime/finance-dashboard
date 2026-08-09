@@ -88,6 +88,15 @@
   flex: 1 0 100%;
 }
 
+/* Keeps invite sheet height stable when an error alert mounts (≈3 wrapped lines). */
+.inviteErrorSlot {
+  min-height: calc(0.9rem * 1.45 * 3 + 1rem);
+}
+
+.inviteErrorSlot .error {
+  margin-bottom: 0;
+}
+
 .panel {
   max-width: 36rem;
   margin: 0 0 1.5rem;
@@ -327,9 +336,66 @@
   box-shadow: none;
 }
 
-.softBelow {
+/* Soft-Ledger list detail: settle/receipts lead on phone; sidebar left from md. */
+.detailLayout {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.detailPrimary {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.detailSidebar {
+  display: none;
+  flex-direction: column;
+  gap: var(--space-6);
   margin: var(--space-6) var(--page-gutter) 0;
   max-width: 36rem;
+  min-width: 0;
+}
+
+.detailSidebar > :last-child {
+  margin-bottom: 0;
+}
+
+.mobileBack {
+  margin: var(--space-6) var(--page-gutter) 0;
+}
+
+@media (min-width: 768px) {
+  .detailLayout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    gap: var(--space-6);
+    align-items: start;
+    padding: var(--space-2) var(--page-gutter) 0;
+  }
+
+  .detailSidebar {
+    display: flex;
+    grid-column: 1;
+    grid-row: 1;
+    margin: 0;
+    max-width: none;
+  }
+
+  .detailPrimary {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .detailPrimary .softReceipts {
+    margin-inline: var(--strip-inset);
+  }
+
+  .mobileBack {
+    display: none;
+  }
 }
 
 .softBack {

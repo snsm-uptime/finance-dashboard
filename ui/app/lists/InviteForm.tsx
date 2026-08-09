@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, useId, useRef, useState } from "react";
 
 import { inviteMember, type ListsClientMessages } from "./listsClient";
 import styles from "./lists.module.css";
@@ -19,6 +19,9 @@ type Props = {
 };
 
 export function InviteForm({ listId, messages }: Props) {
+  const baseId = useId();
+  const headingId = `${baseId}-heading`;
+  const emailId = `${baseId}-email`;
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
@@ -48,8 +51,8 @@ export function InviteForm({ listId, messages }: Props) {
   }
 
   return (
-    <section className={styles.detailSection} aria-labelledby="invite-heading">
-      <h2 id="invite-heading" className={styles.sectionTitle}>
+    <section className={styles.detailSection} aria-labelledby={headingId}>
+      <h2 id={headingId} className={styles.sectionTitle}>
         {messages.inviteTitle}
       </h2>
       {sent ? (
@@ -60,10 +63,10 @@ export function InviteForm({ listId, messages }: Props) {
       <form className={styles.createForm} onSubmit={onSubmit}>
         <div className={styles.createRow}>
           <div className={styles.createField}>
-            <label className={styles.label} htmlFor="invite-email">
+            <label className={styles.label} htmlFor={emailId}>
               {messages.inviteLabel}
               <input
-                id="invite-email"
+                id={emailId}
                 className={styles.input}
                 type="email"
                 name="email"
@@ -84,11 +87,14 @@ export function InviteForm({ listId, messages }: Props) {
             {pending ? messages.inviteSending : messages.inviteSubmit}
           </button>
         </div>
-        {error ? (
-          <p className={styles.error} role="alert">
-            {error}
-          </p>
-        ) : null}
+        {/* Reserve error height so the mobile sheet does not grow/scroll when an alert appears. */}
+        <div className={styles.inviteErrorSlot} aria-live="polite">
+          {error ? (
+            <p className={styles.error} role="alert">
+              {error}
+            </p>
+          ) : null}
+        </div>
       </form>
     </section>
   );
