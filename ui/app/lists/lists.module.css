@@ -368,11 +368,28 @@
 }
 
 @media (min-width: 768px) {
+  /* Lock Soft-Ledger shell to the viewport — only the receipts list scrolls. */
+  .softMain {
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100vh;
+    max-height: 100dvh;
+    overflow: hidden;
+  }
+
+  .softBody {
+    overflow: hidden;
+    padding-bottom: 0;
+  }
+
   .detailLayout {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
     gap: var(--space-6);
-    align-items: start;
+    align-items: stretch;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
     padding: var(--space-2) var(--page-gutter) 0;
   }
 
@@ -382,15 +399,45 @@
     grid-row: 1;
     margin: 0;
     max-width: none;
+    min-height: 0;
+    gap: var(--space-4);
+    /* Escape hatch only — page chrome stays fixed; receipts are the intended scroll. */
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .detailSidebar :global(section) {
+    margin-bottom: 0;
+  }
+
+  .detailSidebar :global(form) {
+    margin-bottom: 0;
+    max-width: none;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
   }
 
   .detailPrimary {
     grid-column: 2;
     grid-row: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .detailPrimary > :not(.softReceipts) {
+    flex-shrink: 0;
   }
 
   .detailPrimary .softReceipts {
+    flex: 1 1 auto;
+    min-height: 0;
     margin-inline: var(--strip-inset);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   .mobileBack {

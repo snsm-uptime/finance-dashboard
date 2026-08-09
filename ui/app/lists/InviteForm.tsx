@@ -16,9 +16,11 @@ export type InviteFormMessages = ListsClientMessages & {
 type Props = {
   listId: string;
   messages: InviteFormMessages;
+  /** When true, keep a fixed error slot so a mobile sheet does not grow when an alert appears. */
+  reserveErrorHeight?: boolean;
 };
 
-export function InviteForm({ listId, messages }: Props) {
+export function InviteForm({ listId, messages, reserveErrorHeight = false }: Props) {
   const baseId = useId();
   const headingId = `${baseId}-heading`;
   const emailId = `${baseId}-email`;
@@ -87,8 +89,11 @@ export function InviteForm({ listId, messages }: Props) {
             {pending ? messages.inviteSending : messages.inviteSubmit}
           </button>
         </div>
-        {/* Reserve error height so the mobile sheet does not grow/scroll when an alert appears. */}
-        <div className={styles.inviteErrorSlot} aria-live="polite">
+        {/* Optional reserved height: mobile sheet only (desktop sidebar should not grow for empty alerts). */}
+        <div
+          className={reserveErrorHeight ? styles.inviteErrorSlot : undefined}
+          aria-live="polite"
+        >
           {error ? (
             <p className={styles.error} role="alert">
               {error}

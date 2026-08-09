@@ -4,7 +4,6 @@ import {
   useCallback,
   useEffect,
   useId,
-  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -104,6 +103,7 @@ function Sheet({
   );
 
   // Respond to open prop changes: transition to mounting or closing
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     if (open && phase === "unmounted") {
       setPhase("mounting");
@@ -288,7 +288,11 @@ export function ListDetailMobileChrome({
           onClose={close}
           closeLabel={closeLabel}
         >
-          <InviteForm listId={listId} messages={inviteMessages} />
+          <InviteForm
+            listId={listId}
+            messages={inviteMessages}
+            reserveErrorHeight
+          />
         </Sheet>
       ) : null}
     </div>
