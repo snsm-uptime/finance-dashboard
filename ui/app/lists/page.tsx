@@ -47,7 +47,7 @@ function resolvePageLocale(languageCookie: string | undefined): Locale {
   return "en";
 }
 
-/** Minimal Lists surface with create/rename (Story 2.1). Homepage polish = 2.2. */
+/** Minimal Lists surface with create + inline rename (Story 2.1). Homepage polish = 2.2. */
 export default async function ListsPage() {
   const session = await fetchSession();
   if (!session) {
