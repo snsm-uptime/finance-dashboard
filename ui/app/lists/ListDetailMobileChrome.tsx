@@ -99,29 +99,44 @@ function Sheet({
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
-  const [mounted, setMounted] = useState(false);
-  const [visible, setVisible] = useState(false);
+  const [phase, setPhase] = useState<"unmounted" | "mounting" | "open" | "closing">(
+    "unmounted"
+  );
 
-  useLayoutEffect(() => {
-    if (open) {
-      setMounted(true);
-    }
-  }, [open]);
-
+  // Respond to open prop changes: transition to mounting or closing
   useEffect(() => {
-    if (!open) {
-      setVisible(false);
-      const hide = window.setTimeout(() => setMounted(false), 280);
+    if (open && phase === "unmounted") {
+      setPhase("mounting");
+    } else if (!open && phase !== "unmounted" && phase !== "closing") {
+      setPhase("closing");
+    }
+  }, [open, phase]);
+
+  // Handle mounting phase: trigger visibility animation
+  useEffect(() => {
+    if (phase === "mounting") {
+      const show = window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          setPhase("open");
+        });
+      });
+      return () => window.cancelAnimationFrame(show);
+    }
+  }, [phase]);
+
+  // Handle closing phase: delay unmounting for animation
+  useEffect(() => {
+    if (phase === "closing") {
+      const hide = window.setTimeout(() => {
+        setPhase("unmounted");
+      }, 280);
       return () => window.clearTimeout(hide);
     }
-    const show = window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => setVisible(true));
-    });
-    return () => window.cancelAnimationFrame(show);
-  }, [open]);
+  }, [phase]);
 
+  // Focus management and keyboard traps when sheet is visible
   useEffect(() => {
-    if (!open || !visible) return;
+    if (phase !== "open") return;
     closeRef.current?.focus();
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -153,21 +168,23 @@ function Sheet({
       document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [open, visible, onClose]);
+  }, [phase, onClose]);
 
-  if (!mounted || typeof document === "undefined") return null;
+  if (phase === "unmounted" || typeof document === "undefined") return null;
+
+  const isVisible = phase === "open" || phase === "closing";
 
   return createPortal(
     <>
       <button
         type="button"
-        className={`${styles.backdrop} ${visible ? styles.backdropOpen : ""}`}
+        className={`${styles.backdrop} ${isVisible ? styles.backdropOpen : ""}`}
         aria-label={closeLabel}
         onClick={onClose}
       />
       <div
         ref={panelRef}
-        className={`${styles.sheet} ${visible ? styles.sheetOpen : ""}`}
+        className={`${styles.sheet} ${isVisible ? styles.sheetOpen : ""}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
