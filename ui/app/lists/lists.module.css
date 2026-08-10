@@ -226,7 +226,7 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .cardButton,
@@ -325,32 +325,109 @@
   border-top: 1px solid var(--border);
 }
 
-.renameIcon {
+.menuContainer {
   position: absolute;
   top: 0.55rem;
   right: 0.55rem;
-  z-index: 1;
+  z-index: 2;
+}
+
+.renameIcon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   margin: 0;
-  padding: 0.25rem;
+  padding: 0.35rem;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
   line-height: 0;
+  width: 2.25rem;
+  height: 2.25rem;
+  transition: all 0.15s ease;
 }
 
 .renameIcon:hover:not(:disabled) {
-  color: var(--accent);
-  background: color-mix(in srgb, var(--border) 40%, transparent);
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.renameIcon:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 2px;
 }
 
 .renameIcon:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--foreground) 12%, transparent);
+  min-width: 11rem;
+  overflow: hidden;
+  animation: slideDown 0.15s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.menuItem {
+  display: block;
+  width: 100%;
+  padding: 0.65rem 1rem;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: var(--foreground);
+  text-align: left;
+  font-family: var(--font-ui), system-ui, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+}
+
+.menuItem:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.menuItem:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.menuItem:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.menuItemDanger:not(:disabled) {
+  color: color-mix(in srgb, #d32f2f 85%, transparent);
+}
+
+.menuItemDanger:hover:not(:disabled) {
+  background: color-mix(in srgb, #d32f2f 12%, transparent);
+}
+
+.menuItemDanger:focus-visible:not(:disabled) {
+  background: color-mix(in srgb, #d32f2f 18%, transparent);
 }
 
 .balance {
@@ -589,4 +666,156 @@
   font-family: var(--font-ui), system-ui, sans-serif;
   font-size: 0.9rem;
   font-variant-numeric: tabular-nums;
+}
+
+.confirmPopover {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--foreground) 12%, transparent);
+  padding: 1rem;
+  min-width: 16rem;
+  animation: slideDown 0.15s ease-out;
+}
+
+.confirmText {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  color: var(--foreground);
+  line-height: 1.4;
+  font-weight: 500;
+}
+
+.confirmActions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.confirmActions button {
+  flex: 0 0 auto;
+  font-size: 0.85rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.primaryDanger {
+  background: #d32f2f !important;
+  color: #fff !important;
+  font-weight: 600;
+}
+
+.primaryDanger:not(:disabled):hover {
+  filter: brightness(1.1) !important;
+}
+
+.primaryDanger:not(:disabled):focus-visible {
+  outline: 2px solid #d32f2f !important;
+  outline-offset: 2px !important;
+}
+
+.sliderContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+  max-width: 24rem;
+}
+
+.sliderTrack {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  height: 48px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: grab;
+  overflow: visible;
+  user-select: none;
+}
+
+.sliderTrack:active {
+  cursor: grabbing;
+}
+
+.sliderSegment {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-ui), system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--foreground);
+  cursor: pointer;
+  user-select: none;
+  transition: width 150ms ease, background-color 150ms ease;
+  border-right: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+  white-space: nowrap;
+}
+
+.sliderSegment:last-child {
+  border-right: none;
+}
+
+.sliderSegment:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.sliderHandle {
+  position: absolute;
+  width: 4px;
+  height: 56px;
+  top: -4px;
+  background: var(--accent);
+  border-radius: 2px;
+  cursor: grab;
+  transition: width 150ms ease, box-shadow 150ms ease;
+  z-index: 10;
+  transform: translateX(-50%);
+}
+
+.sliderHandle:active {
+  width: 6px;
+  cursor: grabbing;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--foreground) 15%, transparent);
+}
+
+.sliderHandle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.sliderTooltip {
+  position: absolute;
+  top: -32px;
+  transform: translateX(-50%);
+  background: var(--foreground);
+  color: var(--surface);
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-family: var(--font-ui), system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--foreground) 15%, transparent);
+  z-index: 20;
+}
+
+.sliderLabels {
+  display: flex;
+  gap: 0;
+  font-family: var(--font-ui), system-ui, sans-serif;
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.sliderLabel {
+  flex: 1;
+  text-align: center;
 }

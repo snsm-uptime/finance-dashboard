@@ -93,3 +93,39 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     },
   });
 }
+
+export async function DELETE(request: NextRequest, context: RouteContext) {
+  const { listId } = await context.params;
+  const headers = forwardCookie(request);
+
+  let upstream: Response;
+  try {
+    upstream = await fetch(
+      `${getApiInternalUrl()}/lists/${encodeURIComponent(listId)}`,
+      {
+        method: "DELETE",
+        headers,
+        cache: "no-store",
+      },
+    );
+  } catch {
+    return NextResponse.json(
+      { detail: "Upstream unavailable.", code: "bad_gateway" },
+      { status: 502 },
+    );
+  }
+
+  if (upstream.status === 204) {
+    return new NextResponse(null, { status: 204 });
+  }
+
+  const text = await upstream.text();
+  const responseHeaders: Record<string, string> = {};
+  if (text) {
+    responseHeaders["Content-Type"] = upstream.headers.get("Content-Type") || "application/json";
+  }
+  return new NextResponse(text, {
+    status: upstream.status,
+    headers: responseHeaders,
+  });
+}

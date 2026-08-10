@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Percentage Split Slider Concept</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      padding: 40px 20px;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 24px;
+      margin-bottom: 8px;
+      color: #333;
+    }
+
+    .subtitle {
+      color: #666;
+      margin-bottom: 32px;
+      font-size: 14px;
+    }
+
+    .scenario {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 32px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .scenario h3 {
+      font-size: 16px;
+      margin-bottom: 16px;
+      color: #333;
+      font-weight: 600;
+    }
+
+    .slider-wrapper {
+      margin-bottom: 20px;
+    }
+
+    .slider-bar {
+      position: relative;
+      height: 48px;
+      background: linear-gradient(90deg, #e8f5e9 0%, #e8f5e9 100%);
+      border-radius: 8px;
+      border: 2px solid #c8e6c9;
+      overflow: visible;
+      display: flex;
+      align-items: stretch;
+    }
+
+    .segment {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-right: 2px solid rgba(0,0,0,0.1);
+      color: #333;
+      font-weight: 600;
+      font-size: 14px;
+      user-select: none;
+      cursor: pointer;
+      transition: background-color 150ms ease;
+    }
+
+    .segment:hover {
+      background-color: rgba(76, 175, 80, 0.1);
+    }
+
+    .segment:last-child {
+      border-right: none;
+    }
+
+    .handle {
+      position: absolute;
+      width: 4px;
+      height: 56px;
+      background: #4caf50;
+      border-radius: 2px;
+      top: -4px;
+      cursor: grab;
+      transition: width 150ms ease, box-shadow 150ms ease;
+      z-index: 10;
+    }
+
+    .handle:active {
+      cursor: grabbing;
+      width: 6px;
+      box-shadow: 0 2px 8px rgba(76, 175, 80, 0.4);
+    }
+
+    .labels {
+      display: flex;
+      margin-top: 8px;
+      gap: 0;
+    }
+
+    .label {
+      flex: 1;
+      text-align: center;
+      font-size: 12px;
+      color: #666;
+      font-weight: 500;
+    }
+
+    .interactions {
+      background: #f9f9f9;
+      border-left: 4px solid #2196f3;
+      padding: 12px;
+      margin-top: 16px;
+      border-radius: 4px;
+      font-size: 13px;
+      color: #555;
+    }
+
+    .interactions strong {
+      display: block;
+      color: #333;
+      margin-bottom: 4px;
+    }
+
+    .note {
+      font-size: 12px;
+      color: #888;
+      margin-top: 8px;
+      font-style: italic;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      body {
+        background: #1a1a1a;
+        color: #e0e0e0;
+      }
+
+      .scenario {
+        background: #2a2a2a;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      }
+
+      h1, .scenario h3 {
+        color: #f0f0f0;
+      }
+
+      .subtitle, .note {
+        color: #aaa;
+      }
+
+      .slider-bar {
+        background: #1e3a1e;
+        border-color: #2e5c2e;
+      }
+
+      .segment {
+        color: #e0e0e0;
+        border-right-color: rgba(255,255,255,0.1);
+      }
+
+      .segment:hover {
+        background-color: rgba(76, 175, 80, 0.2);
+      }
+
+      .label {
+        color: #999;
+      }
+
+      .interactions {
+        background: #1f2937;
+        border-left-color: #64b5f6;
+        color: #ccc;
+      }
+
+      .interactions strong {
+        color: #e0e0e0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Percentage Split Slider</h1>
+    <p class="subtitle">Interactive concept for replacing form inputs with visual slider control</p>
+
+    <!-- 2-person split -->
+    <div class="scenario">
+      <h3>2-person split (1 handle)</h3>
+      <div class="slider-wrapper">
+        <div class="slider-bar" id="slider2">
+          <div class="segment" data-id="user1">50%</div>
+          <div class="handle" style="left: 50%;"></div>
+          <div class="segment" data-id="user2">50%</div>
+        </div>
+        <div class="labels">
+          <div class="label">Alice</div>
+          <div class="label">Bob</div>
+        </div>
+      </div>
+      <div class="interactions">
+        <strong>Interaction:</strong>
+        Drag the handle left/right to adjust percentages. Tap a segment to focus it.
+      </div>
+    </div>
+
+    <!-- 3-person split -->
+    <div class="scenario">
+      <h3>3-person split (2 handles)</h3>
+      <div class="slider-wrapper">
+        <div class="slider-bar" id="slider3">
+          <div class="segment" data-id="user1">33%</div>
+          <div class="handle" style="left: calc(33.33% - 2px);"></div>
+          <div class="segment" data-id="user2">33%</div>
+          <div class="handle" style="left: calc(66.66% - 2px);"></div>
+          <div class="segment" data-id="user3">34%</div>
+        </div>
+        <div class="labels">
+          <div class="label">Alice</div>
+          <div class="label">Bob</div>
+          <div class="label">Carol</div>
+        </div>
+      </div>
+      <div class="interactions">
+        <strong>Interaction:</strong>
+        2 handles give independent control. Last percentage (Carol) auto-calculated to reach 100%.
+      </div>
+    </div>
+
+    <!-- 4-person split -->
+    <div class="scenario">
+      <h3>4-person split (3 handles)</h3>
+      <div class="slider-wrapper">
+        <div class="slider-bar" id="slider4">
+          <div class="segment" data-id="user1">25%</div>
+          <div class="handle" style="left: calc(25% - 2px);"></div>
+          <div class="segment" data-id="user2">25%</div>
+          <div class="handle" style="left: calc(50% - 2px);"></div>
+          <div class="segment" data-id="user3">25%</div>
+          <div class="handle" style="left: calc(75% - 2px);"></div>
+          <div class="segment" data-id="user4">25%</div>
+        </div>
+        <div class="labels">
+          <div class="label">Alice</div>
+          <div class="label">Bob</div>
+          <div class="label">Carol</div>
+          <div class="label">Dave</div>
+        </div>
+      </div>
+      <div class="interactions">
+        <strong>Interaction:</strong>
+        3 handles distribute freely. Dave's percentage always = 100% - (Alice + Bob + Carol).
+      </div>
+    </div>
+
+    <div class="scenario" style="background: #fff3cd; border-left: 4px solid #ffc107;">
+      <h3>Key Properties</h3>
+      <ul style="margin-left: 16px; font-size: 14px; line-height: 1.8;">
+        <li><strong>Handles:</strong> N-1 draggable handles for N people</li>
+        <li><strong>Live feedback:</strong> Percentages update in real-time as you drag</li>
+        <li><strong>Last person auto-calc:</strong> Always sums to 100% automatically</li>
+        <li><strong>Tap to select:</strong> Tapping a segment highlights it (visual feedback)</li>
+        <li><strong>Free-form:</strong> Any value 0–100 per person, no constraints</li>
+        <li><strong>Responsive:</strong> Scales on mobile (taller touch target) and desktop</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>

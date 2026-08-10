@@ -422,11 +422,12 @@ export default async function ListDetailPage({
                   {t.errorDefaultSplitLoad}
                 </p>
               ) : null}
-              {isOwner && defaultSplit ? (
+              {isOwner && defaultSplit && members.length > 1 ? (
                 <DefaultSplitPanel
                   listId={listId}
                   isOwner={isOwner}
                   initial={defaultSplit}
+                  members={members}
                   messages={{
                     errorGeneric: t.errorGeneric,
                     errorInvalidName: t.errorInvalidName,

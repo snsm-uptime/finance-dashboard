@@ -266,6 +266,13 @@ class SqlAlchemyListRepository:
         self._session.flush()
         return ListRecord(id=row.id, name=row.name, owner_id=row.owner_id)
 
+    def delete_list(self, list_id: UUID) -> None:
+        row = self._session.get(ListModel, list_id)
+        if row is None:
+            raise ListNotFoundError()
+        self._session.delete(row)
+        self._session.flush()
+
     def list_for_user(self, user_id: UUID) -> list[ListMembershipSummary]:
         stmt = (
             select(ListModel, ListMembershipModel.role)
