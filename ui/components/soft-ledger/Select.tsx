@@ -25,7 +25,6 @@ type SoftLedgerSelectProps = {
   required?: boolean;
   "aria-label"?: string;
   "aria-labelledby"?: string;
-  "aria-invalid"?: boolean | "true" | "false";
   "aria-describedby"?: string;
   onChange: (value: string) => void;
 };
@@ -40,7 +39,6 @@ export function SoftLedgerSelect({
   required = false,
   "aria-label": ariaLabel,
   "aria-labelledby": ariaLabelledBy,
-  "aria-invalid": ariaInvalid,
   "aria-describedby": ariaDescribedBy,
   onChange,
 }: SoftLedgerSelectProps) {
@@ -129,7 +127,6 @@ export function SoftLedgerSelect({
         aria-controls={listboxId}
         aria-label={ariaLabel}
         aria-labelledby={ariaLabelledBy}
-        aria-invalid={ariaInvalid}
         aria-describedby={ariaDescribedBy}
         onClick={() => {
           if (!disabled) setOpen((v) => !v);

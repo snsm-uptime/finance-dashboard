@@ -90,8 +90,12 @@ function InviteSheet({
   );
 
   useEffect(() => {
-    if (open && phase === "unmounted") setPhase("mounting");
-    else if (!open && phase !== "unmounted" && phase !== "closing") setPhase("closing");
+    if (open && phase === "unmounted") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPhase("mounting");
+    } else if (!open && phase !== "unmounted" && phase !== "closing") {
+      setPhase("closing");
+    }
   }, [open, phase]);
 
   useEffect(() => {
