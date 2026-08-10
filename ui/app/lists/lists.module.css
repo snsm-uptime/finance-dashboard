@@ -128,6 +128,82 @@
   min-width: 0;
 }
 
+.iconInputLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.iconInputContainer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--background);
+  padding: 0.5rem 0.65rem;
+  overflow: hidden;
+}
+
+.iconInput {
+  flex: 1;
+  display: block;
+  border: none;
+  background: transparent;
+  font-family: var(--font-ui), system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--foreground);
+  appearance: none;
+  padding: 0;
+  min-width: 0;
+}
+
+.iconInput::placeholder {
+  color: var(--muted);
+  opacity: 0.6;
+}
+
+.iconInput:focus {
+  outline: none;
+}
+
+.iconInput:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.iconButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+  border-radius: 4px;
+  transition: color 0.2s;
+}
+
+.iconButton:hover:not(:disabled) {
+  color: var(--accent);
+}
+
+.iconButton:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: -2px;
+}
+
+.iconButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .label {
   display: flex;
   flex-direction: column;
