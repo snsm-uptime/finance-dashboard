@@ -25,6 +25,8 @@ from application.list_invite import InviteMemberToListCommand, InviteMemberToLis
 from application.lists import (
     CreateOwnedListCommand,
     CreateOwnedListService,
+    DeleteListCommand,
+    DeleteListService,
     GetListBalancesStubCommand,
     GetListBalancesStubService,
     GetListDefaultSplitCommand,
@@ -53,7 +55,7 @@ from domain.errors import (
     SmtpSendError,
 )
 from fastapi import APIRouter, Depends, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.orm import Session
 
 from api.deps import get_auth_settings, get_db, require_authenticated_user
@@ -520,3 +522,23 @@ def rename_list(
         )
     logger.info("list_renamed list_id=%s", result.id)
     return _list_response(result.id, result.name, result.owner_id)
+
+
+@router.delete("/{list_id}", response_model=None)
+def delete_list(
+    list_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> Response | JSONResponse:
+    service = DeleteListService(SqlAlchemyListRepository(db))
+    try:
+        service.execute(DeleteListCommand(actor_user_id=user_id, list_id=list_id))
+    except (ListNotFoundError, NotListMemberError):
+        return _access_denied()
+    except NotListOwnerError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={"detail": str(exc), "code": "not_list_owner"},
+        )
+    logger.info("list_deleted list_id=%s", list_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

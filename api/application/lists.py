@@ -94,6 +94,8 @@ class ListRepository(Protocol):
 
     def update_list_name(self, list_id: UUID, name: str) -> ListRecord: ...
 
+    def delete_list(self, list_id: UUID) -> None: ...
+
     def list_for_user(self, user_id: UUID) -> list[ListMembershipSummary]: ...
 
     def get_list_with_grant(self, grant: ListAccessGrant, list_id: UUID) -> ListRecord: ...
@@ -124,6 +126,12 @@ class RenameListCommand:
     actor_user_id: UUID
     list_id: UUID
     name: str
+
+
+@dataclass(frozen=True, slots=True)
+class DeleteListCommand:
+    actor_user_id: UUID
+    list_id: UUID
 
 
 @dataclass(frozen=True, slots=True)
@@ -234,6 +242,24 @@ class RenameListService:
             raise NotListOwnerError()
 
         return self._repo.update_list_name(command.list_id, name)
+
+
+class DeleteListService:
+    """Delete a list — owner-only; non-members and non-owner members rejected."""
+
+    def __init__(self, repo: ListRepository) -> None:
+        self._repo = repo
+
+    def execute(self, command: DeleteListCommand) -> None:
+        existing = self._repo.get_list(command.list_id)
+        membership = self._repo.get_membership(command.list_id, command.actor_user_id)
+        if existing is None or membership is None:
+            raise NotListMemberError()
+
+        if existing.owner_id != command.actor_user_id:
+            raise NotListOwnerError()
+
+        self._repo.delete_list(command.list_id)
 
 
 class ListMembershipsService:

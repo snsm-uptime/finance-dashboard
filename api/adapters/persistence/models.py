@@ -82,15 +82,30 @@ class ListModel(Base):
         back_populates="owned_lists",
         foreign_keys=[owner_id],
     )
-    memberships: Mapped[list[ListMembershipModel]] = relationship(back_populates="list")
+    memberships: Mapped[list[ListMembershipModel]] = relationship(
+        back_populates="list",
+        cascade="all, delete-orphan",
+    )
     default_split_shares: Mapped[list[ListDefaultSplitShareModel]] = relationship(
         back_populates="list",
         cascade="all, delete-orphan",
     )
-    invite_tokens: Mapped[list[ListInviteTokenModel]] = relationship(back_populates="list")
-    receipts: Mapped[list[ReceiptModel]] = relationship(back_populates="list")
-    ledger_entries: Mapped[list[LedgerEntryModel]] = relationship(back_populates="list")
-    split_overrides: Mapped[list[SplitOverrideModel]] = relationship(back_populates="list")
+    invite_tokens: Mapped[list[ListInviteTokenModel]] = relationship(
+        back_populates="list",
+        cascade="all, delete-orphan",
+    )
+    receipts: Mapped[list[ReceiptModel]] = relationship(
+        back_populates="list",
+        cascade="all, delete-orphan",
+    )
+    ledger_entries: Mapped[list[LedgerEntryModel]] = relationship(
+        back_populates="list",
+        cascade="all, delete-orphan",
+    )
+    split_overrides: Mapped[list[SplitOverrideModel]] = relationship(
+        back_populates="list",
+        cascade="all, delete-orphan",
+    )
 
 
 class ListMembershipModel(Base):
