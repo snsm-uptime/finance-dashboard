@@ -275,7 +275,7 @@ function PercentageSlider({ userIds, members, percents, onChangePercents, disabl
   );
 }
 
-export function DefaultSplitPanel({ listId, isOwner, initial, messages }: Props) {
+export function DefaultSplitPanel({ listId, isOwner, initial, members, messages }: Props) {
   const [mode, setMode] = useState<"even" | "percentage">(initial.mode);
   const savedPercents = useMemo(() => getInitialSavedPercents(initial), [initial]);
   const [percents, setPercents] = useState<Record<string, string>>(() => getInitialSavedPercents(initial));
