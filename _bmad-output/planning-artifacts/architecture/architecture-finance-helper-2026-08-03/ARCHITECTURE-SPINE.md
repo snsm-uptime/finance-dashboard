@@ -144,6 +144,7 @@ flowchart LR
 - **Binds:** `ui` styling, IA, interaction choreography
 - **Prevents:** shadcn/template defaults becoming brand; inventing IA that contradicts UX spines
 - **Rule:** `DESIGN.md` + `EXPERIENCE.md` are **binding companions**. Warm Balance tokens / Soft-Ledger / IA / interaction primitives own product behavior and look. Architecture chooses stack only. Component kits may supply unstyled primitives only.
+- **Addendum (Epic 3.5):** Delivery stack is Tailwind + SCSS (AD-23). AD-12 still owns appearance — utilities/theme mapping must express Warm Balance / Soft-Ledger, not replace them with kit defaults.
 
 ### AD-13 — Story branch naming [ADOPTED]
 
@@ -209,6 +210,13 @@ flowchart LR
 - **Prevents:** Silent drift on backup/migrate/health
 - **Rule:** Environments = **local** and **homelab prod** via Compose overlays sharing the same service graph. Alembic migrations run on `api` startup (or explicit one-shot) against the external PG volume — never recreate volume for schema. `api` and `ui` expose `/health`. Postgres + PDF volumes backed up by operator filesystem/volume snapshot. Secrets via Compose secrets/env outside repo. Observability floor: structured app logs + healthchecks (no third-party APM required in v1).
 
+### AD-23 — UI styling delivery [ADOPTED]
+
+- **Binds:** `ui` style authoring (Epic 3.5+)
+- **Prevents:** CSS Modules sprawl; kit theme inheritance; dual styling stacks into Epic 4
+- **Rule:** Prefer **Tailwind utilities co-located on components**. Use **SCSS modules (`*.module.scss`)** only for custom styles that utilities cannot express cleanly. Warm Balance / Soft-Ledger tokens remain authoritative via CSS variables and/or Tailwind `@theme` mapping (AD-12 still binds look). **Forbidden:** new `*.module.css`; shipping starter/kit default palettes; re-picking DESIGN.md hexes inside feature work.
+- **Sprint change:** `_bmad-output/planning-artifacts/sprint-change-proposal-2026-08-10.md`
+
 ## Consistency Conventions
 
 | Concern | Convention |
@@ -224,6 +232,7 @@ flowchart LR
 | Auth email tokens | Hash at rest; TTL; claim re-checks `expires_at`; shared claim helper (AD-8 addendum) |
 | i18n | EN + ES from v1; keys in `ui`; preference remembered on account (Account menu); first visit from browser |
 | Appearance | Light / Dark / System from Account menu; remembered on account; default System (OS/browser); Warm Balance token sets from DESIGN.md |
+| UI styling | Tailwind utilities co-located; SCSS modules for custom only — AD-23 |
 | Logging | No raw statement PII at info; correlate by session/statement/batch ids |
 | Branches | `<type>/<epic>/<us-id>` — AD-13 |
 | Versioning | Single app SemVer tag — AD-14 |
@@ -248,6 +257,8 @@ Versions verified 2026-08-03 (`stack-options.md` + gate re-check). Code owns exa
 | pytest | 9.x |
 | Next.js (`ui`) | 16.2.x (`output: 'standalone'`) |
 | React (via Next) | 19.2.x |
+| Tailwind CSS (`ui`) | 4.x (Warm Balance `@theme` / CSS-var bridge — AD-12, AD-23) |
+| Sass (`ui`) | 1.x (custom styles / `*.module.scss` only — AD-23) |
 | react-pdf | 10.4.x (owns bundled `pdfjs-dist` — do not pin a conflicting standalone pdfjs) |
 | @use-gesture/react | 10.3.x |
 | PostgreSQL | 16.x (`postgres:16`) |
