@@ -55,45 +55,42 @@ export function InviteForm({ listId, messages, reserveErrorHeight = false }: Pro
   }
 
   return (
-    <section className={styles.detailSection}>
+    <form className={styles.createForm} onSubmit={onSubmit}>
+      <FormIconField
+        id={emailId}
+        submitLabel={pending ? messages.inviteSending : messages.inviteSubmit}
+        variant="send"
+        type="email"
+        name="email"
+        autoComplete="email"
+        inputMode="email"
+        placeholder="person@home.com"
+        required
+        value={email}
+        disabled={pending}
+        submitDisabled={!canSubmit}
+        onChange={(e) => {
+          setEmail(e.target.value);
+          setSent(false);
+          setError(null);
+        }}
+      />
       {sent ? (
         <p className={styles.copy} role="status">
           {messages.inviteSent}
         </p>
       ) : null}
-      <form className={styles.createForm} onSubmit={onSubmit}>
-        <FormIconField
-          id={emailId}
-          label="Invite someone!"
-          submitLabel={pending ? messages.inviteSending : messages.inviteSubmit}
-          variant="send"
-          type="email"
-          name="email"
-          autoComplete="email"
-          inputMode="email"
-          placeholder="person@home.com"
-          required
-          value={email}
-          disabled={pending}
-          submitDisabled={!canSubmit}
-          onChange={(e) => {
-            setEmail(e.target.value);
-            setSent(false);
-            setError(null);
-          }}
-        />
-        {/* Optional reserved height: mobile sheet only (desktop sidebar should not grow for empty alerts). */}
-        <div
-          className={reserveErrorHeight ? styles.inviteErrorSlot : undefined}
-          aria-live="polite"
-        >
-          {error ? (
-            <p className={styles.error} role="alert">
-              {error}
-            </p>
-          ) : null}
-        </div>
-      </form>
-    </section>
+      {/* Optional reserved height: mobile sheet only (desktop sidebar should not grow for empty alerts). */}
+      <div
+        className={reserveErrorHeight ? styles.inviteErrorSlot : undefined}
+        aria-live="polite"
+      >
+        {error ? (
+          <p className={styles.error} role="alert">
+            {error}
+          </p>
+        ) : null}
+      </div>
+    </form>
   );
 }
