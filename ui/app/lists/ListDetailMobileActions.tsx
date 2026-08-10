@@ -262,17 +262,6 @@ export function ListDetailMobileActions({
 
   return (
     <div className={styles.chrome}>
-      {canInvite ? (
-        <button
-          type="button"
-          className={styles.shareButton}
-          aria-label={inviteAria}
-          aria-expanded={sheet === "invite"}
-          onClick={() => setSheet("invite")}
-        >
-          <ShareIcon />
-        </button>
-      ) : null}
       <div className={styles.fab} role="group" aria-label={groupLabel}>
         {canAddExpense ? (
           <button
@@ -285,7 +274,7 @@ export function ListDetailMobileActions({
             <PlusIcon />
           </button>
         ) : null}
-        {canInvite ? (
+        {canInvite && !canAddExpense ? (
           <button
             type="button"
             className={styles.fabHalf}
@@ -294,6 +283,17 @@ export function ListDetailMobileActions({
             onClick={() => setSheet("invite")}
           >
             <UserIcon />
+          </button>
+        ) : null}
+        {canInvite && canAddExpense ? (
+          <button
+            type="button"
+            className={styles.fabHalf}
+            aria-label={inviteAria}
+            aria-expanded={sheet === "invite"}
+            onClick={() => setSheet("invite")}
+          >
+            <ShareIcon />
           </button>
         ) : null}
       </div>

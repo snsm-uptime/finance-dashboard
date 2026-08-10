@@ -370,6 +370,7 @@ export default async function ListDetailPage({
               </p>
             </div>
             <aside className={styles.detailSidebar}>
+              {members.length > 0 && <h1 className={styles.expenseTitle}>{listTitle}</h1>}
               {membersLoadError ? (
                 <p className={styles.copy} role="alert">
                   {t.loadError}
