@@ -18,6 +18,7 @@ import { DefaultSplitPanel } from "../DefaultSplitPanel";
 import { InviteForm } from "../InviteForm";
 import { ListDetailMobileActions } from "../ListDetailMobileActions";
 import { ManualExpenseForm } from "../ManualExpenseForm";
+import { ShareTitleButton } from "../ShareTitleButton";
 import { balanceTone, type DefaultSplitPayload, type ExpenseItem, type ListMember } from "../listsClient";
 import styles from "../lists.module.css";
 
@@ -370,7 +371,12 @@ export default async function ListDetailPage({
               </p>
             </div>
             <aside className={styles.detailSidebar}>
-              {members.length > 0 && <h1 className={styles.expenseTitle}>{listTitle}</h1>}
+              {members.length > 0 && (
+                <h1 className={styles.expenseTitle}>
+                  <span>{listTitle}</span>
+                  {isOwner ? <ShareTitleButton ariaLabel={t.mobileInviteAria} /> : null}
+                </h1>
+              )}
               {membersLoadError ? (
                 <p className={styles.copy} role="alert">
                   {t.loadError}
