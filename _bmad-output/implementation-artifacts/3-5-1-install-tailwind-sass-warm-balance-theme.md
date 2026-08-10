@@ -46,14 +46,17 @@ so that components can use utilities without inheriting kit defaults.
     - [x] Check if any other PostCSS plugins are installed that might conflict; list them for reference
   - [x] In `ui/`: `npm install tailwindcss @tailwindcss/postcss postcss` and `npm install -D sass` (pinned to Tailwind **4.x**, Sass **1.x** per spine)
   - [x] **Verify versions** after install:
+
     ```bash
     npm list tailwindcss @tailwindcss/postcss sass
     # Expected: tailwindcss 4.x.x, @tailwindcss/postcss 4.x.x, sass 1.x.x
     ```
+
   - [x] PostCSS config: **Not needed** — Next.js 16 / Turbopack auto-detects `@tailwindcss/postcss` from dependencies and handles CSS transforms automatically
   - [x] Confirm `ui/next.config.ts` stays `output: “standalone”` — no Tailwind-specific Next options required (Next auto-detects Tailwind)
   - [x] Dockerfile / Compose: deps come from lockfile only — no Dockerfile CSS special-casing unless build fails
   - [x] TypeScript strict mode: CSS imports in Next.js v16+ are supported natively; if `import “./app.css”` in `layout.tsx` shows type errors, add to `ui/tsconfig.json`:
+
     ```json
     {
       “compilerOptions”: {
@@ -61,19 +64,23 @@ so that components can use utilities without inheriting kit defaults.
       }
     }
     ```
+
     (Usually already set in Next scaffolds; verify only if typecheck fails)
 
 - [x] Task 2: Warm Balance theme bridge in `globals.css` (AC: #2)
   - [x] At top of `ui/app/globals.css` — **preserve** all existing `:root` / `html.dark` / System media token hexes and aliases; place `@import “tailwindcss”` before custom CSS:
+
     ```css
     @import “tailwindcss”;
 
     /* Class strategy matches PreferencesProvider FOUC: html.dark / html.light */
     @custom-variant dark (&:where(.dark, .dark *));
     ```
+
     (If `globals.css` currently starts with `:root { --background: ...}`, keep that block intact and add `@import` before it. Tailwind’s CSS-first approach loads base styles first, then your token overrides layer on top.)
   
   - [x] Add `@theme` block (after `@custom-variant dark` or at end of imports, before CSS rules):
+
     ```css
     @theme {
       --color-background: var(--background);
@@ -96,6 +103,7 @@ so that components can use utilities without inheriting kit defaults.
       --spacing-row-y: var(--row-y);
     }
     ```
+
     (Ref: [Tailwind v4 @theme docs](https://tailwindcss.com/docs/theme))
     - This generates utilities: `bg-background`, `text-foreground`, `rounded-sm`, `px-page-gutter`, etc.
     - Do **not** add hex literals or duplicate existing CSS var definitions — `@theme` only points at `var(--…)`
@@ -108,14 +116,17 @@ so that components can use utilities without inheriting kit defaults.
     - [x] **If issues appear:** Tailwind’s base reset is overriding existing rules:
       1. Try: In `globals.css`, move your existing `body`, `*`, `input`, `button` rules **below** the `@theme` block (after `@import “tailwindcss”`)
       2. If that doesn’t work, use selective import:
+
          ```css
          @import “tailwindcss/base” layer(base);
          @import “tailwindcss/components” layer(components);
          @import “tailwindcss/utilities”;
          ```
+
          Then add custom base rules only where needed (comment: “Custom base for Soft-Ledger compat”). This is the escape hatch — use only if full preflight breaks chrome.
 
   - [x] **Proof of bridge:** Add a one-line test in `ui/vitest.config.mts` or a new `ui/tests/tailwind-integration.test.ts`:
+
     ```typescript
     import { readFileSync } from “fs”;
     import { resolve } from “path”;
@@ -130,6 +141,7 @@ so that components can use utilities without inheriting kit defaults.
       });
     });
     ```
+
     This confirms `@theme` and var mappings exist without rendering anything visible. Include this test in Task 4 gates.
 
   - [x] Leave all `*.module.css` imports and content untouched (they coexist with Tailwind)
@@ -160,7 +172,7 @@ so that components can use utilities without inheriting kit defaults.
 ### Warm Balance hexes (do not change)
 
 | Role | Light | Dark |
-|------|-------|------|
+| ------ | ------- | ------ |
 | background | `#F7F3EC` | `#17140F` |
 | surface | `#FFFCF7` | `#221E17` |
 | text | `#2A241C` | `#F0E9DC` |
@@ -176,7 +188,7 @@ Aliases already in globals: `--background`, `--surface`, `--foreground`, `--mute
 ### Current codebase (UPDATE files)
 
 | Path | Role | This story |
-|------|------|------------|
+| ------ | ------ | ------------ |
 | `ui/package.json` / lockfile | No Tailwind/Sass today | ADD deps |
 | `ui/postcss.config.mjs` | Missing | NEW |
 | `ui/app/globals.css` | Token + base styles | UPDATE — import Tailwind + `@theme` + dark variant |
@@ -192,7 +204,6 @@ Aliases already in globals: `--background`, `--surface`, `--foreground`, `--mute
 - **CSS-first:** No `tailwind.config.js` — all config lives in CSS via `@import "tailwindcss"` and `@theme`
 - **Dark mode:** Use `@custom-variant dark` (Task 2) to tie `dark:` utilities to `html.dark` class; prefer plain utilities that reference `var(--background)` for automatic light/dark switching via CSS var overrides
 - **PostCSS required:** Install `@tailwindcss/postcss` plugin; Next.js auto-detects `postcss.config.mjs`
-
 
 ### Testing
 
@@ -214,6 +225,7 @@ Aliases already in globals: `--background`, `--surface`, `--foreground`, `--mute
 ### PostCSS Plugin Conflicts
 
 If `ui/package.json` lists other PostCSS plugins (e.g., `autoprefixer`, `cssnano`), they can coexist with `@tailwindcss/postcss` BUT:
+
 - **Autoprefixer:** Safe; works after Tailwind. Tailwind v4 already vendor-prefixes; autoprefixer is redundant but harmless.
 - **cssnano or similar minifiers:** Safe in production, but can strip CSS layers during build. If build output looks wrong, move cssnano to a separate production build step or remove it (Next.js already minifies).
 - **Other Tailwind plugins:** Do not mix plugins from `@tailwindcss/*` (e.g., `@tailwindcss/forms`) — Story 3.5 uses unstyled primitives only (AD-12).
@@ -249,11 +261,13 @@ Claude Haiku 4.5
 ### Completion Notes
 
 ✅ **Tailwind v4 + Sass Installation Complete**
+
 - Installed tailwindcss 4.3.3, @tailwindcss/postcss 4.3.3, sass 1.102.0
 - No explicit PostCSS config needed — Next.js 16 / Turbopack auto-detects Tailwind
 - All version requirements met per spine (4.x Tailwind, 1.x Sass)
 
 ✅ **Warm Balance Theme Bridge Wired**
+
 - Added `@import "tailwindcss"` at top of globals.css
 - Added `@custom-variant dark` to tie `dark:` utilities to `html.dark` class
 - Added `@theme` block mapping 9 colors + 3 radius + 4 spacing to existing CSS vars
@@ -261,6 +275,7 @@ Claude Haiku 4.5
 - Light/dark/System theme switching via PreferencesProvider remains unchanged
 
 ✅ **Styling Convention Note Added**
+
 - Added **Styling** section to ui/README.md documenting:
   - Tailwind utilities as default (co-located)
   - SCSS modules only for custom styles
@@ -268,6 +283,7 @@ Claude Haiku 4.5
   - Tokens sourced from globals.css via @theme bridge
 
 ✅ **Quality Gates All Pass**
+
 - typecheck: ✓ (no TS errors)
 - lint: ✓ (no ESLint issues)
 - test: ✓ (31 test files, 136 tests pass including new bridge validation test)
