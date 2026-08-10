@@ -473,8 +473,10 @@ export default async function ListDetailPage({
               listId={listId}
               currentUserId={session.user_id}
               members={members}
+              isOwner={isOwner}
               canAddExpense={!membersLoadError && members.length > 0}
               canInvite={isOwner}
+              defaultSplit={defaultSplit}
               expenseMessages={{
                 expenseTitle: t.expenseTitle,
                 expenseAmount: t.expenseAmount,
@@ -505,6 +507,20 @@ export default async function ListDetailPage({
                 errorUnauthorized: t.errorUnauthorized,
                 errorAlreadyMember: t.errorAlreadyMember,
                 errorSmtp: t.errorSmtp,
+              }}
+              splitMessages={{
+                errorGeneric: t.errorGeneric,
+                errorInvalidName: t.errorInvalidName,
+                errorForbidden: t.errorForbidden,
+                errorUnauthorized: t.errorUnauthorized,
+                defaultSplitTitle: t.defaultSplitTitle,
+                defaultSplitEven: t.defaultSplitEven,
+                defaultSplitCustom: t.defaultSplitCustom,
+                defaultSplitSum: t.defaultSplitSum,
+                defaultSplitSave: t.defaultSplitSave,
+                defaultSplitSaving: t.defaultSplitSaving,
+                defaultSplitReadOnly: t.defaultSplitReadOnly,
+                errorInvalidSplit: t.errorInvalidSplit,
               }}
               addExpenseAria={t.mobileAddExpenseAria}
               inviteAria={t.mobileInviteAria}

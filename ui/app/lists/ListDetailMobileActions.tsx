@@ -14,19 +14,24 @@ import type { InviteFormMessages } from "./InviteForm";
 import { InviteForm } from "./InviteForm";
 import type { ManualExpenseMessages } from "./ManualExpenseForm";
 import { ManualExpenseForm } from "./ManualExpenseForm";
-import type { ListMember } from "./listsClient";
+import type { DefaultSplitMessages } from "./DefaultSplitPanel";
+import { DefaultSplitPanel } from "./DefaultSplitPanel";
+import type { DefaultSplitPayload, ListMember } from "./listsClient";
 import styles from "./ListDetailMobileActions.module.css";
 
-type SheetKind = "expense" | "invite" | null;
+type SheetKind = "expense" | "invite" | "split" | null;
 
 type Props = {
   listId: string;
   currentUserId: string;
   members: ListMember[];
+  isOwner: boolean;
   canInvite: boolean;
   canAddExpense: boolean;
+  defaultSplit: DefaultSplitPayload | null;
   expenseMessages: ManualExpenseMessages;
   inviteMessages: InviteFormMessages;
+  splitMessages: DefaultSplitMessages;
   addExpenseAria: string;
   inviteAria: string;
   closeLabel: string;
@@ -64,6 +69,22 @@ function UserIcon() {
         strokeWidth="2"
         strokeLinecap="round"
       />
+    </svg>
+  );
+}
+
+function PieChartIcon() {
+  return (
+    <svg className={styles.fabIcon} viewBox="0 0 24 24" aria-hidden="true">
+      <circle
+        cx="12"
+        cy="12"
+        r="10"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+      <path d="M 12 2 A 10 10 0 0 1 20.66 6.34 L 12 12 Z" fill="currentColor" />
     </svg>
   );
 }
@@ -233,17 +254,20 @@ function Sheet({
 }
 
 /**
- * Mobile-only actions for list detail: split pill FAB + mid-screen sheets.
+ * Mobile-only actions for list detail: vertical FAB + bottom sheets.
  * Hidden from md breakpoint up (sidebar owns the same forms there).
  */
 export function ListDetailMobileActions({
   listId,
   currentUserId,
   members,
+  isOwner,
   canInvite,
   canAddExpense,
+  defaultSplit,
   expenseMessages,
   inviteMessages,
+  splitMessages,
   addExpenseAria,
   inviteAria,
   closeLabel,
@@ -253,12 +277,15 @@ export function ListDetailMobileActions({
 
   if (!canAddExpense && !canInvite) return null;
 
+  const canShowSplit = isOwner && defaultSplit && members.length > 1;
   const groupLabel =
-    canAddExpense && canInvite
-      ? `${addExpenseAria}, ${inviteAria}`
-      : canAddExpense
-        ? addExpenseAria
-        : inviteAria;
+    canAddExpense && canInvite && canShowSplit
+      ? `${addExpenseAria}, ${splitMessages.defaultSplitTitle}, ${inviteAria}`
+      : canAddExpense && canInvite
+        ? `${addExpenseAria}, ${inviteAria}`
+        : canAddExpense
+          ? addExpenseAria
+          : inviteAria;
 
   return (
     <div className={styles.chrome}>
@@ -270,28 +297,31 @@ export function ListDetailMobileActions({
             aria-label={addExpenseAria}
             aria-expanded={sheet === "expense"}
             onClick={() => setSheet("expense")}
+            title={addExpenseAria}
           >
             <PlusIcon />
           </button>
         ) : null}
-        {canInvite && !canAddExpense ? (
+        {canShowSplit ? (
           <button
             type="button"
             className={styles.fabHalf}
-            aria-label={inviteAria}
-            aria-expanded={sheet === "invite"}
-            onClick={() => setSheet("invite")}
+            aria-label={splitMessages.defaultSplitTitle}
+            aria-expanded={sheet === "split"}
+            onClick={() => setSheet("split")}
+            title={splitMessages.defaultSplitTitle}
           >
-            <UserIcon />
+            <PieChartIcon />
           </button>
         ) : null}
-        {canInvite && canAddExpense ? (
+        {canInvite ? (
           <button
             type="button"
             className={styles.fabHalf}
             aria-label={inviteAria}
             aria-expanded={sheet === "invite"}
             onClick={() => setSheet("invite")}
+            title={inviteAria}
           >
             <ShareIcon />
           </button>
@@ -310,6 +340,24 @@ export function ListDetailMobileActions({
             currentUserId={currentUserId}
             members={members}
             messages={expenseMessages}
+            showMobileActions
+          />
+        </Sheet>
+      ) : null}
+
+      {canShowSplit ? (
+        <Sheet
+          open={sheet === "split"}
+          label={splitMessages.defaultSplitTitle}
+          onClose={close}
+          closeLabel={closeLabel}
+        >
+          <DefaultSplitPanel
+            listId={listId}
+            isOwner={isOwner}
+            initial={defaultSplit}
+            members={members}
+            messages={splitMessages}
           />
         </Sheet>
       ) : null}

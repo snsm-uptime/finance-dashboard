@@ -1,10 +1,22 @@
 "use client";
 
-import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  FormEvent,
+  KeyboardEvent,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 
 import { usePreferences } from "@/components/PreferencesProvider";
 import { listsMessages } from "@/lib/i18n/lists";
+import type { InviteFormMessages } from "./InviteForm";
+import { InviteForm } from "./InviteForm";
 import {
   balanceTone,
   createList,
@@ -37,6 +49,148 @@ function DotsIcon() {
   );
 }
 
+function CloseIcon() {
+  return (
+    <svg
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M6.5 6.5l11 11M17.5 6.5l-11 11"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function InviteSheet({
+  open,
+  listId,
+  inviteMessages,
+  closeLabel,
+  onClose,
+}: {
+  open: boolean;
+  listId: string;
+  inviteMessages: InviteFormMessages;
+  closeLabel: string;
+  onClose: () => void;
+}) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const titleId = useId();
+  const [phase, setPhase] = useState<"unmounted" | "mounting" | "open" | "closing">(
+    "unmounted"
+  );
+
+  useEffect(() => {
+    if (open && phase === "unmounted") setPhase("mounting");
+    else if (!open && phase !== "unmounted" && phase !== "closing") setPhase("closing");
+  }, [open, phase]);
+
+  useEffect(() => {
+    if (phase === "mounting") {
+      const show = window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          setPhase("open");
+        });
+      });
+      return () => window.cancelAnimationFrame(show);
+    }
+  }, [phase]);
+
+  useEffect(() => {
+    if (phase === "closing") {
+      const hide = window.setTimeout(() => {
+        setPhase("unmounted");
+      }, 280);
+      return () => window.clearTimeout(hide);
+    }
+  }, [phase]);
+
+  useEffect(() => {
+    if (phase !== "open") return;
+    closeRef.current?.focus();
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab" || !panelRef.current) return;
+      const focusable = panelRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown as unknown as EventListener);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onKeyDown as unknown as EventListener);
+    };
+  }, [phase, onClose]);
+
+  if (phase === "unmounted" || typeof document === "undefined") return null;
+
+  const isVisible = phase === "open" || phase === "closing";
+
+  return createPortal(
+    <>
+      <button
+        type="button"
+        className={`${styles.backdrop} ${isVisible ? styles.backdropOpen : ""}`}
+        aria-label={closeLabel}
+        onClick={onClose}
+      />
+      <div
+        ref={panelRef}
+        className={`${styles.sheet} ${isVisible ? styles.sheetOpen : ""}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+      >
+        <div className={styles.sheetHeader}>
+          <h2 id={titleId} className={styles.sheetTitle}>
+            {inviteMessages.inviteTitle}
+          </h2>
+          <button
+            ref={closeRef}
+            type="button"
+            className={styles.sheetClose}
+            aria-label={closeLabel}
+            onClick={onClose}
+          >
+            <CloseIcon />
+          </button>
+        </div>
+        <div className={styles.sheetBody}>
+          <InviteForm listId={listId} messages={inviteMessages} reserveErrorHeight />
+        </div>
+      </div>
+    </>,
+    document.body,
+  );
+}
+
 export function ListsPanel({ initialLists, currentUserId }: Props) {
   const { locale } = usePreferences();
   const t = listsMessages[locale];
@@ -54,6 +208,7 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [invitingListId, setInvitingListId] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const renamingIdRef = useRef<string | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -64,11 +219,18 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
       errorInvalidName: t.errorInvalidName,
       errorForbidden: t.errorForbidden,
       errorUnauthorized: t.errorUnauthorized,
+      inviteTitle: t.inviteTitle,
+      inviteLabel: t.inviteLabel,
+      inviteSubmit: t.inviteSubmit,
+      inviteSending: t.inviteSending,
+      inviteSent: t.inviteSent,
     }),
     [t],
-  );
+  ) as InviteFormMessages;
 
   const canCreate = newName.trim().length > 0 && !creating;
+
+  const closeInviteSheet = useCallback(() => setInvitingListId(null), []);
 
   useEffect(() => {
     if (!editingId) return;
@@ -259,8 +421,14 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
 
   const anyOpening = openingId !== null;
 
+  const startInvite = useCallback((listId: string) => {
+    setInvitingListId(listId);
+    setOpenMenuId(null);
+  }, []);
+
   return (
-    <div className={styles.panel}>
+    <>
+      <div className={styles.panel}>
       <form className={styles.createForm} onSubmit={onCreate}>
         <div className={styles.createRow}>
           <label className={`${styles.label} ${styles.createField}`}>
@@ -391,6 +559,15 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
                             <button
                               type="button"
                               className={styles.menuItem}
+                              onClick={() => startInvite(list.id)}
+                              disabled={anyOpening}
+                              role="menuitem"
+                            >
+                              {t.mobileInviteAria}
+                            </button>
+                            <button
+                              type="button"
+                              className={styles.menuItem}
                               onClick={() => {
                                 startRename(list);
                                 setOpenMenuId(null);
@@ -448,6 +625,17 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
           })}
         </ul>
       )}
-    </div>
+      </div>
+
+      {invitingListId ? (
+        <InviteSheet
+          open={invitingListId !== null}
+          listId={invitingListId}
+          inviteMessages={messages}
+          closeLabel={t.mobileSheetClose}
+          onClose={closeInviteSheet}
+        />
+      ) : null}
+    </>
   );
 }
