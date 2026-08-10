@@ -21,10 +21,16 @@ export type DefaultSplitMessages = ListsClientMessages & {
   errorInvalidSplit: string;
 };
 
+type ListMember = {
+  user_id: string;
+  alias: string | null;
+};
+
 type Props = {
   listId: string;
   isOwner: boolean;
   initial: DefaultSplitPayload;
+  members: ListMember[];
   messages: DefaultSplitMessages;
 };
 
@@ -51,22 +57,36 @@ function getInitialSavedPercents(initial: DefaultSplitPayload): Record<string, s
 }
 
 function hasChanges(current: Record<string, string>, saved: Record<string, string>): boolean {
-  const userIds = Object.keys(current);
-  if (userIds.length !== Object.keys(saved).length) return true;
-  for (const id of userIds) {
-    if (Number(current[id]) !== Number(saved[id])) return true;
+  const currentIds = Object.keys(current).sort();
+  const savedIds = Object.keys(saved).sort();
+
+  if (currentIds.length !== savedIds.length) return true;
+  if (currentIds.join(",") !== savedIds.join(",")) return true;
+
+  for (const id of currentIds) {
+    const currentVal = Math.round(Number(current[id] || 0) * 100) / 100;
+    const savedVal = Math.round(Number(saved[id] || 0) * 100) / 100;
+    if (currentVal !== savedVal) return true;
   }
   return false;
 }
 
 type SliderProps = {
   userIds: string[];
+  members: ListMember[];
   percents: Record<string, string>;
   onChangePercents: (newPercents: Record<string, string>) => void;
   disabled: boolean;
 };
 
-function PercentageSlider({ userIds, percents, onChangePercents, disabled }: SliderProps) {
+function PercentageSlider({ userIds, members, percents, onChangePercents, disabled }: SliderProps) {
+  const memberMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const member of members) {
+      map.set(member.user_id, member.alias || member.user_id);
+    }
+    return map;
+  }, [members]);
   const trackRef = useRef<HTMLDivElement>(null);
   const [draggedHandleIndex, setDraggedHandleIndex] = useState<number | null>(null);
   const [tooltipX, setTooltipX] = useState(0);
@@ -158,6 +178,29 @@ function PercentageSlider({ userIds, percents, onChangePercents, disabled }: Sli
     handleElement?.focus();
   };
 
+  const handleTrackClick = (e: React.MouseEvent) => {
+    if (disabled || draggedHandleIndex !== null) return;
+    if (!trackRef.current) return;
+
+    const rect = trackRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const clickPercent = Math.max(0, Math.min(100, (x / rect.width) * 100));
+
+    let closestHandleIndex = 0;
+    let closestDistance = Math.abs(percentValues.slice(0, 1).reduce((a, b) => a + b, 0) - clickPercent);
+
+    for (let i = 0; i < handleCount; i++) {
+      const handlePos = percentValues.slice(0, i + 1).reduce((a, b) => a + b, 0);
+      const distance = Math.abs(handlePos - clickPercent);
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestHandleIndex = i;
+      }
+    }
+
+    updateHandlePosition(closestHandleIndex, clickPercent);
+  };
+
   return (
     <div className={styles.sliderContainer}>
       <div
@@ -168,6 +211,7 @@ function PercentageSlider({ userIds, percents, onChangePercents, disabled }: Sli
         onMouseLeave={handleMouseUp}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
+        onClick={handleTrackClick}
         role="group"
         aria-label="Percentage split slider"
       >
@@ -214,8 +258,8 @@ function PercentageSlider({ userIds, percents, onChangePercents, disabled }: Sli
               left: `${tooltipX}%`,
             }}
           >
-            {userIds[draggedHandleIndex]}: {Math.round(percentValues[draggedHandleIndex])}% |{" "}
-            {userIds[draggedHandleIndex + 1]}: {Math.round(percentValues[draggedHandleIndex + 1])}%
+            {memberMap.get(userIds[draggedHandleIndex]) || userIds[draggedHandleIndex]}: {Math.round(percentValues[draggedHandleIndex])}% |{" "}
+            {memberMap.get(userIds[draggedHandleIndex + 1]) || userIds[draggedHandleIndex + 1]}: {Math.round(percentValues[draggedHandleIndex + 1])}%
           </div>
         )}
       </div>
@@ -223,7 +267,7 @@ function PercentageSlider({ userIds, percents, onChangePercents, disabled }: Sli
       <div className={styles.sliderLabels}>
         {userIds.map((userId) => (
           <div key={`label-${userId}`} className={styles.sliderLabel}>
-            {userId.slice(0, 8)}…
+            {memberMap.get(userId) || userId.slice(0, 8)}
           </div>
         ))}
       </div>
@@ -337,6 +381,7 @@ export function DefaultSplitPanel({ listId, isOwner, initial, messages }: Props)
         <>
           <PercentageSlider
             userIds={initial.member_ids}
+            members={members}
             percents={percents}
             onChangePercents={setPercents}
             disabled={pending}
