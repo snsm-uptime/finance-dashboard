@@ -302,8 +302,8 @@ export default async function ListDetailPage({
 
   const listTitle = detail?.name;
   const isOwner = Boolean(detail?.owner_id && detail.owner_id === session.user_id);
-  const showSoftChrome = Boolean(listTitle) && !notFound && !loadError;
-  const navTitle = showSoftChrome ? (listTitle as string) : "";
+  const showListDetail = Boolean(listTitle) && !notFound && !loadError;
+  const navTitle = showListDetail ? (listTitle as string) : "";
   const stripProps = balanceStripPropsFrom(
     expenses.length > 0,
     balancesLoadError,
@@ -324,7 +324,7 @@ export default async function ListDetailPage({
               </Link>
             </p>
           </>
-        ) : !showSoftChrome ? (
+        ) : !showListDetail ? (
           <>
             <h1 className={styles.title}>{t.loadError}</h1>
             <p className={`${styles.copy} ${styles.softBack}`}>
@@ -373,7 +373,6 @@ export default async function ListDetailPage({
               {members.length > 0 && (
                 <h1 className={styles.expenseTitle}>
                   <span>{listTitle}</span>
-                  {isOwner ? <ShareTitleButton ariaLabel={t.mobileInviteAria} /> : null}
                 </h1>
               )}
               {membersLoadError ? (

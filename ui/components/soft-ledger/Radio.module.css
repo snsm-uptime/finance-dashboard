@@ -1,0 +1,64 @@
+.root {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-ui), system-ui, sans-serif;
+  font-size: inherit;
+  font-weight: inherit;
+  color: var(--foreground);
+  cursor: pointer;
+  user-select: none;
+}
+
+.input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+  border: 0;
+}
+
+.mark {
+  box-sizing: border-box;
+  flex-shrink: 0;
+  width: 1.125rem;
+  height: 1.125rem;
+  border: 3px solid var(--accent);
+  background: transparent;
+  transition: background-color 120ms ease;
+}
+
+.radio {
+  border-radius: 50%;
+}
+
+.checkbox {
+  border-radius: 4px;
+}
+
+.input:checked + .mark {
+  background: var(--accent);
+}
+
+.input:focus-visible + .mark {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 2px;
+}
+
+.input:disabled + .mark {
+  opacity: 0.55;
+}
+
+.root:has(.input:disabled) {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.label {
+  line-height: 1.3;
+}

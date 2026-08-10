@@ -656,9 +656,6 @@
 }
 
 .splitModeOption {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
   font-family: var(--font-ui), system-ui, sans-serif;
   font-size: 0.95rem;
 }

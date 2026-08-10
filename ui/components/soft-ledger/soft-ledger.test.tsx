@@ -15,6 +15,7 @@ import { Hint } from "./Hint";
 import { PrimaryButton } from "./PrimaryButton";
 import { ReceiptRow } from "./ReceiptRow";
 import { SectionLabel } from "./SectionLabel";
+import { SoftLedgerRadio } from "./Radio";
 import { SoftLedgerSelect } from "./Select";
 import { TabBar } from "./TabBar";
 import { TopNav } from "./TopNav";
@@ -54,6 +55,7 @@ vi.mock("./SectionLabel.module.css", mockCssModules);
 vi.mock("./TabBar.module.css", mockCssModules);
 vi.mock("./TopNav.module.css", mockCssModules);
 vi.mock("./Select.module.css", mockCssModules);
+vi.mock("./Radio.module.css", mockCssModules);
 
 describe("Soft-Ledger primitives", () => {
   let host: HTMLDivElement;
@@ -200,5 +202,36 @@ describe("Soft-Ledger primitives", () => {
       bob.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     });
     expect(onChange).toHaveBeenCalledWith("b");
+  });
+
+  it("SoftLedgerRadio renders radio and checkbox with background outline fill", () => {
+    const onChange = vi.fn();
+    act(() => {
+      root.render(
+        <SoftLedgerRadio name="mode" checked={false} onChange={onChange}>
+          Even
+        </SoftLedgerRadio>,
+      );
+    });
+    const input = host.querySelector('input[type="radio"]') as HTMLInputElement;
+    expect(input).not.toBeNull();
+    expect(host.textContent).toContain("Even");
+    act(() => {
+      input.click();
+    });
+    expect(onChange).toHaveBeenCalled();
+
+    act(() => {
+      root.render(
+        <SoftLedgerRadio type="checkbox" checked onChange={() => {}}>
+          Agree
+        </SoftLedgerRadio>,
+      );
+    });
+    expect(host.querySelector('input[type="checkbox"]')).not.toBeNull();
+
+    const css = readFileSync(join(here, "Radio.module.css"), "utf8");
+    expect(css).toContain("3px solid var(--accent)");
+    expect(css).toContain("background: var(--accent)");
   });
 });
