@@ -16,7 +16,6 @@ import type { Locale } from "@/lib/i18n/locale";
 import { fetchSession } from "@/lib/session";
 import { ListDetailMobileActions } from "../ListDetailMobileActions";
 import { ManualExpenseForm } from "../ManualExpenseForm";
-import { ShareTitleButton } from "../ShareTitleButton";
 import { TemporalNavigation } from "../TemporalNavigation";
 import { balanceTone, type DefaultSplitPayload, type ExpenseItem, type ListMember } from "../listsClient";
 import styles from "../lists.module.css";
@@ -406,27 +405,9 @@ export default async function ListDetailPage({
               {members.length > 0 && (
                 <TemporalNavigation
                   listId={listId}
-                  currentUserId={session.user_id}
                   members={members}
                   isOwner={isOwner}
                   defaultSplit={defaultSplit}
-                  expenseMessages={{
-                    expenseTitle: t.expenseTitle,
-                    expenseAmount: t.expenseAmount,
-                    expenseDescription: t.expenseDescription,
-                    expensePayer: t.expensePayer,
-                    expenseSubmit: t.expenseSubmit,
-                    expenseSaving: t.expenseSaving,
-                    expenseAdjustSplit: t.expenseAdjustSplit,
-                    expenseModeWhole: t.expenseModeWhole,
-                    expenseModeAbsolute: t.expenseModeAbsolute,
-                    expenseModePercentage: t.expenseModePercentage,
-                    expenseAssignee: t.expenseAssignee,
-                    errorGeneric: t.errorGeneric,
-                    errorInvalidName: t.errorInvalidName,
-                    errorForbidden: t.errorForbidden,
-                    errorUnauthorized: t.errorUnauthorized,
-                  }}
                   inviteMessages={{
                     inviteTitle: t.inviteTitle,
                     inviteLabel: t.inviteLabel,

@@ -52,28 +52,6 @@ function PlusIcon() {
   );
 }
 
-function UserIcon() {
-  return (
-    <svg className={styles.fabIcon} viewBox="0 0 24 24" aria-hidden="true">
-      <circle
-        cx="12"
-        cy="8"
-        r="3.25"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-      />
-      <path
-        d="M5.5 19.25c1.4-3.1 3.7-4.65 6.5-4.65s5.1 1.55 6.5 4.65"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
 function PieChartIcon() {
   return (
     <svg className={styles.fabIcon} viewBox="0 0 24 24" aria-hidden="true">

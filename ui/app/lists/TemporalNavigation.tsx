@@ -2,7 +2,6 @@
 
 import { useCallback, useState, type ReactNode } from "react";
 import type { DefaultSplitPayload, ListMember } from "./listsClient";
-import type { ManualExpenseMessages } from "./ManualExpenseForm";
 import type { InviteFormMessages } from "./InviteForm";
 import { InviteForm } from "./InviteForm";
 import type { DefaultSplitMessages } from "./DefaultSplitPanel";
@@ -14,11 +13,9 @@ type FormKind = "expense" | "invite" | "split" | null;
 
 type Props = {
   listId: string;
-  currentUserId: string;
   members: ListMember[];
   isOwner: boolean;
   defaultSplit: DefaultSplitPayload | null;
-  expenseMessages: ManualExpenseMessages;
   inviteMessages: InviteFormMessages;
   splitMessages: DefaultSplitMessages;
 };
@@ -110,11 +107,9 @@ function FormWrapper({ kind, title, onClose, children }: FormWrapperProps) {
 
 export function TemporalNavigation({
   listId,
-  currentUserId,
   members,
   isOwner,
   defaultSplit,
-  expenseMessages,
   inviteMessages,
   splitMessages,
 }: Props) {
