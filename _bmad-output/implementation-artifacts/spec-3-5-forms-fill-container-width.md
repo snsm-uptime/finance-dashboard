@@ -77,6 +77,7 @@ Forms should respect the Warm Balance design system and use available container 
 
 ### Changes Made
 
+**CSS Updates for Full-Width Forms:**
 1. **ManualExpenseForm.module.css** - Changed `.form` from `max-width: 28rem` to `width: 100%`
 2. **signup.module.css** - Added `width: 100%` to `.form` class
 3. **lists.module.css** - Changed `.createForm` from `max-width: 36rem` to `width: 100%`
@@ -85,10 +86,18 @@ Forms should respect the Warm Balance design system and use available container 
 6. **lists.module.css** - Changed `.sliderContainer` from `max-width: 24rem` to `width: 100%`
 7. **PercentageSplitTrack.module.css** - Removed `max-width: 24rem` from `.sliderContainer`
 
+**Component Refactoring for Mobile Sheets:**
+8. **InviteForm.tsx** - Removed `.detailSection` wrapper container, form now renders directly at top level
+9. **FormIconSubmit.tsx** - Made `label` prop optional in `FormIconField` (not rendered if not provided)
+   - Allows forms to omit visible labels when sheet headers provide the title
+   - Cleaner mobile layout without duplicate labels
+
 All forms in the UI now explicitly use `width: 100%` to fill their container width, replacing previous `max-width` constraints that limited their width. This ensures:
 - Mobile sheets (e.g., DefaultSplitPanel) fill the full sheet width
 - Forms on main pages fill the available container width
 - Consistent width behavior across all form components (ManualExpenseForm, InviteForm, DefaultSplitPanel, SignInForm, SignupForm, VerifyForm, ForgotPasswordForm, ResetPasswordForm, AliasSetupForm)
+
+Additionally, InviteForm has been refactored to remove nested containers and move form labels to sheet headers, improving mobile layout efficiency.
 
 ## Suggested Review Order
 
