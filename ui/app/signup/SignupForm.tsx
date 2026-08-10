@@ -96,7 +96,7 @@ export function SignupForm({ locale, inviteToken }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [inviteToken, t.errorExpiredInvite, t.errorGeneric]);
+  }, [inviteToken, t.errorExpiredInvite, t.errorGeneric, router]);
 
   const canSubmit = useMemo(
     () =>

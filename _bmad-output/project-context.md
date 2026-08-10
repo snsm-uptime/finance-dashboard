@@ -93,6 +93,8 @@ Pins: match majors; re-verify patches **only when creating lockfiles** (Story 1.
 - `ui` → HTTP only — no DB/parsers (AD-1)
 - Secrets stay on `api` / env — never `NEXT_PUBLIC_*` for secrets
 - i18n: EN+ES keys for all product chrome
+- Styling (AD-23 / Epic 3.5): **Tailwind utilities co-located** by default; `*.module.scss` only for custom styles; **no new `*.module.css`**
+- Tokens: Warm Balance + Soft-Ledger via CSS vars / Tailwind theme bridge — do not re-pick DESIGN.md hexes; no kit/purple default themes; no pill primary CTAs
 
 #### Shared
 
@@ -208,6 +210,7 @@ Pins: match majors; re-verify patches **only when creating lockfiles** (Story 1.
 
 - `DESIGN.md` + `EXPERIENCE.md` own look/behavior — kits = unstyled primitives only
 - Don’t ship: kit default/purple theme · pill primary CTAs · “Mark settled” / Simplify “paid” framing
+- After Epic 3.5: do not reintroduce CSS Modules; prefer Tailwind; SCSS modules for custom only (AD-23)
 
 ### Development Workflow Rules
 
@@ -216,7 +219,7 @@ Pins: match majors; re-verify patches **only when creating lockfiles** (Story 1.
 - Path: sprint planning → create story → validate → dev-story. **Start at Story 1.1** — no freestyle features first
 - **One story per branch:** `<type>/<epic>/<us-id>` — no stacking stories
 - Order & independence: follow `epics.md` (Epic N must not need Epic N+1)
-- Gates: Epic 5 **5.9/5.10 after 5.1–5.8 (J3+J7)** · **3.2–3.4** as J5→J2 slice · FR-10 done only with UI (3.2) · **FR-43 done only at 5.4** (3.6 = slot only)
+- Gates: Epic 5 **5.9/5.10 after 5.1–5.8 (J3+J7)** · **3.2–3.4** as J5→J2 slice · FR-10 done only with UI (3.2) · **FR-43 done only at 5.4** (3.6 = slot only) · **Epic 3.5 (Tailwind/SCSS) after Epic 3 product 3.5–3.6; before Epic 4**
 - Language/theme still required (Epic 1 / UX-DR10) even without FR ids
 - **Before `done`:** short how/why overview (request path, key components, why, what not to break) — see `_bmad-output/implementation-artifacts/story-close-overview-checklist.md`
 

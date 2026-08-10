@@ -14,10 +14,9 @@ import { accountCopy } from "@/lib/i18n/account";
 import { listsMessages } from "@/lib/i18n/lists";
 import type { Locale } from "@/lib/i18n/locale";
 import { fetchSession } from "@/lib/session";
-import { DefaultSplitPanel } from "../DefaultSplitPanel";
-import { InviteForm } from "../InviteForm";
-import { ListDetailMobileChrome } from "../ListDetailMobileChrome";
+import { ListDetailMobileActions } from "../ListDetailMobileActions";
 import { ManualExpenseForm } from "../ManualExpenseForm";
+import { TemporalNavigation } from "../TemporalNavigation";
 import { balanceTone, type DefaultSplitPayload, type ExpenseItem, type ListMember } from "../listsClient";
 import styles from "../lists.module.css";
 
@@ -302,8 +301,8 @@ export default async function ListDetailPage({
 
   const listTitle = detail?.name;
   const isOwner = Boolean(detail?.owner_id && detail.owner_id === session.user_id);
-  const showSoftChrome = Boolean(listTitle) && !notFound && !loadError;
-  const navTitle = showSoftChrome ? (listTitle as string) : "";
+  const showListDetail = Boolean(listTitle) && !notFound && !loadError;
+  const navTitle = showListDetail ? (listTitle as string) : "";
   const stripProps = balanceStripPropsFrom(
     expenses.length > 0,
     balancesLoadError,
@@ -324,7 +323,7 @@ export default async function ListDetailPage({
               </Link>
             </p>
           </>
-        ) : !showSoftChrome ? (
+        ) : !showListDetail ? (
           <>
             <h1 className={styles.title}>{t.loadError}</h1>
             <p className={`${styles.copy} ${styles.softBack}`}>
@@ -370,6 +369,11 @@ export default async function ListDetailPage({
               </p>
             </div>
             <aside className={styles.detailSidebar}>
+              {members.length > 0 && (
+                <h1 className={styles.expenseTitle}>
+                  <span>{listTitle}</span>
+                </h1>
+              )}
               {membersLoadError ? (
                 <p className={styles.copy} role="alert">
                   {t.loadError}
@@ -398,10 +402,13 @@ export default async function ListDetailPage({
                   }}
                 />
               ) : null}
-              {isOwner ? (
-                <InviteForm
+              {members.length > 0 && (
+                <TemporalNavigation
                   listId={listId}
-                  messages={{
+                  members={members}
+                  isOwner={isOwner}
+                  defaultSplit={defaultSplit}
+                  inviteMessages={{
                     inviteTitle: t.inviteTitle,
                     inviteLabel: t.inviteLabel,
                     inviteSubmit: t.inviteSubmit,
@@ -415,20 +422,7 @@ export default async function ListDetailPage({
                     errorAlreadyMember: t.errorAlreadyMember,
                     errorSmtp: t.errorSmtp,
                   }}
-                />
-              ) : null}
-              {isOwner && splitLoadError ? (
-                <p className={styles.copy} role="alert">
-                  {t.errorDefaultSplitLoad}
-                </p>
-              ) : null}
-              {isOwner && defaultSplit && members.length > 1 ? (
-                <DefaultSplitPanel
-                  listId={listId}
-                  isOwner={isOwner}
-                  initial={defaultSplit}
-                  members={members}
-                  messages={{
+                  splitMessages={{
                     errorGeneric: t.errorGeneric,
                     errorInvalidName: t.errorInvalidName,
                     errorForbidden: t.errorForbidden,
@@ -443,6 +437,11 @@ export default async function ListDetailPage({
                     errorInvalidSplit: t.errorInvalidSplit,
                   }}
                 />
+              )}
+              {isOwner && splitLoadError ? (
+                <p className={styles.copy} role="alert">
+                  {t.errorDefaultSplitLoad}
+                </p>
               ) : null}
               <p className={styles.copy}>
                 <Link className={styles.link} href="/lists">
@@ -450,12 +449,14 @@ export default async function ListDetailPage({
                 </Link>
               </p>
             </aside>
-            <ListDetailMobileChrome
+            <ListDetailMobileActions
               listId={listId}
               currentUserId={session.user_id}
               members={members}
+              isOwner={isOwner}
               canAddExpense={!membersLoadError && members.length > 0}
               canInvite={isOwner}
+              defaultSplit={defaultSplit}
               expenseMessages={{
                 expenseTitle: t.expenseTitle,
                 expenseAmount: t.expenseAmount,
@@ -486,6 +487,20 @@ export default async function ListDetailPage({
                 errorUnauthorized: t.errorUnauthorized,
                 errorAlreadyMember: t.errorAlreadyMember,
                 errorSmtp: t.errorSmtp,
+              }}
+              splitMessages={{
+                errorGeneric: t.errorGeneric,
+                errorInvalidName: t.errorInvalidName,
+                errorForbidden: t.errorForbidden,
+                errorUnauthorized: t.errorUnauthorized,
+                defaultSplitTitle: t.defaultSplitTitle,
+                defaultSplitEven: t.defaultSplitEven,
+                defaultSplitCustom: t.defaultSplitCustom,
+                defaultSplitSum: t.defaultSplitSum,
+                defaultSplitSave: t.defaultSplitSave,
+                defaultSplitSaving: t.defaultSplitSaving,
+                defaultSplitReadOnly: t.defaultSplitReadOnly,
+                errorInvalidSplit: t.errorInvalidSplit,
               }}
               addExpenseAria={t.mobileAddExpenseAria}
               inviteAria={t.mobileInviteAria}

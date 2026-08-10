@@ -14,19 +14,25 @@ import type { InviteFormMessages } from "./InviteForm";
 import { InviteForm } from "./InviteForm";
 import type { ManualExpenseMessages } from "./ManualExpenseForm";
 import { ManualExpenseForm } from "./ManualExpenseForm";
-import type { ListMember } from "./listsClient";
-import styles from "./ListDetailMobileChrome.module.css";
+import type { DefaultSplitMessages } from "./DefaultSplitPanel";
+import { DefaultSplitPanel } from "./DefaultSplitPanel";
+import { FormHeaderActionHostProvider } from "./FormChrome";
+import type { DefaultSplitPayload, ListMember } from "./listsClient";
+import styles from "./ListDetailMobileActions.module.css";
 
-type SheetKind = "expense" | "invite" | null;
+type SheetKind = "expense" | "invite" | "split" | null;
 
 type Props = {
   listId: string;
   currentUserId: string;
   members: ListMember[];
+  isOwner: boolean;
   canInvite: boolean;
   canAddExpense: boolean;
+  defaultSplit: DefaultSplitPayload | null;
   expenseMessages: ManualExpenseMessages;
   inviteMessages: InviteFormMessages;
+  splitMessages: DefaultSplitMessages;
   addExpenseAria: string;
   inviteAria: string;
   closeLabel: string;
@@ -46,20 +52,36 @@ function PlusIcon() {
   );
 }
 
-function UserIcon() {
+function PieChartIcon() {
   return (
     <svg className={styles.fabIcon} viewBox="0 0 24 24" aria-hidden="true">
       <circle
         cx="12"
-        cy="8"
-        r="3.25"
+        cy="12"
+        r="10"
         fill="none"
         stroke="currentColor"
         strokeWidth="2"
       />
+      <path d="M 12 2 A 10 10 0 0 1 20.66 6.34 L 12 12 Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function ShareIcon() {
+  return (
+    <svg className={styles.fabIcon} viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="18" cy="5" r="3" stroke="currentColor" strokeWidth="2" />
+      <circle cx="6" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
+      <circle cx="18" cy="19" r="3" stroke="currentColor" strokeWidth="2" />
       <path
-        d="M5.5 19.25c1.4-3.1 3.7-4.65 6.5-4.65s5.1 1.55 6.5 4.65"
-        fill="none"
+        d="M8.59 13.51L15.41 17.49"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M15.41 6.51L8.59 10.49"
         stroke="currentColor"
         strokeWidth="2"
         strokeLinecap="round"
@@ -98,18 +120,19 @@ function Sheet({
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
+  const [actionHost, setActionHost] = useState<HTMLDivElement | null>(null);
   const [phase, setPhase] = useState<"unmounted" | "mounting" | "open" | "closing">(
     "unmounted"
   );
 
   // Respond to open prop changes: transition to mounting or closing
-  // Animation phase transitions require setState in effect; this is the
-  // recommended pattern for coordinating state changes (React docs)
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (open && phase === "unmounted") setPhase("mounting");
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    else if (!open && phase !== "unmounted" && phase !== "closing") setPhase("closing");
+    if (open && phase === "unmounted") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPhase("mounting");
+    } else if (!open && phase !== "unmounted" && phase !== "closing") {
+      setPhase("closing");
+    }
   }, [open, phase]);
 
   // Handle mounting phase: trigger visibility animation
@@ -190,6 +213,7 @@ function Sheet({
         aria-labelledby={titleId}
       >
         <div className={styles.sheetHeader}>
+          <div ref={setActionHost} className={styles.sheetLeading} />
           <h2 id={titleId} className={styles.sheetTitle}>
             {label}
           </h2>
@@ -203,7 +227,9 @@ function Sheet({
             <CloseIcon />
           </button>
         </div>
-        <div className={styles.sheetBody}>{children}</div>
+        <FormHeaderActionHostProvider host={actionHost}>
+          <div className={styles.sheetBody}>{children}</div>
+        </FormHeaderActionHostProvider>
       </div>
     </>,
     document.body,
@@ -211,17 +237,20 @@ function Sheet({
 }
 
 /**
- * Mobile-only actions for list detail: split pill FAB + mid-screen sheets.
+ * Mobile-only actions for list detail: vertical FAB + bottom sheets.
  * Hidden from md breakpoint up (sidebar owns the same forms there).
  */
-export function ListDetailMobileChrome({
+export function ListDetailMobileActions({
   listId,
   currentUserId,
   members,
+  isOwner,
   canInvite,
   canAddExpense,
+  defaultSplit,
   expenseMessages,
   inviteMessages,
+  splitMessages,
   addExpenseAria,
   inviteAria,
   closeLabel,
@@ -231,12 +260,15 @@ export function ListDetailMobileChrome({
 
   if (!canAddExpense && !canInvite) return null;
 
+  const canShowSplit = isOwner && defaultSplit && members.length > 1;
   const groupLabel =
-    canAddExpense && canInvite
-      ? `${addExpenseAria}, ${inviteAria}`
-      : canAddExpense
-        ? addExpenseAria
-        : inviteAria;
+    canAddExpense && canInvite && canShowSplit
+      ? `${addExpenseAria}, ${splitMessages.defaultSplitTitle}, ${inviteAria}`
+      : canAddExpense && canInvite
+        ? `${addExpenseAria}, ${inviteAria}`
+        : canAddExpense
+          ? addExpenseAria
+          : inviteAria;
 
   return (
     <div className={styles.chrome}>
@@ -248,8 +280,21 @@ export function ListDetailMobileChrome({
             aria-label={addExpenseAria}
             aria-expanded={sheet === "expense"}
             onClick={() => setSheet("expense")}
+            title={addExpenseAria}
           >
             <PlusIcon />
+          </button>
+        ) : null}
+        {canShowSplit ? (
+          <button
+            type="button"
+            className={styles.fabHalf}
+            aria-label={splitMessages.defaultSplitTitle}
+            aria-expanded={sheet === "split"}
+            onClick={() => setSheet("split")}
+            title={splitMessages.defaultSplitTitle}
+          >
+            <PieChartIcon />
           </button>
         ) : null}
         {canInvite ? (
@@ -259,8 +304,9 @@ export function ListDetailMobileChrome({
             aria-label={inviteAria}
             aria-expanded={sheet === "invite"}
             onClick={() => setSheet("invite")}
+            title={inviteAria}
           >
-            <UserIcon />
+            <ShareIcon />
           </button>
         ) : null}
       </div>
@@ -281,10 +327,27 @@ export function ListDetailMobileChrome({
         </Sheet>
       ) : null}
 
+      {canShowSplit ? (
+        <Sheet
+          open={sheet === "split"}
+          label={splitMessages.defaultSplitTitle}
+          onClose={close}
+          closeLabel={closeLabel}
+        >
+          <DefaultSplitPanel
+            listId={listId}
+            isOwner={isOwner}
+            initial={defaultSplit}
+            members={members}
+            messages={splitMessages}
+          />
+        </Sheet>
+      ) : null}
+
       {canInvite ? (
         <Sheet
           open={sheet === "invite"}
-          label={inviteMessages.inviteTitle}
+          label=""
           onClose={close}
           closeLabel={closeLabel}
         >

@@ -3,9 +3,12 @@
 import { FormEvent, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
+import { SoftLedgerRadio } from "@/components/soft-ledger/Radio";
 import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
 
+import { FormHeaderAction } from "./FormChrome";
+import { FormIconSubmit } from "./FormIconSubmit";
+import { PercentageSplitTrack } from "./PercentageSplitTrack";
 import {
   createExpense,
   memberLabel,
@@ -42,6 +45,22 @@ function emptyMemberMap(members: ListMember[]): Record<string, string> {
   return Object.fromEntries(members.map((m) => [m.user_id, ""]));
 }
 
+function evenPercentMap(list: ListMember[]): Record<string, string> {
+  if (list.length === 0) return {};
+  const each = Math.floor(100 / list.length);
+  const map: Record<string, string> = {};
+  let allocated = 0;
+  list.forEach((m, i) => {
+    if (i === list.length - 1) {
+      map[m.user_id] = String(100 - allocated);
+    } else {
+      map[m.user_id] = String(each);
+      allocated += each;
+    }
+  });
+  return map;
+}
+
 function nonEmptyEntries(map: Record<string, string>): Record<string, string> | null {
   const out: Record<string, string> = {};
   for (const [key, raw] of Object.entries(map)) {
@@ -63,6 +82,7 @@ export function ManualExpenseForm({
 }: Props) {
   const router = useRouter();
   const baseId = useId();
+  const formId = `${baseId}-form`;
   const errorId = `${baseId}-error`;
   const memberOptions = members.map((m) => ({
     value: m.user_id,
@@ -79,18 +99,21 @@ export function ManualExpenseForm({
     emptyMemberMap(members),
   );
   const [percentages, setPercentages] = useState<Record<string, string>>(() =>
-    emptyMemberMap(members),
+    evenPercentMap(members),
   );
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const pendingRef = useRef(false);
+
+  const canSubmit =
+    amount.trim().length > 0 && description.trim().length > 0 && !pending;
 
   function resetAdjustFields() {
     setAdjustOpen(false);
     setMode("whole_assignee");
     setAssigneeId(currentUserId);
     setAbsoluteAmounts(emptyMemberMap(members));
-    setPercentages(emptyMemberMap(members));
+    setPercentages(evenPercentMap(members));
   }
 
   function buildSplitOverride():
@@ -154,7 +177,7 @@ export function ManualExpenseForm({
       <h2 id={`${baseId}-heading`} className={styles.heading}>
         {messages.expenseTitle}
       </h2>
-      <form className={styles.form} onSubmit={onSubmit}>
+      <form id={formId} className={styles.form} onSubmit={onSubmit}>
         <div className={styles.field}>
           <label className={styles.label} htmlFor={`${baseId}-amount`}>
             {messages.expenseAmount}
@@ -231,36 +254,39 @@ export function ManualExpenseForm({
           <summary className={styles.adjustSummary}>{messages.expenseAdjustSplit}</summary>
           <div className={styles.adjustBody} id={`${baseId}-adjust-panel`}>
             <div className={styles.modeRow} role="radiogroup" aria-label={messages.expenseAdjustSplit}>
-              <label className={styles.modeOption}>
-                <input
-                  type="radio"
-                  name="split-mode"
-                  checked={mode === "whole_assignee"}
-                  disabled={pending}
-                  onChange={() => setMode("whole_assignee")}
-                />
+              <SoftLedgerRadio
+                className={styles.modeOption}
+                name="split-mode"
+                value="whole_assignee"
+                checked={mode === "whole_assignee"}
+                disabled={pending}
+                onChange={() => setMode("whole_assignee")}
+              >
                 {messages.expenseModeWhole}
-              </label>
-              <label className={styles.modeOption}>
-                <input
-                  type="radio"
-                  name="split-mode"
-                  checked={mode === "absolute_amounts"}
-                  disabled={pending}
-                  onChange={() => setMode("absolute_amounts")}
-                />
+              </SoftLedgerRadio>
+              <SoftLedgerRadio
+                className={styles.modeOption}
+                name="split-mode"
+                value="absolute_amounts"
+                checked={mode === "absolute_amounts"}
+                disabled={pending}
+                onChange={() => setMode("absolute_amounts")}
+              >
                 {messages.expenseModeAbsolute}
-              </label>
-              <label className={styles.modeOption}>
-                <input
-                  type="radio"
-                  name="split-mode"
-                  checked={mode === "percentage"}
-                  disabled={pending}
-                  onChange={() => setMode("percentage")}
-                />
+              </SoftLedgerRadio>
+              <SoftLedgerRadio
+                className={styles.modeOption}
+                name="split-mode"
+                value="percentage"
+                checked={mode === "percentage"}
+                disabled={pending}
+                onChange={() => {
+                  setMode("percentage");
+                  setPercentages(evenPercentMap(members));
+                }}
+              >
                 {messages.expenseModePercentage}
-              </label>
+              </SoftLedgerRadio>
             </div>
 
             {mode === "whole_assignee" ? (
@@ -305,28 +331,13 @@ export function ManualExpenseForm({
             ) : null}
 
             {mode === "percentage" ? (
-              <div className={styles.memberGrid}>
-                {members.map((m) => (
-                  <div key={m.user_id} className={styles.memberRow}>
-                    <label className={styles.label} htmlFor={`${baseId}-pct-${m.user_id}`}>
-                      {memberLabel(m)}
-                    </label>
-                    <input
-                      id={`${baseId}-pct-${m.user_id}`}
-                      className={styles.input}
-                      inputMode="decimal"
-                      value={percentages[m.user_id] ?? ""}
-                      disabled={pending}
-                      onChange={(e) =>
-                        setPercentages((prev) => ({
-                          ...prev,
-                          [m.user_id]: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                ))}
-              </div>
+              <PercentageSplitTrack
+                userIds={members.map((m) => m.user_id)}
+                members={members}
+                percents={percentages}
+                onChangePercents={setPercentages}
+                disabled={pending}
+              />
             ) : null}
           </div>
         </details>
@@ -337,11 +348,13 @@ export function ManualExpenseForm({
           </p>
         ) : null}
 
-        <div className={styles.actions}>
-          <PrimaryButton type="submit" disabled={pending}>
-            {pending ? messages.expenseSaving : messages.expenseSubmit}
-          </PrimaryButton>
-        </div>
+        <FormHeaderAction>
+          <FormIconSubmit
+            form={formId}
+            label={pending ? messages.expenseSaving : messages.expenseSubmit}
+            disabled={!canSubmit}
+          />
+        </FormHeaderAction>
       </form>
     </section>
   );

@@ -16,6 +16,15 @@ vi.mock("./lists.module.css", () => ({
   ),
 }));
 
+vi.mock("./FormIconSubmit.module.css", () => ({
+  default: new Proxy(
+    {},
+    {
+      get: (_t, prop) => String(prop),
+    },
+  ),
+}));
+
 const inviteMember = vi.fn();
 
 vi.mock("./listsClient", async () => {
@@ -71,6 +80,27 @@ describe("InviteForm", () => {
       root.unmount();
     });
     container.remove();
+  });
+
+  it("send control stays disabled until an email is entered", async () => {
+    await act(async () => {
+      root.render(<InviteForm listId="list-1" messages={messages} />);
+    });
+
+    const button = container.querySelector('button[type="submit"]') as HTMLButtonElement;
+    expect(button).not.toBeNull();
+    expect(button.getAttribute("aria-label")).toBe(messages.inviteSubmit);
+    expect(button.disabled).toBe(true);
+
+    const input = container.querySelector('input[name="email"]') as HTMLInputElement;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(input, "peer@example.com");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    expect(button.disabled).toBe(false);
   });
 
   it("shows invite-sent confirmation on success", async () => {
