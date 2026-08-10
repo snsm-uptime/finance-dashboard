@@ -2,6 +2,7 @@
 
 import { FormEvent, useId, useRef, useState } from "react";
 
+import { FormIconField } from "./FormIconSubmit";
 import { inviteMember, type ListsClientMessages } from "./listsClient";
 import styles from "./lists.module.css";
 
@@ -30,9 +31,11 @@ export function InviteForm({ listId, messages, reserveErrorHeight = false }: Pro
   const [pending, setPending] = useState(false);
   const pendingRef = useRef(false);
 
+  const canSubmit = email.trim().length > 0 && !pending;
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (pendingRef.current) return;
+    if (pendingRef.current || !email.trim()) return;
     pendingRef.current = true;
     setError(null);
     setPending(true);
@@ -63,32 +66,25 @@ export function InviteForm({ listId, messages, reserveErrorHeight = false }: Pro
         </p>
       ) : null}
       <form className={styles.createForm} onSubmit={onSubmit}>
-        <div className={styles.createRow}>
-          <div className={styles.createField}>
-            <label className={styles.label} htmlFor={emailId}>
-              {messages.inviteLabel}
-              <input
-                id={emailId}
-                className={styles.input}
-                type="email"
-                name="email"
-                autoComplete="email"
-                inputMode="email"
-                required
-                value={email}
-                disabled={pending}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  setSent(false);
-                  setError(null);
-                }}
-              />
-            </label>
-          </div>
-          <button className={styles.primary} type="submit" disabled={pending}>
-            {pending ? messages.inviteSending : messages.inviteSubmit}
-          </button>
-        </div>
+        <FormIconField
+          id={emailId}
+          label={messages.inviteLabel}
+          submitLabel={pending ? messages.inviteSending : messages.inviteSubmit}
+          variant="send"
+          type="email"
+          name="email"
+          autoComplete="email"
+          inputMode="email"
+          required
+          value={email}
+          disabled={pending}
+          submitDisabled={!canSubmit}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            setSent(false);
+            setError(null);
+          }}
+        />
         {/* Optional reserved height: mobile sheet only (desktop sidebar should not grow for empty alerts). */}
         <div
           className={reserveErrorHeight ? styles.inviteErrorSlot : undefined}

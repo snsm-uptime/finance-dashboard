@@ -34,7 +34,6 @@ type Props = {
   currentUserId: string;
   members: ListMember[];
   messages: ManualExpenseMessages;
-  showMobileActions?: boolean;
 };
 
 type SplitMode = "whole_assignee" | "absolute_amounts" | "percentage";
@@ -61,7 +60,6 @@ export function ManualExpenseForm({
   currentUserId,
   members,
   messages,
-  showMobileActions = false,
 }: Props) {
   const router = useRouter();
   const baseId = useId();
@@ -344,42 +342,6 @@ export function ManualExpenseForm({
             {pending ? messages.expenseSaving : messages.expenseSubmit}
           </PrimaryButton>
         </div>
-
-        {showMobileActions && (
-          <>
-            <div className={styles.divider} />
-
-            <div className={styles.mobileActions}>
-              <button
-                type="button"
-                className={styles.actionButton}
-                aria-label="Share"
-                disabled={pending}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true" width="24" height="24">
-                  <circle cx="18" cy="5" r="3" stroke="currentColor" strokeWidth="2" />
-                  <circle cx="6" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
-                  <circle cx="18" cy="19" r="3" stroke="currentColor" strokeWidth="2" />
-                  <path d="M8.59 13.51L15.41 17.49" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  <path d="M15.41 6.51L8.59 10.49" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-              </button>
-
-              <button
-                type="button"
-                className={styles.actionButton}
-                aria-label={messages.expenseAdjustSplit}
-                disabled={pending}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true" width="24" height="24">
-                  <path d="M 12 12 L 12 2 A 10 10 0 0 1 15.09 21.51 Z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M 12 12 L 15.09 21.51 A 10 10 0 0 1 6.12 3.91 Z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M 12 12 L 6.12 3.91 A 10 10 0 0 1 12 2 Z" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-            </div>
-          </>
-        )}
       </form>
     </section>
   );
