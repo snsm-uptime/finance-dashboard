@@ -23,7 +23,6 @@ type Props = {
 
 export function InviteForm({ listId, messages, reserveErrorHeight = false }: Props) {
   const baseId = useId();
-  const headingId = `${baseId}-heading`;
   const emailId = `${baseId}-email`;
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -56,10 +55,7 @@ export function InviteForm({ listId, messages, reserveErrorHeight = false }: Pro
   }
 
   return (
-    <section className={styles.detailSection} aria-labelledby={headingId}>
-      <h2 id={headingId} className={styles.sectionTitle}>
-        {messages.inviteTitle}
-      </h2>
+    <section className={styles.detailSection}>
       {sent ? (
         <p className={styles.copy} role="status">
           {messages.inviteSent}
@@ -68,13 +64,14 @@ export function InviteForm({ listId, messages, reserveErrorHeight = false }: Pro
       <form className={styles.createForm} onSubmit={onSubmit}>
         <FormIconField
           id={emailId}
-          label={messages.inviteLabel}
+          label="Invite someone!"
           submitLabel={pending ? messages.inviteSending : messages.inviteSubmit}
           variant="send"
           type="email"
           name="email"
           autoComplete="email"
           inputMode="email"
+          placeholder="person@home.com"
           required
           value={email}
           disabled={pending}

@@ -3,11 +3,11 @@
 import { useCallback, useState, type ReactNode } from "react";
 import type { DefaultSplitPayload, ListMember } from "./listsClient";
 import type { ManualExpenseMessages } from "./ManualExpenseForm";
-import { ManualExpenseForm } from "./ManualExpenseForm";
 import type { InviteFormMessages } from "./InviteForm";
 import { InviteForm } from "./InviteForm";
 import type { DefaultSplitMessages } from "./DefaultSplitPanel";
 import { DefaultSplitPanel } from "./DefaultSplitPanel";
+import { FormHeaderActionHostProvider } from "./FormChrome";
 import styles from "./TemporalNavigation.module.css";
 
 type FormKind = "expense" | "invite" | "split" | null;
@@ -83,11 +83,14 @@ type FormWrapperProps = {
 };
 
 function FormWrapper({ kind, title, onClose, children }: FormWrapperProps) {
+  const [actionHost, setActionHost] = useState<HTMLDivElement | null>(null);
+
   if (kind === null) return null;
 
   return (
     <div className={styles.formContainer}>
       <div className={styles.formHeader}>
+        <div ref={setActionHost} className={styles.formLeading} />
         <h3 className={styles.formTitle}>{title}</h3>
         <button
           type="button"
@@ -98,7 +101,9 @@ function FormWrapper({ kind, title, onClose, children }: FormWrapperProps) {
           <CloseIcon />
         </button>
       </div>
-      <div className={styles.formBody}>{children}</div>
+      <FormHeaderActionHostProvider host={actionHost}>
+        <div className={styles.formBody}>{children}</div>
+      </FormHeaderActionHostProvider>
     </div>
   );
 }

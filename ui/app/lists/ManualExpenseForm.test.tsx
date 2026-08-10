@@ -17,12 +17,12 @@ vi.mock("./ManualExpenseForm.module.css", () => ({
   ),
 }));
 
-vi.mock("@/components/soft-ledger/PrimaryButton", () => ({
-  PrimaryButton: ({
-    children,
-    ...rest
-  }: React.ButtonHTMLAttributes<HTMLButtonElement> & { children: React.ReactNode }) => (
-    <button {...rest}>{children}</button>
+vi.mock("./FormIconSubmit.module.css", () => ({
+  default: new Proxy(
+    {},
+    {
+      get: (_t, prop) => String(prop),
+    },
   ),
 }));
 
@@ -340,7 +340,7 @@ describe("ManualExpenseForm", () => {
     expect(optionLabels).toContain("01234567…");
   });
 
-  it("submit control is a PrimaryButton (type=submit)", async () => {
+  it("submit control is an icon button, disabled until amount and description are set", async () => {
     await act(async () => {
       root.render(
         <ManualExpenseForm
@@ -351,8 +351,25 @@ describe("ManualExpenseForm", () => {
         />,
       );
     });
-    const button = container.querySelector('button[type="submit"]');
+    const button = container.querySelector('button[type="submit"]') as HTMLButtonElement;
     expect(button).not.toBeNull();
-    expect(button?.textContent).toBe(messages.expenseSubmit);
+    expect(button.getAttribute("aria-label")).toBe(messages.expenseSubmit);
+    expect(button.disabled).toBe(true);
+
+    const amount = container.querySelector('input[name="amount"]') as HTMLInputElement;
+    const description = container.querySelector(
+      'input[name="description"]',
+    ) as HTMLInputElement;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(amount, "10");
+      amount.dispatchEvent(new Event("input", { bubbles: true }));
+      amount.dispatchEvent(new Event("change", { bubbles: true }));
+      setter?.call(description, "Coffee");
+      description.dispatchEvent(new Event("input", { bubbles: true }));
+      description.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    expect(button.disabled).toBe(false);
   });
 });

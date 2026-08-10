@@ -16,6 +16,7 @@ import type { ManualExpenseMessages } from "./ManualExpenseForm";
 import { ManualExpenseForm } from "./ManualExpenseForm";
 import type { DefaultSplitMessages } from "./DefaultSplitPanel";
 import { DefaultSplitPanel } from "./DefaultSplitPanel";
+import { FormHeaderActionHostProvider } from "./FormChrome";
 import type { DefaultSplitPayload, ListMember } from "./listsClient";
 import styles from "./ListDetailMobileActions.module.css";
 
@@ -141,6 +142,7 @@ function Sheet({
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
+  const [actionHost, setActionHost] = useState<HTMLDivElement | null>(null);
   const [phase, setPhase] = useState<"unmounted" | "mounting" | "open" | "closing">(
     "unmounted"
   );
@@ -233,6 +235,7 @@ function Sheet({
         aria-labelledby={titleId}
       >
         <div className={styles.sheetHeader}>
+          <div ref={setActionHost} className={styles.sheetLeading} />
           <h2 id={titleId} className={styles.sheetTitle}>
             {label}
           </h2>
@@ -246,7 +249,9 @@ function Sheet({
             <CloseIcon />
           </button>
         </div>
-        <div className={styles.sheetBody}>{children}</div>
+        <FormHeaderActionHostProvider host={actionHost}>
+          <div className={styles.sheetBody}>{children}</div>
+        </FormHeaderActionHostProvider>
       </div>
     </>,
     document.body,
@@ -340,7 +345,6 @@ export function ListDetailMobileActions({
             currentUserId={currentUserId}
             members={members}
             messages={expenseMessages}
-            showMobileActions
           />
         </Sheet>
       ) : null}
@@ -365,7 +369,7 @@ export function ListDetailMobileActions({
       {canInvite ? (
         <Sheet
           open={sheet === "invite"}
-          label={inviteMessages.inviteTitle}
+          label=""
           onClose={close}
           closeLabel={closeLabel}
         >

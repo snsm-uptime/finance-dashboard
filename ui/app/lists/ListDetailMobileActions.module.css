@@ -146,7 +146,17 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
+  width: 100%;
   margin: 0 0 var(--space-4);
+}
+
+.sheetLeading {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.5rem;
+  min-height: 2.5rem;
 }
 
 .sheetTitle {
@@ -193,6 +203,7 @@
 
 .sheetBody {
   flex: 1 1 auto;
+  width: 100%;
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
