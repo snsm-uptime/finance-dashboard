@@ -50,16 +50,8 @@ so that components can use utilities without inheriting kit defaults.
     npm list tailwindcss @tailwindcss/postcss sass
     # Expected: tailwindcss 4.x.x, @tailwindcss/postcss 4.x.x, sass 1.x.x
     ```
-  - [x] Add `ui/postcss.config.mjs` (create new file):
-    ```js
-    const config = {
-      plugins: {
-        “@tailwindcss/postcss”: {},
-      },
-    };
-    export default config;
-    ```
-  - [x] Confirm `ui/next.config.ts` stays `output: “standalone”` — no Tailwind-specific Next options required (Next auto-detects PostCSS)
+  - [x] PostCSS config: **Not needed** — Next.js 16 / Turbopack auto-detects `@tailwindcss/postcss` from dependencies and handles CSS transforms automatically
+  - [x] Confirm `ui/next.config.ts` stays `output: “standalone”` — no Tailwind-specific Next options required (Next auto-detects Tailwind)
   - [x] Dockerfile / Compose: deps come from lockfile only — no Dockerfile CSS special-casing unless build fails
   - [x] TypeScript strict mode: CSS imports in Next.js v16+ are supported natively; if `import “./app.css”` in `layout.tsx` shows type errors, add to `ui/tsconfig.json`:
     ```json
@@ -258,7 +250,7 @@ Claude Haiku 4.5
 
 ✅ **Tailwind v4 + Sass Installation Complete**
 - Installed tailwindcss 4.3.3, @tailwindcss/postcss 4.3.3, sass 1.102.0
-- Created PostCSS config (ui/postcss.config.mjs)
+- No explicit PostCSS config needed — Next.js 16 / Turbopack auto-detects Tailwind
 - All version requirements met per spine (4.x Tailwind, 1.x Sass)
 
 ✅ **Warm Balance Theme Bridge Wired**
@@ -286,7 +278,6 @@ Claude Haiku 4.5
 
 - `ui/package.json` — Added tailwindcss, @tailwindcss/postcss, postcss, sass dependencies
 - `ui/package-lock.json` — Updated with new dependencies
-- `ui/postcss.config.mjs` — NEW: PostCSS plugin configuration for Tailwind v4
 - `ui/app/globals.css` — UPDATED: Added @import "tailwindcss", @custom-variant dark, @theme block at top; preserved all existing token definitions
 - `ui/README.md` — UPDATED: Added Styling section with convention guidance
 - `ui/tests/tailwind-integration.test.ts` — NEW: Bridge validation test verifying @theme and CSS var references
