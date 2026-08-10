@@ -128,8 +128,8 @@
 }
 
 .sheetOpen {
-  /* Rise from below and settle around vertical mid-screen. */
-  transform: translate(-50%, calc(-50vh + 50%));
+  /* Rise from below to bottom of screen. */
+  transform: translate(-50%, 0);
 }
 
 @media (prefers-reduced-motion: reduce) {
