@@ -742,7 +742,7 @@
 }
 
 .sliderSegment {
-  flex: 1;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -752,8 +752,9 @@
   color: var(--foreground);
   cursor: pointer;
   user-select: none;
-  transition: background-color 150ms ease;
+  transition: width 150ms ease, background-color 150ms ease;
   border-right: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+  white-space: nowrap;
 }
 
 .sliderSegment:last-child {

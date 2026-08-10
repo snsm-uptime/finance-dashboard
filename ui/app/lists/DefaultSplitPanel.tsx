@@ -219,6 +219,9 @@ function PercentageSlider({ userIds, members, percents, onChangePercents, disabl
           <div
             key={userId}
             className={styles.sliderSegment}
+            style={{
+              width: `${Math.max(percentValues[i], 1)}%`,
+            }}
             onClick={() => handleSegmentTap(i)}
           >
             {Math.round(percentValues[i])}%
