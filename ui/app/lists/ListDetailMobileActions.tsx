@@ -15,7 +15,7 @@ import { InviteForm } from "./InviteForm";
 import type { ManualExpenseMessages } from "./ManualExpenseForm";
 import { ManualExpenseForm } from "./ManualExpenseForm";
 import type { ListMember } from "./listsClient";
-import styles from "./ListDetailMobileChrome.module.css";
+import styles from "./ListDetailMobileActions.module.css";
 
 type SheetKind = "expense" | "invite" | null;
 
@@ -60,6 +60,28 @@ function UserIcon() {
       <path
         d="M5.5 19.25c1.4-3.1 3.7-4.65 6.5-4.65s5.1 1.55 6.5 4.65"
         fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function ShareIcon() {
+  return (
+    <svg className={styles.fabIcon} viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="18" cy="5" r="3" stroke="currentColor" strokeWidth="2" />
+      <circle cx="6" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
+      <circle cx="18" cy="19" r="3" stroke="currentColor" strokeWidth="2" />
+      <path
+        d="M8.59 13.51L15.41 17.49"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M15.41 6.51L8.59 10.49"
         stroke="currentColor"
         strokeWidth="2"
         strokeLinecap="round"
@@ -214,7 +236,7 @@ function Sheet({
  * Mobile-only actions for list detail: split pill FAB + mid-screen sheets.
  * Hidden from md breakpoint up (sidebar owns the same forms there).
  */
-export function ListDetailMobileChrome({
+export function ListDetailMobileActions({
   listId,
   currentUserId,
   members,
@@ -240,6 +262,17 @@ export function ListDetailMobileChrome({
 
   return (
     <div className={styles.chrome}>
+      {canInvite ? (
+        <button
+          type="button"
+          className={styles.shareButton}
+          aria-label={inviteAria}
+          aria-expanded={sheet === "invite"}
+          onClick={() => setSheet("invite")}
+        >
+          <ShareIcon />
+        </button>
+      ) : null}
       <div className={styles.fab} role="group" aria-label={groupLabel}>
         {canAddExpense ? (
           <button

@@ -16,7 +16,7 @@ import type { Locale } from "@/lib/i18n/locale";
 import { fetchSession } from "@/lib/session";
 import { DefaultSplitPanel } from "../DefaultSplitPanel";
 import { InviteForm } from "../InviteForm";
-import { ListDetailMobileChrome } from "../ListDetailMobileChrome";
+import { ListDetailMobileActions } from "../ListDetailMobileActions";
 import { ManualExpenseForm } from "../ManualExpenseForm";
 import { balanceTone, type DefaultSplitPayload, type ExpenseItem, type ListMember } from "../listsClient";
 import styles from "../lists.module.css";
@@ -450,7 +450,7 @@ export default async function ListDetailPage({
                 </Link>
               </p>
             </aside>
-            <ListDetailMobileChrome
+            <ListDetailMobileActions
               listId={listId}
               currentUserId={session.user_id}
               members={members}
