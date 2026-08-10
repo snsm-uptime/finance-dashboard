@@ -9,6 +9,8 @@
 }
 
 .fab {
+  --temporal-nav-radius: 8px;
+
   position: fixed;
   right: max(var(--page-gutter), env(safe-area-inset-right, 0px));
   bottom: calc(3.25rem + env(safe-area-inset-bottom, 0px));
@@ -18,7 +20,7 @@
   width: 3.25rem;
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: var(--rounded-full);
+  border-radius: var(--temporal-nav-radius);
   background: var(--surface);
   box-shadow: 0 6px 18px color-mix(in srgb, var(--foreground) 12%, transparent);
   overflow: hidden;
@@ -104,6 +106,8 @@
 }
 
 .sheet {
+  --temporal-nav-radius: 8px;
+
   position: fixed;
   left: 50%;
   bottom: 0;
@@ -115,7 +119,7 @@
   margin: 0;
   padding: var(--space-4) var(--space-5) var(--space-5);
   border: 1px solid var(--border);
-  border-radius: var(--rounded-lg) var(--rounded-lg) 0 0;
+  border-radius: var(--temporal-nav-radius) var(--temporal-nav-radius) 0 0;
   background: var(--surface);
   box-shadow: 0 -10px 28px color-mix(in srgb, var(--foreground) 10%, transparent);
   transform: translate(-50%, 110%);

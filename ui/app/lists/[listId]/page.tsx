@@ -14,11 +14,10 @@ import { accountCopy } from "@/lib/i18n/account";
 import { listsMessages } from "@/lib/i18n/lists";
 import type { Locale } from "@/lib/i18n/locale";
 import { fetchSession } from "@/lib/session";
-import { DefaultSplitPanel } from "../DefaultSplitPanel";
-import { InviteForm } from "../InviteForm";
 import { ListDetailMobileActions } from "../ListDetailMobileActions";
 import { ManualExpenseForm } from "../ManualExpenseForm";
 import { ShareTitleButton } from "../ShareTitleButton";
+import { TemporalNavigation } from "../TemporalNavigation";
 import { balanceTone, type DefaultSplitPayload, type ExpenseItem, type ListMember } from "../listsClient";
 import styles from "../lists.module.css";
 
@@ -405,10 +404,31 @@ export default async function ListDetailPage({
                   }}
                 />
               ) : null}
-              {isOwner ? (
-                <InviteForm
+              {members.length > 0 && (
+                <TemporalNavigation
                   listId={listId}
-                  messages={{
+                  currentUserId={session.user_id}
+                  members={members}
+                  isOwner={isOwner}
+                  defaultSplit={defaultSplit}
+                  expenseMessages={{
+                    expenseTitle: t.expenseTitle,
+                    expenseAmount: t.expenseAmount,
+                    expenseDescription: t.expenseDescription,
+                    expensePayer: t.expensePayer,
+                    expenseSubmit: t.expenseSubmit,
+                    expenseSaving: t.expenseSaving,
+                    expenseAdjustSplit: t.expenseAdjustSplit,
+                    expenseModeWhole: t.expenseModeWhole,
+                    expenseModeAbsolute: t.expenseModeAbsolute,
+                    expenseModePercentage: t.expenseModePercentage,
+                    expenseAssignee: t.expenseAssignee,
+                    errorGeneric: t.errorGeneric,
+                    errorInvalidName: t.errorInvalidName,
+                    errorForbidden: t.errorForbidden,
+                    errorUnauthorized: t.errorUnauthorized,
+                  }}
+                  inviteMessages={{
                     inviteTitle: t.inviteTitle,
                     inviteLabel: t.inviteLabel,
                     inviteSubmit: t.inviteSubmit,
@@ -422,20 +442,7 @@ export default async function ListDetailPage({
                     errorAlreadyMember: t.errorAlreadyMember,
                     errorSmtp: t.errorSmtp,
                   }}
-                />
-              ) : null}
-              {isOwner && splitLoadError ? (
-                <p className={styles.copy} role="alert">
-                  {t.errorDefaultSplitLoad}
-                </p>
-              ) : null}
-              {isOwner && defaultSplit && members.length > 1 ? (
-                <DefaultSplitPanel
-                  listId={listId}
-                  isOwner={isOwner}
-                  initial={defaultSplit}
-                  members={members}
-                  messages={{
+                  splitMessages={{
                     errorGeneric: t.errorGeneric,
                     errorInvalidName: t.errorInvalidName,
                     errorForbidden: t.errorForbidden,
@@ -450,6 +457,11 @@ export default async function ListDetailPage({
                     errorInvalidSplit: t.errorInvalidSplit,
                   }}
                 />
+              )}
+              {isOwner && splitLoadError ? (
+                <p className={styles.copy} role="alert">
+                  {t.errorDefaultSplitLoad}
+                </p>
               ) : null}
               <p className={styles.copy}>
                 <Link className={styles.link} href="/lists">
