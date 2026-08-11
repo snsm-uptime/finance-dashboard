@@ -99,8 +99,8 @@ type FormIconFieldProps = Omit<
   InputHTMLAttributes<HTMLInputElement>,
   "children" | "onChange" | "type"
 > & {
-  /** Visible field label (associated via htmlFor). */
-  label: ReactNode;
+  /** Visible field label (associated via htmlFor). Optional — if not provided, label is hidden. */
+  label?: ReactNode;
   /** Accessible name for the suffix submit control. */
   submitLabel: string;
   /** Input type — email, text, number, etc. */
@@ -133,9 +133,11 @@ export function FormIconField({
   const rootClass = className ? `${styles.fieldRoot} ${className}` : styles.fieldRoot;
   return (
     <div className={rootClass}>
-      <label className={styles.fieldLabel} htmlFor={id}>
-        {label}
-      </label>
+      {label != null ? (
+        <label className={styles.fieldLabel} htmlFor={id}>
+          {label}
+        </label>
+      ) : null}
       <div className={styles.group}>
         <input
           {...inputRest}

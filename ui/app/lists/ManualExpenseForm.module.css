@@ -3,7 +3,7 @@
   flex-direction: column;
   gap: 0.85rem;
   margin: 0 0 1.25rem;
-  max-width: 28rem;
+  width: 100%;
 }
 
 .field {

@@ -272,6 +272,17 @@ export function ListDetailMobileActions({
 
   return (
     <div className={styles.chrome}>
+      {canInvite ? (
+        <button
+          type="button"
+          className={styles.shareButton}
+          aria-label={inviteAria}
+          aria-expanded={sheet === "invite"}
+          onClick={() => setSheet("invite")}
+        >
+          <ShareIcon />
+        </button>
+      ) : null}
       <div className={styles.fab} role="group" aria-label={groupLabel}>
         {canAddExpense ? (
           <button
@@ -295,18 +306,6 @@ export function ListDetailMobileActions({
             title={splitMessages.defaultSplitTitle}
           >
             <PieChartIcon />
-          </button>
-        ) : null}
-        {canInvite ? (
-          <button
-            type="button"
-            className={styles.fabHalf}
-            aria-label={inviteAria}
-            aria-expanded={sheet === "invite"}
-            onClick={() => setSheet("invite")}
-            title={inviteAria}
-          >
-            <ShareIcon />
           </button>
         ) : null}
       </div>

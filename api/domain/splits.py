@@ -37,7 +37,9 @@ from domain.errors import InvalidDefaultSplitError, InvalidSplitOverrideError
 KIND_WHOLE_ASSIGNEE = "whole_assignee"
 KIND_ABSOLUTE_AMOUNTS = "absolute_amounts"
 KIND_PERCENTAGE = "percentage"
-ALLOWED_OVERRIDE_KINDS = frozenset({KIND_WHOLE_ASSIGNEE, KIND_ABSOLUTE_AMOUNTS, KIND_PERCENTAGE})
+ALLOWED_OVERRIDE_KINDS = frozenset(
+    {KIND_WHOLE_ASSIGNEE, KIND_ABSOLUTE_AMOUNTS, KIND_PERCENTAGE}
+)
 
 SUBJECT_ITEM = "item"
 SUBJECT_RECEIPT = "receipt"
@@ -75,7 +77,9 @@ def _as_decimal(value: Decimal | str, *, label: str) -> Decimal:
     try:
         amount = value if isinstance(value, Decimal) else Decimal(str(value))
     except Exception as exc:
-        raise InvalidSplitOverrideError(f"{label} must be exact decimal values.") from exc
+        raise InvalidSplitOverrideError(
+            f"{label} must be exact decimal values."
+        ) from exc
     if not amount.is_finite():
         raise InvalidSplitOverrideError(f"{label} must be finite decimal values.")
     return amount
@@ -115,11 +119,15 @@ def _allocations_tuple(
     ordered = sorted(members, key=lambda uid: str(uid))
     try:
         rows = tuple(
-            ShareAllocation(member_id=mid, amount=by_member[mid], currency=currency_code)
+            ShareAllocation(
+                member_id=mid, amount=by_member[mid], currency=currency_code
+            )
             for mid in ordered
         )
     except KeyError as exc:
-        raise InvalidSplitOverrideError("Override no longer matches current list members.") from exc
+        raise InvalidSplitOverrideError(
+            "Override no longer matches current list members."
+        ) from exc
     if sum((row.amount for row in rows), Decimal("0")) != amount:
         raise InvalidSplitOverrideError(
             "Share allocations must sum exactly to the line or receipt total."
@@ -161,12 +169,16 @@ def parse_split_spec(
         for raw_id, raw_amt in amounts.items():
             user_id = _as_uuid(raw_id)
             if user_id not in member_set:
-                raise InvalidSplitOverrideError("Amount map may only include current list members.")
+                raise InvalidSplitOverrideError(
+                    "Amount map may only include current list members."
+                )
             amt = _as_decimal(raw_amt, label="Amounts")
             if amt < 0:
                 raise InvalidSplitOverrideError("Amounts cannot be negative.")
             if amt != amt.quantize(quantum):
-                raise InvalidSplitOverrideError("Amounts may not exceed the currency minor unit.")
+                raise InvalidSplitOverrideError(
+                    "Amounts may not exceed the currency minor unit."
+                )
             normalized[user_id] = amt
         return SplitSpec(kind=KIND_ABSOLUTE_AMOUNTS, amounts=normalized)
 
@@ -231,10 +243,10 @@ def allocate_from_spec(
         by_member[fresh.assignee_id] = amount
     elif fresh.kind == KIND_ABSOLUTE_AMOUNTS:
         assert fresh.amounts is not None
-        provided_sum = sum(fresh.amounts.values(), Decimal("0"))
+        provided_sum: Decimal = sum(fresh.amounts.values(), Decimal("0"))
         if provided_sum != amount:
             raise InvalidSplitOverrideError(
-                "Absolute amounts must sum exactly to the line or receipt total."
+                f"Absolute amounts must sum ({provided_sum.normalize()}) exactly to the line or receipt total ({amount.normalize()})."
             )
         by_member = {mid: Decimal("0") for mid in members}
         by_member.update(fresh.amounts)
@@ -293,7 +305,9 @@ def compute_share_allocations(
         )
         return AllocationResult(allocations=allocations, resolved_from=resolved_from)
 
-    mode, shares = resolve_effective_default(list_default_mode, list_default_shares, members)
+    mode, shares = resolve_effective_default(
+        list_default_mode, list_default_shares, members
+    )
     try:
         if mode == MODE_EVEN:
             by_member = allocate_even_shares(
