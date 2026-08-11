@@ -19,9 +19,11 @@ type Props = {
   messages: InviteFormMessages;
   /** When true, keep a fixed error slot so a mobile sheet does not grow when an alert appears. */
   reserveErrorHeight?: boolean;
+  /** When true, remove the form border and padding to show only the inputs. */
+  hideBorder?: boolean;
 };
 
-export function InviteForm({ listId, messages, reserveErrorHeight = false }: Props) {
+export function InviteForm({ listId, messages, reserveErrorHeight = false, hideBorder = false }: Props) {
   const baseId = useId();
   const emailId = `${baseId}-email`;
   const [email, setEmail] = useState("");
@@ -55,7 +57,7 @@ export function InviteForm({ listId, messages, reserveErrorHeight = false }: Pro
   }
 
   return (
-    <form className={styles.createForm} onSubmit={onSubmit}>
+    <form className={`${styles.createForm}${hideBorder ? ` ${styles.createFormNoBorder}` : ""}`} onSubmit={onSubmit}>
       <FormIconField
         id={emailId}
         submitLabel={pending ? messages.inviteSending : messages.inviteSubmit}

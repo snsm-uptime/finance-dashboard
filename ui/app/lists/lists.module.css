@@ -116,6 +116,13 @@
   border-radius: 8px;
 }
 
+.createFormNoBorder {
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+
 .createRow {
   display: flex;
   flex-wrap: wrap;

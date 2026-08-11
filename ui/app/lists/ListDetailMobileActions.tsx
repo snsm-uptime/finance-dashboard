@@ -10,6 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
+import { PlusIcon, PieChartIcon, ShareIcon, CloseIcon } from "@/app/icons";
 import type { InviteFormMessages } from "./InviteForm";
 import { InviteForm } from "./InviteForm";
 import type { ManualExpenseMessages } from "./ManualExpenseForm";
@@ -37,72 +38,6 @@ type Props = {
   inviteAria: string;
   closeLabel: string;
 };
-
-function PlusIcon() {
-  return (
-    <svg className={styles.fabIcon} viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        d="M12 5v14M5 12h14"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function PieChartIcon() {
-  return (
-    <svg className={styles.fabIcon} viewBox="0 0 24 24" aria-hidden="true">
-      <circle
-        cx="12"
-        cy="12"
-        r="10"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-      />
-      <path d="M 12 2 A 10 10 0 0 1 20.66 6.34 L 12 12 Z" fill="currentColor" />
-    </svg>
-  );
-}
-
-function ShareIcon() {
-  return (
-    <svg className={styles.fabIcon} viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="18" cy="5" r="3" stroke="currentColor" strokeWidth="2" />
-      <circle cx="6" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
-      <circle cx="18" cy="19" r="3" stroke="currentColor" strokeWidth="2" />
-      <path
-        d="M8.59 13.51L15.41 17.49"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <path
-        d="M15.41 6.51L8.59 10.49"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg className={styles.closeIcon} viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        d="M6.5 6.5l11 11M17.5 6.5l-11 11"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
 
 function Sheet({
   open,
@@ -224,7 +159,7 @@ function Sheet({
             aria-label={closeLabel}
             onClick={onClose}
           >
-            <CloseIcon />
+            <CloseIcon className={styles.closeIcon} />
           </button>
         </div>
         <FormHeaderActionHostProvider host={actionHost}>
@@ -272,17 +207,6 @@ export function ListDetailMobileActions({
 
   return (
     <div className={styles.chrome}>
-      {canInvite ? (
-        <button
-          type="button"
-          className={styles.shareButton}
-          aria-label={inviteAria}
-          aria-expanded={sheet === "invite"}
-          onClick={() => setSheet("invite")}
-        >
-          <ShareIcon />
-        </button>
-      ) : null}
       <div className={styles.fab} role="group" aria-label={groupLabel}>
         {canAddExpense ? (
           <button
@@ -293,7 +217,7 @@ export function ListDetailMobileActions({
             onClick={() => setSheet("expense")}
             title={addExpenseAria}
           >
-            <PlusIcon />
+            <PlusIcon className={styles.fabIcon} />
           </button>
         ) : null}
         {canShowSplit ? (
@@ -305,7 +229,19 @@ export function ListDetailMobileActions({
             onClick={() => setSheet("split")}
             title={splitMessages.defaultSplitTitle}
           >
-            <PieChartIcon />
+            <PieChartIcon className={styles.fabIcon} />
+          </button>
+        ) : null}
+        {canInvite ? (
+          <button
+            type="button"
+            className={styles.fabHalf}
+            aria-label={inviteAria}
+            aria-expanded={sheet === "invite"}
+            onClick={() => setSheet("invite")}
+            title={inviteAria}
+          >
+            <ShareIcon className={styles.fabIcon} />
           </button>
         ) : null}
       </div>

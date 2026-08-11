@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 
 import { usePreferences } from "@/components/PreferencesProvider";
 import { listsMessages } from "@/lib/i18n/lists";
+import { DotsIcon, CloseIcon, PlusIcon } from "@/app/icons";
 import type { InviteFormMessages } from "./InviteForm";
 import { InviteForm } from "./InviteForm";
 import {
@@ -31,63 +32,6 @@ type Props = {
   initialLists: ListItem[];
   currentUserId: string;
 };
-
-function DotsIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <circle cx="8" cy="3" r="1.5" fill="currentColor" />
-      <circle cx="8" cy="8" r="1.5" fill="currentColor" />
-      <circle cx="8" cy="13" r="1.5" fill="currentColor" />
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path
-        d="M6.5 6.5l11 11M17.5 6.5l-11 11"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function PlusIcon() {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <path
-        d="M12 5v14M5 12h14"
-        stroke="currentColor"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
 
 function InviteSheet({
   open,
@@ -194,7 +138,7 @@ function InviteSheet({
       >
         <div className={styles.sheetHeader}>
           <h2 id={titleId} className={styles.sheetTitle}>
-            {inviteMessages.inviteTitle}
+            Invite Someone!
           </h2>
           <button
             ref={closeRef}
@@ -207,7 +151,7 @@ function InviteSheet({
           </button>
         </div>
         <div className={styles.sheetBody}>
-          <InviteForm listId={listId} messages={inviteMessages} reserveErrorHeight />
+          <InviteForm listId={listId} messages={inviteMessages} reserveErrorHeight hideBorder />
         </div>
       </div>
     </>,
