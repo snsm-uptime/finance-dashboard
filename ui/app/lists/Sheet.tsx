@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  useCallback,
   useEffect,
   useId,
   useRef,
@@ -12,6 +11,8 @@ import { createPortal } from "react-dom";
 import { CloseIcon } from "@/app/icons";
 import styles from "./Sheet.module.css";
 
+const CLOSE_ANIMATION_MS = 280;
+
 type Props = {
   /** Whether the sheet is open */
   open: boolean;
@@ -21,12 +22,16 @@ type Props = {
   closeLabel: string;
   /** Content to render in the top-left corner of the sheet header */
   cornerAction?: ReactNode;
-  /** Content to render in the center of the sheet header */
-  title: ReactNode;
-  /** Custom close button element; if not provided, renders default close button */
+  /** Content to render in the center of the sheet header (must be non-empty for a11y) */
+  title: string | ReactNode;
+  /** Custom close button element; if not provided, renders default close button with closeLabel aria-label */
   closeButton?: ReactNode;
   /** Main content of the sheet */
   body: ReactNode;
+  /** Optional ref to focus when sheet closes (typically the button that opened it) */
+  returnFocusRef?: React.RefObject<HTMLElement | null>;
+  /** Maximum height of sheet content (default: min(72vh, 36rem)) */
+  maxHeight?: string;
 };
 
 export function Sheet({
@@ -37,13 +42,18 @@ export function Sheet({
   title,
   closeButton,
   body,
+  returnFocusRef,
+  maxHeight = "min(72vh, 36rem)",
 }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
-  const closeRef = useRef<HTMLButtonElement>(null);
+  const defaultCloseRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
   const [phase, setPhase] = useState<"unmounted" | "mounting" | "open" | "closing">(
     "unmounted"
   );
+
+  // Use default close ref if no custom close button, otherwise undefined
+  const closeRef = closeButton ? undefined : defaultCloseRef;
 
   // Respond to open prop changes: transition to mounting or closing
   useEffect(() => {
@@ -67,20 +77,21 @@ export function Sheet({
     }
   }, [phase]);
 
-  // Handle closing phase: delay unmounting for animation
+  // Handle closing phase: delay unmounting for animation and return focus
   useEffect(() => {
     if (phase === "closing") {
       const hide = window.setTimeout(() => {
         setPhase("unmounted");
-      }, 280);
+        returnFocusRef?.current?.focus();
+      }, CLOSE_ANIMATION_MS);
       return () => window.clearTimeout(hide);
     }
-  }, [phase]);
+  }, [phase, returnFocusRef]);
 
   // Focus management and keyboard traps when sheet is visible
   useEffect(() => {
     if (phase !== "open") return;
-    closeRef.current?.focus();
+    closeRef?.current?.focus();
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
@@ -123,6 +134,7 @@ export function Sheet({
         type="button"
         className={`${styles.backdrop} ${isVisible ? styles.backdropOpen : ""}`}
         aria-label={closeLabel}
+        disabled={phase === "closing"}
         onClick={onClose}
       />
       <div
@@ -131,6 +143,7 @@ export function Sheet({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        style={{ "--sheet-max-height": maxHeight } as React.CSSProperties}
       >
         <div className={styles.sheetHeader}>
           <div className={styles.sheetLeading}>{cornerAction}</div>
@@ -139,7 +152,7 @@ export function Sheet({
           </h2>
           {closeButton ?? (
             <button
-              ref={closeRef}
+              ref={defaultCloseRef}
               type="button"
               className={styles.sheetClose}
               aria-label={closeLabel}

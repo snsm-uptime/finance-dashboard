@@ -2,8 +2,8 @@
 
 import {
   useCallback,
+  useRef,
   useState,
-  type ReactNode,
 } from "react";
 
 import { PlusIcon, PieChartIcon, ShareIcon } from "@/app/icons";
@@ -57,6 +57,10 @@ export function ListDetailMobileActions({
   const [sheet, setSheet] = useState<SheetKind>(null);
   const close = useCallback(() => setSheet(null), []);
 
+  const expenseButtonRef = useRef<HTMLButtonElement>(null);
+  const splitButtonRef = useRef<HTMLButtonElement>(null);
+  const inviteButtonRef = useRef<HTMLButtonElement>(null);
+
   if (!canAddExpense && !canInvite) return null;
 
   const canShowSplit = isOwner && defaultSplit && members.length > 1;
@@ -74,6 +78,7 @@ export function ListDetailMobileActions({
       <div className={styles.fab} role="group" aria-label={groupLabel}>
         {canAddExpense ? (
           <button
+            ref={expenseButtonRef}
             type="button"
             className={styles.fabHalf}
             aria-label={addExpenseAria}
@@ -86,6 +91,7 @@ export function ListDetailMobileActions({
         ) : null}
         {canShowSplit ? (
           <button
+            ref={splitButtonRef}
             type="button"
             className={styles.fabHalf}
             aria-label={splitMessages.defaultSplitTitle}
@@ -98,6 +104,7 @@ export function ListDetailMobileActions({
         ) : null}
         {canInvite ? (
           <button
+            ref={inviteButtonRef}
             type="button"
             className={styles.fabHalf}
             aria-label={inviteAria}
@@ -116,6 +123,7 @@ export function ListDetailMobileActions({
           title={expenseMessages.expenseTitle}
           onClose={close}
           closeLabel={closeLabel}
+          returnFocusRef={expenseButtonRef}
           body={
             <ManualExpenseForm
               listId={listId}
@@ -133,6 +141,7 @@ export function ListDetailMobileActions({
           title={splitMessages.defaultSplitTitle}
           onClose={close}
           closeLabel={closeLabel}
+          returnFocusRef={splitButtonRef}
           body={
             <DefaultSplitPanel
               listId={listId}
@@ -151,6 +160,7 @@ export function ListDetailMobileActions({
           title={inviteMessages.inviteTitle}
           onClose={close}
           closeLabel={closeLabel}
+          returnFocusRef={inviteButtonRef}
           body={
             <InviteForm
               listId={listId}
