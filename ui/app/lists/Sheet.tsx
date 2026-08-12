@@ -9,6 +9,7 @@ import {
 import { createPortal } from "react-dom";
 import { useModalAnimation, useFocusTrap } from "@/hooks";
 import { CloseIcon } from "@/app/icons";
+import { IconButton } from "@/components/IconButton";
 import styles from "./Sheet.module.css";
 
 const CLOSE_ANIMATION_MS = 280;
@@ -98,15 +99,12 @@ export function Sheet({
             {title}
           </h2>
           {closeButton ?? (
-            <button
+            <IconButton
               ref={defaultCloseRef}
-              type="button"
-              className={styles.sheetClose}
-              aria-label={closeLabel}
+              icon={<CloseIcon />}
+              label={closeLabel}
               onClick={onClose}
-            >
-              <CloseIcon className={styles.closeIcon} />
-            </button>
+            />
           )}
         </div>
         <div className={styles.sheetBody}>{body}</div>
