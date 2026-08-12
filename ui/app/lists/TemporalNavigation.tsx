@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useState, type ReactNode } from "react";
+
+import { ShareIcon, PieChartIcon, CloseIcon } from "@/app/icons";
 import type { DefaultSplitPayload, ListMember } from "./listsClient";
 import type { InviteFormMessages } from "./InviteForm";
 import { InviteForm } from "./InviteForm";
@@ -19,58 +21,6 @@ type Props = {
   inviteMessages: InviteFormMessages;
   splitMessages: DefaultSplitMessages;
 };
-
-function ShareIcon() {
-  return (
-    <svg className={styles.navIcon} viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="18" cy="5" r="3" stroke="currentColor" strokeWidth="2" fill="none" />
-      <circle cx="6" cy="12" r="3" stroke="currentColor" strokeWidth="2" fill="none" />
-      <circle cx="18" cy="19" r="3" stroke="currentColor" strokeWidth="2" fill="none" />
-      <path
-        d="M8.59 13.51L15.41 17.49"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <path
-        d="M15.41 6.51L8.59 10.49"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function PieChartIcon() {
-  return (
-    <svg className={styles.navIcon} viewBox="0 0 24 24" aria-hidden="true">
-      <circle
-        cx="12"
-        cy="12"
-        r="10"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-      />
-      <path d="M 12 2 A 10 10 0 0 1 20.66 6.34 L 12 12 Z" fill="currentColor" />
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg className={styles.closeIcon} viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        d="M6.5 6.5l11 11M17.5 6.5l-11 11"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
 
 type FormWrapperProps = {
   kind: FormKind;
@@ -95,7 +45,7 @@ function FormWrapper({ kind, title, onClose, children }: FormWrapperProps) {
           aria-label={`Close ${title}`}
           onClick={onClose}
         >
-          <CloseIcon />
+          <CloseIcon className={styles.closeIcon} />
         </button>
       </div>
       <FormHeaderActionHostProvider host={actionHost}>
@@ -133,7 +83,7 @@ export function TemporalNavigation({
             onClick={() => setOpenForm("invite")}
             aria-label="Share / Invite"
           >
-            <ShareIcon />
+            <ShareIcon className={styles.navIcon} />
           </button>
           {isOwner && defaultSplit && members.length > 1 ? (
             <button
@@ -143,7 +93,7 @@ export function TemporalNavigation({
               onClick={() => setOpenForm("split")}
               aria-label="Split Settings"
             >
-              <PieChartIcon />
+              <PieChartIcon className={styles.navIcon} />
             </button>
           ) : null}
         </div>

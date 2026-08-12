@@ -7,7 +7,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
-import iconStyles from "./FormIconSubmit.module.css";
+import iconStyles from "@/components/FormIconSubmit/FormIconSubmit.module.css";
 
 const FormHeaderActionHostContext = createContext<HTMLElement | null>(null);
 

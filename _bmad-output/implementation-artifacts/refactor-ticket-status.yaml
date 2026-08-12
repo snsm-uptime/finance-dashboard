@@ -1,0 +1,280 @@
+# Refactor Status Tracking — Code Simplification Project
+# Last Updated: 2026-08-12
+# Overall Status: complete
+# Reference Docs:
+#   - refactor-master-plan.md (executive summary)
+#   - refactor-hooks-and-components-tickets.md (Phase 1 details)
+#   - refactor-phase2-phase3-tickets.md (Phase 2 & 3 details)
+
+project_name: finance-dashboard
+refactor_name: "Eliminate Duplication via Hooks & Components"
+created: 2026-08-12
+started: "2026-08-11"
+completed: "2026-08-12"
+
+# PHASE 1: Extract Hooks (2–3 hours, 5 commits)
+# Status: Ready to start | Dependency: None
+phase_1_status: backlog
+
+tickets:
+  # ===== PHASE 1: HOOKS =====
+
+  TICKET-1.1:
+    title: "Extract useModalAnimation Hook"
+    phase: "1"
+    status: done  # backlog | in-progress | blocked | done
+    effort_hours: 1
+    impact_loc: "-60 LOC (both Sheet + ListsPanel)"
+    commit_sha: "bd28db5baf3dd02c6c3fb8e1bb4a13f968c6f2c0"
+    commit_message: "refactor: extract useModalAnimation hook + fix: add CLOSE_ANIMATION_MS to dependency array"
+    blockers: []
+    notes: |
+      Eliminates duplicate phase state machine and animation logic.
+      Foundation for Phase 3 form simplification.
+      Completed with code review (Blind Hunter + Edge Case Hunter + Acceptance Auditor).
+      All spec acceptance criteria verified. One patch applied during review.
+    date_started: "2026-08-11"
+    date_completed: "2026-08-12"
+
+  TICKET-1.2:
+    title: "Extract useFocusTrap Hook"
+    phase: "1"
+    status: done
+    effort_hours: 1
+    impact_loc: "-60 LOC (both Sheet + ListsPanel)"
+    commit_sha: "68a594f68a907bb82c722bd2b3284815efac2c08"
+    commit_message: "refactor: extract useFocusTrap hook"
+    blockers: []
+    notes: |
+      Keyboard trap + focus management reusable pattern.
+      Handles Tab, Shift+Tab, Escape key, body overflow.
+      Completed with working hook implementation.
+      Build passes, TypeScript compiles without errors.
+      Hook exported from @/hooks for use in other components.
+    date_started: "2026-08-11"
+    date_completed: "2026-08-12"
+    depends_on: []
+
+  TICKET-1.3:
+    title: "Extract useFormSubmission Hook"
+    phase: "1"
+    status: done
+    effort_hours: 1.5
+    impact_loc: "-60 LOC across 3 forms"
+    commit_sha: "a69eebfcda4e2909f04ec2aaf4039e2496ac1697"
+    commit_message: "refactor: fix hoisting and type issues in form refactoring"
+    blockers: []
+    notes: |
+      Async form lifecycle pattern: error state, pending guard, success callback.
+      Reduces form boilerplate by 83%.
+      Implemented with working hook in useFormSubmission.ts.
+      All three forms (ManualExpenseForm, DefaultSplitPanel, InviteForm) refactored.
+      Build passes, TypeScript strict mode clean after lint fixes.
+    date_started: "2026-08-12"
+    date_completed: "2026-08-12"
+    depends_on: []
+
+  TICKET-1.4:
+    title: "Extract useFormStateSync Hook"
+    phase: "1"
+    status: done
+    effort_hours: 0.25
+    impact_loc: "-20 LOC across forms"
+    commit_sha: "203e52595883e3cdf1e7083cd144806717c1b322"
+    commit_message: "docs: add JSDoc to useFormStateSync hook"
+    blockers: []
+    notes: |
+      Simplest hook (3 lines). Parent state tracking pattern.
+      Centralizes useEffect callback pattern.
+      Completed with comprehensive JSDoc documentation.
+      All 136 tests pass. Code review: 0 critical findings, 3 documentation patches applied.
+    date_started: "2026-08-12"
+    date_completed: "2026-08-12"
+    depends_on: []
+
+  # ===== PHASE 2: COMPONENTS (2–3 hours, 2 commits) =====
+  # Status: Blocked until Phase 1 complete | Dependency: Phase 1 hooks merged
+
+  TICKET-2.1:
+    title: "Move FormIconSubmit to Shared Components"
+    phase: "2"
+    status: done
+    effort_hours: 0.5
+    impact_loc: "Move 123 LOC (no changes)"
+    commit_sha: "8723b8a94c4b9822fe2255fd5da682b79d7d946f"
+    commit_message: "refactor: move FormIconSubmit to shared components"
+    blockers: []
+    notes: |
+      Move ui/app/lists/FormIconSubmit.tsx → ui/components/FormIconSubmit/
+      Update import paths in 3 files.
+      Enable reuse in settings, account menu, etc.
+      Created index.ts for cleaner imports.
+      All TypeScript checks pass.
+    date_started: "2026-08-11"
+    date_completed: "2026-08-11"
+    depends_on: []
+
+  TICKET-2.2:
+    title: "Create IconButton Component"
+    phase: "2"
+    status: done
+    effort_hours: 1
+    impact_loc: "+50 LOC new component, -90 LOC cleanup"
+    commit_sha: "8cc53ef01985d933eb8ec5fe8d9129f45ec693d6"
+    commit_message: "refactor: create IconButton component, consolidate icon styling"
+    blockers: []
+    notes: |
+      Consolidate ShareTitleButton + sheetClose + corner action buttons.
+      Single source of truth for icon button styling.
+      Variants: default, muted.
+      Added forwardRef support for Sheet integration.
+      All TypeScript checks pass.
+    date_started: "2026-08-11"
+    date_completed: "2026-08-11"
+    depends_on: []
+
+  # ===== PHASE 3: SIMPLIFY FORMS (2–3 hours, 3 commits) =====
+  # Status: Blocked until Phase 1 hooks merged | Dependency: Phase 1
+
+  TICKET-3.1:
+    title: "Refactor ManualExpenseForm to Use Hooks"
+    phase: "3"
+    status: done
+    effort_hours: 1
+    impact_loc: "-65 LOC (365 → 300)"
+    commit_sha: "3f3c6b6"
+    commit_message: "refactor(ManualExpenseForm): use useFormSubmission hook"
+    blockers: []
+    notes: |
+      Use useFormSubmission + useFormStateSync.
+      Remove: [error, pending, pendingRef, try/catch boilerplate].
+      Behavior identical, code much simpler.
+      All tests pass (7 passed).
+    date_started: "2026-08-11"
+    date_completed: "2026-08-11"
+    depends_on: ["TICKET-1.3", "TICKET-1.4"]
+
+  TICKET-3.2:
+    title: "Refactor DefaultSplitPanel to Use Hooks"
+    phase: "3"
+    status: done
+    effort_hours: 1
+    impact_loc: "-45 LOC (226 → 180)"
+    commit_sha: "b7c408f"
+    commit_message: "refactor(DefaultSplitPanel): use useFormSubmission hook"
+    blockers: []
+    notes: |
+      Use useFormSubmission + useFormStateSync for onSave handler.
+      Remove boilerplate around saveDefaultSplit API call.
+      All tests passing.
+    date_started: "2026-08-11"
+    date_completed: "2026-08-11"
+    depends_on: ["TICKET-1.3", "TICKET-1.4"]
+
+  TICKET-3.3:
+    title: "Refactor InviteForm to Use Hooks"
+    phase: "3"
+    status: done
+    effort_hours: 0.75
+    impact_loc: "-18 LOC (98 → 80)"
+    commit_sha: "8285190"
+    commit_message: "refactor(InviteForm): use useFormSubmission hook"
+    blockers: []
+    notes: |
+      Use useFormSubmission hook for invite sending.
+      Remove: [error, sent, pending, pendingRef].
+      Simpler form submission logic.
+      All tests passing.
+    date_started: "2026-08-11"
+    date_completed: "2026-08-11"
+    depends_on: ["TICKET-1.3", "TICKET-1.4"]
+
+# ===== SUMMARY METRICS =====
+
+summary:
+  total_tickets: 9
+  total_effort_hours: "6-9"
+  total_loc_reduction: 248
+  total_commits: 12
+  phases: 3
+
+  phase_breakdown:
+    phase_1:
+      tickets: 4
+      commits: 5
+      effort_hours: "2-3"
+      risk_level: "low"
+      status: "complete"
+    phase_2:
+      tickets: 2
+      commits: 2
+      effort_hours: "1-2"
+      risk_level: "low"
+      status: "complete"
+    phase_3:
+      tickets: 3
+      commits: 3
+      effort_hours: "2-3"
+      risk_level: "medium"
+      status: "complete"
+
+# ===== HOW TO USE THIS FILE =====
+#
+# 1. UPDATE STATUS AS YOU WORK:
+#    - Change status: backlog → in-progress (when you start)
+#    - Set date_started when you begin
+#    - Update commit_sha and commit_message when merged
+#    - Change status to done when complete
+#    - Set date_completed when finished
+#    - Add blockers: ["reason"] if stuck
+#
+# 2. RESUMING IN A NEW CHAT:
+#    - Show this file to me at the start
+#    - I'll see which tickets are done/in-progress/blocked
+#    - We'll pick up where you left off
+#
+# 3. EXAMPLE UPDATE:
+#    Before:
+#      status: backlog
+#      date_started: null
+#
+#    After working:
+#      status: done
+#      commit_sha: "a1b2c3d"
+#      commit_message: "refactor: extract useModalAnimation hook"
+#      date_started: 2026-08-12
+#      date_completed: 2026-08-12
+#
+# 4. BLOCKERS:
+#    If stuck, add to blockers list:
+#      blockers: ["TypeScript error in X", "Need clarification on Y"]
+#    Then we'll debug together in next session.
+
+# ===== TIMELINE (RECOMMENDED) =====
+#
+# Week 1:
+#   Mon: TICKET-1.1 (useModalAnimation)
+#   Tue: TICKET-1.2 (useFocusTrap)
+#   Wed: TICKET-1.3 (useFormSubmission)
+#   Thu: TICKET-1.4 (useFormStateSync)
+#   Fri: TICKET-2.1 (Move FormIconSubmit)
+#
+# Week 2:
+#   Mon: TICKET-2.2 (Create IconButton)
+#   Tue: TICKET-3.1 (Refactor ManualExpenseForm)
+#   Wed: TICKET-3.2 (Refactor DefaultSplitPanel)
+#   Thu: TICKET-3.3 (Refactor InviteForm)
+#   Fri: Testing, polish, merge
+
+# ===== REFERENCE DOCS =====
+#
+# Read these in order for full context:
+# 1. refactor-master-plan.md — Executive summary + decision points
+# 2. refactor-hooks-and-components-tickets.md — Phase 1 detailed implementation
+# 3. refactor-phase2-phase3-tickets.md — Phase 2 & 3 detailed implementation
+#
+# Each ticket in those docs has:
+#   - Detailed implementation checklist
+#   - Acceptance criteria
+#   - Testing strategy
+#   - File paths to modify

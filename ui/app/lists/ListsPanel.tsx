@@ -14,7 +14,9 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 
 import { usePreferences } from "@/components/PreferencesProvider";
+import { useModalAnimation, useFocusTrap } from "@/hooks";
 import { listsMessages } from "@/lib/i18n/lists";
+import { DotsIcon, CloseIcon, PlusIcon } from "@/app/icons";
 import type { InviteFormMessages } from "./InviteForm";
 import { InviteForm } from "./InviteForm";
 import {
@@ -32,43 +34,6 @@ type Props = {
   currentUserId: string;
 };
 
-function DotsIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <circle cx="8" cy="3" r="1.5" fill="currentColor" />
-      <circle cx="8" cy="8" r="1.5" fill="currentColor" />
-      <circle cx="8" cy="13" r="1.5" fill="currentColor" />
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path
-        d="M6.5 6.5l11 11M17.5 6.5l-11 11"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
 function InviteSheet({
   open,
   listId,
@@ -85,73 +50,14 @@ function InviteSheet({
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
-  const [phase, setPhase] = useState<"unmounted" | "mounting" | "open" | "closing">(
-    "unmounted"
-  );
+  const { phase } = useModalAnimation(open, { closeAnimationMs: 280 });
 
-  useEffect(() => {
-    if (open && phase === "unmounted") {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setPhase("mounting");
-    } else if (!open && phase !== "unmounted" && phase !== "closing") {
-      setPhase("closing");
-    }
-  }, [open, phase]);
-
-  useEffect(() => {
-    if (phase === "mounting") {
-      const show = window.requestAnimationFrame(() => {
-        window.requestAnimationFrame(() => {
-          setPhase("open");
-        });
-      });
-      return () => window.cancelAnimationFrame(show);
-    }
-  }, [phase]);
-
-  useEffect(() => {
-    if (phase === "closing") {
-      const hide = window.setTimeout(() => {
-        setPhase("unmounted");
-      }, 280);
-      return () => window.clearTimeout(hide);
-    }
-  }, [phase]);
-
-  useEffect(() => {
-    if (phase !== "open") return;
-    closeRef.current?.focus();
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-        return;
-      }
-      if (event.key !== "Tab" || !panelRef.current) return;
-      const focusable = panelRef.current.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      );
-      if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.addEventListener("keydown", onKeyDown as unknown as EventListener);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", onKeyDown as unknown as EventListener);
-    };
-  }, [phase, onClose]);
+  useFocusTrap({
+    isActive: phase === "open",
+    containerRef: panelRef,
+    defaultFocusRef: closeRef,
+    onEscapePress: onClose,
+  });
 
   if (phase === "unmounted" || typeof document === "undefined") return null;
 
@@ -174,7 +80,7 @@ function InviteSheet({
       >
         <div className={styles.sheetHeader}>
           <h2 id={titleId} className={styles.sheetTitle}>
-            {inviteMessages.inviteTitle}
+            Invite Someone!
           </h2>
           <button
             ref={closeRef}
@@ -187,14 +93,13 @@ function InviteSheet({
           </button>
         </div>
         <div className={styles.sheetBody}>
-          <InviteForm listId={listId} messages={inviteMessages} reserveErrorHeight />
+          <InviteForm listId={listId} messages={inviteMessages} reserveErrorHeight hideBorder />
         </div>
       </div>
     </>,
     document.body,
   );
 }
-
 export function ListsPanel({ initialLists, currentUserId }: Props) {
   const { locale } = usePreferences();
   const t = listsMessages[locale];
@@ -434,11 +339,11 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
     <>
       <div className={styles.panel}>
         <form className={styles.createForm} onSubmit={onCreate}>
-          <div className={styles.createRow}>
-            <label className={`${styles.label} ${styles.createField}`}>
-              {t.createLabel}
+          <label className={`${styles.label} ${styles.iconInputLabel}`}>
+            {t.createLabel}
+            <div className={styles.iconInputContainer}>
               <input
-                className={styles.input}
+                className={styles.iconInput}
                 type="text"
                 name="name"
                 value={newName}
@@ -446,12 +351,18 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
                 maxLength={200}
                 autoComplete="off"
                 disabled={creating}
+                placeholder={t.createLabel}
               />
-            </label>
-            <button className={styles.primary} type="submit" disabled={!canCreate}>
-              {creating ? t.creating : t.createSubmit}
-            </button>
-          </div>
+              <button
+                className={styles.iconButton}
+                type="submit"
+                disabled={!canCreate}
+                aria-label={creating ? t.creating : t.createSubmit}
+              >
+                <PlusIcon />
+              </button>
+            </div>
+          </label>
           {createError ? (
             <p className={styles.error} role="alert">
               {createError}

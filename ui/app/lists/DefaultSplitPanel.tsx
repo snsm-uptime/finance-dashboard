@@ -1,11 +1,10 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { useFormSubmission, useFormStateSync } from "@/hooks";
 import { SoftLedgerRadio } from "@/components/soft-ledger/Radio";
 
-import { FormHeaderAction } from "./FormChrome";
-import { FormIconSubmit } from "./FormIconSubmit";
 import { PercentageSplitTrack } from "./PercentageSplitTrack";
 import {
   fetchDefaultSplit,
@@ -37,6 +36,12 @@ type Props = {
   initial: DefaultSplitPayload;
   members: ListMember[];
   messages: DefaultSplitMessages;
+  /** Callback fired when default split is successfully saved */
+  onSuccess?: () => void;
+  /** Callback that receives the save function (called once to register save handler) */
+  onSaveRequest?: (saveHandler: () => void) => void;
+  /** Callback to update button disabled state (called with canSave value) */
+  onCanSaveChange?: (canSave: boolean) => void;
 };
 
 function sumPercents(values: Record<string, string>): number {
@@ -76,14 +81,39 @@ function hasChanges(current: Record<string, string>, saved: Record<string, strin
   return false;
 }
 
-export function DefaultSplitPanel({ listId, isOwner, initial, members, messages }: Props) {
+export function DefaultSplitPanel({ listId, isOwner, initial, members, messages, onSuccess, onSaveRequest, onCanSaveChange }: Props) {
   const [mode, setMode] = useState<"even" | "percentage">(initial.mode);
   const [savedMode, setSavedMode] = useState<"even" | "percentage">(initial.mode);
   const initialPercents = useMemo(() => getInitialSavedPercents(initial), [initial]);
   const [percents, setPercents] = useState<Record<string, string>>(() => initialPercents);
   const [savedPercents, setSavedPercents] = useState<Record<string, string>>(initialPercents);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+
+  const { pending, error, submit } = useFormSubmission(
+    async (
+      body: { mode: "even" } | { mode: "percentage"; shares: Array<{ user_id: string; percentage: string }> }
+    ) => {
+      const result = await saveDefaultSplit(
+        listId,
+        body as Parameters<typeof saveDefaultSplit>[1],
+        {
+          ...messages,
+          errorInvalidName: messages.errorInvalidSplit,
+        }
+      );
+      if (result.ok) {
+        setMode(result.split.mode);
+        setSavedMode(result.split.mode);
+        const next: Record<string, string> = {};
+        for (const share of result.split.shares) {
+          next[share.user_id] = share.percentage;
+        }
+        setPercents(next);
+        setSavedPercents(next);
+      }
+      return result;
+    },
+    { onSuccess }
+  );
 
   const userIds = useMemo(() => {
     if (initial.member_ids.length > 0) return initial.member_ids;
@@ -99,6 +129,32 @@ export function DefaultSplitPanel({ listId, isOwner, initial, members, messages 
   }, [mode, savedMode, percents, savedPercents]);
   const canSave = hasChanged && sumOk && !pending;
 
+  async function onSave() {
+    const body =
+      mode === "even"
+        ? { mode: "even" as const }
+        : {
+            mode: "percentage" as const,
+            shares: Object.entries(percents).map(([user_id, percentage]) => ({
+              user_id,
+              percentage,
+            })),
+          };
+    await submit(body);
+  }
+
+  useFormStateSync(canSave, onCanSaveChange);
+
+  useEffect(() => {
+    if (isOwner) {
+      onSaveRequest?.(() => {
+        if (canSave) {
+          onSave();
+        }
+      });
+    }
+  }, [isOwner, canSave, onSaveRequest, onSave]);
+
   if (!isOwner) {
     return (
       <section className={styles.detailSection} aria-labelledby="default-split-heading">
@@ -113,38 +169,6 @@ export function DefaultSplitPanel({ listId, isOwner, initial, members, messages 
         </p>
       </section>
     );
-  }
-
-  function onSave() {
-    setError(null);
-    startTransition(async () => {
-      const body =
-        mode === "even"
-          ? { mode: "even" as const }
-          : {
-              mode: "percentage" as const,
-              shares: Object.entries(percents).map(([user_id, percentage]) => ({
-                user_id,
-                percentage,
-              })),
-            };
-      const result = await saveDefaultSplit(listId, body, {
-        ...messages,
-        errorInvalidName: messages.errorInvalidSplit,
-      });
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      setMode(result.split.mode);
-      setSavedMode(result.split.mode);
-      const next: Record<string, string> = {};
-      for (const share of result.split.shares) {
-        next[share.user_id] = share.percentage;
-      }
-      setPercents(next);
-      setSavedPercents(next);
-    });
   }
 
   return (
@@ -202,14 +226,6 @@ export function DefaultSplitPanel({ listId, isOwner, initial, members, messages 
           </p>
         </>
       ) : null}
-      <FormHeaderAction>
-        <FormIconSubmit
-          type="button"
-          label={pending ? messages.defaultSplitSaving : messages.defaultSplitSave}
-          disabled={!canSave}
-          onClick={onSave}
-        />
-      </FormHeaderAction>
     </section>
   );
 }
