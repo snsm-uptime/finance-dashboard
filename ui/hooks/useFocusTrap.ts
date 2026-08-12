@@ -7,7 +7,6 @@ type UseFocusTrapOptions = {
   isActive: boolean;
   containerRef: RefObject<HTMLElement | null>;
   defaultFocusRef?: RefObject<HTMLElement | null>;
-  returnFocusRef?: RefObject<HTMLElement | null>;
   onEscapePress?: () => void;
 };
 
@@ -15,7 +14,6 @@ export function useFocusTrap({
   isActive,
   containerRef,
   defaultFocusRef,
-  returnFocusRef,
   onEscapePress,
 }: UseFocusTrapOptions): void {
   useEffect(() => {
@@ -45,9 +43,11 @@ export function useFocusTrap({
 
       if (event.shiftKey && document.activeElement === first) {
         event.preventDefault();
+        event.stopPropagation();
         last.focus();
       } else if (!event.shiftKey && document.activeElement === last) {
         event.preventDefault();
+        event.stopPropagation();
         first.focus();
       }
     }
@@ -57,9 +57,8 @@ export function useFocusTrap({
     return () => {
       document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", onKeyDown);
-      returnFocusRef?.current?.focus();
     };
-  }, [isActive, containerRef, defaultFocusRef, returnFocusRef, onEscapePress]);
+  }, [isActive, defaultFocusRef, onEscapePress]);
 }
 
 function getFirstFocusable(container: HTMLElement): HTMLElement | null {
