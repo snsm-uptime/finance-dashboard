@@ -77,17 +77,19 @@ tickets:
   TICKET-1.4:
     title: "Extract useFormStateSync Hook"
     phase: "1"
-    status: backlog
+    status: done
     effort_hours: 0.25
     impact_loc: "-20 LOC across forms"
-    commit_sha: null
-    commit_message: null
+    commit_sha: "203e52595883e3cdf1e7083cd144806717c1b322"
+    commit_message: "docs: add JSDoc to useFormStateSync hook"
     blockers: []
     notes: |
       Simplest hook (3 lines). Parent state tracking pattern.
       Centralizes useEffect callback pattern.
-    date_started: null
-    date_completed: null
+      Completed with comprehensive JSDoc documentation.
+      All 136 tests pass. Code review: 0 critical findings, 3 documentation patches applied.
+    date_started: "2026-08-12"
+    date_completed: "2026-08-12"
     depends_on: []
 
   # ===== PHASE 2: COMPONENTS (2–3 hours, 2 commits) =====
