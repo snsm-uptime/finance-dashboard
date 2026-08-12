@@ -282,7 +282,7 @@ export function ListDetailMobileActions({
       {canInvite ? (
         <Sheet
           open={sheet === "invite"}
-          label=""
+          label={inviteMessages.inviteTitle}
           onClose={close}
           closeLabel={closeLabel}
         >
