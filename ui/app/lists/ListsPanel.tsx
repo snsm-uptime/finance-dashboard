@@ -14,6 +14,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 
 import { usePreferences } from "@/components/PreferencesProvider";
+import { useModalAnimation } from "@/hooks";
 import { listsMessages } from "@/lib/i18n/lists";
 import { DotsIcon, CloseIcon, PlusIcon } from "@/app/icons";
 import type { InviteFormMessages } from "./InviteForm";
@@ -49,38 +50,7 @@ function InviteSheet({
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
-  const [phase, setPhase] = useState<"unmounted" | "mounting" | "open" | "closing">(
-    "unmounted"
-  );
-
-  useEffect(() => {
-    if (open && phase === "unmounted") {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setPhase("mounting");
-    } else if (!open && phase !== "unmounted" && phase !== "closing") {
-      setPhase("closing");
-    }
-  }, [open, phase]);
-
-  useEffect(() => {
-    if (phase === "mounting") {
-      const show = window.requestAnimationFrame(() => {
-        window.requestAnimationFrame(() => {
-          setPhase("open");
-        });
-      });
-      return () => window.cancelAnimationFrame(show);
-    }
-  }, [phase]);
-
-  useEffect(() => {
-    if (phase === "closing") {
-      const hide = window.setTimeout(() => {
-        setPhase("unmounted");
-      }, 280);
-      return () => window.clearTimeout(hide);
-    }
-  }, [phase]);
+  const { phase } = useModalAnimation(open, { closeAnimationMs: 280 });
 
   useEffect(() => {
     if (phase !== "open") return;

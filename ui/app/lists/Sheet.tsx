@@ -4,10 +4,10 @@ import {
   useEffect,
   useId,
   useRef,
-  useState,
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { useModalAnimation } from "@/hooks";
 import { CloseIcon } from "@/app/icons";
 import styles from "./Sheet.module.css";
 
@@ -48,40 +48,15 @@ export function Sheet({
   const panelRef = useRef<HTMLDivElement>(null);
   const defaultCloseRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
-  const [phase, setPhase] = useState<"unmounted" | "mounting" | "open" | "closing">(
-    "unmounted"
-  );
+  const { phase } = useModalAnimation(open, { closeAnimationMs: CLOSE_ANIMATION_MS });
 
   // Use default close ref if no custom close button, otherwise undefined
   const closeRef = closeButton ? undefined : defaultCloseRef;
 
-  // Respond to open prop changes: transition to mounting or closing
-  useEffect(() => {
-    if (open && phase === "unmounted") {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setPhase("mounting");
-    } else if (!open && phase !== "unmounted" && phase !== "closing") {
-      setPhase("closing");
-    }
-  }, [open, phase]);
-
-  // Handle mounting phase: trigger visibility animation
-  useEffect(() => {
-    if (phase === "mounting") {
-      const show = window.requestAnimationFrame(() => {
-        window.requestAnimationFrame(() => {
-          setPhase("open");
-        });
-      });
-      return () => window.cancelAnimationFrame(show);
-    }
-  }, [phase]);
-
-  // Handle closing phase: delay unmounting for animation and return focus
+  // Return focus when closing phase completes
   useEffect(() => {
     if (phase === "closing") {
       const hide = window.setTimeout(() => {
-        setPhase("unmounted");
         returnFocusRef?.current?.focus();
       }, CLOSE_ANIMATION_MS);
       return () => window.clearTimeout(hide);
