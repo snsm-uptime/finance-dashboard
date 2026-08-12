@@ -37,8 +37,7 @@ from domain.errors import InvalidDefaultSplitError, InvalidSplitOverrideError
 KIND_WHOLE_ASSIGNEE = "whole_assignee"
 KIND_ABSOLUTE_AMOUNTS = "absolute_amounts"
 KIND_PERCENTAGE = "percentage"
-ALLOWED_OVERRIDE_KINDS = frozenset(
-    {KIND_WHOLE_ASSIGNEE, KIND_ABSOLUTE_AMOUNTS, KIND_PERCENTAGE})
+ALLOWED_OVERRIDE_KINDS = frozenset({KIND_WHOLE_ASSIGNEE, KIND_ABSOLUTE_AMOUNTS, KIND_PERCENTAGE})
 
 SUBJECT_ITEM = "item"
 SUBJECT_RECEIPT = "receipt"
@@ -76,11 +75,9 @@ def _as_decimal(value: Decimal | str, *, label: str) -> Decimal:
     try:
         amount = value if isinstance(value, Decimal) else Decimal(str(value))
     except Exception as exc:
-        raise InvalidSplitOverrideError(
-            f"{label} must be exact decimal values.") from exc
+        raise InvalidSplitOverrideError(f"{label} must be exact decimal values.") from exc
     if not amount.is_finite():
-        raise InvalidSplitOverrideError(
-            f"{label} must be finite decimal values.")
+        raise InvalidSplitOverrideError(f"{label} must be finite decimal values.")
     return amount
 
 
@@ -91,8 +88,7 @@ def _as_uuid(value: UUID | str) -> UUID:
 def _member_set(member_ids: Iterable[UUID]) -> list[UUID]:
     members = list(dict.fromkeys(member_ids))
     if not members:
-        raise InvalidSplitOverrideError(
-            "A list must have at least one member.")
+        raise InvalidSplitOverrideError("A list must have at least one member.")
     return members
 
 
@@ -105,8 +101,7 @@ def _require_positive_total(total: Decimal | str) -> Decimal:
 
 def _currency_quantum(currency_exponent: int) -> Decimal:
     if currency_exponent < 0:
-        raise InvalidSplitOverrideError(
-            "Currency exponent cannot be negative.")
+        raise InvalidSplitOverrideError("Currency exponent cannot be negative.")
     return Decimal("1").scaleb(-currency_exponent)
 
 
@@ -120,13 +115,11 @@ def _allocations_tuple(
     ordered = sorted(members, key=lambda uid: str(uid))
     try:
         rows = tuple(
-            ShareAllocation(
-                member_id=mid, amount=by_member[mid], currency=currency_code)
+            ShareAllocation(member_id=mid, amount=by_member[mid], currency=currency_code)
             for mid in ordered
         )
     except KeyError as exc:
-        raise InvalidSplitOverrideError(
-            "Override no longer matches current list members.") from exc
+        raise InvalidSplitOverrideError("Override no longer matches current list members.") from exc
     if sum((row.amount for row in rows), Decimal("0")) != amount:
         raise InvalidSplitOverrideError(
             "Share allocations must sum exactly to the line or receipt total."
@@ -154,31 +147,26 @@ def parse_split_spec(
 
     if normalized_kind == KIND_WHOLE_ASSIGNEE:
         if assignee_id is None:
-            raise InvalidSplitOverrideError(
-                "whole_assignee requires assignee_id.")
+            raise InvalidSplitOverrideError("whole_assignee requires assignee_id.")
         assignee = _as_uuid(assignee_id)
         if assignee not in member_set:
-            raise InvalidSplitOverrideError(
-                "Assignee must be a current list member.")
+            raise InvalidSplitOverrideError("Assignee must be a current list member.")
         return SplitSpec(kind=KIND_WHOLE_ASSIGNEE, assignee_id=assignee)
 
     if normalized_kind == KIND_ABSOLUTE_AMOUNTS:
         if not amounts:
-            raise InvalidSplitOverrideError(
-                "absolute_amounts requires amounts.")
+            raise InvalidSplitOverrideError("absolute_amounts requires amounts.")
         quantum = _currency_quantum(currency_exponent)
         normalized: dict[UUID, Decimal] = {}
         for raw_id, raw_amt in amounts.items():
             user_id = _as_uuid(raw_id)
             if user_id not in member_set:
-                raise InvalidSplitOverrideError(
-                    "Amount map may only include current list members.")
+                raise InvalidSplitOverrideError("Amount map may only include current list members.")
             amt = _as_decimal(raw_amt, label="Amounts")
             if amt < 0:
                 raise InvalidSplitOverrideError("Amounts cannot be negative.")
             if amt != amt.quantize(quantum):
-                raise InvalidSplitOverrideError(
-                    "Amounts may not exceed the currency minor unit.")
+                raise InvalidSplitOverrideError("Amounts may not exceed the currency minor unit.")
             normalized[user_id] = amt
         return SplitSpec(kind=KIND_ABSOLUTE_AMOUNTS, amounts=normalized)
 
@@ -221,13 +209,11 @@ def allocate_from_spec(
     """Allocate ``total`` according to override spec; re-validates current membership."""
     members = _member_set(member_ids)
     if creator_user_id not in members:
-        raise InvalidSplitOverrideError(
-            "List creator must be a current member.")
+        raise InvalidSplitOverrideError("List creator must be a current member.")
     amount = _require_positive_total(total)
     currency_code = currency.strip().upper()
     if len(currency_code) != 3:
-        raise InvalidSplitOverrideError(
-            "Currency must be a 3-letter ISO 4217 code.")
+        raise InvalidSplitOverrideError("Currency must be a 3-letter ISO 4217 code.")
 
     # Fail loud when a stored override no longer matches current membership.
     fresh = parse_split_spec(
@@ -287,13 +273,11 @@ def compute_share_allocations(
     """Resolve override chain and allocate shares (stable output for Epic 3)."""
     members = _member_set(member_ids)
     if creator_user_id not in members:
-        raise InvalidSplitOverrideError(
-            "List creator must be a current member.")
+        raise InvalidSplitOverrideError("List creator must be a current member.")
     amount = _require_positive_total(total)
     currency_code = currency.strip().upper()
     if len(currency_code) != 3:
-        raise InvalidSplitOverrideError(
-            "Currency must be a 3-letter ISO 4217 code.")
+        raise InvalidSplitOverrideError("Currency must be a 3-letter ISO 4217 code.")
 
     resolved_from, override = resolve_override_source(
         item_override=item_override,
@@ -310,8 +294,7 @@ def compute_share_allocations(
         )
         return AllocationResult(allocations=allocations, resolved_from=resolved_from)
 
-    mode, shares = resolve_effective_default(
-        list_default_mode, list_default_shares, members)
+    mode, shares = resolve_effective_default(list_default_mode, list_default_shares, members)
     try:
         if mode == MODE_EVEN:
             by_member = allocate_even_shares(
