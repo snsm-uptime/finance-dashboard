@@ -1,11 +1,9 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 
 import { SoftLedgerRadio } from "@/components/soft-ledger/Radio";
 
-import { FormHeaderAction } from "./FormChrome";
-import { FormIconSubmit } from "./FormIconSubmit";
 import { PercentageSplitTrack } from "./PercentageSplitTrack";
 import {
   fetchDefaultSplit,
@@ -37,6 +35,12 @@ type Props = {
   initial: DefaultSplitPayload;
   members: ListMember[];
   messages: DefaultSplitMessages;
+  /** Callback fired when default split is successfully saved */
+  onSuccess?: () => void;
+  /** Callback that receives the save function (called once to register save handler) */
+  onSaveRequest?: (saveHandler: () => void) => void;
+  /** Callback to update button disabled state (called with canSave value) */
+  onCanSaveChange?: (canSave: boolean) => void;
 };
 
 function sumPercents(values: Record<string, string>): number {
@@ -76,7 +80,7 @@ function hasChanges(current: Record<string, string>, saved: Record<string, strin
   return false;
 }
 
-export function DefaultSplitPanel({ listId, isOwner, initial, members, messages }: Props) {
+export function DefaultSplitPanel({ listId, isOwner, initial, members, messages, onSuccess, onSaveRequest, onCanSaveChange }: Props) {
   const [mode, setMode] = useState<"even" | "percentage">(initial.mode);
   const [savedMode, setSavedMode] = useState<"even" | "percentage">(initial.mode);
   const initialPercents = useMemo(() => getInitialSavedPercents(initial), [initial]);
@@ -98,6 +102,20 @@ export function DefaultSplitPanel({ listId, isOwner, initial, members, messages 
     return hasChanges(percents, savedPercents);
   }, [mode, savedMode, percents, savedPercents]);
   const canSave = hasChanged && sumOk && !pending;
+
+  useEffect(() => {
+    onCanSaveChange?.(canSave);
+  }, [canSave, onCanSaveChange]);
+
+  useEffect(() => {
+    if (isOwner) {
+      onSaveRequest?.(() => {
+        if (canSave) {
+          onSave();
+        }
+      });
+    }
+  }, [isOwner, canSave, onSaveRequest]);
 
   if (!isOwner) {
     return (
@@ -144,6 +162,7 @@ export function DefaultSplitPanel({ listId, isOwner, initial, members, messages 
       }
       setPercents(next);
       setSavedPercents(next);
+      onSuccess?.();
     });
   }
 
@@ -202,14 +221,6 @@ export function DefaultSplitPanel({ listId, isOwner, initial, members, messages 
           </p>
         </>
       ) : null}
-      <FormHeaderAction>
-        <FormIconSubmit
-          type="button"
-          label={pending ? messages.defaultSplitSaving : messages.defaultSplitSave}
-          disabled={!canSave}
-          onClick={onSave}
-        />
-      </FormHeaderAction>
     </section>
   );
 }

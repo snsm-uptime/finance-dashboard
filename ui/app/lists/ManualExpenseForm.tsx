@@ -1,13 +1,11 @@
 "use client";
 
-import { FormEvent, useId, useRef, useState } from "react";
+import { FormEvent, useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { SoftLedgerRadio } from "@/components/soft-ledger/Radio";
 import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
 
-import { FormHeaderAction } from "./FormChrome";
-import { FormIconSubmit } from "./FormIconSubmit";
 import { PercentageSplitTrack } from "./PercentageSplitTrack";
 import {
   createExpense,
@@ -37,6 +35,12 @@ type Props = {
   currentUserId: string;
   members: ListMember[];
   messages: ManualExpenseMessages;
+  /** Callback fired when expense is successfully created */
+  onSuccess?: () => void;
+  /** Ref to form element for button submission */
+  formRef?: React.RefObject<HTMLFormElement | null>;
+  /** Callback to update button disabled state (called with canSubmit value) */
+  onCanSubmitChange?: (canSubmit: boolean) => void;
 };
 
 type SplitMode = "whole_assignee" | "absolute_amounts" | "percentage";
@@ -79,6 +83,9 @@ export function ManualExpenseForm({
   currentUserId,
   members,
   messages,
+  onSuccess,
+  formRef,
+  onCanSubmitChange,
 }: Props) {
   const router = useRouter();
   const baseId = useId();
@@ -107,6 +114,10 @@ export function ManualExpenseForm({
 
   const canSubmit =
     amount.trim().length > 0 && description.trim().length > 0 && !pending;
+
+  useEffect(() => {
+    onCanSubmitChange?.(canSubmit);
+  }, [canSubmit, onCanSubmitChange]);
 
   function resetAdjustFields() {
     setAdjustOpen(false);
@@ -166,6 +177,7 @@ export function ManualExpenseForm({
       setPayerId(currentUserId);
       resetAdjustFields();
       router.refresh();
+      onSuccess?.();
     } finally {
       pendingRef.current = false;
       setPending(false);
@@ -177,7 +189,7 @@ export function ManualExpenseForm({
       <h2 id={`${baseId}-heading`} className={styles.heading}>
         {messages.expenseTitle}
       </h2>
-      <form id={formId} className={styles.form} onSubmit={onSubmit}>
+      <form ref={formRef} id={formId} className={styles.form} onSubmit={onSubmit}>
         <div className={styles.field}>
           <label className={styles.label} htmlFor={`${baseId}-amount`}>
             {messages.expenseAmount}
@@ -347,14 +359,6 @@ export function ManualExpenseForm({
             {error}
           </p>
         ) : null}
-
-        <FormHeaderAction>
-          <FormIconSubmit
-            form={formId}
-            label={pending ? messages.expenseSaving : messages.expenseSubmit}
-            disabled={!canSubmit}
-          />
-        </FormHeaderAction>
       </form>
     </section>
   );

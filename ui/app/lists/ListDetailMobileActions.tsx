@@ -15,6 +15,7 @@ import type { DefaultSplitMessages } from "./DefaultSplitPanel";
 import { DefaultSplitPanel } from "./DefaultSplitPanel";
 import type { DefaultSplitPayload, ListMember } from "./listsClient";
 import { Sheet } from "./Sheet";
+import { FormIconSubmit } from "./FormIconSubmit";
 import styles from "./ListDetailMobileActions.module.css";
 
 type SheetKind = "expense" | "invite" | "split" | null;
@@ -60,6 +61,11 @@ export function ListDetailMobileActions({
   const expenseButtonRef = useRef<HTMLButtonElement>(null);
   const splitButtonRef = useRef<HTMLButtonElement>(null);
   const inviteButtonRef = useRef<HTMLButtonElement>(null);
+
+  const expenseFormRef = useRef<HTMLFormElement>(null);
+  const splitSaveRequestRef = useRef<() => void>(() => {});
+  const [expenseCanSubmit, setExpenseCanSubmit] = useState(false);
+  const [splitCanSave, setSplitCanSave] = useState(false);
 
   if (!canAddExpense && !canInvite) return null;
 
@@ -124,12 +130,24 @@ export function ListDetailMobileActions({
           onClose={close}
           closeLabel={closeLabel}
           returnFocusRef={expenseButtonRef}
+          cornerAction={
+            <FormIconSubmit
+              type="button"
+              variant="save"
+              label={expenseMessages.expenseSubmit}
+              disabled={!expenseCanSubmit}
+              onClick={() => expenseFormRef.current?.requestSubmit()}
+            />
+          }
           body={
             <ManualExpenseForm
               listId={listId}
               currentUserId={currentUserId}
               members={members}
               messages={expenseMessages}
+              formRef={expenseFormRef}
+              onSuccess={close}
+              onCanSubmitChange={setExpenseCanSubmit}
             />
           }
         />
@@ -142,6 +160,15 @@ export function ListDetailMobileActions({
           onClose={close}
           closeLabel={closeLabel}
           returnFocusRef={splitButtonRef}
+          cornerAction={
+            <FormIconSubmit
+              type="button"
+              variant="save"
+              label={splitMessages.defaultSplitSave}
+              disabled={!splitCanSave}
+              onClick={() => splitSaveRequestRef.current?.()}
+            />
+          }
           body={
             <DefaultSplitPanel
               listId={listId}
@@ -149,6 +176,11 @@ export function ListDetailMobileActions({
               initial={defaultSplit}
               members={members}
               messages={splitMessages}
+              onSuccess={close}
+              onSaveRequest={(fn) => {
+                splitSaveRequestRef.current = fn;
+              }}
+              onCanSaveChange={setSplitCanSave}
             />
           }
         />
