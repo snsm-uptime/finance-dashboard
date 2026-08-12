@@ -3,7 +3,7 @@
 import { FormEvent, useId, useState } from "react";
 
 import { useFormSubmission } from "@/hooks";
-import { FormIconField } from "@/components/FormIconSubmit/FormIconSubmit";
+import { FormIconField } from "@/components/FormIconSubmit";
 import { inviteMember, type ListsClientMessages } from "./listsClient";
 import styles from "./lists.module.css";
 
