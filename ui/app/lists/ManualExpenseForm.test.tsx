@@ -17,7 +17,7 @@ vi.mock("./ManualExpenseForm.module.css", () => ({
   ),
 }));
 
-vi.mock("./FormIconSubmit.module.css", () => ({
+vi.mock("@/components/FormIconSubmit/FormIconSubmit.module.css", () => ({
   default: new Proxy(
     {},
     {
