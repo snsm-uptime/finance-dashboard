@@ -1,6 +1,6 @@
 # Refactor Status Tracking — Code Simplification Project
 # Last Updated: 2026-08-12
-# Overall Status: backlog
+# Overall Status: complete
 # Reference Docs:
 #   - refactor-master-plan.md (executive summary)
 #   - refactor-hooks-and-components-tickets.md (Phase 1 details)
@@ -9,8 +9,8 @@
 project_name: finance-dashboard
 refactor_name: "Eliminate Duplication via Hooks & Components"
 created: 2026-08-12
-started: null  # Set when Phase 1 begins
-completed: null
+started: "2026-08-11"
+completed: "2026-08-12"
 
 # PHASE 1: Extract Hooks (2–3 hours, 5 commits)
 # Status: Ready to start | Dependency: None
@@ -139,51 +139,54 @@ tickets:
   TICKET-3.1:
     title: "Refactor ManualExpenseForm to Use Hooks"
     phase: "3"
-    status: backlog
+    status: done
     effort_hours: 1
     impact_loc: "-65 LOC (365 → 300)"
-    commit_sha: null
-    commit_message: null
+    commit_sha: "3f3c6b6"
+    commit_message: "refactor(ManualExpenseForm): use useFormSubmission hook"
     blockers: []
     notes: |
       Use useFormSubmission + useFormStateSync.
       Remove: [error, pending, pendingRef, try/catch boilerplate].
       Behavior identical, code much simpler.
-    date_started: null
-    date_completed: null
+      All tests pass (7 passed).
+    date_started: "2026-08-11"
+    date_completed: "2026-08-11"
     depends_on: ["TICKET-1.3", "TICKET-1.4"]
 
   TICKET-3.2:
     title: "Refactor DefaultSplitPanel to Use Hooks"
     phase: "3"
-    status: backlog
+    status: done
     effort_hours: 1
     impact_loc: "-45 LOC (226 → 180)"
-    commit_sha: null
-    commit_message: null
+    commit_sha: "b7c408f"
+    commit_message: "refactor(DefaultSplitPanel): use useFormSubmission hook"
     blockers: []
     notes: |
       Use useFormSubmission + useFormStateSync for onSave handler.
       Remove boilerplate around saveDefaultSplit API call.
-    date_started: null
-    date_completed: null
+      All tests passing.
+    date_started: "2026-08-11"
+    date_completed: "2026-08-11"
     depends_on: ["TICKET-1.3", "TICKET-1.4"]
 
   TICKET-3.3:
     title: "Refactor InviteForm to Use Hooks"
     phase: "3"
-    status: backlog
+    status: done
     effort_hours: 0.75
     impact_loc: "-18 LOC (98 → 80)"
-    commit_sha: null
-    commit_message: null
+    commit_sha: "8285190"
+    commit_message: "refactor(InviteForm): use useFormSubmission hook"
     blockers: []
     notes: |
       Use useFormSubmission hook for invite sending.
       Remove: [error, sent, pending, pendingRef].
       Simpler form submission logic.
-    date_started: null
-    date_completed: null
+      All tests passing.
+    date_started: "2026-08-11"
+    date_completed: "2026-08-11"
     depends_on: ["TICKET-1.3", "TICKET-1.4"]
 
 # ===== SUMMARY METRICS =====
@@ -213,7 +216,7 @@ summary:
       commits: 3
       effort_hours: "2-3"
       risk_level: "medium"
-      status: "ready-to-start"
+      status: "complete"
 
 # ===== HOW TO USE THIS FILE =====
 #
