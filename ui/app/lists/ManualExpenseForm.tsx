@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, useEffect, useId, useRef, useState } from "react";
+import { FormEvent, useEffect, useId, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { useFormSubmission } from "@/hooks";
 import { SoftLedgerRadio } from "@/components/soft-ledger/Radio";
 import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
 
@@ -108,9 +109,31 @@ export function ManualExpenseForm({
   const [percentages, setPercentages] = useState<Record<string, string>>(() =>
     evenPercentMap(members),
   );
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
-  const pendingRef = useRef(false);
+
+  const { pending, error, submit, clearError } = useFormSubmission(
+    async (body: CreateExpenseBody) => {
+      const override = buildSplitOverride();
+      if (!override.ok) {
+        return { ok: false, error: override.error };
+      }
+      const result = await createExpense(
+        listId,
+        { ...body, split_override: override.value },
+        messages
+      );
+      return result;
+    },
+    {
+      onSuccess: () => {
+        setAmount("");
+        setDescription("");
+        setPayerId(currentUserId);
+        resetAdjustFields();
+        router.refresh();
+        onSuccess?.();
+      },
+    }
+  );
 
   const canSubmit =
     amount.trim().length > 0 && description.trim().length > 0 && !pending;
@@ -150,38 +173,13 @@ export function ManualExpenseForm({
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (pendingRef.current) return;
-    pendingRef.current = true;
-    setError(null);
-    setPending(true);
-    try {
-      const override = buildSplitOverride();
-      if (!override.ok) {
-        setError(override.error);
-        return;
-      }
-      const body: CreateExpenseBody = {
-        amount: amount.trim(),
-        currency: "CRC",
-        description: description.trim(),
-        payer_id: payerId,
-        split_override: override.value,
-      };
-      const result = await createExpense(listId, body, messages);
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      setAmount("");
-      setDescription("");
-      setPayerId(currentUserId);
-      resetAdjustFields();
-      router.refresh();
-      onSuccess?.();
-    } finally {
-      pendingRef.current = false;
-      setPending(false);
-    }
+    await submit({
+      amount: amount.trim(),
+      currency: "CRC",
+      description: description.trim(),
+      payer_id: payerId,
+      split_override: undefined,
+    });
   }
 
   return (
@@ -206,7 +204,7 @@ export function ManualExpenseForm({
             aria-describedby={error ? errorId : undefined}
             onChange={(e) => {
               setAmount(e.target.value);
-              setError(null);
+              clearError();
             }}
           />
         </div>
@@ -227,7 +225,7 @@ export function ManualExpenseForm({
             aria-describedby={error ? errorId : undefined}
             onChange={(e) => {
               setDescription(e.target.value);
-              setError(null);
+              clearError();
             }}
           />
         </div>
@@ -248,7 +246,7 @@ export function ManualExpenseForm({
             aria-describedby={error ? errorId : undefined}
             onChange={(next) => {
               setPayerId(next);
-              setError(null);
+              clearError();
             }}
           />
         </div>
@@ -260,7 +258,7 @@ export function ManualExpenseForm({
           open={adjustOpen}
           onToggle={(e) => {
             setAdjustOpen((e.target as HTMLDetailsElement).open);
-            setError(null);
+            clearError();
           }}
         >
           <summary className={styles.adjustSummary}>{messages.expenseAdjustSplit}</summary>
