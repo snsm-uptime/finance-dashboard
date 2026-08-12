@@ -146,7 +146,7 @@ export function Sheet({
         style={{ "--sheet-max-height": maxHeight } as React.CSSProperties}
       >
         <div className={styles.sheetHeader}>
-          <div className={styles.sheetLeading}>{cornerAction}</div>
+          {cornerAction && <div className={styles.sheetLeading}>{cornerAction}</div>}
           <h2 id={titleId} className={styles.sheetTitle}>
             {title}
           </h2>
