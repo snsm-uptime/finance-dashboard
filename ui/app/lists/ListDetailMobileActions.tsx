@@ -15,7 +15,7 @@ import type { DefaultSplitMessages } from "./DefaultSplitPanel";
 import { DefaultSplitPanel } from "./DefaultSplitPanel";
 import type { DefaultSplitPayload, ListMember } from "./listsClient";
 import { Sheet } from "./Sheet";
-import { FormIconSubmit } from "./FormIconSubmit";
+import { FormIconSubmit } from "@/components/FormIconSubmit/FormIconSubmit";
 import styles from "./ListDetailMobileActions.module.css";
 
 type SheetKind = "expense" | "invite" | "split" | null;
