@@ -14,7 +14,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 
 import { usePreferences } from "@/components/PreferencesProvider";
-import { useModalAnimation } from "@/hooks";
+import { useModalAnimation, useFocusTrap } from "@/hooks";
 import { listsMessages } from "@/lib/i18n/lists";
 import { DotsIcon, CloseIcon, PlusIcon } from "@/app/icons";
 import type { InviteFormMessages } from "./InviteForm";
@@ -52,40 +52,12 @@ function InviteSheet({
   const titleId = useId();
   const { phase } = useModalAnimation(open, { closeAnimationMs: 280 });
 
-  useEffect(() => {
-    if (phase !== "open") return;
-    closeRef.current?.focus();
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-        return;
-      }
-      if (event.key !== "Tab" || !panelRef.current) return;
-      const focusable = panelRef.current.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      );
-      if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.addEventListener("keydown", onKeyDown as unknown as EventListener);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", onKeyDown as unknown as EventListener);
-    };
-  }, [phase, onClose]);
+  useFocusTrap({
+    isActive: phase === "open",
+    containerRef: panelRef,
+    defaultFocusRef: closeRef,
+    onEscapePress: onClose,
+  });
 
   if (phase === "unmounted" || typeof document === "undefined") return null;
 
