@@ -117,18 +117,20 @@ tickets:
   TICKET-2.2:
     title: "Create IconButton Component"
     phase: "2"
-    status: backlog
+    status: done
     effort_hours: 1
     impact_loc: "+50 LOC new component, -90 LOC cleanup"
-    commit_sha: null
-    commit_message: null
+    commit_sha: "8cc53ef01985d933eb8ec5fe8d9129f45ec693d6"
+    commit_message: "refactor: create IconButton component, consolidate icon styling"
     blockers: []
     notes: |
       Consolidate ShareTitleButton + sheetClose + corner action buttons.
       Single source of truth for icon button styling.
       Variants: default, muted.
-    date_started: null
-    date_completed: null
+      Added forwardRef support for Sheet integration.
+      All TypeScript checks pass.
+    date_started: "2026-08-11"
+    date_completed: "2026-08-11"
     depends_on: []
 
   # ===== PHASE 3: SIMPLIFY FORMS (2–3 hours, 3 commits) =====
@@ -199,19 +201,19 @@ summary:
       commits: 5
       effort_hours: "2-3"
       risk_level: "low"
-      status: "ready-to-start"
+      status: "complete"
     phase_2:
       tickets: 2
       commits: 2
       effort_hours: "1-2"
       risk_level: "low"
-      status: "blocked-until-phase-1"
+      status: "complete"
     phase_3:
       tickets: 3
       commits: 3
       effort_hours: "2-3"
       risk_level: "medium"
-      status: "blocked-until-phase-1"
+      status: "ready-to-start"
 
 # ===== HOW TO USE THIS FILE =====
 #
