@@ -110,6 +110,35 @@ export function ManualExpenseForm({
     evenPercentMap(members),
   );
 
+  function resetAdjustFields() {
+    setAdjustOpen(false);
+    setMode("whole_assignee");
+    setAssigneeId(currentUserId);
+    setAbsoluteAmounts(emptyMemberMap(members));
+    setPercentages(evenPercentMap(members));
+  }
+
+  function buildSplitOverride():
+    | { ok: true; value: CreateExpenseBody["split_override"] | undefined }
+    | { ok: false; error: string } {
+    if (!adjustOpen) return { ok: true, value: undefined };
+    if (mode === "whole_assignee") {
+      return { ok: true, value: { kind: "whole_assignee", assignee_id: assigneeId } };
+    }
+    if (mode === "absolute_amounts") {
+      const amounts = nonEmptyEntries(absoluteAmounts);
+      if (!amounts) {
+        return { ok: false, error: messages.errorGeneric };
+      }
+      return { ok: true, value: { kind: "absolute_amounts", amounts } };
+    }
+    const pct = nonEmptyEntries(percentages);
+    if (!pct) {
+      return { ok: false, error: messages.errorGeneric };
+    }
+    return { ok: true, value: { kind: "percentage", percentages: pct } };
+  }
+
   const { pending, error, submit, clearError } = useFormSubmission(
     async (body: CreateExpenseBody) => {
       const override = buildSplitOverride();
@@ -141,35 +170,6 @@ export function ManualExpenseForm({
   useEffect(() => {
     onCanSubmitChange?.(canSubmit);
   }, [canSubmit, onCanSubmitChange]);
-
-  function resetAdjustFields() {
-    setAdjustOpen(false);
-    setMode("whole_assignee");
-    setAssigneeId(currentUserId);
-    setAbsoluteAmounts(emptyMemberMap(members));
-    setPercentages(evenPercentMap(members));
-  }
-
-  function buildSplitOverride():
-    | { ok: true; value: CreateExpenseBody["split_override"] | undefined }
-    | { ok: false; error: string } {
-    if (!adjustOpen) return { ok: true, value: undefined };
-    if (mode === "whole_assignee") {
-      return { ok: true, value: { kind: "whole_assignee", assignee_id: assigneeId } };
-    }
-    if (mode === "absolute_amounts") {
-      const amounts = nonEmptyEntries(absoluteAmounts);
-      if (!amounts) {
-        return { ok: false, error: messages.errorGeneric };
-      }
-      return { ok: true, value: { kind: "absolute_amounts", amounts } };
-    }
-    const pct = nonEmptyEntries(percentages);
-    if (!pct) {
-      return { ok: false, error: messages.errorGeneric };
-    }
-    return { ok: true, value: { kind: "percentage", percentages: pct } };
-  }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

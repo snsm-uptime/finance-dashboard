@@ -88,14 +88,18 @@ export function DefaultSplitPanel({ listId, isOwner, initial, members, messages,
   const [percents, setPercents] = useState<Record<string, string>>(() => initialPercents);
   const [savedPercents, setSavedPercents] = useState<Record<string, string>>(initialPercents);
 
-  const { pending, error, submit, clearError } = useFormSubmission(
+  const { pending, error, submit } = useFormSubmission(
     async (
       body: { mode: "even" } | { mode: "percentage"; shares: Array<{ user_id: string; percentage: string }> }
     ) => {
-      const result = await saveDefaultSplit(listId, body as any, {
-        ...messages,
-        errorInvalidName: messages.errorInvalidSplit,
-      });
+      const result = await saveDefaultSplit(
+        listId,
+        body as Parameters<typeof saveDefaultSplit>[1],
+        {
+          ...messages,
+          errorInvalidName: messages.errorInvalidSplit,
+        }
+      );
       if (result.ok) {
         setMode(result.split.mode);
         setSavedMode(result.split.mode);
@@ -125,6 +129,20 @@ export function DefaultSplitPanel({ listId, isOwner, initial, members, messages,
   }, [mode, savedMode, percents, savedPercents]);
   const canSave = hasChanged && sumOk && !pending;
 
+  async function onSave() {
+    const body =
+      mode === "even"
+        ? { mode: "even" as const }
+        : {
+            mode: "percentage" as const,
+            shares: Object.entries(percents).map(([user_id, percentage]) => ({
+              user_id,
+              percentage,
+            })),
+          };
+    await submit(body);
+  }
+
   useEffect(() => {
     onCanSaveChange?.(canSave);
   }, [canSave, onCanSaveChange]);
@@ -137,7 +155,7 @@ export function DefaultSplitPanel({ listId, isOwner, initial, members, messages,
         }
       });
     }
-  }, [isOwner, canSave, onSaveRequest]);
+  }, [isOwner, canSave, onSaveRequest, onSave]);
 
   if (!isOwner) {
     return (
@@ -153,20 +171,6 @@ export function DefaultSplitPanel({ listId, isOwner, initial, members, messages,
         </p>
       </section>
     );
-  }
-
-  async function onSave() {
-    const body =
-      mode === "even"
-        ? { mode: "even" as const }
-        : {
-            mode: "percentage" as const,
-            shares: Object.entries(percents).map(([user_id, percentage]) => ({
-              user_id,
-              percentage,
-            })),
-          };
-    await submit(body);
   }
 
   return (
