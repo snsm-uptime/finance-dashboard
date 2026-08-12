@@ -58,17 +58,20 @@ tickets:
   TICKET-1.3:
     title: "Extract useFormSubmission Hook"
     phase: "1"
-    status: backlog
+    status: done
     effort_hours: 1.5
     impact_loc: "-60 LOC across 3 forms"
-    commit_sha: null
-    commit_message: null
+    commit_sha: "a69eebfcda4e2909f04ec2aaf4039e2496ac1697"
+    commit_message: "refactor: fix hoisting and type issues in form refactoring"
     blockers: []
     notes: |
       Async form lifecycle pattern: error state, pending guard, success callback.
       Reduces form boilerplate by 83%.
-    date_started: null
-    date_completed: null
+      Implemented with working hook in useFormSubmission.ts.
+      All three forms (ManualExpenseForm, DefaultSplitPanel, InviteForm) refactored.
+      Build passes, TypeScript strict mode clean after lint fixes.
+    date_started: "2026-08-12"
+    date_completed: "2026-08-12"
     depends_on: []
 
   TICKET-1.4:
