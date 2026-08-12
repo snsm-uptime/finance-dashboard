@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { useFormSubmission } from "@/hooks";
 import { SoftLedgerRadio } from "@/components/soft-ledger/Radio";
 
 import { PercentageSplitTrack } from "./PercentageSplitTrack";
@@ -86,8 +87,29 @@ export function DefaultSplitPanel({ listId, isOwner, initial, members, messages,
   const initialPercents = useMemo(() => getInitialSavedPercents(initial), [initial]);
   const [percents, setPercents] = useState<Record<string, string>>(() => initialPercents);
   const [savedPercents, setSavedPercents] = useState<Record<string, string>>(initialPercents);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+
+  const { pending, error, submit, clearError } = useFormSubmission(
+    async (
+      body: { mode: "even" } | { mode: "percentage"; shares: Array<{ user_id: string; percentage: string }> }
+    ) => {
+      const result = await saveDefaultSplit(listId, body as any, {
+        ...messages,
+        errorInvalidName: messages.errorInvalidSplit,
+      });
+      if (result.ok) {
+        setMode(result.split.mode);
+        setSavedMode(result.split.mode);
+        const next: Record<string, string> = {};
+        for (const share of result.split.shares) {
+          next[share.user_id] = share.percentage;
+        }
+        setPercents(next);
+        setSavedPercents(next);
+      }
+      return result;
+    },
+    { onSuccess }
+  );
 
   const userIds = useMemo(() => {
     if (initial.member_ids.length > 0) return initial.member_ids;
@@ -133,37 +155,18 @@ export function DefaultSplitPanel({ listId, isOwner, initial, members, messages,
     );
   }
 
-  function onSave() {
-    setError(null);
-    startTransition(async () => {
-      const body =
-        mode === "even"
-          ? { mode: "even" as const }
-          : {
-              mode: "percentage" as const,
-              shares: Object.entries(percents).map(([user_id, percentage]) => ({
-                user_id,
-                percentage,
-              })),
-            };
-      const result = await saveDefaultSplit(listId, body, {
-        ...messages,
-        errorInvalidName: messages.errorInvalidSplit,
-      });
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      setMode(result.split.mode);
-      setSavedMode(result.split.mode);
-      const next: Record<string, string> = {};
-      for (const share of result.split.shares) {
-        next[share.user_id] = share.percentage;
-      }
-      setPercents(next);
-      setSavedPercents(next);
-      onSuccess?.();
-    });
+  async function onSave() {
+    const body =
+      mode === "even"
+        ? { mode: "even" as const }
+        : {
+            mode: "percentage" as const,
+            shares: Object.entries(percents).map(([user_id, percentage]) => ({
+              user_id,
+              percentage,
+            })),
+          };
+    await submit(body);
   }
 
   return (
