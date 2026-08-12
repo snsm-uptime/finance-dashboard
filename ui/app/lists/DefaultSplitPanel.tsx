@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { useFormSubmission } from "@/hooks";
+import { useFormSubmission, useFormStateSync } from "@/hooks";
 import { SoftLedgerRadio } from "@/components/soft-ledger/Radio";
 
 import { PercentageSplitTrack } from "./PercentageSplitTrack";
@@ -143,9 +143,7 @@ export function DefaultSplitPanel({ listId, isOwner, initial, members, messages,
     await submit(body);
   }
 
-  useEffect(() => {
-    onCanSaveChange?.(canSave);
-  }, [canSave, onCanSaveChange]);
+  useFormStateSync(canSave, onCanSaveChange);
 
   useEffect(() => {
     if (isOwner) {

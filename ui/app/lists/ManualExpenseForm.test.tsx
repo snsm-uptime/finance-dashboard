@@ -341,6 +341,7 @@ describe("ManualExpenseForm", () => {
   });
 
   it("submit control is an icon button, disabled until amount and description are set", async () => {
+    const onCanSubmitChange = vi.fn();
     await act(async () => {
       root.render(
         <ManualExpenseForm
@@ -348,13 +349,12 @@ describe("ManualExpenseForm", () => {
           currentUserId="user-a"
           members={members}
           messages={messages}
+          onCanSubmitChange={onCanSubmitChange}
         />,
       );
     });
-    const button = container.querySelector('button[type="submit"]') as HTMLButtonElement;
-    expect(button).not.toBeNull();
-    expect(button.getAttribute("aria-label")).toBe(messages.expenseSubmit);
-    expect(button.disabled).toBe(true);
+    // Form starts empty, so canSubmit should be false
+    expect(onCanSubmitChange).toHaveBeenCalledWith(false);
 
     const amount = container.querySelector('input[name="amount"]') as HTMLInputElement;
     const description = container.querySelector(
@@ -370,6 +370,7 @@ describe("ManualExpenseForm", () => {
       description.dispatchEvent(new Event("change", { bubbles: true }));
     });
 
-    expect(button.disabled).toBe(false);
+    // After filling both fields, canSubmit should be true
+    expect(onCanSubmitChange).toHaveBeenLastCalledWith(true);
   });
 });

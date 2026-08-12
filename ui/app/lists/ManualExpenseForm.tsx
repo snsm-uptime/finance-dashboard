@@ -1,9 +1,9 @@
 "use client";
 
-import { FormEvent, useEffect, useId, useState } from "react";
+import { FormEvent, useId, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { useFormSubmission } from "@/hooks";
+import { useFormSubmission, useFormStateSync } from "@/hooks";
 import { SoftLedgerRadio } from "@/components/soft-ledger/Radio";
 import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
 
@@ -167,9 +167,7 @@ export function ManualExpenseForm({
   const canSubmit =
     amount.trim().length > 0 && description.trim().length > 0 && !pending;
 
-  useEffect(() => {
-    onCanSubmitChange?.(canSubmit);
-  }, [canSubmit, onCanSubmitChange]);
+  useFormStateSync(canSubmit, onCanSubmitChange);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
