@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useId, useRef, useState } from "react";
+import { FormEvent, useId, useState } from "react";
 
+import { useFormSubmission } from "@/hooks";
 import { FormIconField } from "./FormIconSubmit";
 import { inviteMember, type ListsClientMessages } from "./listsClient";
 import styles from "./lists.module.css";
@@ -27,33 +28,26 @@ export function InviteForm({ listId, messages, reserveErrorHeight = false, hideB
   const baseId = useId();
   const emailId = `${baseId}-email`;
   const [email, setEmail] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
-  const [pending, setPending] = useState(false);
-  const pendingRef = useRef(false);
+
+  const { pending, error, submit, clearError } = useFormSubmission(
+    async (emailAddress: string) => {
+      const result = await inviteMember(listId, emailAddress, messages);
+      if (result.ok) {
+        setSent(true);
+        setEmail("");
+      }
+      return result;
+    }
+  );
 
   const canSubmit = email.trim().length > 0 && !pending;
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (pendingRef.current || !email.trim()) return;
-    pendingRef.current = true;
-    setError(null);
-    setPending(true);
+    setSent(false);
     const submitted = String(new FormData(event.currentTarget).get("email") ?? email);
-    try {
-      const result = await inviteMember(listId, submitted, messages);
-      if (!result.ok) {
-        setSent(false);
-        setError(result.error);
-        return;
-      }
-      setSent(true);
-      setEmail("");
-    } finally {
-      pendingRef.current = false;
-      setPending(false);
-    }
+    await submit(submitted);
   }
 
   return (
@@ -74,7 +68,7 @@ export function InviteForm({ listId, messages, reserveErrorHeight = false, hideB
         onChange={(e) => {
           setEmail(e.target.value);
           setSent(false);
-          setError(null);
+          clearError();
         }}
       />
       {sent ? (
