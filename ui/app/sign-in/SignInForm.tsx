@@ -6,7 +6,7 @@ import Link from "next/link";
 import { EyeIcon } from "@/app/icons";
 import { signInMessages, type Locale } from "@/lib/i18n/signin";
 import { attemptSignIn } from "./signInClient";
-import styles from "../signup/signup.module.css";
+import styles from "../signup/signup.module.scss";
 
 type Props = {
   locale: Locale;

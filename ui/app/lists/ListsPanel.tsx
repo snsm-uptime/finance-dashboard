@@ -27,7 +27,7 @@ import {
   setLastOpenedList,
   type ListItem,
 } from "./listsClient";
-import styles from "./lists.module.css";
+import styles from "./lists.module.scss";
 
 type Props = {
   initialLists: ListItem[];

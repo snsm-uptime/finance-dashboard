@@ -4,7 +4,7 @@ import { detectLocale } from "@/lib/i18n/locale";
 import { inviteMessages } from "@/lib/i18n/invite";
 import { fetchSession } from "@/lib/session";
 import { AcceptInvitePanel } from "./AcceptInvitePanel";
-import styles from "../../signup/signup.module.css";
+import styles from "../../signup/signup.module.scss";
 
 export const dynamic = "force-dynamic";
 

@@ -8,7 +8,7 @@ import { aliasMessages } from "@/lib/i18n/alias";
 
 import { AliasSetupForm } from "./AliasSetupForm";
 
-vi.mock("../signup/signup.module.css", () => ({
+vi.mock("../signup/signup.module.scss", () => ({
   default: new Proxy(
     {},
     {

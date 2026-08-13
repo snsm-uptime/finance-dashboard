@@ -6,7 +6,7 @@ import { passwordResetMessages } from "@/lib/i18n/password-reset";
 import { resolveServerAuthenticatedLanding } from "@/lib/serverLanding";
 import { fetchSession } from "@/lib/session";
 import { ForgotPasswordForm } from "./ForgotPasswordForm";
-import styles from "../signup/signup.module.css";
+import styles from "../signup/signup.module.scss";
 
 export const dynamic = "force-dynamic";
 

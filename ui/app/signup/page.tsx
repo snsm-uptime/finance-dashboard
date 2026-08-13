@@ -6,7 +6,7 @@ import { detectLocale, signupMessages } from "@/lib/i18n/signup";
 import { resolveServerAuthenticatedLanding } from "@/lib/serverLanding";
 import { fetchSession } from "@/lib/session";
 import { SignupForm } from "./SignupForm";
-import styles from "./signup.module.css";
+import styles from "./signup.module.scss";
 
 export const dynamic = "force-dynamic";
 

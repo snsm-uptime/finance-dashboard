@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { AccountNavLink } from "@/components/AccountNavLink";
 import { requireAlias } from "@/lib/alias";
 import { fetchSession } from "@/lib/session";
-import styles from "../lists/lists.module.css";
+import styles from "../lists/lists.module.scss";
 
 export const dynamic = "force-dynamic";
 

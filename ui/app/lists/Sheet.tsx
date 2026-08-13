@@ -10,7 +10,7 @@ import { createPortal } from "react-dom";
 import { useModalAnimation, useFocusTrap } from "@/hooks";
 import { CloseIcon } from "@/app/icons";
 import { IconButton } from "@/components/IconButton";
-import styles from "./Sheet.module.css";
+import styles from "./Sheet.module.scss";
 
 const CLOSE_ANIMATION_MS = 280;
 

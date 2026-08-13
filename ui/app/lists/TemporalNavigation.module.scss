@@ -145,6 +145,10 @@
   /* Form children will handle their own spacing */
 }
 
+/* IMPLICIT STYLING: These :global() selectors style soft-ledger components' nested elements.
+   Dependency: soft-ledger components must render section/h2/form within this form body.
+   Risk: If other components later place these elements here, they'll inherit these styles.
+   Better approach: Pass layout className props to soft-ledger components if possible. */
 .formBody :global(section) {
   margin: 0;
   max-width: none;
@@ -158,3 +162,5 @@
   margin: 0;
   max-width: none;
 }
+
+/* TODO: Add RTL support for button group if needed (currently flex-row is LTR only) */

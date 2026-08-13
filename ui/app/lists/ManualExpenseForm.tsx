@@ -15,7 +15,7 @@ import {
   type ListMember,
   type ListsClientMessages,
 } from "./listsClient";
-import styles from "./ManualExpenseForm.module.css";
+import styles from "./ManualExpenseForm.module.scss";
 
 export type ManualExpenseMessages = ListsClientMessages & {
   expenseTitle: string;

@@ -18,7 +18,7 @@ import { ListDetailMobileActions } from "../ListDetailMobileActions";
 import { ManualExpenseForm } from "../ManualExpenseForm";
 import { TemporalNavigation } from "../TemporalNavigation";
 import { balanceTone, type DefaultSplitPayload, type ExpenseItem, type ListMember } from "../listsClient";
-import styles from "../lists.module.css";
+import styles from "../lists.module.scss";
 
 export const dynamic = "force-dynamic";
 

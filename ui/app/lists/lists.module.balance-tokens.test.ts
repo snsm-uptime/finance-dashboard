@@ -16,8 +16,8 @@ describe("homepage balance polarity tokens", () => {
     expect(balanceTone(undefined)).toBe("zero");
   });
 
-  it("lists.module.css uses Warm Balance owe/owed vars on homepage balance amounts", () => {
-    const css = readFileSync(join(here, "lists.module.css"), "utf8");
+  it("lists.module.scss uses Warm Balance owe/owed vars on homepage balance amounts", () => {
+    const css = readFileSync(join(here, "lists.module.scss"), "utf8");
     expect(css).toContain(".balanceOwe .balanceAmount");
     expect(css).toContain(".balanceOwed .balanceAmount");
     expect(css).toContain("var(--owe)");

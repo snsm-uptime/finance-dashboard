@@ -7,15 +7,15 @@ import type {
 } from "react";
 
 import { SaveIcon, SendIcon } from "@/app/icons";
-import styles from "./FormIconSubmit.module.css";
+import styles from "./FormIconSubmit.module.scss";
 
 export type FormIconVariant = "save" | "send";
 
 function IconGlyph({ variant }: { variant: FormIconVariant }) {
   return variant === "send" ? (
-    <SendIcon className={styles.icon} />
+    <SendIcon className="block w-[1.2rem] h-[1.2rem]" />
   ) : (
-    <SaveIcon className={styles.icon} />
+    <SaveIcon className="block w-[1.2rem] h-[1.2rem]" />
   );
 }
 
@@ -41,7 +41,9 @@ export function FormIconSubmit({
   title,
   ...rest
 }: FormIconSubmitProps) {
-  const classes = className ? `${styles.button} ${className}` : styles.button;
+  const baseClasses =
+    "inline-flex items-center justify-center w-[2.5rem] h-[2.5rem] m-0 p-0 border border-border rounded-[8px] bg-surface text-accent cursor-pointer leading-none flex-shrink-0 transition-all duration-150 disabled:text-muted disabled:opacity-65 disabled:cursor-not-allowed";
+  const classes = className ? `${baseClasses} ${styles.button} ${className}` : `${baseClasses} ${styles.button}`;
   return (
     <button
       type={type}
@@ -90,19 +92,31 @@ export function FormIconField({
   onChange,
   ...inputRest
 }: FormIconFieldProps) {
-  const rootClass = className ? `${styles.fieldRoot} ${className}` : styles.fieldRoot;
+  const rootClasses = "flex flex-col gap-[0.35rem] min-w-0 w-full";
+  const labelClasses =
+    "text-[0.875rem] font-semibold text-foreground";
+  const groupClasses =
+    "flex items-stretch w-full min-w-0 box-border border border-border rounded-[8px] bg-[var(--background,var(--surface))] overflow-hidden transition-all duration-150 disabled:opacity-65 disabled:cursor-not-allowed";
+  const inputClasses =
+    "block flex-1 min-w-0 w-full box-border m-0 py-[0.6rem] px-[0.75rem] border-0 rounded-l-[8px] bg-transparent text-foreground text-base font-normal leading-[1.4] appearance-none disabled:opacity-65 disabled:cursor-not-allowed";
+  const suffixClasses =
+    "inline-flex items-center justify-center flex-shrink-0 w-[2.75rem] m-0 p-0 border-0 border-l border-l-border rounded-r-[8px] bg-surface text-accent cursor-pointer leading-none transition-all duration-150 disabled:text-muted disabled:opacity-45 disabled:cursor-not-allowed";
+  const rootClass = className
+    ? `${rootClasses} ${className}`
+    : rootClasses;
   return (
     <div className={rootClass}>
       {label != null ? (
-        <label className={styles.fieldLabel} htmlFor={id}>
+        <label className={labelClasses} htmlFor={id} style={{ fontFamily: "var(--font-ui), system-ui, sans-serif" }}>
           {label}
         </label>
       ) : null}
-      <div className={styles.group}>
+      <div className={`${groupClasses} ${styles.group}`}>
         <input
           {...inputRest}
           id={id}
-          className={styles.fieldInput}
+          className={inputClasses}
+          style={{ fontFamily: "var(--font-ui), system-ui, sans-serif" }}
           type={type}
           value={value}
           disabled={disabled}
@@ -110,7 +124,7 @@ export function FormIconField({
         />
         <button
           type="submit"
-          className={styles.suffix}
+          className={`${suffixClasses} ${styles.suffix}`}
           aria-label={submitLabel}
           title={submitLabel}
           disabled={submitDisabled ?? disabled}

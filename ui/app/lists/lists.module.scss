@@ -472,6 +472,12 @@
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .menu {
+    animation: none;
+  }
+}
+
 .menuItem {
   display: block;
   width: 100%;
@@ -503,15 +509,15 @@
 }
 
 .menuItemDanger:not(:disabled) {
-  color: color-mix(in srgb, #d32f2f 85%, transparent);
+  color: color-mix(in srgb, var(--owe) 85%, transparent);
 }
 
 .menuItemDanger:hover:not(:disabled) {
-  background: color-mix(in srgb, #d32f2f 12%, transparent);
+  background: color-mix(in srgb, var(--owe) 12%, transparent);
 }
 
 .menuItemDanger:focus-visible:not(:disabled) {
-  background: color-mix(in srgb, #d32f2f 18%, transparent);
+  background: color-mix(in srgb, var(--owe) 18%, transparent);
 }
 
 .balance {
@@ -567,6 +573,7 @@
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  min-height: 100dvh;
   padding: 0;
   margin: 0;
   background: var(--background);
@@ -627,6 +634,7 @@
   font-weight: 600;
 }
 
+/* Breakpoint: 768px matches Tailwind default md: breakpoint. Must stay in sync if config changes. */
 @media (min-width: 768px) {
   .expenseTitle {
     display: flex;
@@ -677,6 +685,10 @@
     overscroll-behavior: contain;
   }
 
+  /* IMPLICIT STYLING: These :global() selectors style soft-ledger primitives' section/form elements.
+     Dependency: soft-ledger components must render <section> and <form> within this sidebar.
+     Risk: If other components later place section/form here, they'll inherit these styles.
+     Better approach: Pass layout className props to soft-ledger components if possible. */
   .detailSidebar :global(section) {
     margin-bottom: 0;
   }

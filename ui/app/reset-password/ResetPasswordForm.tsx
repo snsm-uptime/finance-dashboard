@@ -8,7 +8,7 @@ import {
   passwordResetMessages,
   type Locale,
 } from "@/lib/i18n/password-reset";
-import styles from "../signup/signup.module.css";
+import styles from "../signup/signup.module.scss";
 
 type Props = {
   locale: Locale;
