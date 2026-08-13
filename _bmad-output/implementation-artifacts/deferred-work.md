@@ -144,3 +144,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-2-user-alias-display.md`
   summary: No dedicated test that POST /auth/verify/confirm never mutates alias
   evidence: Review — design says verify-only; locked only by absence of call sites today
+
+## Deferred from: code review of 3-5-1-install-tailwind-sass-warm-balance-theme.md (2026-08-12)
+
+- `@custom-variant dark` is class-only; legacy CSS vars have a `prefers-color-scheme` fallback for the no-class state but `dark:` Tailwind utilities do not — masked today because no component uses `dark:` utilities yet and `themeBootScript` runs pre-paint; revisit when 3.5.2/3.5.3 first uses `dark:` utilities
+- `sass` added with zero `*.module.scss` files to prove the compile pipeline works end-to-end — lower risk than the Tailwind PostCSS issue since Next's Sass loader is built-in/stable, but still unverified; will get real coverage once 3.5.2 adds the first `.module.scss`
+- "Forbidden: new `*.module.css`" convention is prose-only with no lint/tooling enforcement; 21 pre-existing `*.module.css` files remain, making an accidental violation easy — enforcement tooling is beyond Task 3's scope (convention note only)
