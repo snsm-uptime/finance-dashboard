@@ -219,6 +219,10 @@ describe("expense client", () => {
           line_type: "purchase",
           posted_date: "2026-08-06",
           created_at: "2026-08-06T12:00:00Z",
+          amount_crc: "10.00",
+          fx_rate: "1",
+          fx_rate_date: "2026-08-06",
+          fx_fallback: false,
         }),
       }),
     );

@@ -5,17 +5,40 @@ Requires DATABASE_URL (Compose db or CI Postgres 16). Skips when unset.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from datetime import date
+from decimal import Decimal
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
-from tests.integration_db import claim_alias, database_url
+from tests.integration_db import claim_alias, database_url, make_client
 
 pytestmark = pytest.mark.skipif(
     database_url() is None,
     reason="DATABASE_URL not set — Postgres 16 required for integration tests",
 )
+
+
+class FakeUsdBccrClient:
+    """Deterministic BCCR double for USD FX integration tests (Story 3.5)."""
+
+    def get_rate(self, rate_date: date, currency: str) -> Decimal | None:
+        if currency == "USD":
+            return Decimal("525.00")
+        return None
+
+    def get_nearest_prior_rate(self, rate_date: date, currency: str):
+        return None
+
+    def supported_currencies(self) -> list[str]:
+        return ["USD"]
+
+
+@pytest.fixture
+def client_with_fx(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
+    yield from make_client(db_session, monkeypatch, smtp=False, bccr_client=FakeUsdBccrClient())
 
 
 def _register(client: TestClient, email: str) -> str:
@@ -167,12 +190,32 @@ def test_non_member_create_forbidden(client: TestClient) -> None:
     assert owner_id  # used
 
 
-def test_non_crc_rejected(client: TestClient) -> None:
-    owner_id = _register(client, "owner-usd@example.com")
+def test_unsupported_currency_rejected(client: TestClient) -> None:
+    """v1 FX scope is CRC+USD only (AD-7) — other currencies are deferred."""
+    owner_id = _register(client, "owner-eur@example.com")
     created = client.post("/lists", json={"name": "FX later"})
     list_id = created.json()["id"]
 
     bad = client.post(
+        f"/lists/{list_id}/expenses",
+        json={
+            "amount": "1.00",
+            "currency": "EUR",
+            "description": "Euros",
+            "payer_id": owner_id,
+        },
+    )
+    assert bad.status_code == 422
+    assert bad.json()["code"] == "invalid_manual_expense"
+
+
+def test_usd_without_bccr_wired_fails_loud(client: TestClient) -> None:
+    """No live BCCR adapter yet (Dev Notes) — USD must 503, never silently use 1:1."""
+    owner_id = _register(client, "owner-usd-unwired@example.com")
+    created = client.post("/lists", json={"name": "FX unwired"})
+    list_id = created.json()["id"]
+
+    resp = client.post(
         f"/lists/{list_id}/expenses",
         json={
             "amount": "1.00",
@@ -181,8 +224,60 @@ def test_non_crc_rejected(client: TestClient) -> None:
             "payer_id": owner_id,
         },
     )
-    assert bad.status_code == 422
-    assert bad.json()["code"] == "invalid_manual_expense"
+    assert resp.status_code == 503, resp.text
+    assert resp.json()["code"] == "fx_service_unavailable"
+
+
+def test_usd_expense_materializes_fx_and_audit_trail(client_with_fx: TestClient) -> None:
+    owner_id = _register(client_with_fx, "owner-usd-fx@example.com")
+    created = client_with_fx.post("/lists", json={"name": "FX materialized"})
+    list_id = created.json()["id"]
+
+    expense = client_with_fx.post(
+        f"/lists/{list_id}/expenses",
+        json={
+            "amount": "100.00",
+            "currency": "USD",
+            "description": "Dinner",
+            "payer_id": owner_id,
+        },
+    )
+    assert expense.status_code == 201, expense.text
+    body = expense.json()
+    assert body["currency"] == "USD"
+    assert body["amount"] == "100.00"
+    assert body["amount_crc"] == "52500.00"
+    assert body["fx_rate"] == "525.00"
+    assert body["fx_fallback"] is False
+
+    listing = client_with_fx.get(f"/lists/{list_id}/expenses")
+    assert listing.status_code == 200, listing.text
+    row = listing.json()["expenses"][0]
+    assert row["amount_crc"] == "52500.00"
+    assert row["fx_rate"] == "525.00"
+    assert row["fx_rate_date"]
+    assert row["fx_fallback"] is False
+
+
+def test_crc_expense_fx_passthrough(client_with_fx: TestClient) -> None:
+    owner_id = _register(client_with_fx, "owner-crc-fx@example.com")
+    created = client_with_fx.post("/lists", json={"name": "CRC passthrough"})
+    list_id = created.json()["id"]
+
+    expense = client_with_fx.post(
+        f"/lists/{list_id}/expenses",
+        json={
+            "amount": "10.00",
+            "currency": "CRC",
+            "description": "Coffee",
+            "payer_id": owner_id,
+        },
+    )
+    assert expense.status_code == 201, expense.text
+    body = expense.json()
+    assert body["amount_crc"] == "10.00"
+    assert body["fx_rate"] == "1"
+    assert body["fx_fallback"] is False
 
 
 def test_list_members_roster_labels_with_alias(client: TestClient, db_session: Session) -> None:

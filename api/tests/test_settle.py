@@ -48,7 +48,7 @@ def test_simple_50_50_split_alice_pays(alice_id, bob_id, list_id):
     entry = LedgerEntryRecord(
         id=uuid4(),
         list_id=list_id,
-        amount=Decimal("1000"),
+        amount_crc=Decimal("1000"),
         currency="CRC",
         payer_id=alice_id,
         line_type="purchase",
@@ -101,7 +101,7 @@ def test_single_payer_single_recipient(alice_id, bob_id, list_id):
     entry = LedgerEntryRecord(
         id=uuid4(),
         list_id=list_id,
-        amount=Decimal("1000"),
+        amount_crc=Decimal("1000"),
         currency="CRC",
         payer_id=alice_id,
         line_type="purchase",
@@ -154,7 +154,7 @@ def test_multiple_members_mixed_payers(alice_id, bob_id, charlie_id, list_id):
     entry1 = LedgerEntryRecord(
         id=uuid4(),
         list_id=list_id,
-        amount=Decimal("1000"),
+        amount_crc=Decimal("1000"),
         currency="CRC",
         payer_id=alice_id,
         line_type="purchase",
@@ -163,7 +163,7 @@ def test_multiple_members_mixed_payers(alice_id, bob_id, charlie_id, list_id):
     entry2 = LedgerEntryRecord(
         id=uuid4(),
         list_id=list_id,
-        amount=Decimal("600"),
+        amount_crc=Decimal("600"),
         currency="CRC",
         payer_id=bob_id,
         line_type="purchase",
@@ -230,7 +230,7 @@ def test_excluded_line_types_skipped(alice_id, bob_id, list_id):
     purchase_entry = LedgerEntryRecord(
         id=uuid4(),
         list_id=list_id,
-        amount=Decimal("1000"),
+        amount_crc=Decimal("1000"),
         currency="CRC",
         payer_id=alice_id,
         line_type="purchase",
@@ -239,7 +239,7 @@ def test_excluded_line_types_skipped(alice_id, bob_id, list_id):
     fee_entry = LedgerEntryRecord(
         id=uuid4(),
         list_id=list_id,
-        amount=Decimal("100"),
+        amount_crc=Decimal("100"),
         currency="CRC",
         payer_id=alice_id,
         line_type="fee",
@@ -248,7 +248,7 @@ def test_excluded_line_types_skipped(alice_id, bob_id, list_id):
     payment_entry = LedgerEntryRecord(
         id=uuid4(),
         list_id=list_id,
-        amount=Decimal("50"),
+        amount_crc=Decimal("50"),
         currency="CRC",
         payer_id=bob_id,
         line_type="payment",
@@ -329,7 +329,7 @@ def test_expense_with_only_payer_in_allocations(alice_id, bob_id, list_id):
     entry = LedgerEntryRecord(
         id=uuid4(),
         list_id=list_id,
-        amount=Decimal("1000"),
+        amount_crc=Decimal("1000"),
         currency="CRC",
         payer_id=alice_id,
         line_type="purchase",
@@ -380,7 +380,7 @@ def test_invariant_sum_equals_zero(alice_id, bob_id, list_id):
     entry = LedgerEntryRecord(
         id=uuid4(),
         list_id=list_id,
-        amount=Decimal("1000"),
+        amount_crc=Decimal("1000"),
         currency="CRC",
         payer_id=alice_id,
         line_type="purchase",
@@ -432,7 +432,7 @@ def test_percentage_split_with_remainder_to_creator(alice_id, bob_id, charlie_id
     entry = LedgerEntryRecord(
         id=uuid4(),
         list_id=list_id,
-        amount=Decimal("1000"),
+        amount_crc=Decimal("1000"),
         currency="CRC",
         payer_id=bob_id,
         line_type="purchase",
@@ -486,7 +486,7 @@ def test_double_count_prevention_receipt_level_only(alice_id, bob_id, list_id):
     entry = LedgerEntryRecord(
         id=uuid4(),
         list_id=list_id,
-        amount=Decimal("1000"),
+        amount_crc=Decimal("1000"),
         currency="CRC",
         payer_id=alice_id,
         line_type="purchase",
@@ -527,4 +527,70 @@ def test_double_count_prevention_receipt_level_only(alice_id, bob_id, list_id):
 
     assert balances[alice_id] == Decimal("500")
     assert balances[bob_id] == Decimal("-500")
+    assert sum(balances.values(), Decimal("0")) == Decimal("0")
+
+
+def test_mixed_crc_and_usd_entries_use_materialized_amount_crc(alice_id, bob_id, list_id):
+    """Story 3.5: settle-up sums amount_crc for both CRC and FX-materialized USD lines."""
+    members = [
+        ListMemberView(user_id=alice_id, alias="Alice"),
+        ListMemberView(user_id=bob_id, alias="Bob"),
+    ]
+    crc_entry = LedgerEntryRecord(
+        id=uuid4(),
+        list_id=list_id,
+        amount_crc=Decimal("1000"),
+        currency="CRC",
+        payer_id=alice_id,
+        line_type="purchase",
+    )
+    # USD 100 materialized at 525.00 -> amount_crc = 52500; original currency/amount
+    # are not consulted by settle-up (AC #2) — only the materialized CRC value is.
+    usd_entry = LedgerEntryRecord(
+        id=uuid4(),
+        list_id=list_id,
+        amount_crc=Decimal("52500.00"),
+        currency="USD",
+        payer_id=bob_id,
+        line_type="purchase",
+    )
+
+    def compute_allocations_fn(
+        total,
+        currency,
+        item_override=None,
+        receipt_override=None,
+        list_default_mode="even",
+        list_default_shares=None,
+        member_ids=None,
+        creator_user_id=None,
+        currency_exponent=2,
+    ):
+        half = total / 2
+        allocations = [
+            ShareAllocation(member_id=alice_id, amount=half, currency="CRC"),
+            ShareAllocation(member_id=bob_id, amount=total - half, currency="CRC"),
+        ]
+        return MockAllocationResult(allocations)
+
+    def get_split_override_fn(entry_id):
+        return None
+
+    def get_list_default_split_fn(list_id):
+        return None
+
+    balances = compute_settle_balance_for_list_members(
+        [crc_entry, usd_entry],
+        members,
+        alice_id,
+        compute_allocations_fn,
+        get_split_override_fn,
+        get_list_default_split_fn,
+        default_mode="even",
+    )
+
+    # Alice paid 1000 CRC, owes half of each entry; Bob paid 52500 CRC (materialized),
+    # owes the other half of each entry.
+    assert balances[alice_id] == Decimal("1000") - Decimal("500") - Decimal("26250")
+    assert balances[bob_id] == Decimal("52500") - Decimal("500") - Decimal("26250")
     assert sum(balances.values(), Decimal("0")) == Decimal("0")

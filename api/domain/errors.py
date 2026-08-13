@@ -282,3 +282,48 @@ class InviteEmailMismatchError(DomainError):
 
     def __init__(self) -> None:
         super().__init__(self.MESSAGE)
+
+
+class FxFutureDateError(DomainError):
+    """Raised when FX materialization is attempted for a future posted_date (AD-7)."""
+
+    CODE = "fx_future_date"
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(detail or "Cannot materialize FX for a future date.")
+
+
+class FxCurrencyNotSupportedError(DomainError):
+    """Raised when a currency has no BCCR rate support (v1 is USD+CRC only)."""
+
+    CODE = "fx_currency_not_supported"
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(detail or "Currency is not supported for FX conversion.")
+
+
+class FxRateNotAvailableError(DomainError):
+    """Raised when no BCCR rate exists for the date or any prior date (fail loud, AD-7)."""
+
+    CODE = "fx_rate_not_available"
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(detail or "No BCCR rate available for this currency/date.")
+
+
+class FxServiceUnavailableError(DomainError):
+    """Raised on BCCR transport failure (timeout, 5xx) — transient, operator/user retries."""
+
+    CODE = "fx_service_unavailable"
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(detail or "BCCR FX service is unavailable. Try again.")
+
+
+class FxAuthenticationError(DomainError):
+    """Raised on BCCR auth failure — operator-fixable (check BCCR_* env vars)."""
+
+    CODE = "fx_authentication_error"
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(detail or "BCCR authentication failed. Check BCCR_* configuration.")

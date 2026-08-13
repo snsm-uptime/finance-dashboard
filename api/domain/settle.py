@@ -22,11 +22,15 @@ INCLUDED_LINE_TYPES = frozenset({"purchase", "classified_purchase_reversal"})
 
 @dataclass(frozen=True, slots=True)
 class LedgerEntryRecord:
-    """Ledger entry with payer, amount, currency, and line type."""
+    """Ledger entry with payer, materialized CRC amount, currency, and line type.
+
+    amount_crc is FX-materialized at commit (Story 3.5 / AD-7) — settle-up always
+    reads it directly and never re-derives balances from the original currency.
+    """
 
     id: UUID
     list_id: UUID
-    amount: Decimal
+    amount_crc: Decimal
     currency: str
     payer_id: UUID
     line_type: str
@@ -91,7 +95,8 @@ def compute_settle_balance_for_list_members(
             continue
 
         payer_id = entry.payer_id
-        amount = entry.amount
+        # Always the materialized CRC amount — never re-call BCCR here (AC #2, AD-21).
+        amount = entry.amount_crc
 
         receipt_override = None
         if entry.receipt_id:

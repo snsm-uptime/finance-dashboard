@@ -73,6 +73,10 @@ export const listsMessages = {
     mobileAddExpenseAria: "Add expense",
     mobileInviteAria: "Invite someone",
     mobileSheetClose: "Close",
+    expenseFxOriginalTemplate: "{currency} {original} → ₡{crc}",
+    expenseFxFallbackSuffix: " (rate from {date}, nearest prior)",
+    expenseFxSummaryLabel: "Rate details",
+    expenseFxRateDetailTemplate: "Converted at rate {rate} on {date}",
   },
   es: {
     brand: "finance-helper",
@@ -148,6 +152,10 @@ export const listsMessages = {
     mobileAddExpenseAria: "Agregar gasto",
     mobileInviteAria: "Invitar a alguien",
     mobileSheetClose: "Cerrar",
+    expenseFxOriginalTemplate: "{currency} {original} → ₡{crc}",
+    expenseFxFallbackSuffix: " (tasa del {date}, fecha anterior más cercana)",
+    expenseFxSummaryLabel: "Detalles de la tasa",
+    expenseFxRateDetailTemplate: "Convertido a la tasa {rate} el {date}",
   },
 } as const;
 

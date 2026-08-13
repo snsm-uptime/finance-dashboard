@@ -4,9 +4,12 @@ type ReceiptRowProps = {
   amount?: string;
   /** Empty settle surface — muted placeholder, no invented totals. */
   emptyLabel?: string;
+  /** FX audit detail (Story 3.5 AC #3) — rate/date, keyboard-accessible via <details>. */
+  fxSummary?: string;
+  fxDetail?: string;
 };
 
-export function ReceiptRow({ title, when, amount, emptyLabel }: ReceiptRowProps) {
+export function ReceiptRow({ title, when, amount, emptyLabel, fxSummary, fxDetail }: ReceiptRowProps) {
   if (emptyLabel && !title) {
     return (
       <div
@@ -52,6 +55,30 @@ export function ReceiptRow({ title, when, amount, emptyLabel }: ReceiptRowProps)
           >
             {when}
           </span>
+        ) : null}
+        {fxSummary && fxDetail ? (
+          <details className="text-muted">
+            <summary
+              style={{
+                fontFamily: "var(--type-meta-face)",
+                fontSize: "var(--type-meta-size)",
+                fontWeight: "var(--type-meta-weight)",
+                cursor: "pointer",
+              }}
+              aria-label={fxDetail}
+            >
+              {fxSummary}
+            </summary>
+            <p
+              style={{
+                fontFamily: "var(--type-meta-face)",
+                fontSize: "var(--type-meta-size)",
+                fontWeight: "var(--type-meta-weight)",
+              }}
+            >
+              {fxDetail}
+            </p>
+          </details>
         ) : null}
       </div>
       {amount ? (

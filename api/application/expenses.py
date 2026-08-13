@@ -13,6 +13,7 @@ from domain.errors import InvalidManualExpenseError, ListNotFoundError
 from domain.expenses import ManualExpenseDraft, validate_manual_expense
 from domain.splits import SUBJECT_ITEM
 
+from application.fx_service import MaterializedFx, MaterializeFxService
 from application.list_access import (
     AuthorizeListAccessCommand,
     AuthorizeListAccessService,
@@ -37,6 +38,11 @@ class LedgerEntryRecord:
     line_type: str
     posted_date: date
     created_at: datetime
+    # FX materialized at commit (Story 3.5 / AD-7) — CRC entries pass through 1:1.
+    amount_crc: Decimal
+    fx_rate: Decimal
+    fx_rate_date: date | None
+    fx_fallback: bool
     receipt_id: UUID | None = None
     product_id: UUID | None = None
     external_ref: str | None = None
@@ -72,6 +78,7 @@ class ExpenseRepository(Protocol):
         entry_id: UUID,
         list_id: UUID,
         draft: ManualExpenseDraft,
+        fx: MaterializedFx,
     ) -> LedgerEntryRecord: ...
 
     def list_ledger_entries(self, list_id: UUID) -> list[LedgerEntryRecord]: ...
@@ -121,8 +128,9 @@ class ListMembersResult:
 class CreateManualExpenseService:
     """Create a hand ledger entry; optionally attach item split override in one txn."""
 
-    def __init__(self, repo: ExpenseRepository) -> None:
+    def __init__(self, repo: ExpenseRepository, fx_service: MaterializeFxService) -> None:
         self._repo = repo
+        self._fx_service = fx_service
 
     def execute(self, command: CreateManualExpenseCommand) -> LedgerEntryRecord:
         AuthorizeListAccessService(self._repo).execute(
@@ -140,6 +148,13 @@ class CreateManualExpenseService:
             payer_id=command.payer_id,
             member_ids=members,
         )
+        # Materialize FX before any write — a failed BCCR lookup must not persist
+        # a half-written entry (fail loud, AD-7). CRC drafts pass through 1:1.
+        fx = self._fx_service.materialize_fx_for_entry(
+            amount=draft.amount,
+            currency=draft.currency,
+            posted_date=date.fromisoformat(draft.posted_date),
+        )
         entry_id = uuid4()
         if not hasattr(self._repo, "atomic") or not callable(self._repo.atomic):
             raise TypeError("Expense repository must provide atomic() savepoints.")
@@ -148,6 +163,7 @@ class CreateManualExpenseService:
                 entry_id=entry_id,
                 list_id=command.list_id,
                 draft=draft,
+                fx=fx,
             )
             if command.split_override is not None:
                 # Reuse SetSplitOverride — do not invent a second allocator.

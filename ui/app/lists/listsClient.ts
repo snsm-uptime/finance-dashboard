@@ -349,6 +349,11 @@ export type ExpenseItem = {
   line_type: string;
   posted_date: string;
   created_at: string;
+  /** FX materialized at commit (Story 3.5) — CRC rows have amount_crc === amount. */
+  amount_crc: string;
+  fx_rate: string;
+  fx_rate_date: string | null;
+  fx_fallback: boolean;
 };
 
 export type CreateExpenseBody = {
@@ -400,11 +405,17 @@ function asExpense(data: unknown): ExpenseItem | null {
     typeof row.provenance !== "string" ||
     typeof row.line_type !== "string" ||
     typeof row.posted_date !== "string" ||
-    typeof row.created_at !== "string"
+    typeof row.created_at !== "string" ||
+    typeof row.amount_crc !== "string" ||
+    typeof row.fx_rate !== "string"
   ) {
     return null;
   }
-  return row as ExpenseItem;
+  return {
+    ...(row as ExpenseItem),
+    fx_rate_date: typeof row.fx_rate_date === "string" ? row.fx_rate_date : null,
+    fx_fallback: row.fx_fallback === true,
+  };
 }
 
 export async function fetchExpenses(
