@@ -257,6 +257,7 @@ Claude Haiku 4.5
 - All 136 existing tests pass (no regressions from preflight)
 - Build succeeds without errors
 - Typecheck and lint pass with no issues
+- **2026-08-12 (code review):** A separate, undocumented commit (`b3826d7`, outside this story's File List) had added `ui/tailwind.config.js` + `ui/postcss.config.js`, contradicting Task 1's explicit CSS-first / no-config-file instruction. Verified via `docker build --target builder` + local `npm run build` that Tailwind compiles identically (preflight + `@theme` vars present in output CSS chunks) with both files removed — neither was referenced via `@config` and Next.js 16 auto-detects `@tailwindcss/postcss` in both environments. Removed both files; typecheck/lint/test (136/136)/build all re-verified green after removal.
 
 ### Completion Notes
 
@@ -297,8 +298,12 @@ Claude Haiku 4.5
 - `ui/app/globals.css` — UPDATED: Added @import "tailwindcss", @custom-variant dark, @theme block at top; preserved all existing token definitions
 - `ui/README.md` — UPDATED: Added Styling section with convention guidance
 - `ui/tests/tailwind-integration.test.ts` — NEW: Bridge validation test verifying @theme and CSS var references
+- `ui/tailwind.config.js` — REMOVED (code review, 2026-08-12): dead config, never wired in via `@config`; violated Task 1's CSS-first requirement
+- `ui/postcss.config.js` — REMOVED (code review, 2026-08-12): confirmed unnecessary via Docker + local build verification; Next.js 16 auto-detects `@tailwindcss/postcss`
 
 ## Change Log
+
+- 2026-08-12: **Code review fix** — removed `ui/tailwind.config.js` + `ui/postcss.config.js`, added outside this story's scope by an undocumented follow-up commit (`b3826d7`) that claimed to fix a Docker/Turbopack module resolution error. Verified via `docker build --target builder` and local build that Tailwind compiles correctly without either file (no `@config` reference; Next.js 16 auto-detects `@tailwindcss/postcss`). Restores compliance with Task 1's CSS-first requirement. typecheck/lint/test (136/136)/build all green after removal.
 
 - 2026-08-10: **Story implementation complete (dev-story)** — marked for review
   - Installed Tailwind v4.3.3 + PostCSS + Sass 1.102.0
