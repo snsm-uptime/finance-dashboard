@@ -5,7 +5,6 @@ import { RedirectIfAuthenticated } from "@/components/RedirectIfAuthenticated";
 import { requireAlias } from "@/lib/alias";
 import { resolveServerAuthenticatedLanding } from "@/lib/serverLanding";
 import { fetchSession } from "@/lib/session";
-import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
 
@@ -19,13 +18,16 @@ export default async function Home() {
   }
 
   return (
-    <main className={styles.main}>
+    <main className="flex flex-col gap-3 max-w-[36rem] mx-auto p-[4rem_1.5rem]">
       <RedirectIfAuthenticated />
-      <p className={styles.brand}>finance-helper</p>
-      <h1 className={styles.title}>Stack is up</h1>
-      <p className={styles.copy}>
-        Compose services <code>db</code>, <code>api</code>, and <code>ui</code> are
-        ready.{" "}
+      <p className="m-0 text-[0.85rem] uppercase tracking-[0.08em] text-muted">
+        finance-helper
+      </p>
+      <h1 className="m-0 text-[2rem] font-semibold leading-[1.2]">Stack is up</h1>
+      <p className="m-0 text-muted leading-[1.5]">
+        Compose services <code className="font-mono text-[0.95em]">db</code>,{" "}
+        <code className="font-mono text-[0.95em]">api</code>, and{" "}
+        <code className="font-mono text-[0.95em]">ui</code> are ready.{" "}
         <Link href="/signup">Create an account</Link> or{" "}
         <Link href="/sign-in">sign in</Link> to get your personal list.
       </p>

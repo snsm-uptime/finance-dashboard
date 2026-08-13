@@ -8,7 +8,7 @@ import { listsMessages } from "@/lib/i18n/lists";
 
 import { ManualExpenseForm } from "./ManualExpenseForm";
 
-vi.mock("./ManualExpenseForm.module.css", () => ({
+vi.mock("./ManualExpenseForm.module.scss", () => ({
   default: new Proxy(
     {},
     {
@@ -17,7 +17,7 @@ vi.mock("./ManualExpenseForm.module.css", () => ({
   ),
 }));
 
-vi.mock("@/components/FormIconSubmit/FormIconSubmit.module.css", () => ({
+vi.mock("@/components/FormIconSubmit/FormIconSubmit.module.scss", () => ({
   default: new Proxy(
     {},
     {

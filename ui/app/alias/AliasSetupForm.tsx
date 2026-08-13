@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import type { AliasMessages } from "@/lib/i18n/alias";
 
 import { normalizeAliasInput, setAlias } from "./aliasClient";
-import styles from "../signup/signup.module.css";
+import styles from "../signup/signup.module.scss";
 
 const ALIAS_PATTERN = /^[a-z0-9_]{3,32}$/;
 

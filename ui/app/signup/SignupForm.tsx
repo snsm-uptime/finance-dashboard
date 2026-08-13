@@ -10,7 +10,7 @@ import { signupMessages, type Locale } from "@/lib/i18n/signup";
 import { setLastOpenedList } from "@/app/lists/listsClient";
 import { fetchInvitePreview } from "@/app/invites/inviteClient";
 import { attemptSignup } from "./signupClient";
-import styles from "./signup.module.css";
+import styles from "./signup.module.scss";
 
 type Props = {
   locale: Locale;

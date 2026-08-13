@@ -12,7 +12,7 @@ import {
   type DefaultSplitPayload,
   type ListsClientMessages,
 } from "./listsClient";
-import styles from "./lists.module.css";
+import styles from "./lists.module.scss";
 
 export type DefaultSplitMessages = ListsClientMessages & {
   defaultSplitTitle: string;

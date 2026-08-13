@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 
-import styles from "./PercentageSplitTrack.module.css";
+import styles from "./PercentageSplitTrack.module.scss";
 
 export type PercentageSplitMember = {
   user_id: string;

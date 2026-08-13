@@ -1,0 +1,29 @@
+/* AccountMenu color-mix hover/focus states */
+
+.choice:not(:disabled):hover {
+  border-color: var(--border);
+}
+
+.choiceActive {
+  border-color: var(--accent);
+}
+
+.choice:disabled,
+.choiceActive:disabled,
+.signOut:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.resetLink:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.resetLink:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.signOut:hover:not(:disabled) {
+  border-color: var(--accent);
+}

@@ -1,0 +1,21 @@
+/* Icon button hover and focus states with color-mix */
+
+.button:not(:disabled):hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--border) 30%, transparent);
+}
+
+.button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 2px;
+}
+
+.muted:not(:disabled):hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.muted:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 2px;
+}

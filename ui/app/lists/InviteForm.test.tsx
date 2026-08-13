@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { InviteForm } from "./InviteForm";
 import { listsMessages } from "@/lib/i18n/lists";
 
-vi.mock("./lists.module.css", () => ({
+vi.mock("./lists.module.scss", () => ({
   default: new Proxy(
     {},
     {
@@ -16,7 +16,7 @@ vi.mock("./lists.module.css", () => ({
   ),
 }));
 
-vi.mock("@/components/FormIconSubmit/FormIconSubmit.module.css", () => ({
+vi.mock("@/components/FormIconSubmit/FormIconSubmit.module.scss", () => ({
   default: new Proxy(
     {},
     {

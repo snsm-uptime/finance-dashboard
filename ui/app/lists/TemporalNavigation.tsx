@@ -9,7 +9,7 @@ import { InviteForm } from "./InviteForm";
 import type { DefaultSplitMessages } from "./DefaultSplitPanel";
 import { DefaultSplitPanel } from "./DefaultSplitPanel";
 import { FormHeaderActionHostProvider } from "./FormChrome";
-import styles from "./TemporalNavigation.module.css";
+import styles from "./TemporalNavigation.module.scss";
 
 type FormKind = "expense" | "invite" | "split" | null;
 

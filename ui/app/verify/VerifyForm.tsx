@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import { type Locale, verifyMessages } from "@/lib/i18n/verify";
 import { safeReturnTo } from "../sign-in/signInClient";
-import styles from "../signup/signup.module.css";
+import styles from "../signup/signup.module.scss";
 
 type Props = {
   locale: Locale;

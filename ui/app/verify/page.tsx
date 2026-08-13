@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { detectLocale } from "@/lib/i18n/signin";
 import { verifyMessages } from "@/lib/i18n/verify";
 import { VerifyForm } from "./VerifyForm";
-import styles from "../signup/signup.module.css";
+import styles from "../signup/signup.module.scss";
 
 export const dynamic = "force-dynamic";
 
