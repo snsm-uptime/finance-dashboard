@@ -55,13 +55,13 @@ Use a **sibling** worktree when another agent or branch needs its own ports and 
 From the **primary** checkout:
 
 ```bash
-./scripts/cursor-worktree/worktree-add.sh <slug> <branch>
+./scripts/worktree/worktree-add.sh <slug> <branch>
 ```
 
 Example:
 
 ```bash
-./scripts/cursor-worktree/worktree-add.sh 2-3-invite feat/2/2-3-invite-members-by-email
+./scripts/worktree/worktree-add.sh 2-3-invite feat/2/2-3-invite-members-by-email
 ```
 
 That creates `../finance-dashboard-wt-<slug>` from the remote default branch (`origin/main` when that is the default).
@@ -73,13 +73,13 @@ Use the absolute `Next:` path printed by `worktree-add`, or from the worktree:
 ```bash
 cd ../finance-dashboard-wt-<slug>
 # If your primary folder is named finance-dashboard:
-../finance-dashboard/scripts/cursor-worktree/worktree-bootstrap.sh
+../finance-dashboard/scripts/worktree/worktree-bootstrap.sh
 ```
 
 Deps only (start Compose yourself later):
 
 ```bash
-START_COMPOSE=0 ../finance-dashboard/scripts/cursor-worktree/worktree-bootstrap.sh
+START_COMPOSE=0 ../finance-dashboard/scripts/worktree/worktree-bootstrap.sh
 ```
 
 Bootstrap copies `.env` from the primary checkout when present, assigns unique `FH_COMPOSE_NAME` / ports / data dir under `~/finance-helper-wt/`, installs deps, and optionally starts Compose. It sets `ROOT_WORKTREE_PATH` for you via git (override with `ROOT_WORKTREE_PATH=...` if discovery fails for a renamed clone).
@@ -123,7 +123,7 @@ Prefer stopping Compose first; `worktree-remove` also attempts `compose-down` wh
 
 ```bash
 # from primary:
-./scripts/cursor-worktree/worktree-remove.sh <slug>
+./scripts/worktree/worktree-remove.sh <slug>
 ```
 
 Postgres data under `~/finance-helper-wt/` is left alone unless you delete that directory on disk.
@@ -137,8 +137,8 @@ Postgres data under `~/finance-helper-wt/` is left alone unless you delete that 
 | First run | `cp .env.example .env` → `./scripts/compose-up.sh` |
 | Stop | `./scripts/compose-down.sh` |
 | Restart | `./scripts/compose-restart.sh -d` |
-| Add worktree | `./scripts/cursor-worktree/worktree-add.sh <slug> <branch>` |
-| Bootstrap | `cd ../finance-dashboard-wt-<slug>` → `<primary>/scripts/cursor-worktree/worktree-bootstrap.sh` |
-| Remove worktree | `./scripts/cursor-worktree/worktree-remove.sh <slug>` |
+| Add worktree | `./scripts/worktree/worktree-add.sh <slug> <branch>` |
+| Bootstrap | `cd ../finance-dashboard-wt-<slug>` → `<primary>/scripts/worktree/worktree-bootstrap.sh` |
+| Remove worktree | `./scripts/worktree/worktree-remove.sh <slug>` |
 
-More detail on Cursor’s worktree hook: `scripts/cursor-worktree/README.md`.
+More detail on Cursor’s worktree hook: `scripts/worktree/README.md`.

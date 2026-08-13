@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Remove a sibling story worktree (run from the primary checkout).
-# Usage: ./scripts/cursor-worktree/worktree-remove.sh <slug>
+# Usage: ./scripts/worktree/worktree-remove.sh <slug>
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -8,7 +8,7 @@ PRIMARY_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/cursor-worktree/worktree-remove.sh <slug>
+Usage: ./scripts/worktree/worktree-remove.sh <slug>
 
 Stops Compose in that worktree when possible, then removes
 ../finance-dashboard-wt-<slug> via git worktree remove.

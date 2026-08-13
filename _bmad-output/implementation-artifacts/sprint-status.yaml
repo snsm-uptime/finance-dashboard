@@ -94,7 +94,7 @@ development_status:
   3-5-1-install-tailwind-sass-warm-balance-theme: done
   3-5-2-migrate-soft-ledger-primitives-tailwind: review
   3-5-3-migrate-lists-auth-account-surfaces: done
-  3-5-4-convention-lock-project-context-architecture: backlog
+  3-5-4-convention-lock-project-context-architecture: ready-for-dev
   epic-3-5-retrospective: optional
   # Do not start Epic 4 until epic-3-5 demo gate done
 

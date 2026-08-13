@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Create a sibling git worktree for a story (run from the primary checkout).
-# Usage: ./scripts/cursor-worktree/worktree-add.sh <slug> <branch>
-# Example: ./scripts/cursor-worktree/worktree-add.sh 2-3-invite feat/2/2-3-invite-members-by-email
+# Usage: ./scripts/worktree/worktree-add.sh <slug> <branch>
+# Example: ./scripts/worktree/worktree-add.sh 2-3-invite feat/2/2-3-invite-members-by-email
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -9,14 +9,14 @@ PRIMARY_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/cursor-worktree/worktree-add.sh <slug> <branch>
+Usage: ./scripts/worktree/worktree-add.sh <slug> <branch>
 
 Creates ../finance-dashboard-wt-<slug> (fetches origin first).
 Branch is required (repo convention: feat/<epic>/<story-slug>).
 
 Run from the primary checkout. Afterward:
   cd ../finance-dashboard-wt-<slug>
-  <primary>/scripts/cursor-worktree/worktree-bootstrap.sh
+  <primary>/scripts/worktree/worktree-bootstrap.sh
 EOF
 }
 
@@ -82,5 +82,5 @@ Worktree created.
 
 Next:
   cd $WT_PATH
-  $PRIMARY_ROOT/scripts/cursor-worktree/worktree-bootstrap.sh
+  $PRIMARY_ROOT/scripts/worktree/worktree-bootstrap.sh
 EOF

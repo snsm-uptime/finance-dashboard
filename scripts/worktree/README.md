@@ -52,12 +52,12 @@ These values are auto-calculated and injected by `setup-worktree-unix.sh`.
 From the **primary checkout** (`finance-dashboard/`):
 
 ```bash
-./scripts/cursor-worktree/worktree-add.sh <slug> <branch>
+./scripts/worktree/worktree-add.sh <slug> <branch>
 ```
 
 Example:
 ```bash
-./scripts/cursor-worktree/worktree-add.sh 2-3-invite feat/2/2-3-invite-members-by-email
+./scripts/worktree/worktree-add.sh 2-3-invite feat/2/2-3-invite-members-by-email
 ```
 
 This creates `../finance-dashboard-wt-2-3-invite` with the specified branch checked out.
@@ -67,7 +67,7 @@ Inside the new worktree:
 
 ```bash
 cd ../finance-dashboard-wt-2-3-invite
-../finance-dashboard/scripts/cursor-worktree/worktree-bootstrap.sh
+../finance-dashboard/scripts/worktree/worktree-bootstrap.sh
 ```
 
 This:
@@ -112,18 +112,18 @@ To work on **2+ stories simultaneously**, repeat Steps 1–3 in separate termina
 **Terminal 1 (Story 2-3):**
 ```bash
 cd ~/finance-dashboard
-./scripts/cursor-worktree/worktree-add.sh 2-3-invite feat/2/2-3-invite-members-by-email
+./scripts/worktree/worktree-add.sh 2-3-invite feat/2/2-3-invite-members-by-email
 cd ../finance-dashboard-wt-2-3-invite
-../finance-dashboard/scripts/cursor-worktree/worktree-bootstrap.sh
+../finance-dashboard/scripts/worktree/worktree-bootstrap.sh
 claude .
 ```
 
 **Terminal 2 (Story 2-4):**
 ```bash
 cd ~/finance-dashboard
-./scripts/cursor-worktree/worktree-add.sh 2-4-billing feat/2/2-4-billing-page
+./scripts/worktree/worktree-add.sh 2-4-billing feat/2/2-4-billing-page
 cd ../finance-dashboard-wt-2-4-billing
-../finance-dashboard/scripts/cursor-worktree/worktree-bootstrap.sh
+../finance-dashboard/scripts/worktree/worktree-bootstrap.sh
 claude .
 ```
 
@@ -139,7 +139,7 @@ Each Claude session:
 
 ### Reboot bootstrap (deps/`.env` only, skip Compose)
 ```bash
-START_COMPOSE=0 ../finance-dashboard/scripts/cursor-worktree/worktree-bootstrap.sh
+START_COMPOSE=0 ../finance-dashboard/scripts/worktree/worktree-bootstrap.sh
 ```
 
 ### List all worktrees
@@ -160,7 +160,7 @@ git worktree list
 ### Remove a worktree when done
 From the **primary checkout**:
 ```bash
-./scripts/cursor-worktree/worktree-remove.sh 2-3-invite
+./scripts/worktree/worktree-remove.sh 2-3-invite
 ```
 
 This stops Compose and removes the worktree from `.git/worktrees/`.

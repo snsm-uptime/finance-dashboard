@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Bootstrap the current worktree (.env, ports, deps, optional Compose).
 # Usage (from inside the worktree):
-#   <primary>/scripts/cursor-worktree/worktree-bootstrap.sh
-#   START_COMPOSE=0 <primary>/scripts/cursor-worktree/worktree-bootstrap.sh
+#   <primary>/scripts/worktree/worktree-bootstrap.sh
+#   START_COMPOSE=0 <primary>/scripts/worktree/worktree-bootstrap.sh
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
