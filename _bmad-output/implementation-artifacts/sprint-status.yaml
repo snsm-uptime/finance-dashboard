@@ -1,5 +1,5 @@
 # generated: 2026-08-03T22:46:31
-# last_updated: 2026-08-10T14:30:00
+# last_updated: 2026-08-12T20:40:00
 
 # project: finance-dashboard
 # project_key: NOKEY
@@ -91,7 +91,7 @@ development_status:
   # Epic 3.5 — Tailwind + SCSS styling stack (before Epic 4; product 3.5–3.6 may still be open)
   # Key naming: 3-5-N-… = Epic 3.5 story N (distinct from Epic 3 story 3.5: 3-5-materialize-…)
   epic-3-5: in-progress
-  3-5-1-install-tailwind-sass-warm-balance-theme: review
+  3-5-1-install-tailwind-sass-warm-balance-theme: done
   3-5-2-migrate-soft-ledger-primitives-tailwind: backlog
   3-5-3-migrate-lists-auth-account-surfaces: backlog
   3-5-4-convention-lock-project-context-architecture: backlog
