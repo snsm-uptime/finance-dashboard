@@ -1,7 +1,5 @@
 import Link from "next/link";
 
-import styles from "./TabBar.module.css";
-
 export type TabKey = "list" | "upload" | "account";
 
 type TabBarProps = {
@@ -16,6 +14,11 @@ type TabBarProps = {
   ariaLabel: string;
 };
 
+const baseTabClass =
+  "block text-center py-[var(--space-3)] px-[var(--space-1)] no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+const tabClass = `${baseTabClass} text-muted`;
+const tabActiveClass = `${baseTabClass} text-accent`;
+
 export function TabBar({
   listHref,
   uploadHref,
@@ -27,23 +30,31 @@ export function TabBar({
   ariaLabel,
 }: TabBarProps) {
   return (
-    <nav className={styles.bar} aria-label={ariaLabel}>
+    <nav
+      className="grid grid-cols-3 mt-auto bg-surface border-t border-border"
+      style={{
+        fontFamily: "var(--type-tab-face)",
+        fontSize: "var(--type-tab-size)",
+        fontWeight: "var(--type-tab-weight)",
+      }}
+      aria-label={ariaLabel}
+    >
       <Link
-        className={active === "list" ? styles.tabActive : styles.tab}
+        className={active === "list" ? tabActiveClass : tabClass}
         href={listHref}
         aria-current={active === "list" ? "page" : undefined}
       >
         {listLabel}
       </Link>
       <Link
-        className={active === "upload" ? styles.tabActive : styles.tab}
+        className={active === "upload" ? tabActiveClass : tabClass}
         href={uploadHref}
         aria-current={active === "upload" ? "page" : undefined}
       >
         {uploadLabel}
       </Link>
       <Link
-        className={active === "account" ? styles.tabActive : styles.tab}
+        className={active === "account" ? tabActiveClass : tabClass}
         href={accountHref}
         aria-current={active === "account" ? "page" : undefined}
       >
