@@ -5,20 +5,18 @@ import {
   KeyboardEvent,
   useCallback,
   useEffect,
-  useId,
   useMemo,
   useRef,
   useState,
 } from "react";
-import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 
 import { usePreferences } from "@/components/PreferencesProvider";
-import { useModalAnimation, useFocusTrap } from "@/hooks";
 import { listsMessages } from "@/lib/i18n/lists";
-import { DotsIcon, CloseIcon, PlusIcon } from "@/app/icons";
+import { DotsIcon, PlusIcon } from "@/app/icons";
 import type { InviteFormMessages } from "./InviteForm";
 import { InviteForm } from "./InviteForm";
+import { Sheet } from "./Sheet";
 import {
   balanceTone,
   createList,
@@ -34,72 +32,6 @@ type Props = {
   currentUserId: string;
 };
 
-function InviteSheet({
-  open,
-  listId,
-  inviteMessages,
-  closeLabel,
-  onClose,
-}: {
-  open: boolean;
-  listId: string;
-  inviteMessages: InviteFormMessages;
-  closeLabel: string;
-  onClose: () => void;
-}) {
-  const panelRef = useRef<HTMLDivElement>(null);
-  const closeRef = useRef<HTMLButtonElement>(null);
-  const titleId = useId();
-  const { phase } = useModalAnimation(open, { closeAnimationMs: 280 });
-
-  useFocusTrap({
-    isActive: phase === "open",
-    containerRef: panelRef,
-    defaultFocusRef: closeRef,
-    onEscapePress: onClose,
-  });
-
-  if (phase === "unmounted" || typeof document === "undefined") return null;
-
-  const isVisible = phase === "open" || phase === "closing";
-
-  return createPortal(
-    <>
-      <button
-        type="button"
-        className={`${styles.backdrop} ${isVisible ? styles.backdropOpen : ""}`}
-        aria-label={closeLabel}
-        onClick={onClose}
-      />
-      <div
-        ref={panelRef}
-        className={`${styles.sheet} ${isVisible ? styles.sheetOpen : ""}`}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-      >
-        <div className={styles.sheetHeader}>
-          <h2 id={titleId} className={styles.sheetTitle}>
-            Invite Someone!
-          </h2>
-          <button
-            ref={closeRef}
-            type="button"
-            className={styles.sheetClose}
-            aria-label={closeLabel}
-            onClick={onClose}
-          >
-            <CloseIcon />
-          </button>
-        </div>
-        <div className={styles.sheetBody}>
-          <InviteForm listId={listId} messages={inviteMessages} reserveErrorHeight hideBorder />
-        </div>
-      </div>
-    </>,
-    document.body,
-  );
-}
 export function ListsPanel({ initialLists, currentUserId }: Props) {
   const { locale } = usePreferences();
   const t = listsMessages[locale];
@@ -541,12 +473,19 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
       </div>
 
       {invitingListId ? (
-        <InviteSheet
+        <Sheet
           open={invitingListId !== null}
-          listId={invitingListId}
-          inviteMessages={messages}
+          title={t.inviteTitle}
           closeLabel={t.mobileSheetClose}
           onClose={closeInviteSheet}
+          body={
+            <InviteForm
+              listId={invitingListId}
+              messages={messages}
+              reserveErrorHeight
+              hideBorder
+            />
+          }
         />
       ) : null}
     </>
