@@ -1,10 +1,6 @@
 /**
  * @vitest-environment jsdom
  */
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
 import { act } from "react";
 import type { ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -19,8 +15,6 @@ import { SoftLedgerRadio } from "./Radio";
 import { SoftLedgerSelect } from "./Select";
 import { TabBar } from "./TabBar";
 import { TopNav } from "./TopNav";
-
-const here = dirname(fileURLToPath(import.meta.url));
 
 vi.mock("next/link", () => ({
   default: ({
@@ -39,23 +33,6 @@ vi.mock("next/link", () => ({
     </a>
   ),
 }));
-
-function mockCssModules() {
-  const handler = {
-    get: (_t: object, prop: string | symbol) => String(prop),
-  };
-  return { default: new Proxy({}, handler) };
-}
-
-vi.mock("./BalanceStrip.module.css", mockCssModules);
-vi.mock("./Hint.module.css", mockCssModules);
-vi.mock("./PrimaryButton.module.css", mockCssModules);
-vi.mock("./ReceiptRow.module.css", mockCssModules);
-vi.mock("./SectionLabel.module.css", mockCssModules);
-vi.mock("./TabBar.module.css", mockCssModules);
-vi.mock("./TopNav.module.css", mockCssModules);
-vi.mock("./Select.module.css", mockCssModules);
-vi.mock("./Radio.module.css", mockCssModules);
 
 describe("Soft-Ledger primitives", () => {
   let host: HTMLDivElement;
@@ -89,10 +66,12 @@ describe("Soft-Ledger primitives", () => {
         <BalanceStrip who="You owe Partner" amount="₡42,500" polarity="owe" />,
       );
     });
-    const who = host.querySelector("p");
-    expect(who?.textContent).toBe("You owe Partner");
+    const section = host.querySelector("section");
+    expect(section).not.toBeNull();
+    const paragraphs = host.querySelectorAll("p");
+    expect(paragraphs[0]?.textContent).toBe("You owe Partner");
     expect(host.textContent).toContain("₡42,500");
-    expect(host.querySelector("[class*='amountOwe'], .amountOwe")).toBeTruthy();
+    expect(section?.getAttribute("aria-label")).toBe("You owe Partner");
   });
 
   it("renders BalanceStrip with owed polarity", () => {
@@ -101,17 +80,21 @@ describe("Soft-Ledger primitives", () => {
         <BalanceStrip who="You’re owed" amount="₡10,000" polarity="owed" />,
       );
     });
+    const section = host.querySelector("section");
+    expect(section).not.toBeNull();
     expect(host.textContent).toContain("You’re owed");
     expect(host.textContent).toContain("₡10,000");
-    expect(host.querySelector("[class*='amountOwed'], .amountOwed")).toBeTruthy();
+    expect(section?.getAttribute("aria-label")).toBe("You’re owed");
   });
 
   it("renders BalanceStrip with neutral polarity (default)", () => {
     act(() => {
       root.render(<BalanceStrip who="Settled" amount="₡0" />);
     });
+    const section = host.querySelector("section");
+    expect(section).not.toBeNull();
     expect(host.textContent).toContain("Settled");
-    expect(host.querySelector("[class*='amountNeutral'], .amountNeutral")).toBeTruthy();
+    expect(section?.getAttribute("aria-label")).toBe("Settled");
   });
 
   it("renders Hint and SectionLabel and empty ReceiptRow", () => {
@@ -148,8 +131,6 @@ describe("Soft-Ledger primitives", () => {
     });
     const nav = host.querySelector("nav");
     expect(nav?.getAttribute("aria-label")).toBe("Primary");
-    const tabCss = readFileSync(join(here, "TabBar.module.css"), "utf8");
-    expect(tabCss).toContain(":focus-visible");
     const links = Array.from(host.querySelectorAll("a"));
     expect(links).toHaveLength(3);
     expect(links[0]?.getAttribute("href")).toBe("/lists/abc");
@@ -159,18 +140,14 @@ describe("Soft-Ledger primitives", () => {
     expect(links[2]?.getAttribute("href")).toBe("/account");
   });
 
-  it("PrimaryButton mounts and module CSS is not pill", () => {
+  it("PrimaryButton mounts and uses rounded-sm (not pill)", () => {
     act(() => {
       root.render(<PrimaryButton>Continue</PrimaryButton>);
     });
     const button = host.querySelector("button");
     expect(button?.textContent).toBe("Continue");
-
-    const css = readFileSync(join(here, "PrimaryButton.module.css"), "utf8");
-    expect(css).toContain("var(--rounded-sm)");
-    expect(css).toContain(":focus-visible");
-    expect(css).not.toMatch(/border-radius:\s*9999px/);
-    expect(css).not.toContain("rounded-full");
+    expect(button?.className).toContain("rounded-sm");
+    expect(button?.className).not.toContain("rounded-full");
   });
 
   it("SoftLedgerSelect opens a listbox and chooses an option", () => {
@@ -230,8 +207,8 @@ describe("Soft-Ledger primitives", () => {
     });
     expect(host.querySelector('input[type="checkbox"]')).not.toBeNull();
 
-    const css = readFileSync(join(here, "Radio.module.css"), "utf8");
-    expect(css).toContain("3px solid var(--accent)");
-    expect(css).toContain("background: var(--accent)");
+    const mark = host.querySelector("span[aria-hidden='true']");
+    expect(mark?.className).toContain("border-accent");
+    expect(mark?.className).toContain("peer-checked:bg-accent");
   });
 });

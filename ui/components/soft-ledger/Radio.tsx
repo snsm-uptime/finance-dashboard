@@ -1,7 +1,5 @@
 import type { InputHTMLAttributes, ReactNode } from "react";
 
-import styles from "./Radio.module.css";
-
 type SoftLedgerRadioProps = Omit<
   InputHTMLAttributes<HTMLInputElement>,
   "type" | "className"
@@ -22,19 +20,33 @@ export function SoftLedgerRadio({
   disabled,
   ...rest
 }: SoftLedgerRadioProps) {
-  const rootClass = className ? `${styles.root} ${className}` : styles.root;
-  const markClass = `${styles.mark} ${type === "checkbox" ? styles.checkbox : styles.radio}`;
+  const rootClass = className
+    ? `relative inline-flex items-center gap-[0.4rem] select-none cursor-pointer text-foreground ${className}`
+    : "relative inline-flex items-center gap-[0.4rem] select-none cursor-pointer text-foreground";
+
+  const inputClass = "peer absolute inset-0 w-full h-full m-0 p-0 opacity-0 cursor-pointer border-0";
+
+  const markBaseClass =
+    "box-border flex-shrink-0 w-[1.125rem] h-[1.125rem] border-[3px] border-accent bg-transparent transition-colors duration-[120ms] peer-checked:bg-accent peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent peer-disabled:opacity-55";
+  const markClass =
+    type === "checkbox"
+      ? `${markBaseClass} rounded-[4px]`
+      : `${markBaseClass} rounded-full`;
 
   return (
-    <label className={rootClass}>
+    <label
+      className={`${rootClass} ${disabled ? "opacity-65 cursor-not-allowed" : ""}`}
+    >
       <input
         {...rest}
         type={type}
-        className={styles.input}
+        className={inputClass}
         disabled={disabled}
       />
       <span className={markClass} aria-hidden="true" />
-      {children != null ? <span className={styles.label}>{children}</span> : null}
+      {children != null ? (
+        <span style={{ lineHeight: "1.3" }}>{children}</span>
+      ) : null}
     </label>
   );
 }

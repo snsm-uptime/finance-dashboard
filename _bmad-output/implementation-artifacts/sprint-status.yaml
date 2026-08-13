@@ -92,7 +92,7 @@ development_status:
   # Key naming: 3-5-N-… = Epic 3.5 story N (distinct from Epic 3 story 3.5: 3-5-materialize-…)
   epic-3-5: in-progress
   3-5-1-install-tailwind-sass-warm-balance-theme: ready-for-dev
-  3-5-2-migrate-soft-ledger-primitives-tailwind: backlog
+  3-5-2-migrate-soft-ledger-primitives-tailwind: review
   3-5-3-migrate-lists-auth-account-surfaces: backlog
   3-5-4-convention-lock-project-context-architecture: backlog
   epic-3-5-retrospective: optional
