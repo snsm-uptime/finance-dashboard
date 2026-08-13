@@ -55,6 +55,10 @@
   border-radius: 0 var(--temporal-nav-radius) var(--temporal-nav-radius) 0;
 }
 
+.navButton:first-child:last-child {
+  border-radius: var(--temporal-nav-radius);
+}
+
 .navButton:hover {
   background: color-mix(in srgb, var(--temporal-icon-hover-color) 8%, var(--surface));
   color: var(--temporal-icon-hover-color);
