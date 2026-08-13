@@ -38,6 +38,7 @@ Quick links:
 - **Custom only:** `*.module.scss` for complex selectors, animations, or custom styles
 - **Forbidden:** New `*.module.css` files; kit/starter palettes; re-picking Warm Balance hexes
 - **Tokens:** Use CSS variables from `globals.css` (Warm Balance light/dark + Soft-Ledger spacing/shape); wired into Tailwind via `@theme` bridge (see `ARCHITECTURE-SPINE.md` AD-12 & AD-23 for details)
+- **Spacing caveat:** Prefer the named `--spacing-*` utilities (`strip-inset`, `page-gutter`, `nav-x`, `row-y`) or the raw `--space-*` CSS variables over Tailwind's generic numeric spacing scale — `p-3`/`gap-3`/etc. resolve to Tailwind's own `0.25rem` step (12px), which is **not** the same value as the project's `--space-3` (10px) despite the matching number
 - **Icon styling:** See **COMPONENT_PATTERNS.md** → Icon Management section for icon-specific styling patterns
 
 ## Developer Resources
