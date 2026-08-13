@@ -18,9 +18,9 @@ export default async function Home() {
   }
 
   return (
-    <main className="flex flex-col gap-3 max-w-[36rem] mx-auto p-[4rem_1.5rem]">
+    <main className="flex flex-col gap-3 max-w-[36rem] mx-auto py-16 px-6">
       <RedirectIfAuthenticated />
-      <p className="m-0 text-[0.85rem] uppercase tracking-[0.08em] text-muted">
+      <p className="m-0 text-[0.85rem] uppercase tracking-[0.08rem] text-muted">
         finance-helper
       </p>
       <h1 className="m-0 text-[2rem] font-semibold leading-[1.2]">Stack is up</h1>

@@ -9,6 +9,17 @@
   outline-offset: 2px;
 }
 
+/* Reset hover state on touch to prevent sticky appearance after tap */
+@media (hover: none) and (pointer: coarse) {
+  .button:not(:disabled):active {
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  }
+
+  .button:not(:disabled):active:not(:focus-visible) {
+    background: var(--surface);
+  }
+}
+
 .group:focus-within {
   outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
   outline-offset: 1px;

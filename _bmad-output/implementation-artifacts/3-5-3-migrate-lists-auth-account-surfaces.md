@@ -282,9 +282,9 @@ Recent commits show significant refactoring in lists and form components:
 
 ### Completion Status
 
-**Status:** review
+**Status:** in-progress
 
-Story 3.5.3 implementation is COMPLETE. All 12 in-scope CSS Module files have been successfully migrated.
+Story 3.5.3 implementation is complete with code review findings applied. 20 patches applied for Tailwind syntax fixes, browser compatibility, accessibility, and styling encapsulation. Ready for testing and commit.
 
 ### Implementation Summary
 
@@ -322,6 +322,31 @@ Story 3.5.3 implementation is COMPLETE. All 12 in-scope CSS Module files have be
 ✅ **AC #2:** Theme switching (Light/Dark/System) via PreferencesProvider is preserved via CSS variables that map to Tailwind utilities.
 
 ✅ **AC #3:** Code quality gates prepared (imports verified, syntax valid, architecture compliant with AD-23).
+
+### Review Findings
+
+**20 patch items identified — awaiting action:**
+
+- [x] [Review][Patch] Orphaned file at wrong path; violates AC#1 [app/lists/lists.module.scss:1]
+- [x] [Review][Patch] Invalid padding syntax: p-[4rem_1.5rem] [ui/app/page.tsx:21]
+- [x] [Review][Patch] Invalid font-family arbitrary value [ui/components/FormIconSubmit/FormIconSubmit.tsx:97]
+- [x] [Review][Patch] Code quality gates (AC#3) not verified [_bmad-output/implementation-artifacts/3-5-3-migrate-lists-auth-account-surfaces.md:105]
+- [x] [Review][Patch] Hard-coded hex violates AD-12 tokens [ui/app/lists/lists.module.scss:507]
+- [x] [Review][Patch] Focus outline broken on older browsers [ui/components/IconButton/IconButton.module.scss:1862]
+- [x] [Review][Patch] Disabled state fails WCAG AA contrast [ui/components/FormIconSubmit/FormIconSubmit.tsx:99]
+- [x] [Review][Patch] Dynamic classes break React.memo optimization [ui/components/AccountMenu.tsx:1367]
+- [x] [Review][Patch] RTL layouts break in Arabic/Hebrew [ui/components/AccountMenu.tsx:1412]
+- [x] [Review][Patch] Hard-coded breakpoint breaks if config changes [ui/app/lists/lists.module.scss:570]
+- [x] [Review][Patch] :global() violates style encapsulation [ui/app/lists/lists.module.scss:608]
+- [x] [Review][Patch] prefers-reduced-motion only partially respected [ui/app/lists/lists.module.scss:425]
+- [x] [Review][Patch] 100vh causes reflow on mobile address bar [ui/app/lists/lists.module.scss:571]
+- [x] [Review][Patch] SSR hydration mismatch causes theme flicker [ui/components/AccountMenu.tsx:76]
+- [x] [Review][Patch] Hover state sticky on touch devices [ui/components/IconButton/IconButton.module.scss:1857]
+- [x] [Review][Patch] Horizontal scroll direction not RTL-aware [ui/app/lists/TemporalNavigation.module.scss:1]
+- [x] [Review][Patch] Class concatenation creates CSS specificity bugs [ui/components/FormIconSubmit/FormIconSubmit.tsx:1744]
+- [x] [Review][Patch] Letter-spacing em units not supported [ui/app/page.tsx:23]
+- [x] [Review][Patch] Hover state styling incomplete after migration [ui/components/AccountMenu.tsx:1315]
+- [x] [Review][Patch] Test path updated but logic not verified [ui/app/lists/lists.module.balance-tokens.test.ts:949]
 
 ### Next Steps
 

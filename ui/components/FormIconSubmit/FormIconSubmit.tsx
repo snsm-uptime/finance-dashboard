@@ -42,7 +42,7 @@ export function FormIconSubmit({
   ...rest
 }: FormIconSubmitProps) {
   const baseClasses =
-    "inline-flex items-center justify-center w-[2.5rem] h-[2.5rem] m-0 p-0 border border-border rounded-[8px] bg-surface text-accent cursor-pointer leading-none flex-shrink-0 transition-all duration-150 disabled:text-muted disabled:opacity-45 disabled:cursor-not-allowed";
+    "inline-flex items-center justify-center w-[2.5rem] h-[2.5rem] m-0 p-0 border border-border rounded-[8px] bg-surface text-accent cursor-pointer leading-none flex-shrink-0 transition-all duration-150 disabled:text-muted disabled:opacity-65 disabled:cursor-not-allowed";
   const classes = className ? `${baseClasses} ${styles.button} ${className}` : `${baseClasses} ${styles.button}`;
   return (
     <button
@@ -94,20 +94,20 @@ export function FormIconField({
 }: FormIconFieldProps) {
   const rootClasses = "flex flex-col gap-[0.35rem] min-w-0 w-full";
   const labelClasses =
-    "font-[family:var(--font-ui),system-ui,sans-serif] text-[0.875rem] font-semibold text-foreground";
+    "text-[0.875rem] font-semibold text-foreground";
   const groupClasses =
     "flex items-stretch w-full min-w-0 box-border border border-border rounded-[8px] bg-[var(--background,var(--surface))] overflow-hidden transition-all duration-150 disabled:opacity-65 disabled:cursor-not-allowed";
   const inputClasses =
-    "block flex-1 min-w-0 w-full box-border m-0 p-[0.6rem_0.75rem] border-0 rounded-[8px_0_0_8px] bg-transparent text-foreground font-[family:var(--font-ui),system-ui,sans-serif] text-base font-normal leading-[1.4] appearance-none disabled:opacity-65 disabled:cursor-not-allowed";
+    "block flex-1 min-w-0 w-full box-border m-0 py-[0.6rem] px-[0.75rem] border-0 rounded-l-[8px] bg-transparent text-foreground text-base font-normal leading-[1.4] appearance-none disabled:opacity-65 disabled:cursor-not-allowed";
   const suffixClasses =
-    "inline-flex items-center justify-center flex-shrink-0 w-[2.75rem] m-0 p-0 border-0 border-l border-l-border rounded-[0_8px_8px_0] bg-surface text-accent cursor-pointer leading-none transition-all duration-150 disabled:text-muted disabled:opacity-45 disabled:cursor-not-allowed";
+    "inline-flex items-center justify-center flex-shrink-0 w-[2.75rem] m-0 p-0 border-0 border-l border-l-border rounded-r-[8px] bg-surface text-accent cursor-pointer leading-none transition-all duration-150 disabled:text-muted disabled:opacity-45 disabled:cursor-not-allowed";
   const rootClass = className
     ? `${rootClasses} ${className}`
     : rootClasses;
   return (
     <div className={rootClass}>
       {label != null ? (
-        <label className={labelClasses} htmlFor={id}>
+        <label className={labelClasses} htmlFor={id} style={{ fontFamily: "var(--font-ui), system-ui, sans-serif" }}>
           {label}
         </label>
       ) : null}
@@ -116,6 +116,7 @@ export function FormIconField({
           {...inputRest}
           id={id}
           className={inputClasses}
+          style={{ fontFamily: "var(--font-ui), system-ui, sans-serif" }}
           type={type}
           value={value}
           disabled={disabled}

@@ -1,5 +1,5 @@
 # generated: 2026-08-03T22:46:31
-# last_updated: 2026-08-12T12:00:00
+# last_updated: 2026-08-12T21:58:00
 
 # project: finance-dashboard
 # project_key: NOKEY
@@ -93,7 +93,7 @@ development_status:
   epic-3-5: in-progress
   3-5-1-install-tailwind-sass-warm-balance-theme: ready-for-dev
   3-5-2-migrate-soft-ledger-primitives-tailwind: backlog
-  3-5-3-migrate-lists-auth-account-surfaces: review
+  3-5-3-migrate-lists-auth-account-surfaces: in-progress
   3-5-4-convention-lock-project-context-architecture: backlog
   epic-3-5-retrospective: optional
   # Do not start Epic 4 until epic-3-5 demo gate done
