@@ -4,7 +4,7 @@ baseline_commit: c45de2f31da35527e273b4d65cab2df8d6249c26
 
 # Story 3.5.2: Migrate Soft-Ledger primitives to Tailwind (+ SCSS where needed)
 
-**Status:** ready-for-dev
+**Status:** done
 
 ## Story
 
@@ -425,6 +425,6 @@ No blockers or unexpected findings during implementation. All conversions straig
 
 ## Status
 
-**Current:** review  
+**Current:** done  
 **Last Updated:** 2026-08-12
 
