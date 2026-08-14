@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { BalanceStrip, type BalancePolarity } from "@/components/soft-ledger/BalanceStrip";
 import { Hint } from "@/components/soft-ledger/Hint";
+import { IncompleteDisclosure } from "@/components/soft-ledger/IncompleteDisclosure";
 import { ReceiptRow } from "@/components/soft-ledger/ReceiptRow";
 import { SectionLabel } from "@/components/soft-ledger/SectionLabel";
 import { TabBar } from "@/components/soft-ledger/TabBar";
@@ -338,6 +339,13 @@ export default async function ListDetailPage({
               who={stripProps.who}
               amount={stripProps.amount}
               polarity={stripProps.polarity}
+            />
+            {/* Slot only (Story 3.6): no balanceStatus in the API yet; Epic 5.4 wires isIncomplete. */}
+            <IncompleteDisclosure
+              isIncomplete={false}
+              label={t.incompleteDisclosureLabel}
+              ariaLabel={t.incompleteDisclosureAriaLabel}
+              resolveLabel={t.incompleteDisclosureResolve}
             />
             {expenses.length === 0 && !expensesLoadError ? <Hint>{t.detailHintEmpty}</Hint> : null}
             <div className={styles.softReceipts}>

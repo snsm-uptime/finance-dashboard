@@ -4,7 +4,7 @@ baseline_commit: b3fd6d1
 
 # Story 3.6: Incomplete-disclosure pattern (slot only)
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -32,20 +32,20 @@ So that when Epic 5 wires quarantine data, understated totals are never silent.
 ## Prerequisites: Story 3.1 Warm Balance Setup
 
 Before starting implementation, verify that Story 3.1 has completed the Warm Balance token setup:
-- [ ] CSS custom properties are set globally: `--color-muted`, `--color-background`, `--color-muted-dark`, `--color-background-dark`, `--spacing-4`, `--spacing-5`, `--spacing-strip-inset`
-- [ ] Dark mode detection is set up (via `@media (prefers-color-scheme: dark)` or theme context from Story 1.6)
-- [ ] Manrope font is loaded with `font-weight: 400` variant available
-- [ ] i18n system is wired (i18n function/hook available for use)
+- [x] CSS custom properties are set globally in `ui/app/globals.css` — actual token names differ from this story's placeholders: `--muted`/`--muted` (dark via `html.dark`), `--background`, `--space-4`, `--space-5`, `--strip-inset` (not `--color-muted`/`--spacing-4` etc.). Used the real names.
+- [x] Dark mode is theme-context driven (`html.dark` class from `PreferencesProvider`, Story 1.6) with a `@media (prefers-color-scheme: dark)` pre-hydration fallback — not a bare media query as this story assumed. `var(--muted)` resolves correctly either way, so the component needed no dark-mode-specific code.
+- [x] Manrope is loaded as `--font-ui` (`app/layout.tsx`) and referenced via `var(--type-meta-face)`/`--type-meta-size`/`--type-meta-weight` (weight 400, size 0.62rem) — matches DESIGN.md `components.hint`.
+- [x] i18n is per-domain message objects (`ui/lib/i18n/lists.ts` `listsMessages.en/es`), not a JSON-file/hook system as this story assumed. Added disclosure keys there.
 
 If any of these are missing, verify Story 3.1 is complete before proceeding.
 
 ## Tasks / Subtasks
 
-- [ ] Task 0: Confirm hard prerequisites
-  - [ ] **Branch:** create `feat/3/3-6-incomplete-disclosure-pattern-slot-only` from `main` @ `baseline_commit`. One story per branch (AD-13)
-  - [ ] **Mandatory reads:** this story · `project-context.md` · Story 3.4 completion notes (settle-up computes from CRC amounts) · Story 3.3 completion notes (receipt list rendering) · DESIGN.md Soft-Ledger hybrid layout, `components.hint`, `components.balance-strip` · ARCHITECTURE-SPINE.md AD-17 (quarantine ownership), AD-12 (UX companion authority) · Story 5.2 (accept-with-quarantine marks statement incomplete) · Story 5.4 (wire real incomplete disclosure behavior)
-  - [ ] **Hard deps on tip (all already shipped):** 3.4 settle-up computation and CRC strip rendering · 3.3 shared-expenses view structure with strip + receipts · Warm Balance tokens from 3.1 · Manrope typography for hint text · Accessibility WCAG 2.2 AA floor from Story 1.6
-  - [ ] **Scope — In:**
+- [x] Task 0: Confirm hard prerequisites
+  - [x] **Branch:** `feat/3/3-6-incomplete-disclosure-pattern-slot-only` already checked out from `main` @ `baseline_commit` (b3fd6d1). One story per branch (AD-13)
+  - [x] **Mandatory reads:** this story · `project-context.md` · Story 3.4 file (settle-up computes from CRC amounts) · Story 3.3 file + completion notes (receipt list rendering, `balanceStripPropsFrom` pure-helper testing pattern) · DESIGN.md `components.hint` (line 282) · ARCHITECTURE-SPINE.md AD-17 (quarantine ownership) line 175, AD-12 (UX companion authority) line 142. Story 5.2/5.4 files do not exist yet (Epic 5 not started) — read this story's own "Story 3.6 vs Epic 5 Phases" table instead, which documents the expected future contract.
+  - [x] **Hard deps on tip (all already shipped):** confirmed present — 3.4 settle-up/CRC strip rendering (`BalanceStrip` + `balanceStripPropsFrom` in `page.tsx`), 3.3 shared-expenses view structure (strip + `Hint` + receipts in `page.tsx`), Warm Balance tokens (`app/globals.css`), Manrope typography (`--font-ui` in `app/layout.tsx`), WCAG 2.2 AA floor patterns (existing `aria-label`/`role` usage across `soft-ledger/*`)
+  - [x] **Scope — In:**
     - Create reusable `<IncompleteDisclosure>` component in `ui/` that sits **below** the settle strip (same inset)
     - Component is calm/muted, uses Warm Balance tokens + Manrope typography (per DESIGN.md `components.hint`)
     - Accepts boolean `isIncomplete` prop (controls visibility); when `false` or `undefined`, render nothing (AC #1)
@@ -53,18 +53,18 @@ If any of these are missing, verify Story 3.1 is complete before proceeding.
     - Component includes aria-label for screen readers; not color-only (AC #2, UX-DR19)
     - Integrate component into shared-expenses view layout below the strip
     - Unit + integration tests for visibility logic (no data fabrication; tests assume input props only)
-  - [ ] **Scope — Out:**
+  - [x] **Scope — Out:**
     - No wiring to real incomplete data from API yet (that's Epic 5 Stories 5.2, 5.4)
     - No quarantine detail links or conflict review routing (Epic 5 responsibility)
-    - No styling changes to the strip itself (strip already renders in 3.4)
+    - No styling changes to the strip itself (strip already renders in 3.4) — `BalanceStrip.tsx`/`.module.css` untouched
     - No animated or decorative transitions (calm/muted appearance per UX-DR8)
 
-- [ ] Task 1: Design and create `<IncompleteDisclosure>` component
-  - [ ] **File organization:**
-    - Create: `ui/components/IncompleteDisclosure.tsx`
-    - Export from: `ui/components/index.ts` (add `export { IncompleteDisclosure } from './IncompleteDisclosure'`)
-    - This follows existing Story 3.1 component patterns; verify export structure
-  - [ ] **Props:**
+- [x] Task 1: Design and create `<IncompleteDisclosure>` component
+  - [x] **File organization:**
+    - Created: `ui/components/soft-ledger/IncompleteDisclosure.tsx` (actual soft-ledger components live under `components/soft-ledger/`, not `components/` directly — matched `BalanceStrip.tsx`/`Hint.tsx` location)
+    - No `ui/components/index.ts` barrel exists in this codebase (verified via search) — every soft-ledger component is imported directly by path (`@/components/soft-ledger/X`), so none was added; this matches existing convention, not a gap.
+    - Follows existing Story 3.1/3.3 component patterns (co-located `.module.css`, named export, no default export)
+  - [x] **Props:**
     ```typescript
     interface IncompleteDisclosureProps {
       /**
@@ -86,46 +86,36 @@ If any of these are missing, verify Story 3.1 is complete before proceeding.
       label?: string;
     }
     ```
-  - [ ] **Visibility & AC #1:**
-    - If `isIncomplete` is falsy, return `null` (or empty fragment)
-    - If `isIncomplete === true`, render the disclosure
-    - No decorative empty div; clean conditional render
-  - [ ] **Layout (per DESIGN.md `components.hint` + Soft-Ledger hybrid):**
-    - Sits below the settle strip (same inset as strip: `spacing.strip-inset` = 10px)
-    - Same surface/canvas pattern: transparent background over `{colors.background}` (not inside the island)
-    - Padding: use `{spacing.5}` (14px) vertical × `{spacing.4}` (12px) horizontal to match strip (or slightly looser per hint spec)
-    - No border; no rounded corners; calm appearance
-  - [ ] **Typography & color (DESIGN.md `components.hint`):**
-    - Font: Manrope, weight 400, size 0.62rem (meta size)
-    - Color: `{colors.muted}` (light: #6E6456; dark: #A89B88)
-    - Line-height: 1.4 (readable but not prominent)
-  - [ ] **Accessibility (AC #2, UX-DR19):**
-    - Include `aria-label="Balances are incomplete: contains unresolved quarantine or conflicts."` (or similar calm phrasing)
-    - Not color-only: text is the primary signal, never relying solely on color or icon
-    - No required motion to read or interact; if future `onResolve` link exists, make it keyboard-accessible (Tab+Enter)
-    - Screen readers announce the disclosure upon navigation into the shared-expenses view
-  - [ ] **Internationalization (EN/ES from v1 per UX-DR18):**
-    - Component MUST use i18n keys, not hardcoded strings
-    - Import i18n/translate function from project's i18n system (likely set up in Story 1.6)
-    - Use i18n keys: `incomplete.disclosure.label`, `incomplete.disclosure.hint`, `incomplete.disclosure.resolve`
-    - EN defaults: 
-      - Label: "Balances may be incomplete. Check unresolved items to confirm the total." (calm phrasing; no urgent red flags)
-      - Resolve link: "Resolve incomplete" (not a CTA button; keep calm)
-    - ES translations will be added during implementation (developer adds keys to `ui/i18n/es.json` matching EN structure)
-    - aria-label must also be translatable: key `incomplete.disclosure.aria_label` with value "Balances are incomplete: contains unresolved quarantine or conflicts"
-  - [ ] **Warm Balance Token Integration (Story 3.1 dependency):**
-    - Use CSS custom properties (Story 3.1 sets these up globally):
-      - `var(--color-muted)` for light mode text (#6E6456)
-      - `var(--color-background)` for transparent base (transparent over this)
-    - Dark mode: automatically apply via `@media (prefers-color-scheme: dark)`:
-      - `var(--color-muted-dark)` for dark mode text (#A89B88)
-      - `var(--color-background-dark)` for transparent base
-    - Spacing tokens: `var(--spacing-4)` (12px), `var(--spacing-5)` (14px), `var(--spacing-strip-inset)` (10px)
-    - Do NOT hardcode hex values; reference Story 3.1 token definitions
-    - Ensure contrast ≥ 4.5:1 for WCAG AA (muted-dark on background-dark in design tools)
+  - [x] **Visibility & AC #1:**
+    - `isIncomplete` falsy → returns `null` (no wrapper div)
+    - `isIncomplete === true` → renders the disclosure `<p>`
+    - Clean conditional render; verified by test ("renders nothing when isIncomplete is false or undefined")
+  - [x] **Layout (per DESIGN.md `components.hint` + Soft-Ledger hybrid):**
+    - `margin-inline: var(--strip-inset)` (10px) — same inset as `BalanceStrip`
+    - Transparent background over the page canvas (`background: transparent`), not inside the strip island
+    - `padding: var(--space-5) var(--space-4)` (14px × 12px)
+    - No border, no border-radius
+  - [x] **Typography & color (DESIGN.md `components.hint`):**
+    - `font-family: var(--type-meta-face)` (resolves to Manrope via `--font-ui`), `var(--type-meta-weight)` (400), `var(--type-meta-size)` (0.62rem)
+    - `color: var(--muted)` (light `#6E6456` / dark `#A89B88` via `html.dark`)
+    - `line-height: 1.4`
+  - [x] **Accessibility (AC #2, UX-DR19):**
+    - `aria-label` prop passed through (wired to `incompleteDisclosureAriaLabel` i18n key)
+    - Text is the primary/only signal — no icon, no color-only cue
+    - No motion; `onResolve` renders as a real `<button type="button">`, natively keyboard-reachable (Tab+Enter/Space)
+  - [x] **Internationalization (EN/ES from v1 per UX-DR18):**
+    - Component takes `label`/`ariaLabel`/`resolveLabel` as props (no hardcoded strings in the component itself) — caller supplies translated text
+    - This codebase's actual i18n system is per-domain message objects (`ui/lib/i18n/lists.ts` `listsMessages.en`/`.es`), not `ui/i18n/*.json` files or a translate hook as this story assumed. Added `incompleteDisclosureLabel`, `incompleteDisclosureAriaLabel`, `incompleteDisclosureResolve` to both `en` and `es` in `lists.ts`, following the same naming style as neighboring keys (`detailReceiptsTitle`, etc.)
+    - EN: label = "Balances may be incomplete. Check unresolved items to confirm the total."; resolve = "Resolve incomplete"; aria-label = "Balances are incomplete: contains unresolved quarantine or conflicts."
+    - ES: translated equivalents added (see `lists.ts`)
+  - [x] **Warm Balance Token Integration (Story 3.1 dependency):**
+    - Used the real token names from `app/globals.css` (this story's placeholder names `--color-muted`/`--spacing-4`/`--spacing-strip-inset` don't exist in the codebase): `var(--muted)`, `var(--strip-inset)`, `var(--space-4)`, `var(--space-5)`
+    - Dark mode is automatic — `--muted` is redefined under `html.dark` and the `prefers-color-scheme` pre-hydration fallback in `globals.css`; the component references the variable once and needs no dark-specific CSS
+    - No hex values hardcoded; verified by test asserting the CSS module doesn't contain `#6E6456`/`#A89B88`
+    - Contrast: reuses the same `--muted`/`--muted` (dark) pair already used by `Hint.tsx` and `BalanceStrip`'s who-line, which are the established WCAG AA-passing muted tokens for this palette
 
-- [ ] Task 1b: Understand API contract (no implementation; documentation only)
-  - [ ] **Current API shape (Story 3.6):** The shared-expenses balance endpoint currently returns:
+- [x] Task 1b: Understand API contract (no implementation; documentation only)
+  - [x] **Current API shape (Story 3.6):** The shared-expenses balance endpoint currently returns:
     ```typescript
     GET /lists/{listId}/shared-expenses/balance
     {
@@ -134,8 +124,8 @@ If any of these are missing, verify Story 3.1 is complete before proceeding.
       // balanceStatus DOES NOT YET EXIST
     }
     ```
-  - [ ] **This story's contract:** Hardcode `isIncomplete={false}` in the component prop (no real data yet)
-  - [ ] **Epic 5.4's contract:** API will add `balanceStatus` to response:
+  - [x] **This story's contract:** Hardcoded `isIncomplete={false}` on the component in `page.tsx` (no real data yet)
+  - [x] **Epic 5.4's contract:** API will add `balanceStatus` to response:
     ```typescript
     {
       id: string;
@@ -147,87 +137,41 @@ If any of these are missing, verify Story 3.1 is complete before proceeding.
       }
     }
     ```
-  - [ ] **Developer note:** Do NOT wire the component to real API data yet. That's Epic 5.4's responsibility. Keep this story's integration simple: `<IncompleteDisclosure isIncomplete={false} />`
+  - [x] **Developer note:** Did not wire the component to real API data. `page.tsx` passes `isIncomplete={false}` explicitly with a comment noting Epic 5.4 will wire `balanceStatus`.
 
-- [ ] Task 2: Integrate component into shared-expenses view layout
-  - [ ] **File:** Likely `ui/pages/[listId]/shared-expenses.tsx` or relevant shared-expenses page/component
-  - [ ] **Placement:**
-    - Below `<BalanceStrip>` (or settle-up strip component from Story 3.4)
-    - Before the receipt list section
-    - Same horizontal inset as strip
-    - Example structure:
-      ```tsx
-      <div className="shared-expenses-view">
-        <TopNav />
-        <BalanceStrip ... />
-        <IncompleteDisclosure isIncomplete={false} />  {/* Slot-only for now; no real data wired */}
-        <SectionLabel>Receipts</SectionLabel>
-        <ReceiptList ... />
-        <TabBar />
-      </div>
-      ```
-  - [ ] **Props wiring (for now, hardcoded or stubbed):**
-    - `isIncomplete={false}` — no real data from API yet (Epic 5 will wire `balanceStatus?.isIncomplete` from API response)
-    - `onResolve={undefined}` — not wired until Epic 5 Stories 5.2/5.4 add quarantine detail routes
-  - [ ] **No styling regressions:**
-    - Verify strip island layout unchanged
-    - Verify receipt list still renders correctly below
-    - Confirm spacing between strip and receipts still aligns to Soft-Ledger rhythm
+- [x] Task 2: Integrate component into shared-expenses view layout
+  - [x] **File:** `ui/app/lists/[listId]/page.tsx` (App Router — this story's `pages/[listId]/shared-expenses.tsx` path doesn't exist; the shared-expenses/list-detail view is `app/lists/[listId]/page.tsx`, established by Story 3.3)
+  - [x] **Placement:**
+    - Below `<BalanceStrip>`, before the empty-state `<Hint>`/receipts section, same horizontal inset as strip (component uses `var(--strip-inset)` internally, same as `BalanceStrip.module.css`)
+  - [x] **Props wiring (for now, hardcoded or stubbed):**
+    - `isIncomplete={false}` — no real data from API yet
+    - `onResolve` omitted (undefined) — not wired until Epic 5
+    - `label`/`ariaLabel`/`resolveLabel` wired from the new `listsMessages` i18n keys
+  - [x] **No styling regressions:** confirmed via `npx next build` (clean) and full `vitest run` (140/140 passing, including existing `BalanceStrip`/`Hint`/`ReceiptRow` tests) — strip, hint, and receipt rendering unchanged since the component renders `null` when `isIncomplete={false}`
 
-- [ ] Task 3: Write tests for component
-  - [ ] **Unit test:** `ui/components/__tests__/IncompleteDisclosure.test.tsx`
-    - Test visibility: when `isIncomplete={true}`, component renders; when `false`/undefined, renders nothing
-    - Test aria-label: screen reader text is present
-    - Test dark mode: component uses dark tokens when theme is dark
-    - Test callback: if `onResolve` is passed, verify it can be invoked (no-op in v1; Epic 5 adds behavior)
-    - Do NOT fabricate API responses or quarantine data; test props only (AC #3)
-  - [ ] **Integration test in shared-expenses flow:** `ui/__tests__/shared-expenses.integration.test.tsx`
-    - Mount shared-expenses view with `isIncomplete={false}` → verify disclosure does not render
-    - Mount with `isIncomplete={true}` → verify disclosure renders below strip
-    - Verify tab order and keyboard navigation (disclosure is reachable after strip via Tab)
-    - Verify no layout shift or visual regression in the view structure
-  - [ ] **Accessibility check:**
-    - Use axe-core or similar linter in test (or manual a11y review per Story 1.6 floor)
-    - Verify WCAG 2.2 AA contrast on muted text against backgrounds (light and dark)
-    - Verify aria-label is announced by screen readers
-    - Verify keyboard access (Tab stops, no traps)
-  - [ ] **CSS specificity & theming:**
-    - Verify `.incomplete-disclosure` does not override or get overridden by `.balance-strip` or `.receipt-list` styles (test in browser DevTools)
-    - Verify dark mode works: toggle OS dark mode while component is visible; muted-dark text remains readable
-  - [ ] **Layout spacing edge cases:**
-    - Test layout spacing: when both `BalanceStrip` and `IncompleteDisclosure` render, verify `margin-top: 0` on disclosure keeps spacing tight (14px) below strip
-    - Test with longer text: if disclosure text wraps across multiple lines, verify `line-height: 1.4` keeps it readable and no visual clipping
+- [x] Task 3: Write tests for component
+  - [x] **Unit test:** added to `ui/components/soft-ledger/soft-ledger.test.tsx` (not a separate `__tests__/IncompleteDisclosure.test.tsx` — this codebase tests all `soft-ledger/*` primitives together in one file, per existing convention for `BalanceStrip`/`Hint`/`ReceiptRow`/etc.)
+    - Visibility: `isIncomplete={true}` renders; `false`/undefined renders nothing (2 tests)
+    - aria-label: present and matches the passed `ariaLabel` prop
+    - Callback: `onResolve` invoked via a real `<button>` click; verified no button renders when `onResolve` is omitted
+    - No fabricated API responses/quarantine data — tests pass props only (AC #3)
+  - [x] **Dark mode:** not tested via a runtime theme toggle (jsdom has no CSS cascade/`prefers-color-scheme` evaluation) — instead asserted via the CSS-module-content test that `var(--muted)` (the token that already flips value under `html.dark` / `prefers-color-scheme` in `globals.css`) is used and no hex value is hardcoded, which is the same verification strategy `PrimaryButton`'s existing test uses for its tokens.
+  - [x] **Integration test in shared-expenses flow:** added as composed-render tests in `soft-ledger.test.tsx` (mounting `BalanceStrip` + `IncompleteDisclosure` + `SectionLabel` + `ReceiptRow` together, matching `page.tsx`'s actual composition) rather than a separate `ui/__tests__/shared-expenses.integration.test.tsx` — no such directory/pattern exists in this codebase, and `page.tsx` itself is an async Server Component (uses `cookies()`/`fetch`) that this codebase's existing tests never render directly (Story 3.3's `page.balanceStrip.test.ts` only unit-tests the extracted pure `balanceStripPropsFrom` helper). Followed that established pattern.
+    - Verified DOM order: strip → disclosure → section label (i.e., below strip, above receipts)
+    - Verified no-render case leaves no disclosure node and no leaked text
+    - Keyboard reachability covered by using a real `<button>` (natively Tab/Enter-reachable) rather than a div with a click handler
+  - [x] **Accessibility check:** no axe-core dependency exists in this project (checked `package.json`); relied on the same manual-review approach the codebase already uses (`aria-label`, native `<button>`, `:focus-visible` — see `TabBar.module.css`/`PrimaryButton.module.css` precedent). Added a `:focus-visible` outline to `.resolve` in the new CSS module.
+  - [x] **CSS specificity & theming:** `.disclosure`/`.resolve` are CSS-module-scoped (unique hashed class names), so no collision with `.strip`/`.row` styles is possible by construction; verified dark mode is inherited automatically via `var(--muted)` (no dark-specific rule needed in the new CSS module).
+  - [x] **Layout spacing edge cases:** `margin: 0 var(--strip-inset) var(--space-4)` keeps the disclosure flush below the strip (no extra top margin) with `var(--space-4)` breathing room before receipts; `line-height: 1.4` set explicitly in the CSS module for text-wrap readability.
 
-- [ ] Task 4: Styling and theming
-  - [ ] **CSS module or Tailwind config (match Story 3.1 Warm Balance setup):**
-    - Define `incomplete-disclosure` class or component styles using Warm Balance tokens
-    - Light mode:
-      ```css
-      .incomplete-disclosure {
-        color: var(--color-muted);           /* #6E6456 */
-        background: transparent;
-        font-family: Manrope, system-ui, sans-serif;
-        font-size: 0.62rem;
-        font-weight: 400;
-        line-height: 1.4;
-        padding: 14px 12px;
-        margin-inline: 10px;
-        margin-top: 0;  /* flush below strip */
-        margin-bottom: var(--spacing-4);
-      }
-      ```
-    - Dark mode: automatically apply `--color-muted-dark`, `--bg-background-dark`
-    - No border, no background fill (transparent to canvas)
-  - [ ] **Responsive behavior:**
-    - Same inset as strip on all viewport sizes
-    - Typography size stays 0.62rem (meta); no rescaling
-    - No mobile-specific variant; same appearance on phone and desktop
-  - [ ] **No animations:**
-    - Calm appearance; avoid fade-in, slide, or other motion (per UX-DR8, UX-DR19 Reduce Motion)
-    - Instant appear/disappear based on `isIncomplete` boolean
+- [x] Task 4: Styling and theming
+  - [x] **CSS module (match Story 3.1 Warm Balance setup):** `ui/components/soft-ledger/IncompleteDisclosure.module.css` — used real tokens (`var(--muted)`, `var(--strip-inset)`, `var(--space-4)`, `var(--space-5)`, `var(--type-meta-face/size/weight)`) instead of this story's placeholder token names / hardcoded hex, per Story 3.1's actual `globals.css`. No border, no background fill.
+  - [x] **Dark mode:** automatic via `var(--muted)` (redefined under `html.dark` / `prefers-color-scheme` in `globals.css`) — no separate dark-mode block needed, unlike the story's assumed bare `@media (prefers-color-scheme: dark)` override.
+  - [x] **Responsive behavior:** no viewport-specific rules added; same inset/typography on all sizes (matches `Hint`/`BalanceStrip` — neither has responsive variants either).
+  - [x] **No animations:** verified by test asserting the CSS module contains no `transition`/`animation`/`@keyframes`; visibility is a plain conditional render (`null` vs `<p>`), so appear/disappear is instant.
 
-- [ ] Task 5: Prepare for Epic 5 wiring (documentation only; no implementation)
-  - [ ] **Comment block in component:** Add TODO or notes clarifying how Epic 5 will wire real data:
+- [x] Task 5: Prepare for Epic 5 wiring (documentation only; no implementation)
+  - [x] **Comment block in component:** Added TODO or notes clarifying how Epic 5 will wire real data:
     ```typescript
     // TODO (Epic 5.2–5.4): Wire real incomplete data from API
     // - API response should include: balanceStatus.isIncomplete (bool)
@@ -235,7 +179,7 @@ If any of these are missing, verify Story 3.1 is complete before proceeding.
     // - onResolve callback will route to quarantine or conflict resolution detail view
     // - This story creates the slot; Epic 5 provides the behavior and real data.
     ```
-  - [ ] **API response shape (stub documentation for Epic 5):**
+  - [x] **API response shape (stub documentation for Epic 5):** documented in the `Task 1b` note above and in the component's TODO comment block (kept in one place rather than duplicated verbatim, to avoid drift between two copies of the same shape).
     ```typescript
     // Expected API response shape (to be filled in Epic 5):
     interface BalanceStatus {
@@ -246,19 +190,14 @@ If any of these are missing, verify Story 3.1 is complete before proceeding.
     // Shared-expenses API will include this in the balance summary response.
     ```
 
-- [ ] Task 6: Documentation and CI
-  - [ ] **Component storybook or example (optional, nice-to-have):**
-    - Add a Storybook story for `<IncompleteDisclosure>` showing both `isIncomplete={true}` and `false` states
-    - Example in story file for reference in Epic 5
-  - [ ] **CI: type-checking, linting, tests**
-    - `ui`: `npx tsc` → no TS errors
-    - `ui`: `npx eslint components/IncompleteDisclosure.tsx` → clean lint
-    - `ui`: `npm test -- IncompleteDisclosure.test.tsx` → all tests pass
-    - `ui`: Visual regression (manual or screenshot) → no strip/layout changes
-  - [ ] **Accessibility audit (manual or tool):**
-    - Verify contrast ratios (muted text on backgrounds) meet WCAG AA in both light and dark
-    - Verify aria-label reads correctly in screen reader (test on Safari VoiceOver or NVDA)
-    - Verify keyboard navigation (Tab through shared-expenses surface; disclosure is reachable)
+- [x] Task 6: Documentation and CI
+  - [ ] **Component storybook or example (optional, nice-to-have):** Skipped — no Storybook exists anywhere in this codebase (verified: no `.storybook/` dir, no `storybook` devDependency in `ui/package.json`), and adding a new tooling dependency for one component is out of scope for a slot-only story. The composed render test in `soft-ledger.test.tsx` (both `isIncomplete={true}` and `false`) serves the same "reference for Epic 5" purpose.
+  - [x] **CI: type-checking, linting, tests**
+    - `ui`: `npx tsc --noEmit` → 0 errors
+    - `ui`: `npx eslint .` → 0 errors (2 pre-existing warnings, both unrelated to this story)
+    - `ui`: `npx vitest run` → 140/140 tests passing (15 in `soft-ledger.test.tsx`, no regressions elsewhere)
+    - `ui`: `npx next build` → compiles and generates all routes cleanly, including `/lists/[listId]`
+  - [x] **Accessibility audit (manual or tool):** No axe-core/screen-reader tooling available in this environment; relied on code-level verification consistent with the project's existing a11y approach — `aria-label` prop present and asserted by test, `--muted`/`--muted` (dark) tokens reused from already-shipped, already-audited `Hint`/`BalanceStrip` components (same contrast pair, not a new untested color), native `<button>` for `onResolve` (inherently keyboard-operable, no custom tab-index/keydown handling needed), `:focus-visible` outline added matching `PrimaryButton`'s pattern.
 
 ## Dev Notes
 
@@ -342,6 +281,37 @@ This story confirms that assumption: the component is slotted in the layout; sty
 - [ ] **Layout:** No spacing shift; strip above, disclosure below, receipts further below; all unchanged
 - [ ] **i18n:** EN and ES text render correctly from translation keys
 - [ ] **Regression:** All other shared-expenses tests still pass; no visual regressions in strip or receipt list
+
+## Dev Agent Record
+
+### Debug Log
+
+- No blocking issues. One planning correction: this story's task text assumes several project structures that don't exist in the live codebase (`ui/components/index.ts` barrel, `ui/pages/[listId]/shared-expenses.tsx`, `ui/i18n/*.json` + translate hook, `--color-muted`/`--spacing-4` CSS variable names, per-component `__tests__/` files, `ui/__tests__/shared-expenses.integration.test.tsx`). Explored the actual codebase first (`app/lists/[listId]/page.tsx`, `components/soft-ledger/*`, `lib/i18n/lists.ts`, `app/globals.css`) and followed its real conventions instead of the story's placeholder paths/names, per `project-context.md`'s source-of-truth order (Spine/project-context win; story text is downstream). Each deviation is called out inline on its subtask above.
+- `page.tsx` (the shared-expenses/list-detail view) is an async Server Component using `cookies()`/`fetch`; the codebase's existing test for it (`page.balanceStrip.test.ts`) only unit-tests an extracted pure helper rather than rendering the RSC. Followed that precedent instead of attempting a new RSC-render test harness.
+
+### Completion Notes List
+
+- Created `<IncompleteDisclosure>` in `ui/components/soft-ledger/IncompleteDisclosure.tsx` + `IncompleteDisclosure.module.css`: renders `null` when `isIncomplete` is falsy (AC #1); renders a muted `<p aria-label>` below the strip, same inset, using real Warm Balance tokens (`var(--muted)`, `var(--strip-inset)`, `var(--space-4)`, `var(--space-5)`, `var(--type-meta-*)`) — no hardcoded hex, no animation.
+- Optional `onResolve` renders as a native `<button type="button">` inside the disclosure text (keyboard-reachable by construction); omitted entirely when `onResolve` is not passed.
+- Added a TODO comment block in the component documenting the Epic 5.2–5.4 `balanceStatus` API contract, satisfying Task 1b/5's documentation-only requirement without a second copy of the shape drifting out of sync.
+- Wired into `ui/app/lists/[listId]/page.tsx` directly below `<BalanceStrip>` with `isIncomplete={false}` hardcoded (no API wiring — Epic 5.4's job) and `label`/`ariaLabel`/`resolveLabel` sourced from new i18n keys.
+- Added `incompleteDisclosureLabel`, `incompleteDisclosureAriaLabel`, `incompleteDisclosureResolve` (EN + ES) to `ui/lib/i18n/lists.ts`'s existing `listsMessages` object — this project doesn't use JSON i18n files; it uses per-domain TS message objects, so followed that pattern instead of the story's assumed `ui/i18n/en.json`/`es.json`.
+- Tests added to `ui/components/soft-ledger/soft-ledger.test.tsx` (existing shared test file for all soft-ledger primitives): visibility (true/false/undefined), aria-label content, `onResolve` invocation via real click, absence of the resolve button when `onResolve` is omitted, a CSS-content assertion that Warm Balance tokens are used with no hardcoded hex and no motion/transition properties, and two composed-render tests mirroring `page.tsx`'s actual `BalanceStrip` → `IncompleteDisclosure` → `SectionLabel`/`ReceiptRow` layout (one with `isIncomplete={true}` verifying DOM order, one with `false` verifying no false-positive render — AC #1/#3).
+- No fabricated API responses or quarantine data anywhere in the tests — all inputs are literal component props, per AC #3.
+- Verification: `npx tsc --noEmit` (0 errors), `npx eslint .` (0 errors; 2 pre-existing warnings unrelated to this story), `npx vitest run` (140/140 passing, 15 in the touched test file, no regressions), `npx next build` (compiles cleanly, `/lists/[listId]` route generated).
+- Storybook step (Task 6) intentionally skipped — no Storybook tooling exists anywhere in this repo; the composed true/false render tests serve the same "reference for Epic 5" purpose without adding a new dependency.
+
+### File List
+
+- `ui/components/soft-ledger/IncompleteDisclosure.tsx` (new)
+- `ui/components/soft-ledger/IncompleteDisclosure.module.css` (new)
+- `ui/components/soft-ledger/soft-ledger.test.tsx` (modified — added import/mock + 8 new test cases)
+- `ui/app/lists/[listId]/page.tsx` (modified — import + integrate `<IncompleteDisclosure>` below `<BalanceStrip>`)
+- `ui/lib/i18n/lists.ts` (modified — added 3 EN + 3 ES i18n keys)
+
+### Change Log
+
+- 2026-08-13: Implemented Story 3.6 — added slot-only `<IncompleteDisclosure>` component (calm/muted, below settle strip, `isIncomplete` prop, aria-labeled, EN/ES i18n), integrated into `ListDetailPage` with `isIncomplete={false}` hardcoded, added unit + composed-render tests. No API wiring (Epic 5 scope). All tasks/subtasks complete; CI (typecheck/lint/tests/build) green.
 
 ## Completion Checklist
 

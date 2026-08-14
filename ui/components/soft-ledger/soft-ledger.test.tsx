@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { BalanceStrip } from "./BalanceStrip";
 import { Hint } from "./Hint";
+import { IncompleteDisclosure } from "./IncompleteDisclosure";
 import { PrimaryButton } from "./PrimaryButton";
 import { ReceiptRow } from "./ReceiptRow";
 import { SectionLabel } from "./SectionLabel";
@@ -48,6 +49,7 @@ function mockCssModules() {
 
 vi.mock("./BalanceStrip.module.css", mockCssModules);
 vi.mock("./Hint.module.css", mockCssModules);
+vi.mock("./IncompleteDisclosure.module.css", mockCssModules);
 vi.mock("./PrimaryButton.module.css", mockCssModules);
 vi.mock("./ReceiptRow.module.css", mockCssModules);
 vi.mock("./SectionLabel.module.css", mockCssModules);
@@ -200,5 +202,140 @@ describe("Soft-Ledger primitives", () => {
       bob.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     });
     expect(onChange).toHaveBeenCalledWith("b");
+  });
+
+  it("IncompleteDisclosure renders nothing when isIncomplete is false or undefined (AC #1)", () => {
+    act(() => {
+      root.render(
+        <IncompleteDisclosure
+          isIncomplete={false}
+          label="Balances may be incomplete."
+          ariaLabel="Balances are incomplete: contains unresolved quarantine or conflicts."
+        />,
+      );
+    });
+    expect(host.querySelector("p")).toBeNull();
+    expect(host.textContent).toBe("");
+
+    act(() => {
+      root.render(
+        <IncompleteDisclosure
+          label="Balances may be incomplete."
+          ariaLabel="Balances are incomplete: contains unresolved quarantine or conflicts."
+        />,
+      );
+    });
+    expect(host.querySelector("p")).toBeNull();
+  });
+
+  it("IncompleteDisclosure renders muted text with a screen-reader aria-label when isIncomplete is true (AC #2)", () => {
+    act(() => {
+      root.render(
+        <IncompleteDisclosure
+          isIncomplete={true}
+          label="Balances may be incomplete. Check unresolved items to confirm the total."
+          ariaLabel="Balances are incomplete: contains unresolved quarantine or conflicts."
+        />,
+      );
+    });
+    const p = host.querySelector("p");
+    expect(p?.textContent).toContain("Balances may be incomplete.");
+    expect(p?.getAttribute("aria-label")).toBe(
+      "Balances are incomplete: contains unresolved quarantine or conflicts.",
+    );
+    // Not color-only: the disclosure text itself is the accessible signal (UX-DR19).
+    expect(p?.getAttribute("aria-label")?.length).toBeGreaterThan(0);
+  });
+
+  it("IncompleteDisclosure invokes onResolve via a keyboard-accessible button when provided", () => {
+    const onResolve = vi.fn();
+    act(() => {
+      root.render(
+        <IncompleteDisclosure
+          isIncomplete={true}
+          label="Balances may be incomplete."
+          ariaLabel="Balances are incomplete."
+          onResolve={onResolve}
+          resolveLabel="Resolve incomplete"
+        />,
+      );
+    });
+    const button = host.querySelector("button") as HTMLButtonElement;
+    expect(button).not.toBeNull();
+    expect(button.type).toBe("button");
+    expect(button.textContent).toBe("Resolve incomplete");
+    act(() => {
+      button.click();
+    });
+    expect(onResolve).toHaveBeenCalledTimes(1);
+  });
+
+  it("IncompleteDisclosure has no resolve control when onResolve is omitted", () => {
+    act(() => {
+      root.render(
+        <IncompleteDisclosure
+          isIncomplete={true}
+          label="Balances may be incomplete."
+          ariaLabel="Balances are incomplete."
+        />,
+      );
+    });
+    expect(host.querySelector("button")).toBeNull();
+  });
+
+  it("IncompleteDisclosure CSS uses Warm Balance tokens, not hardcoded colors, and has no motion", () => {
+    const css = readFileSync(join(here, "IncompleteDisclosure.module.css"), "utf8");
+    expect(css).toContain("var(--muted)");
+    expect(css).toContain("var(--strip-inset)");
+    expect(css).not.toMatch(/#6E6456|#A89B88/i);
+    expect(css).not.toMatch(/transition|animation|@keyframes/i);
+  });
+
+  it("shared-expenses composition: strip, then incomplete disclosure (when incomplete), then receipts — same inset, no fabricated data", () => {
+    act(() => {
+      root.render(
+        <>
+          <BalanceStrip who="You owe Partner" amount="₡42,500" polarity="owe" />
+          <IncompleteDisclosure
+            isIncomplete={true}
+            label="Balances may be incomplete. Check unresolved items to confirm the total."
+            ariaLabel="Balances are incomplete: contains unresolved quarantine or conflicts."
+          />
+          <SectionLabel>Receipts</SectionLabel>
+          <ReceiptRow emptyLabel="No receipts yet." />
+        </>,
+      );
+    });
+    const strip = host.querySelector("section");
+    const disclosure = host.querySelector("p[aria-label]");
+    const receiptsLabel = host.querySelector("h2");
+    expect(strip).not.toBeNull();
+    expect(disclosure?.textContent).toContain("Balances may be incomplete.");
+    expect(receiptsLabel?.textContent).toBe("Receipts");
+    // Strip → disclosure → receipts: DOM order preserves Soft-Ledger layout (below strip, above receipts).
+    const order = Array.from(host.children).indexOf(strip as Element);
+    const disclosureIndex = Array.from(host.children).indexOf(disclosure as Element);
+    const receiptsIndex = Array.from(host.children).indexOf(receiptsLabel as Element);
+    expect(order).toBeLessThan(disclosureIndex);
+    expect(disclosureIndex).toBeLessThan(receiptsIndex);
+  });
+
+  it("shared-expenses composition: no incomplete disclosure rendered when isIncomplete is false (no false positives)", () => {
+    act(() => {
+      root.render(
+        <>
+          <BalanceStrip who="Settled" amount="₡0" />
+          <IncompleteDisclosure
+            isIncomplete={false}
+            label="Balances may be incomplete."
+            ariaLabel="Balances are incomplete."
+          />
+          <SectionLabel>Receipts</SectionLabel>
+          <ReceiptRow emptyLabel="No receipts yet." />
+        </>,
+      );
+    });
+    expect(host.querySelector("p[aria-label]")).toBeNull();
+    expect(host.textContent).not.toContain("Balances may be incomplete.");
   });
 });
