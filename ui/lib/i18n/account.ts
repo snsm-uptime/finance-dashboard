@@ -22,6 +22,7 @@ export const accountMessages = {
     saveThemeFailed: "Could not save theme. Try again.",
     backToLists: "Back to lists",
     navAccount: "Account",
+    manageCards: "Manage cards",
   },
   es: {
     brand: "finance-helper",
@@ -43,6 +44,7 @@ export const accountMessages = {
     saveThemeFailed: "No se pudo guardar el tema. Inténtalo de nuevo.",
     backToLists: "Volver a listas",
     navAccount: "Cuenta",
+    manageCards: "Administrar tarjetas",
   },
 } as const;
 

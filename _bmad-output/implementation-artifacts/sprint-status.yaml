@@ -99,7 +99,7 @@ development_status:
   # Do not start Epic 4 until epic-3-5 demo gate done
 
   epic-4: in-progress
-  4-1-register-and-match-cards-by-iban: ready-for-dev
+  4-1-register-and-match-cards-by-iban: review
   4-2-manual-origin-card-cash-blank-no-origin-filter: backlog
   4-3-card-routing-mode-review-default-list: backlog
   4-4-adapter-contract-canonicalline-bac-normalize: backlog

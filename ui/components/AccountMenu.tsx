@@ -160,6 +160,12 @@ export function AccountMenu() {
       </section>
 
       <section className="mb-6">
+        <Link className={resetLinkClass} href="/cards">
+          {t.manageCards}
+        </Link>
+      </section>
+
+      <section className="mb-6">
         <button
           type="button"
           className={resetLinkClass}
