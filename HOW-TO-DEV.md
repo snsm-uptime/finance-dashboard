@@ -101,10 +101,10 @@ Ports and URLs are printed by the scripts (not always `3000` / `8000`). Values l
 ```bash
 git status
 git add <files>
-git commit -m "your message"
-git push -u origin HEAD
 
-gh pr create --base main --title "Story title" --body "$(cat <<'EOF'
+./scripts/worktree/setup-worktree-unix.sh pr \
+  --title "Story title" \
+  --body "$(cat <<'EOF'
 ## Summary
 - ...
 
@@ -112,8 +112,11 @@ gh pr create --base main --title "Story title" --body "$(cat <<'EOF'
 - [ ] ...
 
 EOF
-)"
+)" \
+  --commit-title "your message"
 ```
+
+This commits what's staged, pushes the current branch explicitly to `origin/<branch>`, then opens the PR via `gh`. Don't use `git push -u origin HEAD` here — worktree branches intentionally track `origin/main` (for easy `git pull`), and `-u` would overwrite that tracking.
 
 One story per branch (repo convention). Open the PR from the worktree.
 

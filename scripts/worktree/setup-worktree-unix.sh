@@ -17,6 +17,88 @@ MARKER_END="# --- end cursor worktree overrides ---"
 log() { printf '==> %s\n' "$*"; }
 warn() { printf '!!  %s\n' "$*" >&2; }
 
+# --- pr subcommand ---
+# Usage: setup-worktree-unix.sh pr --title "<title>" --body "<body>" --commit-title "<commit-title>"
+# Commits currently staged changes, pushes the current worktree branch explicitly
+# (not via upstream — upstream intentionally tracks origin/main so `git pull` stays
+# easy in a worktree), then opens a PR with gh.
+cmd_pr() {
+  local title="" body="" commit_title=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --title) title="$2"; shift 2 ;;
+      --body) body="$2"; shift 2 ;;
+      --commit-title) commit_title="$2"; shift 2 ;;
+      *) echo "error: unknown pr option: $1" >&2; exit 1 ;;
+    esac
+  done
+
+  if [[ -z "$title" || -z "$body" ]]; then
+    echo "error: pr requires --title and --body" >&2
+    exit 1
+  fi
+
+  if ! command -v gh >/dev/null 2>&1; then
+    echo "error: gh CLI not found on PATH" >&2
+    exit 1
+  fi
+
+  if ! gh auth status >/dev/null 2>&1; then
+    echo "error: gh is not authenticated — run 'gh auth login' first" >&2
+    exit 1
+  fi
+
+  local branch
+  branch="$(git -C "$WT_ROOT" rev-parse --abbrev-ref HEAD)"
+  if [[ "$branch" == "HEAD" ]]; then
+    echo "error: detached HEAD — checkout a branch before opening a PR" >&2
+    exit 1
+  fi
+
+  if git -C "$WT_ROOT" diff --cached --quiet; then
+    warn "Nothing staged."
+    if [[ ! -t 0 ]]; then
+      echo "error: nothing staged and stdin is not interactive — stage changes first, or run this manually to confirm push-only" >&2
+      exit 1
+    fi
+    read -r -p "Continue and just push + open PR? [y/N] " reply
+    if [[ ! "$reply" =~ ^[Yy]$ ]]; then
+      echo "Aborted." >&2
+      exit 1
+    fi
+  else
+    if [[ -z "$commit_title" ]]; then
+      echo "error: staged changes present but --commit-title not given" >&2
+      exit 1
+    fi
+    log "Committing staged changes: $commit_title"
+    git -C "$WT_ROOT" commit -m "$commit_title"
+  fi
+
+  log "Fetching origin"
+  git -C "$WT_ROOT" fetch origin
+
+  local default_ref
+  default_ref="$(git -C "$WT_ROOT" symbolic-ref -q refs/remotes/origin/HEAD 2>/dev/null || true)"
+  default_ref="${default_ref#refs/remotes/origin/}"
+  if [[ -z "$default_ref" ]]; then
+    if git -C "$WT_ROOT" show-ref --verify --quiet refs/remotes/origin/main; then
+      default_ref=main
+    elif git -C "$WT_ROOT" show-ref --verify --quiet refs/remotes/origin/master; then
+      default_ref=master
+    else
+      echo "error: could not resolve origin default branch (need origin/main or origin/master)" >&2
+      exit 1
+    fi
+  fi
+
+  log "Pushing ${branch} to origin (upstream tracking left untouched)"
+  git -C "$WT_ROOT" push origin "HEAD:refs/heads/${branch}"
+
+  log "Creating PR: base=${default_ref} head=${branch}"
+  (cd "$WT_ROOT" && gh pr create --base "$default_ref" --head "$branch" --title "$title" --body "$body")
+}
+
 slugify() {
   printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//; s/-+/-/g' | cut -c1-48
 }
@@ -28,6 +110,12 @@ port_pair_from_path() {
   offset=$((hash % 40 + 1))
   printf '%s %s' "$((8000 + offset * 10))" "$((3000 + offset * 10))"
 }
+
+if [[ "${1:-}" == "pr" ]]; then
+  shift
+  cmd_pr "$@"
+  exit 0
+fi
 
 # --- .env ---
 if [[ -n "$ROOT_WORKTREE_PATH" && -f "$ROOT_WORKTREE_PATH/.env" ]]; then
@@ -151,5 +239,6 @@ Compose name:   ${COMPOSE_NAME}
 UI:             ${PUBLIC_APP_URL}
 API:            http://localhost:${API_HOST_PORT}
 
-PR tip (AD-13): one story per branch; open PR from this worktree after commit.
+PR tip (AD-13): one story per branch. Stage your changes, then:
+  ./scripts/worktree/setup-worktree-unix.sh pr --title "..." --body "..." --commit-title "..."
 EOF

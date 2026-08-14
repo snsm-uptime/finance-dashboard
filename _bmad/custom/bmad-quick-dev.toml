@@ -1,0 +1,8 @@
+# Team override for bmad-quick-dev.
+# See _bmad/custom/bmad-quick-dev.user.toml for personal overrides.
+
+[workflow]
+
+persistent_facts = [
+  'When offering to push and/or open a pull request (bmad-quick-dev step-05-present.md and step-oneshot.md), use the documented PR flow for this repo instead of raw git commands: `./scripts/worktree/setup-worktree-unix.sh pr --title "<title>" --body "<body>" --commit-title "<commit-title>"` (see HOW-TO-DEV.md, section "Commit, push, open PR"). Never run `git push -u origin HEAD` here -- worktree branches intentionally track origin/main for easy `git pull`, and -u would overwrite that tracking.',
+]
