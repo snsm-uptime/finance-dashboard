@@ -55,6 +55,10 @@
   border-radius: 0 var(--temporal-nav-radius) var(--temporal-nav-radius) 0;
 }
 
+.navButton:first-child:last-child {
+  border-radius: var(--temporal-nav-radius);
+}
+
 .navButton:hover {
   background: color-mix(in srgb, var(--temporal-icon-hover-color) 8%, var(--surface));
   color: var(--temporal-icon-hover-color);
@@ -85,8 +89,6 @@
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 1rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--border);
 }
 
 .formLeading {
@@ -137,8 +139,6 @@
 
 .closeIcon {
   display: block;
-  width: 1.1rem;
-  height: 1.1rem;
 }
 
 .formBody {

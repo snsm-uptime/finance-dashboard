@@ -14,6 +14,8 @@ PROVENANCE_HAND = "hand"
 PROVENANCE_PARSER = "parser"
 LINE_TYPE_PURCHASE = "purchase"
 MANUAL_CURRENCY_CRC = "CRC"
+# v1 FX scope is USD+CRC only (Story 3.5 / AD-7); other currencies deferred.
+MANUAL_SUPPORTED_CURRENCIES = frozenset({"CRC", "USD"})
 CRC_AMOUNT_QUANTUM = Decimal("0.01")
 DESCRIPTION_MAX_LENGTH = 500
 # Numeric(18, 4) ceiling; CRC uses 2dp so keep a safe integer-digit bound.
@@ -44,10 +46,13 @@ def validate_manual_expense(
     member_ids: list[UUID],
     now: datetime | None = None,
 ) -> ManualExpenseDraft:
-    """Validate a manual (hand) expense create. CRC-only until Story 3.5 FX."""
+    """Validate a manual (hand) expense create. v1 supports CRC and USD (Story 3.5 FX)."""
     cur = (currency or "").strip().upper()
-    if cur != MANUAL_CURRENCY_CRC:
-        raise InvalidManualExpenseError("Manual expenses support CRC only in this release.")
+    if cur not in MANUAL_SUPPORTED_CURRENCIES:
+        raise InvalidManualExpenseError(
+            f"Manual expenses support {', '.join(sorted(MANUAL_SUPPORTED_CURRENCIES))} only "
+            "in this release."
+        )
 
     try:
         parsed = amount if isinstance(amount, Decimal) else Decimal(str(amount).strip())
@@ -61,7 +66,7 @@ def validate_manual_expense(
         raise InvalidManualExpenseError("Amount is too large.")
     quantized = parsed.quantize(CRC_AMOUNT_QUANTUM)
     if quantized != parsed:
-        raise InvalidManualExpenseError("Amount may have at most two decimal places for CRC.")
+        raise InvalidManualExpenseError("Amount may have at most two decimal places.")
 
     normalized = (description or "").strip()
     if not normalized:
@@ -76,7 +81,7 @@ def validate_manual_expense(
 
     return ManualExpenseDraft(
         amount=parsed,
-        currency=MANUAL_CURRENCY_CRC,
+        currency=cur,
         normalized_description=normalized,
         payer_id=payer_id,
         provenance=PROVENANCE_HAND,

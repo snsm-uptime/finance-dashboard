@@ -98,24 +98,73 @@ function asExpenses(data: unknown): ExpenseItem[] {
       typeof e.provenance !== "string" ||
       typeof e.line_type !== "string" ||
       typeof e.created_at !== "string" ||
-      typeof e.list_id !== "string"
+      typeof e.list_id !== "string" ||
+      typeof e.amount_crc !== "string" ||
+      typeof e.fx_rate !== "string"
     ) {
       continue;
     }
-    out.push(e as ExpenseItem);
+    out.push({
+      ...(e as ExpenseItem),
+      fx_rate_date: typeof e.fx_rate_date === "string" ? e.fx_rate_date : null,
+      fx_fallback: e.fx_fallback === true,
+    });
   }
   return out;
 }
 
-/** Soft-Ledger plain CRC voice (UX-DR17) — e.g. ₡10.00 / ₡42,500. */
-function formatCrcAmount(amount: string): string {
+function formatCrcNumber(amount: string): string {
   const parsed = Number(amount);
-  if (!Number.isFinite(parsed)) return `₡${amount}`;
-  const formatted = parsed.toLocaleString("en-US", {
+  if (!Number.isFinite(parsed)) return amount;
+  return parsed.toLocaleString("en-US", {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   });
-  return `₡${formatted}`;
+}
+
+/** Soft-Ledger plain CRC voice (UX-DR17) — e.g. ₡10.00 / ₡42,500. */
+function formatCrcAmount(amount: string): string {
+  return `₡${formatCrcNumber(amount)}`;
+}
+
+type ExpenseFxMessages = {
+  expenseFxOriginalTemplate: string;
+  expenseFxFallbackSuffix: string;
+  expenseFxSummaryLabel: string;
+  expenseFxRateDetailTemplate: string;
+};
+
+/**
+ * FX audit trail for a receipt row (Story 3.5 AC #3). CRC rows render plainly;
+ * non-CRC rows show original + converted CRC inline and keep rate/date behind
+ * an expandable detail (fallback is disclosed directly, never hidden).
+ */
+export function receiptRowFxPropsFrom(
+  e: ExpenseItem,
+  t: ExpenseFxMessages,
+): { title: string; amount: string; fxSummary?: string; fxDetail?: string } {
+  if (e.currency === "CRC") {
+    return { title: e.description, amount: formatCrcAmount(e.amount) };
+  }
+  const fallbackSuffix =
+    e.fx_fallback && e.fx_rate_date
+      ? t.expenseFxFallbackSuffix.replace("{date}", e.fx_rate_date)
+      : "";
+  const original = t.expenseFxOriginalTemplate
+    .replace("{currency}", e.currency)
+    .replace("{original}", e.amount)
+    .replace("{crc}", formatCrcNumber(e.amount_crc));
+  const fxDetail = e.fx_rate_date
+    ? t.expenseFxRateDetailTemplate
+        .replace("{rate}", e.fx_rate)
+        .replace("{date}", e.fx_rate_date)
+    : undefined;
+  return {
+    title: `${e.description} (${original}${fallbackSuffix})`,
+    amount: formatCrcAmount(e.amount_crc),
+    fxSummary: fxDetail ? t.expenseFxSummaryLabel : undefined,
+    fxDetail,
+  };
 }
 
 type BalanceStripMessages = {
@@ -352,14 +401,19 @@ export default async function ListDetailPage({
                 ) : expenses.length === 0 ? (
                   <ReceiptRow emptyLabel={t.detailReceiptsEmpty} />
                 ) : (
-                  expenses.map((e) => (
-                    <ReceiptRow
-                      key={e.id}
-                      title={e.description}
-                      when={e.posted_date}
-                      amount={formatCrcAmount(e.amount)}
-                    />
-                  ))
+                  expenses.map((e) => {
+                    const rowProps = receiptRowFxPropsFrom(e, t);
+                    return (
+                      <ReceiptRow
+                        key={e.id}
+                        title={rowProps.title}
+                        when={e.posted_date}
+                        amount={rowProps.amount}
+                        fxSummary={rowProps.fxSummary}
+                        fxDetail={rowProps.fxDetail}
+                      />
+                    );
+                  })
                 )}
               </div>
               <p className={`${styles.copy} ${styles.mobileBack}`}>

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useFormSubmission, useFormStateSync } from "@/hooks";
 import { SoftLedgerRadio } from "@/components/soft-ledger/Radio";
 import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
+import { FormIconSubmit } from "@/components/FormIconSubmit";
 
 import { PercentageSplitTrack } from "./PercentageSplitTrack";
 import {
@@ -354,6 +355,19 @@ export function ManualExpenseForm({
           <p id={errorId} className={styles.error} role="alert">
             {error}
           </p>
+        ) : null}
+
+        {/* Callers that manage submission externally (e.g. mobile Sheet corner action) pass
+            formRef and render their own button; otherwise fall back to this inline control. */}
+        {!formRef ? (
+          <div className={styles.submitRow}>
+            <FormIconSubmit
+              type="submit"
+              variant="save"
+              label={pending ? messages.expenseSaving : messages.expenseSubmit}
+              disabled={!canSubmit}
+            />
+          </div>
         ) : null}
       </form>
     </section>

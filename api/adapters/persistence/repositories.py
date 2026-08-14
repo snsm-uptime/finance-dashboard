@@ -375,6 +375,7 @@ class SqlAlchemyListRepository:
         entry_id: UUID,
         list_id: UUID,
         draft,
+        fx,
     ):
         from datetime import UTC, datetime
         from datetime import date as date_cls
@@ -400,6 +401,10 @@ class SqlAlchemyListRepository:
             receipt_id=None,
             product_id=None,
             external_ref=None,
+            amount_crc=fx.amount_crc,
+            fx_rate=fx.fx_rate,
+            fx_rate_date=fx.fx_rate_date,
+            fx_fallback=fx.fx_fallback,
             created_at=created_at,
         )
         self._session.add(row)
@@ -415,6 +420,10 @@ class SqlAlchemyListRepository:
             line_type=row.line_type or "",
             posted_date=row.posted_date,
             created_at=row.created_at,
+            amount_crc=Decimal(str(row.amount_crc)),
+            fx_rate=Decimal(str(row.fx_rate)),
+            fx_rate_date=row.fx_rate_date,
+            fx_fallback=row.fx_fallback,
             receipt_id=row.receipt_id,
             product_id=row.product_id,
             external_ref=row.external_ref,
@@ -452,6 +461,10 @@ class SqlAlchemyListRepository:
                     line_type=row.line_type,
                     posted_date=row.posted_date,
                     created_at=row.created_at,
+                    amount_crc=Decimal(str(row.amount_crc)),
+                    fx_rate=Decimal(str(row.fx_rate)),
+                    fx_rate_date=row.fx_rate_date,
+                    fx_fallback=row.fx_fallback,
                     receipt_id=row.receipt_id,
                     product_id=row.product_id,
                     external_ref=row.external_ref,

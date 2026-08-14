@@ -75,18 +75,19 @@ export function InviteForm({ listId, messages, reserveErrorHeight = false, hideB
         <p className={styles.copy} role="status">
           {messages.inviteSent}
         </p>
-      ) : null}
-      {/* Optional reserved height: mobile sheet only (desktop sidebar should not grow for empty alerts). */}
-      <div
-        className={reserveErrorHeight ? styles.inviteErrorSlot : undefined}
-        aria-live="polite"
-      >
-        {error ? (
-          <p className={styles.error} role="alert">
-            {error}
-          </p>
-        ) : null}
-      </div>
+      ) : (
+        /* Optional reserved height: mobile sheet only (desktop sidebar should not grow for empty alerts). */
+        <div
+          className={reserveErrorHeight ? styles.inviteErrorSlot : undefined}
+          aria-live="polite"
+        >
+          {error ? (
+            <p className={styles.error} role="alert">
+              {error}
+            </p>
+          ) : null}
+        </div>
+      )}
     </form>
   );
 }

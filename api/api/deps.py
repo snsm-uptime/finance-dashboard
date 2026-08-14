@@ -5,11 +5,13 @@ from __future__ import annotations
 import uuid
 from collections.abc import Iterator
 
+from adapters.fx.bccr_client import UnavailableBccrClient
 from adapters.persistence.db import get_session_factory
 from adapters.persistence.password_hasher import Argon2PasswordHasher
 from adapters.persistence.repositories import SqlAlchemyAuthUserRepository
 from adapters.persistence.sessions import SqlAlchemySessionStore
-from application.ports import PasswordHasher, PreferencesRepository, SessionStore
+from application.fx_service import MaterializeFxService
+from application.ports import BccrClient, PasswordHasher, PreferencesRepository, SessionStore
 from application.rate_limit import SlidingWindowRateLimiter, resolve_trusted_client_ip
 from domain.errors import AliasRequiredError
 from fastapi import Depends, HTTPException, Request, status
@@ -41,6 +43,15 @@ def get_session_store(db: Session = Depends(get_db)) -> SessionStore:
 
 def get_preferences_repository(db: Session = Depends(get_db)) -> PreferencesRepository:
     return SqlAlchemyAuthUserRepository(db)
+
+
+def get_bccr_client() -> BccrClient:
+    """BCCR transport is a deferred infrastructure spike (Story 3.5 Dev Notes)."""
+    return UnavailableBccrClient()
+
+
+def get_fx_service(bccr: BccrClient = Depends(get_bccr_client)) -> MaterializeFxService:
+    return MaterializeFxService(bccr)
 
 
 def get_auth_settings(request: Request) -> AuthSettings:
