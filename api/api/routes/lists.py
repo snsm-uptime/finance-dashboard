@@ -21,10 +21,13 @@ from application.expenses import (
     ListMembersService,
     SplitOverrideInput,
 )
+from application.fx_service import MaterializeFxService
 from application.list_invite import InviteMemberToListCommand, InviteMemberToListService
 from application.lists import (
     CreateOwnedListCommand,
     CreateOwnedListService,
+    DeleteListCommand,
+    DeleteListService,
     GetListBalancesStubCommand,
     GetListBalancesStubService,
     GetListDefaultSplitCommand,
@@ -40,6 +43,11 @@ from application.lists import (
 )
 from domain.errors import (
     AlreadyListMemberError,
+    FxAuthenticationError,
+    FxCurrencyNotSupportedError,
+    FxFutureDateError,
+    FxRateNotAvailableError,
+    FxServiceUnavailableError,
     InvalidDefaultSplitError,
     InvalidInviteEmailError,
     InvalidListNameError,
@@ -53,10 +61,10 @@ from domain.errors import (
     SmtpSendError,
 )
 from fastapi import APIRouter, Depends, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.orm import Session
 
-from api.deps import get_auth_settings, get_db, require_authenticated_user
+from api.deps import get_auth_settings, get_db, get_fx_service, require_authenticated_user
 from api.schemas.lists import (
     CreateExpenseBody,
     CreateExpenseResponse,
@@ -120,6 +128,10 @@ def _expense_item(row) -> ExpenseItemResponse:
         line_type=row.line_type,
         posted_date=row.posted_date.isoformat(),
         created_at=row.created_at,
+        amount_crc=_money_str(row.amount_crc),
+        fx_rate=_money_str(row.fx_rate),
+        fx_rate_date=row.fx_rate_date.isoformat() if row.fx_rate_date else None,
+        fx_fallback=row.fx_fallback,
     )
 
 
@@ -181,6 +193,30 @@ def _smtp_error_response(exc: SmtpConfigurationError | SmtpSendError) -> JSONRes
     return JSONResponse(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         content={"detail": str(exc), "code": code},
+    )
+
+
+def _fx_error_response(
+    exc: FxFutureDateError
+    | FxCurrencyNotSupportedError
+    | FxRateNotAvailableError
+    | FxAuthenticationError
+    | FxServiceUnavailableError,
+) -> JSONResponse:
+    """FX error → HTTP mapping (Dev Notes error classification, AD-7 fail loud)."""
+    if isinstance(exc, FxAuthenticationError):
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"detail": str(exc), "code": exc.CODE},
+        )
+    if isinstance(exc, FxServiceUnavailableError):
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"detail": str(exc), "code": exc.CODE},
+        )
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content={"detail": str(exc), "code": exc.CODE},
     )
 
 
@@ -338,12 +374,13 @@ def create_list_expense(
     body: CreateExpenseBody,
     user_id: uuid.UUID = Depends(require_authenticated_user),
     db: Session = Depends(get_db),
+    fx_service: MaterializeFxService = Depends(get_fx_service),
 ) -> CreateExpenseResponse | JSONResponse:
     parsed_override = _parse_split_override(body)
     if isinstance(parsed_override, JSONResponse):
         return parsed_override
 
-    service = CreateManualExpenseService(SqlAlchemyListRepository(db))
+    service = CreateManualExpenseService(SqlAlchemyListRepository(db), fx_service)
     try:
         created = service.execute(
             CreateManualExpenseCommand(
@@ -367,14 +404,24 @@ def create_list_expense(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             content={"detail": str(exc), "code": "invalid_split_override"},
         )
+    except (
+        FxFutureDateError,
+        FxCurrencyNotSupportedError,
+        FxRateNotAvailableError,
+        FxAuthenticationError,
+        FxServiceUnavailableError,
+    ) as exc:
+        return _fx_error_response(exc)
     except (ListNotFoundError, NotListMemberError):
         return _access_denied()
 
     logger.info(
-        "manual_expense_created list_id=%s entry_id=%s provenance=%s",
+        "manual_expense_created list_id=%s entry_id=%s provenance=%s currency=%s fx_fallback=%s",
         list_id,
         created.id,
         created.provenance,
+        created.currency,
+        created.fx_fallback,
     )
     return CreateExpenseResponse(
         id=created.id,
@@ -387,6 +434,10 @@ def create_list_expense(
         line_type=created.line_type,
         posted_date=created.posted_date.isoformat(),
         created_at=created.created_at,
+        amount_crc=_money_str(created.amount_crc),
+        fx_rate=_money_str(created.fx_rate),
+        fx_rate_date=created.fx_rate_date.isoformat() if created.fx_rate_date else None,
+        fx_fallback=created.fx_fallback,
     )
 
 
@@ -520,3 +571,23 @@ def rename_list(
         )
     logger.info("list_renamed list_id=%s", result.id)
     return _list_response(result.id, result.name, result.owner_id)
+
+
+@router.delete("/{list_id}", response_model=None)
+def delete_list(
+    list_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> Response | JSONResponse:
+    service = DeleteListService(SqlAlchemyListRepository(db))
+    try:
+        service.execute(DeleteListCommand(actor_user_id=user_id, list_id=list_id))
+    except (ListNotFoundError, NotListMemberError):
+        return _access_denied()
+    except NotListOwnerError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={"detail": str(exc), "code": "not_list_owner"},
+        )
+    logger.info("list_deleted list_id=%s", list_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

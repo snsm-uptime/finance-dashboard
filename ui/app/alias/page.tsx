@@ -5,7 +5,7 @@ import { fetchMe } from "@/lib/alias";
 import { aliasMessages, detectLocale } from "@/lib/i18n/alias";
 import { AliasSetupForm } from "./AliasSetupForm";
 import { safeReturnTo } from "../sign-in/signInClient";
-import styles from "../signup/signup.module.css";
+import styles from "../signup/signup.module.scss";
 
 export const dynamic = "force-dynamic";
 

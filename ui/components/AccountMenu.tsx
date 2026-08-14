@@ -10,9 +10,11 @@ import {
 import { accountCopy } from "@/lib/i18n/account";
 import type { Locale, ThemePreference } from "@/lib/i18n/locale";
 
-import styles from "./AccountMenu.module.css";
+import styles from "./AccountMenu.module.scss";
 
 export function AccountMenu() {
+  // NOTE: SSR hydration mismatch — server renders with default theme; client may hydrate with different theme.
+  // This can cause brief light→dark flicker on page load. Mitigation: ensure initial HTML theme matches system preference.
   const { locale, theme, setLanguage, setTheme, ready } = usePreferences();
   const t = accountCopy(locale);
   const [pending, setPending] = useState(false);
@@ -75,27 +77,44 @@ export function AccountMenu() {
 
   const controlsDisabled = pending || !ready || signingOut;
 
+  const choiceButtonClass = `font-inherit text-[0.85rem] font-semibold py-[0.5rem] px-[0.85rem] rounded-[8px] border border-border bg-surface text-foreground cursor-pointer ${styles.choice}`;
+  const choiceButtonActiveClass = `font-inherit text-[0.85rem] font-semibold py-[0.5rem] px-[0.85rem] rounded-[8px] border border-accent bg-accent text-on-accent cursor-pointer ${styles.choiceActive}`;
+  const resetLinkClass = `inline-block font-inherit text-[0.95rem] font-semibold p-0 border-0 bg-transparent text-accent no-underline cursor-pointer ${styles.resetLink}`;
+  const signOutClass = `font-inherit text-[0.9rem] font-semibold py-[0.55rem] px-[1rem] rounded-[8px] border border-border bg-surface text-foreground cursor-pointer ${styles.signOut}`;
+
   return (
-    <main className={styles.main}>
-      <div className={styles.header}>
-        <p className={styles.brand}>{t.brand}</p>
-        <Link className={styles.navLink} href="/lists">
+    <main className="min-h-screen py-[2.5rem] px-[1.5rem]" style={{ fontFamily: "var(--font-ui), Manrope, system-ui, sans-serif" }}>
+      <div className="flex items-center justify-between gap-4 mb-2">
+        <p className="m-0 text-[1.25rem] font-medium text-muted tracking-[0.03rem]" style={{ fontFamily: "var(--font-brand), Georgia, serif" }}>
+          {t.brand}
+        </p>
+        <Link
+          className="text-accent font-semibold no-underline text-[0.9rem]"
+          href="/lists"
+        >
           {t.backToLists}
         </Link>
       </div>
-      <h1 className={styles.title}>{t.title}</h1>
-      <p className={styles.subtitle}>{t.subtitle}</p>
+      <h1 className="m-0 mb-[0.35rem] text-[1.75rem] font-[550] text-foreground">
+        {t.title}
+      </h1>
+      <p className="m-0 mb-[1.75rem] max-w-[28rem] text-muted leading-[1.45] text-[0.95rem]">
+        {t.subtitle}
+      </p>
 
-      {!ready ? <p className={styles.hint}>{t.loading}</p> : null}
+      {!ready ? (
+        <p className="text-muted text-[0.85rem]">{t.loading}</p>
+      ) : null}
 
-      <section className={styles.section} aria-labelledby="account-language">
-        <h2 id="account-language" className={styles.sectionTitle}>
+      <section className="mb-6" aria-labelledby="account-language">
+        <h2 id="account-language" className="m-0 mb-[0.6rem] text-[0.72rem] font-[550] text-muted tracking-[0.02rem]">
           {t.language}
         </h2>
-        <div className={styles.row} role="group" aria-label={t.language}>
+        {/* TODO: Add RTL-aware layout (dir attribute on parent or logical CSS properties) */}
+        <div className="flex flex-wrap gap-2" role="group" aria-label={t.language}>
           <button
             type="button"
-            className={locale === "en" ? styles.choiceActive : styles.choice}
+            className={locale === "en" ? choiceButtonActiveClass : choiceButtonClass}
             aria-pressed={locale === "en"}
             disabled={controlsDisabled}
             onClick={() => void onLanguage("en")}
@@ -104,7 +123,7 @@ export function AccountMenu() {
           </button>
           <button
             type="button"
-            className={locale === "es" ? styles.choiceActive : styles.choice}
+            className={locale === "es" ? choiceButtonActiveClass : choiceButtonClass}
             aria-pressed={locale === "es"}
             disabled={controlsDisabled}
             onClick={() => void onLanguage("es")}
@@ -114,11 +133,11 @@ export function AccountMenu() {
         </div>
       </section>
 
-      <section className={styles.section} aria-labelledby="account-theme">
-        <h2 id="account-theme" className={styles.sectionTitle}>
+      <section className="mb-6" aria-labelledby="account-theme">
+        <h2 id="account-theme" className="m-0 mb-[0.6rem] text-[0.72rem] font-[550] text-muted tracking-[0.02rem]">
           {t.theme}
         </h2>
-        <div className={styles.row} role="group" aria-label={t.theme}>
+        <div className="flex flex-wrap gap-2" role="group" aria-label={t.theme}>
           {(
             [
               ["light", t.light],
@@ -129,7 +148,7 @@ export function AccountMenu() {
             <button
               key={value}
               type="button"
-              className={theme === value ? styles.choiceActive : styles.choice}
+              className={theme === value ? choiceButtonActiveClass : choiceButtonClass}
               aria-pressed={theme === value}
               disabled={controlsDisabled}
               onClick={() => void onTheme(value)}
@@ -140,10 +159,10 @@ export function AccountMenu() {
         </div>
       </section>
 
-      <section className={styles.section}>
+      <section className="mb-6">
         <button
           type="button"
-          className={styles.resetLink}
+          className={resetLinkClass}
           disabled={signingOut}
           onClick={() => void onPasswordReset()}
         >
@@ -151,10 +170,10 @@ export function AccountMenu() {
         </button>
       </section>
 
-      <section className={styles.section}>
+      <section className="mb-6">
         <button
           type="button"
-          className={styles.signOut}
+          className={signOutClass}
           disabled={signingOut}
           onClick={() => void onSignOut()}
         >
@@ -162,7 +181,9 @@ export function AccountMenu() {
         </button>
       </section>
 
-      {error ? <p className={styles.error}>{error}</p> : null}
+      {error ? (
+        <p className="text-owe text-[0.9rem]">{error}</p>
+      ) : null}
     </main>
   );
 }

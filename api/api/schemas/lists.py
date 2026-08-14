@@ -57,6 +57,11 @@ class ExpenseItemResponse(BaseModel):
     line_type: str
     posted_date: str
     created_at: datetime
+    # FX materialized at commit (Story 3.5 / AC #3 audit trail) — CRC rows are 1:1.
+    amount_crc: str
+    fx_rate: str
+    fx_rate_date: str | None = None
+    fx_fallback: bool = False
 
 
 class ListExpensesStubResponse(BaseModel):
@@ -83,6 +88,10 @@ class CreateExpenseResponse(BaseModel):
     line_type: str
     posted_date: str
     created_at: datetime
+    amount_crc: str
+    fx_rate: str
+    fx_rate_date: str | None = None
+    fx_fallback: bool = False
 
 
 class ListMemberItem(BaseModel):

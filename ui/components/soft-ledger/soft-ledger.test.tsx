@@ -1,10 +1,6 @@
 /**
  * @vitest-environment jsdom
  */
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
 import { act } from "react";
 import type { ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -16,11 +12,10 @@ import { IncompleteDisclosure } from "./IncompleteDisclosure";
 import { PrimaryButton } from "./PrimaryButton";
 import { ReceiptRow } from "./ReceiptRow";
 import { SectionLabel } from "./SectionLabel";
+import { SoftLedgerRadio } from "./Radio";
 import { SoftLedgerSelect } from "./Select";
 import { TabBar } from "./TabBar";
 import { TopNav } from "./TopNav";
-
-const here = dirname(fileURLToPath(import.meta.url));
 
 vi.mock("next/link", () => ({
   default: ({
@@ -39,23 +34,6 @@ vi.mock("next/link", () => ({
     </a>
   ),
 }));
-
-function mockCssModules() {
-  const handler = {
-    get: (_t: object, prop: string | symbol) => String(prop),
-  };
-  return { default: new Proxy({}, handler) };
-}
-
-vi.mock("./BalanceStrip.module.css", mockCssModules);
-vi.mock("./Hint.module.css", mockCssModules);
-vi.mock("./IncompleteDisclosure.module.css", mockCssModules);
-vi.mock("./PrimaryButton.module.css", mockCssModules);
-vi.mock("./ReceiptRow.module.css", mockCssModules);
-vi.mock("./SectionLabel.module.css", mockCssModules);
-vi.mock("./TabBar.module.css", mockCssModules);
-vi.mock("./TopNav.module.css", mockCssModules);
-vi.mock("./Select.module.css", mockCssModules);
 
 describe("Soft-Ledger primitives", () => {
   let host: HTMLDivElement;
@@ -89,10 +67,12 @@ describe("Soft-Ledger primitives", () => {
         <BalanceStrip who="You owe Partner" amount="₡42,500" polarity="owe" />,
       );
     });
-    const who = host.querySelector("p");
-    expect(who?.textContent).toBe("You owe Partner");
+    const section = host.querySelector("section");
+    expect(section).not.toBeNull();
+    const paragraphs = host.querySelectorAll("p");
+    expect(paragraphs[0]?.textContent).toBe("You owe Partner");
     expect(host.textContent).toContain("₡42,500");
-    expect(host.querySelector("[class*='amountOwe'], .amountOwe")).toBeTruthy();
+    expect(section?.getAttribute("aria-label")).toBe("You owe Partner");
   });
 
   it("renders BalanceStrip with owed polarity", () => {
@@ -101,17 +81,21 @@ describe("Soft-Ledger primitives", () => {
         <BalanceStrip who="You’re owed" amount="₡10,000" polarity="owed" />,
       );
     });
+    const section = host.querySelector("section");
+    expect(section).not.toBeNull();
     expect(host.textContent).toContain("You’re owed");
     expect(host.textContent).toContain("₡10,000");
-    expect(host.querySelector("[class*='amountOwed'], .amountOwed")).toBeTruthy();
+    expect(section?.getAttribute("aria-label")).toBe("You’re owed");
   });
 
   it("renders BalanceStrip with neutral polarity (default)", () => {
     act(() => {
       root.render(<BalanceStrip who="Settled" amount="₡0" />);
     });
+    const section = host.querySelector("section");
+    expect(section).not.toBeNull();
     expect(host.textContent).toContain("Settled");
-    expect(host.querySelector("[class*='amountNeutral'], .amountNeutral")).toBeTruthy();
+    expect(section?.getAttribute("aria-label")).toBe("Settled");
   });
 
   it("renders Hint and SectionLabel and empty ReceiptRow", () => {
@@ -148,8 +132,6 @@ describe("Soft-Ledger primitives", () => {
     });
     const nav = host.querySelector("nav");
     expect(nav?.getAttribute("aria-label")).toBe("Primary");
-    const tabCss = readFileSync(join(here, "TabBar.module.css"), "utf8");
-    expect(tabCss).toContain(":focus-visible");
     const links = Array.from(host.querySelectorAll("a"));
     expect(links).toHaveLength(3);
     expect(links[0]?.getAttribute("href")).toBe("/lists/abc");
@@ -159,18 +141,14 @@ describe("Soft-Ledger primitives", () => {
     expect(links[2]?.getAttribute("href")).toBe("/account");
   });
 
-  it("PrimaryButton mounts and module CSS is not pill", () => {
+  it("PrimaryButton mounts and uses rounded-sm (not pill)", () => {
     act(() => {
       root.render(<PrimaryButton>Continue</PrimaryButton>);
     });
     const button = host.querySelector("button");
     expect(button?.textContent).toBe("Continue");
-
-    const css = readFileSync(join(here, "PrimaryButton.module.css"), "utf8");
-    expect(css).toContain("var(--rounded-sm)");
-    expect(css).toContain(":focus-visible");
-    expect(css).not.toMatch(/border-radius:\s*9999px/);
-    expect(css).not.toContain("rounded-full");
+    expect(button?.className).toContain("rounded-sm");
+    expect(button?.className).not.toContain("rounded-full");
   });
 
   it("SoftLedgerSelect opens a listbox and chooses an option", () => {
@@ -265,14 +243,6 @@ describe("Soft-Ledger primitives", () => {
     expect(host.querySelector("button")).toBeNull();
   });
 
-  it("IncompleteDisclosure CSS uses Warm Balance tokens, not hardcoded colors, and has no motion", () => {
-    const css = readFileSync(join(here, "IncompleteDisclosure.module.css"), "utf8");
-    expect(css).toContain("var(--muted)");
-    expect(css).toContain("var(--strip-inset)");
-    expect(css).not.toMatch(/#6E6456|#A89B88/i);
-    expect(css).not.toMatch(/transition|animation|@keyframes/i);
-  });
-
   it("shared-expenses composition: strip, then incomplete disclosure (when incomplete), then receipts — same inset, no fabricated data", () => {
     act(() => {
       root.render(
@@ -315,5 +285,36 @@ describe("Soft-Ledger primitives", () => {
       );
     });
     expect(host.textContent).not.toContain("Balances may be incomplete.");
+  });
+
+  it("SoftLedgerRadio renders radio and checkbox with background outline fill", () => {
+    const onChange = vi.fn();
+    act(() => {
+      root.render(
+        <SoftLedgerRadio name="mode" checked={false} onChange={onChange}>
+          Even
+        </SoftLedgerRadio>,
+      );
+    });
+    const input = host.querySelector('input[type="radio"]') as HTMLInputElement;
+    expect(input).not.toBeNull();
+    expect(host.textContent).toContain("Even");
+    act(() => {
+      input.click();
+    });
+    expect(onChange).toHaveBeenCalled();
+
+    act(() => {
+      root.render(
+        <SoftLedgerRadio type="checkbox" checked onChange={() => {}}>
+          Agree
+        </SoftLedgerRadio>,
+      );
+    });
+    expect(host.querySelector('input[type="checkbox"]')).not.toBeNull();
+
+    const mark = host.querySelector("span[aria-hidden='true']");
+    expect(mark?.className).toContain("border-accent");
+    expect(mark?.className).toContain("peer-checked:bg-accent");
   });
 });

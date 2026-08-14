@@ -15,11 +15,11 @@ import { accountCopy } from "@/lib/i18n/account";
 import { listsMessages } from "@/lib/i18n/lists";
 import type { Locale } from "@/lib/i18n/locale";
 import { fetchSession } from "@/lib/session";
-import { DefaultSplitPanel } from "../DefaultSplitPanel";
-import { InviteForm } from "../InviteForm";
+import { ListDetailMobileActions } from "../ListDetailMobileActions";
 import { ManualExpenseForm } from "../ManualExpenseForm";
+import { TemporalNavigation } from "../TemporalNavigation";
 import { balanceTone, type DefaultSplitPayload, type ExpenseItem, type ListMember } from "../listsClient";
-import styles from "../lists.module.css";
+import styles from "../lists.module.scss";
 
 export const dynamic = "force-dynamic";
 
@@ -99,24 +99,73 @@ function asExpenses(data: unknown): ExpenseItem[] {
       typeof e.provenance !== "string" ||
       typeof e.line_type !== "string" ||
       typeof e.created_at !== "string" ||
-      typeof e.list_id !== "string"
+      typeof e.list_id !== "string" ||
+      typeof e.amount_crc !== "string" ||
+      typeof e.fx_rate !== "string"
     ) {
       continue;
     }
-    out.push(e as ExpenseItem);
+    out.push({
+      ...(e as ExpenseItem),
+      fx_rate_date: typeof e.fx_rate_date === "string" ? e.fx_rate_date : null,
+      fx_fallback: e.fx_fallback === true,
+    });
   }
   return out;
 }
 
-/** Soft-Ledger plain CRC voice (UX-DR17) — e.g. ₡10.00 / ₡42,500. */
-function formatCrcAmount(amount: string): string {
+function formatCrcNumber(amount: string): string {
   const parsed = Number(amount);
-  if (!Number.isFinite(parsed)) return `₡${amount}`;
-  const formatted = parsed.toLocaleString("en-US", {
+  if (!Number.isFinite(parsed)) return amount;
+  return parsed.toLocaleString("en-US", {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   });
-  return `₡${formatted}`;
+}
+
+/** Soft-Ledger plain CRC voice (UX-DR17) — e.g. ₡10.00 / ₡42,500. */
+function formatCrcAmount(amount: string): string {
+  return `₡${formatCrcNumber(amount)}`;
+}
+
+type ExpenseFxMessages = {
+  expenseFxOriginalTemplate: string;
+  expenseFxFallbackSuffix: string;
+  expenseFxSummaryLabel: string;
+  expenseFxRateDetailTemplate: string;
+};
+
+/**
+ * FX audit trail for a receipt row (Story 3.5 AC #3). CRC rows render plainly;
+ * non-CRC rows show original + converted CRC inline and keep rate/date behind
+ * an expandable detail (fallback is disclosed directly, never hidden).
+ */
+export function receiptRowFxPropsFrom(
+  e: ExpenseItem,
+  t: ExpenseFxMessages,
+): { title: string; amount: string; fxSummary?: string; fxDetail?: string } {
+  if (e.currency === "CRC") {
+    return { title: e.description, amount: formatCrcAmount(e.amount) };
+  }
+  const fallbackSuffix =
+    e.fx_fallback && e.fx_rate_date
+      ? t.expenseFxFallbackSuffix.replace("{date}", e.fx_rate_date)
+      : "";
+  const original = t.expenseFxOriginalTemplate
+    .replace("{currency}", e.currency)
+    .replace("{original}", e.amount)
+    .replace("{crc}", formatCrcNumber(e.amount_crc));
+  const fxDetail = e.fx_rate_date
+    ? t.expenseFxRateDetailTemplate
+        .replace("{rate}", e.fx_rate)
+        .replace("{date}", e.fx_rate_date)
+    : undefined;
+  return {
+    title: `${e.description} (${original}${fallbackSuffix})`,
+    amount: formatCrcAmount(e.amount_crc),
+    fxSummary: fxDetail ? t.expenseFxSummaryLabel : undefined,
+    fxDetail,
+  };
 }
 
 type BalanceStripMessages = {
@@ -302,8 +351,8 @@ export default async function ListDetailPage({
 
   const listTitle = detail?.name;
   const isOwner = Boolean(detail?.owner_id && detail.owner_id === session.user_id);
-  const showSoftChrome = Boolean(listTitle) && !notFound && !loadError;
-  const navTitle = showSoftChrome ? (listTitle as string) : "";
+  const showListDetail = Boolean(listTitle) && !notFound && !loadError;
+  const navTitle = showListDetail ? (listTitle as string) : "";
   const stripProps = balanceStripPropsFrom(
     expenses.length > 0,
     balancesLoadError,
@@ -324,7 +373,7 @@ export default async function ListDetailPage({
               </Link>
             </p>
           </>
-        ) : !showSoftChrome ? (
+        ) : !showListDetail ? (
           <>
             <h1 className={styles.title}>{t.loadError}</h1>
             <p className={`${styles.copy} ${styles.softBack}`}>
@@ -334,38 +383,57 @@ export default async function ListDetailPage({
             </p>
           </>
         ) : (
-          <>
-            <BalanceStrip
-              who={stripProps.who}
-              amount={stripProps.amount}
-              polarity={stripProps.polarity}
-            />
-            {/* Slot only (Story 3.6): no balanceStatus in the API yet; Epic 5.4 wires isIncomplete. */}
-            <IncompleteDisclosure
-              isIncomplete={false}
-              label={t.incompleteDisclosureLabel}
-            />
-            {expenses.length === 0 && !expensesLoadError ? <Hint>{t.detailHintEmpty}</Hint> : null}
-            <div className={styles.softReceipts}>
-              <SectionLabel>{t.detailReceiptsTitle}</SectionLabel>
-              {expensesLoadError ? (
-                <p className={styles.copy} role="alert">
-                  {t.loadError}
-                </p>
-              ) : expenses.length === 0 ? (
-                <ReceiptRow emptyLabel={t.detailReceiptsEmpty} />
-              ) : (
-                expenses.map((e) => (
-                  <ReceiptRow
-                    key={e.id}
-                    title={e.description}
-                    when={e.posted_date}
-                    amount={formatCrcAmount(e.amount)}
-                  />
-                ))
-              )}
+          <div className={styles.detailLayout}>
+            <div className={styles.detailPrimary}>
+              <BalanceStrip
+                who={stripProps.who}
+                amount={stripProps.amount}
+                polarity={stripProps.polarity}
+              />
+              {/* Slot only (Story 3.6): no balanceStatus in the API yet; Epic 5.4 wires isIncomplete. */}
+              <IncompleteDisclosure
+                isIncomplete={false}
+                label={t.incompleteDisclosureLabel}
+              />
+              {expenses.length === 0 && !expensesLoadError ? (
+                <Hint>{t.detailHintEmpty}</Hint>
+              ) : null}
+              <div className={styles.softReceipts}>
+                <SectionLabel>{t.detailReceiptsTitle}</SectionLabel>
+                {expensesLoadError ? (
+                  <p className={styles.copy} role="alert">
+                    {t.loadError}
+                  </p>
+                ) : expenses.length === 0 ? (
+                  <ReceiptRow emptyLabel={t.detailReceiptsEmpty} />
+                ) : (
+                  expenses.map((e) => {
+                    const rowProps = receiptRowFxPropsFrom(e, t);
+                    return (
+                      <ReceiptRow
+                        key={e.id}
+                        title={rowProps.title}
+                        when={e.posted_date}
+                        amount={rowProps.amount}
+                        fxSummary={rowProps.fxSummary}
+                        fxDetail={rowProps.fxDetail}
+                      />
+                    );
+                  })
+                )}
+              </div>
+              <p className={`${styles.copy} ${styles.mobileBack}`}>
+                <Link className={styles.link} href="/lists">
+                  {t.backToLists}
+                </Link>
+              </p>
             </div>
-            <div className={styles.softBelow}>
+            <aside className={styles.detailSidebar}>
+              {members.length > 0 && (
+                <h1 className={styles.expenseTitle}>
+                  <span>{listTitle}</span>
+                </h1>
+              )}
               {membersLoadError ? (
                 <p className={styles.copy} role="alert">
                   {t.loadError}
@@ -394,15 +462,13 @@ export default async function ListDetailPage({
                   }}
                 />
               ) : null}
-              <p className={styles.copy}>
-                <Link className={styles.link} href="/lists">
-                  {t.backToLists}
-                </Link>
-              </p>
-              {isOwner ? (
-                <InviteForm
+              {members.length > 0 && (
+                <TemporalNavigation
                   listId={listId}
-                  messages={{
+                  members={members}
+                  isOwner={isOwner}
+                  defaultSplit={defaultSplit}
+                  inviteMessages={{
                     inviteTitle: t.inviteTitle,
                     inviteLabel: t.inviteLabel,
                     inviteSubmit: t.inviteSubmit,
@@ -416,19 +482,7 @@ export default async function ListDetailPage({
                     errorAlreadyMember: t.errorAlreadyMember,
                     errorSmtp: t.errorSmtp,
                   }}
-                />
-              ) : null}
-              {splitLoadError ? (
-                <p className={styles.copy} role="alert">
-                  {t.errorDefaultSplitLoad}
-                </p>
-              ) : null}
-              {defaultSplit ? (
-                <DefaultSplitPanel
-                  listId={listId}
-                  isOwner={isOwner}
-                  initial={defaultSplit}
-                  messages={{
+                  splitMessages={{
                     errorGeneric: t.errorGeneric,
                     errorInvalidName: t.errorInvalidName,
                     errorForbidden: t.errorForbidden,
@@ -443,9 +497,76 @@ export default async function ListDetailPage({
                     errorInvalidSplit: t.errorInvalidSplit,
                   }}
                 />
+              )}
+              {isOwner && splitLoadError ? (
+                <p className={styles.copy} role="alert">
+                  {t.errorDefaultSplitLoad}
+                </p>
               ) : null}
-            </div>
-          </>
+              <p className={styles.copy}>
+                <Link className={styles.link} href="/lists">
+                  {t.backToLists}
+                </Link>
+              </p>
+            </aside>
+            <ListDetailMobileActions
+              listId={listId}
+              currentUserId={session.user_id}
+              members={members}
+              isOwner={isOwner}
+              canAddExpense={!membersLoadError && members.length > 0}
+              canInvite={isOwner}
+              defaultSplit={defaultSplit}
+              expenseMessages={{
+                expenseTitle: t.expenseTitle,
+                expenseAmount: t.expenseAmount,
+                expenseDescription: t.expenseDescription,
+                expensePayer: t.expensePayer,
+                expenseSubmit: t.expenseSubmit,
+                expenseSaving: t.expenseSaving,
+                expenseAdjustSplit: t.expenseAdjustSplit,
+                expenseModeWhole: t.expenseModeWhole,
+                expenseModeAbsolute: t.expenseModeAbsolute,
+                expenseModePercentage: t.expenseModePercentage,
+                expenseAssignee: t.expenseAssignee,
+                errorGeneric: t.errorGeneric,
+                errorInvalidName: t.errorInvalidName,
+                errorForbidden: t.errorForbidden,
+                errorUnauthorized: t.errorUnauthorized,
+              }}
+              inviteMessages={{
+                inviteTitle: t.inviteTitle,
+                inviteLabel: t.inviteLabel,
+                inviteSubmit: t.inviteSubmit,
+                inviteSending: t.inviteSending,
+                inviteSent: t.inviteSent,
+                errorGeneric: t.errorGeneric,
+                errorInvalidName: t.errorInvalidName,
+                errorInvalidEmail: t.errorInvalidEmail,
+                errorForbidden: t.errorInviteForbidden,
+                errorUnauthorized: t.errorUnauthorized,
+                errorAlreadyMember: t.errorAlreadyMember,
+                errorSmtp: t.errorSmtp,
+              }}
+              splitMessages={{
+                errorGeneric: t.errorGeneric,
+                errorInvalidName: t.errorInvalidName,
+                errorForbidden: t.errorForbidden,
+                errorUnauthorized: t.errorUnauthorized,
+                defaultSplitTitle: t.defaultSplitTitle,
+                defaultSplitEven: t.defaultSplitEven,
+                defaultSplitCustom: t.defaultSplitCustom,
+                defaultSplitSum: t.defaultSplitSum,
+                defaultSplitSave: t.defaultSplitSave,
+                defaultSplitSaving: t.defaultSplitSaving,
+                defaultSplitReadOnly: t.defaultSplitReadOnly,
+                errorInvalidSplit: t.errorInvalidSplit,
+              }}
+              addExpenseAria={t.mobileAddExpenseAria}
+              inviteAria={t.mobileInviteAria}
+              closeLabel={t.mobileSheetClose}
+            />
+          </div>
         )}
       </div>
       <TabBar

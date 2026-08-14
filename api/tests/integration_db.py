@@ -49,8 +49,13 @@ def make_client(
     monkeypatch: pytest.MonkeyPatch,
     *,
     smtp: bool = False,
+    bccr_client: object | None = None,
 ) -> Iterator[TestClient]:
-    """Factory for TestClient with get_db override. smtp=True sets PUBLIC_APP_URL + SMTP_*."""
+    """Factory for TestClient with get_db override. smtp=True sets PUBLIC_APP_URL + SMTP_*.
+
+    bccr_client, when given, overrides get_bccr_client (Story 3.5) so tests can
+    exercise the USD FX path without a real BCCR transport.
+    """
     apply_base_auth_env(monkeypatch)
     if smtp:
         monkeypatch.setenv("PUBLIC_APP_URL", "http://localhost:3000")
@@ -67,6 +72,10 @@ def make_client(
         db_session.flush()
 
     app.dependency_overrides[get_db] = _override_db
+    if bccr_client is not None:
+        from api.deps import get_bccr_client
+
+        app.dependency_overrides[get_bccr_client] = lambda: bccr_client
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()

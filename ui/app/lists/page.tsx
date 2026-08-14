@@ -9,7 +9,7 @@ import type { Locale } from "@/lib/i18n/locale";
 import { fetchSession } from "@/lib/session";
 import { ListsPanel } from "./ListsPanel";
 import type { ListItem } from "./listsClient";
-import styles from "./lists.module.css";
+import styles from "./lists.module.scss";
 
 export const dynamic = "force-dynamic";
 

@@ -3,56 +3,19 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { EyeIcon } from "@/app/icons";
 import { resolveAuthenticatedLanding } from "@/lib/landing";
 import { inviteMessages } from "@/lib/i18n/invite";
 import { signupMessages, type Locale } from "@/lib/i18n/signup";
 import { setLastOpenedList } from "@/app/lists/listsClient";
 import { fetchInvitePreview } from "@/app/invites/inviteClient";
 import { attemptSignup } from "./signupClient";
-import styles from "./signup.module.css";
+import styles from "./signup.module.scss";
 
 type Props = {
   locale: Locale;
   inviteToken?: string;
 };
-
-function EyeIcon({ open }: { open: boolean }) {
-  if (open) {
-    return (
-      <svg
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
-        <circle cx="12" cy="12" r="3" />
-      </svg>
-    );
-  }
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
-      <circle cx="12" cy="12" r="3" />
-      <path d="M4 4l16 16" />
-    </svg>
-  );
-}
 
 export function SignupForm({ locale, inviteToken }: Props) {
   const router = useRouter();
@@ -96,7 +59,7 @@ export function SignupForm({ locale, inviteToken }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [inviteToken, t.errorExpiredInvite, t.errorGeneric]);
+  }, [inviteToken, t.errorExpiredInvite, t.errorGeneric, router]);
 
   const canSubmit = useMemo(
     () =>

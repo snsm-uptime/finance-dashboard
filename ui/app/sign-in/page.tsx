@@ -7,7 +7,7 @@ import { resolveServerAuthenticatedLanding } from "@/lib/serverLanding";
 import { fetchSession } from "@/lib/session";
 import { safeReturnTo } from "./signInClient";
 import { SignInForm } from "./SignInForm";
-import styles from "../signup/signup.module.css";
+import styles from "../signup/signup.module.scss";
 
 export const dynamic = "force-dynamic";
 

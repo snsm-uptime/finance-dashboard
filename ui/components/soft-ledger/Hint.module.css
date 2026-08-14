@@ -1,9 +1,0 @@
-.hint {
-  margin: 0 var(--strip-inset);
-  padding: var(--space-2) var(--space-1) var(--space-1);
-  font-family: var(--type-meta-face);
-  font-size: var(--type-meta-size);
-  font-weight: var(--type-meta-weight);
-  color: var(--muted);
-  box-shadow: none;
-}

@@ -51,12 +51,27 @@ def test_validate_accepts_crc_positive_amount_and_member_payer() -> None:
     assert not hasattr(draft, "origin_kind")
 
 
-def test_validate_rejects_non_crc_currency() -> None:
+def test_validate_accepts_usd_amount() -> None:
+    """USD manual expenses are the FX vehicle for this epic (Story 3.5 AC #1)."""
+    payer, other = uuid4(), uuid4()
+    draft = validate_manual_expense(
+        amount="100.00",
+        currency="usd",
+        description="Dinner",
+        payer_id=payer,
+        member_ids=[payer, other],
+        now=datetime(2026, 8, 6, 12, 0, tzinfo=COSTA_RICA_TZ),
+    )
+    assert draft.currency == "USD"
+    assert draft.amount == Decimal("100.00")
+
+
+def test_validate_rejects_unsupported_currency() -> None:
     payer = uuid4()
     with pytest.raises(InvalidManualExpenseError, match="CRC"):
         validate_manual_expense(
             amount="10.00",
-            currency="USD",
+            currency="EUR",
             description="Coffee",
             payer_id=payer,
             member_ids=[payer],

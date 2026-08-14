@@ -309,8 +309,8 @@ This story confirms that assumption: the component is slotted in the layout; sty
 
 ### File List
 
-- `ui/components/soft-ledger/IncompleteDisclosure.tsx` (new)
-- `ui/components/soft-ledger/IncompleteDisclosure.module.css` (new)
+- `ui/components/soft-ledger/IncompleteDisclosure.tsx` (new; migrated to Tailwind utilities on merge with `main` — see 2026-08-14 Change Log entry)
+- ~~`ui/components/soft-ledger/IncompleteDisclosure.module.css`~~ (new, then removed on merge — Epic 3.5 migrated all soft-ledger components off CSS Modules on `main`)
 - `ui/components/soft-ledger/soft-ledger.test.tsx` (modified — added import/mock + 8 new test cases)
 - `ui/app/lists/[listId]/page.tsx` (modified — import + integrate `<IncompleteDisclosure>` below `<BalanceStrip>`)
 - `ui/lib/i18n/lists.ts` (modified — added 3 EN + 3 ES i18n keys)
@@ -319,6 +319,7 @@ This story confirms that assumption: the component is slotted in the layout; sty
 
 - 2026-08-13: Implemented Story 3.6 — added slot-only `<IncompleteDisclosure>` component (calm/muted, below settle strip, `isIncomplete` prop, aria-labeled, EN/ES i18n), integrated into `ListDetailPage` with `isIncomplete={false}` hardcoded, added unit + composed-render tests. No API wiring (Epic 5 scope). All tasks/subtasks complete; CI (typecheck/lint/tests/build) green.
 - 2026-08-14: Code review fixes — replaced the `<p aria-label>` wrapper with `<div role="status">` (the `<p>`/`paragraph` role is name-prohibited under WAI-ARIA 1.2, so the original `aria-label` risked being silently ignored by assistive tech); dropped the now-redundant `ariaLabel` prop and `incompleteDisclosureAriaLabel` i18n key since the visible `label` text is now the accessible name directly; coupled `onResolve`/`resolveLabel` via a discriminated union so a future caller can't pass one without the other; removed `.disclosure`'s bottom margin so it no longer double-stacks with `.softReceipts`'s top margin in the flex layout; exported `IncompleteDisclosureProps`; updated tests and this story's Props/Checklist sections to match.
+- 2026-08-14: Merged `main` (Epic 3.5 Tailwind/SCSS migration + Story 3.4/3.5 landings) into this branch. `main` migrated every soft-ledger component off CSS Modules and codified "no new `*.module.css`" as project convention (AD-23), so `IncompleteDisclosure.module.css` — added before that convention landed — was ported to Tailwind utility classes matching `BalanceStrip`/`Hint`/`ReceiptRow`'s pattern (`mx-strip-inset`, `text-muted`, inline `style` for the meta typography CSS vars) and the `.module.css` file was deleted. Also re-integrated `<IncompleteDisclosure>` into `page.tsx`'s new two-column `detailLayout`/`detailPrimary`/`detailSidebar` structure (Story 3.5 UI work), directly below `<BalanceStrip>` as before. No behavior change from the 2026-08-14 review-fix commit; tests/tsc/eslint re-verified green post-merge.
 
 ## Completion Checklist
 

@@ -1,3 +1,29 @@
+@import "tailwindcss";
+
+/* Class strategy matches PreferencesProvider FOUC: html.dark / html.light */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-owe: var(--owe);
+  --color-owed: var(--owed);
+
+  --radius-sm: var(--rounded-sm);
+  --radius-md: var(--rounded-md);
+  --radius-lg: var(--rounded-lg);
+
+  --spacing-strip-inset: var(--strip-inset);
+  --spacing-page-gutter: var(--page-gutter);
+  --spacing-nav-x: var(--nav-x);
+  --spacing-row-y: var(--row-y);
+}
+
 :root {
   /* Warm Balance light (UX-DR1) — --wb-* canonical + legacy aliases */
   --wb-bg: #f7f3ec;

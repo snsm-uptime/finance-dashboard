@@ -7,6 +7,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    Boolean,
     Date,
     DateTime,
     ForeignKey,
@@ -82,15 +83,30 @@ class ListModel(Base):
         back_populates="owned_lists",
         foreign_keys=[owner_id],
     )
-    memberships: Mapped[list[ListMembershipModel]] = relationship(back_populates="list")
+    memberships: Mapped[list[ListMembershipModel]] = relationship(
+        back_populates="list",
+        cascade="all, delete-orphan",
+    )
     default_split_shares: Mapped[list[ListDefaultSplitShareModel]] = relationship(
         back_populates="list",
         cascade="all, delete-orphan",
     )
-    invite_tokens: Mapped[list[ListInviteTokenModel]] = relationship(back_populates="list")
-    receipts: Mapped[list[ReceiptModel]] = relationship(back_populates="list")
-    ledger_entries: Mapped[list[LedgerEntryModel]] = relationship(back_populates="list")
-    split_overrides: Mapped[list[SplitOverrideModel]] = relationship(back_populates="list")
+    invite_tokens: Mapped[list[ListInviteTokenModel]] = relationship(
+        back_populates="list",
+        cascade="all, delete-orphan",
+    )
+    receipts: Mapped[list[ReceiptModel]] = relationship(
+        back_populates="list",
+        cascade="all, delete-orphan",
+    )
+    ledger_entries: Mapped[list[LedgerEntryModel]] = relationship(
+        back_populates="list",
+        cascade="all, delete-orphan",
+    )
+    split_overrides: Mapped[list[SplitOverrideModel]] = relationship(
+        back_populates="list",
+        cascade="all, delete-orphan",
+    )
 
 
 class ListMembershipModel(Base):
@@ -258,6 +274,11 @@ class LedgerEntryModel(Base):
     # Import stubs — no FK; cards/origin land in Epic 4 (do not add origin_* here).
     product_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     external_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # FX materialized at commit (Story 3.5 / AD-7) — CRC entries pass through 1:1.
+    amount_crc: Mapped[Decimal] = mapped_column(Numeric(19, 2), nullable=False, server_default="0")
+    fx_rate: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False, server_default="1")
+    fx_rate_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    fx_fallback: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

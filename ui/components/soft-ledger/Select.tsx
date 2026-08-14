@@ -9,8 +9,6 @@ import {
   type KeyboardEvent,
 } from "react";
 
-import styles from "./Select.module.css";
-
 export type SoftLedgerSelectOption = {
   value: string;
   label: string;
@@ -25,7 +23,6 @@ type SoftLedgerSelectProps = {
   required?: boolean;
   "aria-label"?: string;
   "aria-labelledby"?: string;
-  "aria-invalid"?: boolean | "true" | "false";
   "aria-describedby"?: string;
   onChange: (value: string) => void;
 };
@@ -40,7 +37,6 @@ export function SoftLedgerSelect({
   required = false,
   "aria-label": ariaLabel,
   "aria-labelledby": ariaLabelledBy,
-  "aria-invalid": ariaInvalid,
   "aria-describedby": ariaDescribedBy,
   onChange,
 }: SoftLedgerSelectProps) {
@@ -117,32 +113,50 @@ export function SoftLedgerSelect({
   }
 
   return (
-    <div className={styles.root} ref={rootRef}>
+    <div className="relative w-full" ref={rootRef}>
       {name ? <input type="hidden" name={name} value={value} required={required} /> : null}
       <button
         type="button"
         id={triggerId}
-        className={styles.trigger}
+        className="flex items-center justify-between gap-2 w-full m-0 box-border px-[0.7rem] py-[0.55rem] border border-border rounded-sm bg-surface text-foreground text-left cursor-pointer font-semibold leading-[1.4] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-55 disabled:cursor-not-allowed aria-invalid:border-[#b33]"
+        style={{
+          fontFamily: "var(--font-ui), system-ui, sans-serif",
+          fontSize: "1rem",
+        }}
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={listboxId}
         aria-label={ariaLabel}
         aria-labelledby={ariaLabelledBy}
-        aria-invalid={ariaInvalid}
         aria-describedby={ariaDescribedBy}
         onClick={() => {
           if (!disabled) setOpen((v) => !v);
         }}
         onKeyDown={onTriggerKeyDown}
       >
-        <span className={styles.value}>{selected?.label ?? ""}</span>
-        <span className={styles.chevron} aria-hidden="true" />
+        <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
+          {selected?.label ?? ""}
+        </span>
+        <span
+          className="flex-shrink-0"
+          style={{
+            width: "0.55rem",
+            height: "0.55rem",
+            borderRight: "2px solid rgba(var(--foreground), 0.55)",
+            borderBottom: "2px solid rgba(var(--foreground), 0.55)",
+            transform: "rotate(45deg) translateY(-0.15rem)",
+          }}
+          aria-hidden="true"
+        />
       </button>
       {open ? (
         <ul
           id={listboxId}
-          className={styles.listbox}
+          className="absolute z-20 top-[calc(100%_+_0.25rem)] left-0 right-0 m-0 p-1 list-none max-h-56 overflow-auto border border-border rounded-sm bg-surface"
+          style={{
+            boxShadow: "0 8px 20px rgba(var(--foreground), 0.12)",
+          }}
           role="listbox"
           tabIndex={-1}
           aria-activedescendant={`${listboxId}-opt-${selectedIndex}`}
@@ -156,7 +170,15 @@ export function SoftLedgerSelect({
                 id={`${listboxId}-opt-${index}`}
                 role="option"
                 aria-selected={isSelected}
-                className={isSelected ? `${styles.option} ${styles.optionSelected}` : styles.option}
+                className={`m-0 px-[0.65rem] py-2 rounded-sm font-semibold cursor-pointer ${
+                  isSelected ? "bg-accent bg-opacity-18" : "hover:bg-accent hover:bg-opacity-12 focus-visible:bg-accent focus-visible:bg-opacity-12"
+                }`}
+                style={{
+                  fontFamily: "var(--font-ui), system-ui, sans-serif",
+                  fontSize: "0.95rem",
+                  fontWeight: isSelected ? "550" : "500",
+                  color: "var(--foreground)",
+                }}
                 onMouseDown={(event) => {
                   event.preventDefault();
                   choose(option.value);

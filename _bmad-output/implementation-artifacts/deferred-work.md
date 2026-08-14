@@ -144,3 +144,17 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-2-user-alias-display.md`
   summary: No dedicated test that POST /auth/verify/confirm never mutates alias
   evidence: Review — design says verify-only; locked only by absence of call sites today
+
+## Deferred from: code review of 3-5-1-install-tailwind-sass-warm-balance-theme.md (2026-08-12)
+
+- `@custom-variant dark` is class-only; legacy CSS vars have a `prefers-color-scheme` fallback for the no-class state but `dark:` Tailwind utilities do not — masked today because no component uses `dark:` utilities yet and `themeBootScript` runs pre-paint; revisit when 3.5.2/3.5.3 first uses `dark:` utilities
+- `sass` added with zero `*.module.scss` files to prove the compile pipeline works end-to-end — lower risk than the Tailwind PostCSS issue since Next's Sass loader is built-in/stable, but still unverified; will get real coverage once 3.5.2 adds the first `.module.scss`
+- "Forbidden: new `*.module.css`" convention is prose-only with no lint/tooling enforcement; 21 pre-existing `*.module.css` files remain, making an accidental violation easy — enforcement tooling is beyond Task 3's scope (convention note only)
+
+## Deferred from: code review of 3-5-4-convention-lock-project-context-architecture.md (2026-08-12)
+
+- `## Story-close overview` heading breaks the Dev Agent Record outline (sits at `##` level between two `###` subsections) — pre-existing pattern, also present in Story 1.5.2; fixing it would deviate from established repo convention across multiple stories
+- Story 3.5.3's own file has 3 disagreeing status signals (header "review", Completion Status "in-progress", sprint-status.yaml "done") — pre-existing drift in a different story's file, not caused by 3.5.4's diff
+- Task 5's prior explicit constraint ("do not claim CSS Modules removed") was replaced wholesale rather than marked superseded in the Dev Notes — this rewrite predates the current dev session (already staged before work began)
+- AD-23 "enforced end-to-end" claim relies on a file-count proxy (0 `.module.css` / 10 `.module.scss` under `ui/`) without auditing whether the 10 `.module.scss` files are genuinely custom-styles-only — explicitly out of scope for this docs-only story per its own Scope Boundaries
+- Sibling story 3-5-2 remains `review` (not `done`) while 3-5-4 flips to `review`; `epic-3-5-retrospective` still `optional` — epic-level gate bookkeeping, out of scope for 3.5.4

@@ -1,7 +1,7 @@
 # Overlay for Cursor worktrees / parallel agent stacks.
 # Base compose uses interval: 1h (operator-friendly); depends_on: service_healthy
 # would otherwise block api/ui for ~1h on a fresh stack.
-# Usage (via scripts/cursor-worktree/setup-worktree-unix.sh):
+# Usage (via scripts/worktree/setup-worktree-unix.sh):
 #   docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.worktree.yml up --build -d
 
 services:

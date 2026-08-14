@@ -1,0 +1,59 @@
+.chrome {
+  display: contents;
+}
+
+@media (min-width: 768px) {
+  .chrome {
+    display: none;
+  }
+}
+
+.fab {
+  --temporal-nav-radius: 8px;
+
+  position: fixed;
+  right: max(var(--page-gutter), env(safe-area-inset-right, 0px));
+  bottom: calc(3.25rem + env(safe-area-inset-bottom, 0px));
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  width: 3.25rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--temporal-nav-radius);
+  background: var(--surface);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--foreground) 12%, transparent);
+  overflow: hidden;
+}
+
+.fabHalf {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0.7rem 0;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  line-height: 0;
+}
+
+.fabHalf:not(:last-child) {
+  border-bottom: 1px solid var(--border);
+}
+
+.fabHalf:hover {
+  background: color-mix(in srgb, var(--border) 35%, transparent);
+}
+
+.fabHalf:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: -2px;
+}
+
+.fabIcon {
+  display: block;
+  width: 1.15rem;
+  height: 1.15rem;
+}

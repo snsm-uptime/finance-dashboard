@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import date, timedelta
+from decimal import Decimal
 from typing import Protocol
 from uuid import UUID
 
@@ -126,4 +127,23 @@ class EmailMessage:
 class EmailSender(Protocol):
     def send(self, message: EmailMessage) -> None:
         """Send transactional email. Raises SmtpConfigurationError / SmtpSendError on failure."""
+        ...
+
+
+class BccrClient(Protocol):
+    """BCCR (Banco Central de Costa Rica) daily FX rate port (Story 3.5 / AD-7).
+
+    Implementations own transport/auth/caching; callers never fall back to 1:1.
+    """
+
+    def get_rate(self, rate_date: date, currency: str) -> Decimal | None:
+        """Fetch the BCCR rate for the exact date. None if no rate is published."""
+        ...
+
+    def get_nearest_prior_rate(self, rate_date: date, currency: str) -> tuple[Decimal, date] | None:
+        """Fetch the most recent rate on/before rate_date. None if none exists."""
+        ...
+
+    def supported_currencies(self) -> list[str]:
+        """Currencies this client can convert to CRC (v1: USD)."""
         ...

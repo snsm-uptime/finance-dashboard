@@ -8,7 +8,7 @@ import { listsMessages } from "@/lib/i18n/lists";
 
 import { ManualExpenseForm } from "./ManualExpenseForm";
 
-vi.mock("./ManualExpenseForm.module.css", () => ({
+vi.mock("./ManualExpenseForm.module.scss", () => ({
   default: new Proxy(
     {},
     {
@@ -17,12 +17,12 @@ vi.mock("./ManualExpenseForm.module.css", () => ({
   ),
 }));
 
-vi.mock("@/components/soft-ledger/PrimaryButton", () => ({
-  PrimaryButton: ({
-    children,
-    ...rest
-  }: React.ButtonHTMLAttributes<HTMLButtonElement> & { children: React.ReactNode }) => (
-    <button {...rest}>{children}</button>
+vi.mock("@/components/FormIconSubmit/FormIconSubmit.module.scss", () => ({
+  default: new Proxy(
+    {},
+    {
+      get: (_t, prop) => String(prop),
+    },
   ),
 }));
 
@@ -340,7 +340,41 @@ describe("ManualExpenseForm", () => {
     expect(optionLabels).toContain("01234567…");
   });
 
-  it("submit control is a PrimaryButton (type=submit)", async () => {
+  it("submit control is an icon button, disabled until amount and description are set", async () => {
+    const onCanSubmitChange = vi.fn();
+    await act(async () => {
+      root.render(
+        <ManualExpenseForm
+          listId="list-1"
+          currentUserId="user-a"
+          members={members}
+          messages={messages}
+          onCanSubmitChange={onCanSubmitChange}
+        />,
+      );
+    });
+    // Form starts empty, so canSubmit should be false
+    expect(onCanSubmitChange).toHaveBeenCalledWith(false);
+
+    const amount = container.querySelector('input[name="amount"]') as HTMLInputElement;
+    const description = container.querySelector(
+      'input[name="description"]',
+    ) as HTMLInputElement;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(amount, "10");
+      amount.dispatchEvent(new Event("input", { bubbles: true }));
+      amount.dispatchEvent(new Event("change", { bubbles: true }));
+      setter?.call(description, "Coffee");
+      description.dispatchEvent(new Event("input", { bubbles: true }));
+      description.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    // After filling both fields, canSubmit should be true
+    expect(onCanSubmitChange).toHaveBeenLastCalledWith(true);
+  });
+
+  it("renders the desktop inline save when formRef is omitted, and it fills the row", async () => {
     await act(async () => {
       root.render(
         <ManualExpenseForm
@@ -351,8 +385,62 @@ describe("ManualExpenseForm", () => {
         />,
       );
     });
-    const button = container.querySelector('button[type="submit"]');
-    expect(button).not.toBeNull();
-    expect(button?.textContent).toBe(messages.expenseSubmit);
+
+    const form = container.querySelector("form") as HTMLFormElement;
+    const inlineSave = form.querySelector('button[type="submit"]');
+    expect(inlineSave).not.toBeNull();
+    expect(inlineSave?.className.split(/\s+/)).toContain("!w-full");
+  });
+
+  it("omits the inline save when formRef is provided (e.g. mobile Sheet corner action)", async () => {
+    const formRef = { current: null };
+    await act(async () => {
+      root.render(
+        <ManualExpenseForm
+          listId="list-1"
+          currentUserId="user-a"
+          members={members}
+          messages={messages}
+          formRef={formRef}
+        />,
+      );
+    });
+
+    const form = container.querySelector("form") as HTMLFormElement;
+    expect(form.querySelector('button[type="submit"]')).toBeNull();
+  });
+
+  it("keeps the inline save disabled/enabled matching canSubmit (empty vs filled amount+description)", async () => {
+    await act(async () => {
+      root.render(
+        <ManualExpenseForm
+          listId="list-1"
+          currentUserId="user-a"
+          members={members}
+          messages={messages}
+        />,
+      );
+    });
+
+    const form = container.querySelector("form") as HTMLFormElement;
+    const submitButton = form.querySelector(
+      'button[type="submit"]',
+    ) as HTMLButtonElement;
+    expect(submitButton.disabled).toBe(true);
+
+    const amount = container.querySelector('input[name="amount"]') as HTMLInputElement;
+    const description = container.querySelector(
+      'input[name="description"]',
+    ) as HTMLInputElement;
+
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(amount, "10.00");
+      amount.dispatchEvent(new Event("input", { bubbles: true }));
+      setter?.call(description, "Coffee");
+      description.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    expect(submitButton.disabled).toBe(false);
   });
 });

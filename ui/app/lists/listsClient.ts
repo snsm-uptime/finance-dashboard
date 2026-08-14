@@ -121,6 +121,30 @@ export async function renameList(
   return { ok: true, list: { id: data.id, name: data.name, owner_id: data.owner_id } };
 }
 
+export async function deleteList(
+  listId: string,
+  messages: ListsClientMessages,
+): Promise<OkSimple | ErrorResult> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/lists/${encodeURIComponent(listId)}`, {
+      method: "DELETE",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+    });
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  if (!response.ok) {
+    const body = (await parseJson(response)) as {
+      detail?: unknown;
+      code?: unknown;
+    } | null;
+    return { ok: false, error: mapError(response.status, body, messages) };
+  }
+  return { ok: true };
+}
+
 /** Persist last-opened via /auth/me (account column) after ACL on the API. */
 export async function setLastOpenedList(
   listId: string,
@@ -325,6 +349,11 @@ export type ExpenseItem = {
   line_type: string;
   posted_date: string;
   created_at: string;
+  /** FX materialized at commit (Story 3.5) — CRC rows have amount_crc === amount. */
+  amount_crc: string;
+  fx_rate: string;
+  fx_rate_date: string | null;
+  fx_fallback: boolean;
 };
 
 export type CreateExpenseBody = {
@@ -376,11 +405,17 @@ function asExpense(data: unknown): ExpenseItem | null {
     typeof row.provenance !== "string" ||
     typeof row.line_type !== "string" ||
     typeof row.posted_date !== "string" ||
-    typeof row.created_at !== "string"
+    typeof row.created_at !== "string" ||
+    typeof row.amount_crc !== "string" ||
+    typeof row.fx_rate !== "string"
   ) {
     return null;
   }
-  return row as ExpenseItem;
+  return {
+    ...(row as ExpenseItem),
+    fx_rate_date: typeof row.fx_rate_date === "string" ? row.fx_rate_date : null,
+    fx_fallback: row.fx_fallback === true,
+  };
 }
 
 export async function fetchExpenses(

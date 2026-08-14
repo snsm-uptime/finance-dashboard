@@ -231,10 +231,11 @@ def allocate_from_spec(
         by_member[fresh.assignee_id] = amount
     elif fresh.kind == KIND_ABSOLUTE_AMOUNTS:
         assert fresh.amounts is not None
-        provided_sum = sum(fresh.amounts.values(), Decimal("0"))
+        provided_sum: Decimal = sum(fresh.amounts.values(), Decimal("0"))
         if provided_sum != amount:
             raise InvalidSplitOverrideError(
-                "Absolute amounts must sum exactly to the line or receipt total."
+                f"""Absolute amounts must sum ({provided_sum.normalize()})
+                exactly to the line or receipt total ({amount.normalize()})."""
             )
         by_member = {mid: Decimal("0") for mid in members}
         by_member.update(fresh.amounts)

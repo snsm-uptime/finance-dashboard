@@ -1,49 +1,36 @@
 "use client";
 
-import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  FormEvent,
+  KeyboardEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 
 import { usePreferences } from "@/components/PreferencesProvider";
 import { listsMessages } from "@/lib/i18n/lists";
+import { DotsIcon, PlusIcon } from "@/app/icons";
+import type { InviteFormMessages } from "./InviteForm";
+import { InviteForm } from "./InviteForm";
+import { Sheet } from "./Sheet";
 import {
   balanceTone,
   createList,
+  deleteList,
   renameList,
   setLastOpenedList,
   type ListItem,
 } from "./listsClient";
-import styles from "./lists.module.css";
+import styles from "./lists.module.scss";
 
 type Props = {
   initialLists: ListItem[];
   currentUserId: string;
 };
-
-function PencilIcon() {
-  return (
-    <svg
-      width="15"
-      height="15"
-      viewBox="0 0 16 16"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <path
-        d="M11.5 1.5a1.414 1.414 0 0 1 2 2L5.5 11.5 2 12.5l1-3.5L11.5 1.5Z"
-        stroke="currentColor"
-        strokeWidth="1.35"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M10.25 2.75 13.25 5.75"
-        stroke="currentColor"
-        strokeWidth="1.35"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
 
 export function ListsPanel({ initialLists, currentUserId }: Props) {
   const { locale } = usePreferences();
@@ -59,8 +46,13 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
   const [renameErrors, setRenameErrors] = useState<Record<string, string>>({});
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [openingId, setOpeningId] = useState<string | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [invitingListId, setInvitingListId] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const renamingIdRef = useRef<string | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   const messages = useMemo(
     () => ({
@@ -68,11 +60,18 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
       errorInvalidName: t.errorInvalidName,
       errorForbidden: t.errorForbidden,
       errorUnauthorized: t.errorUnauthorized,
+      inviteTitle: t.inviteTitle,
+      inviteLabel: t.inviteLabel,
+      inviteSubmit: t.inviteSubmit,
+      inviteSending: t.inviteSending,
+      inviteSent: t.inviteSent,
     }),
     [t],
-  );
+  ) as InviteFormMessages;
 
   const canCreate = newName.trim().length > 0 && !creating;
+
+  const closeInviteSheet = useCallback(() => setInvitingListId(null), []);
 
   useEffect(() => {
     if (!editingId) return;
@@ -98,6 +97,20 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [editingId]);
+
+  useEffect(() => {
+    if (!openMenuId) return;
+
+    function onPointerDown(event: PointerEvent) {
+      if (menuRef.current && event.target instanceof Node && menuRef.current.contains(event.target)) {
+        return;
+      }
+      setOpenMenuId(null);
+    }
+
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [openMenuId]);
 
   async function onCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -207,6 +220,31 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
     }
   }
 
+  function showDeleteConfirm(listId: string) {
+    setDeleteConfirmId(listId);
+    setOpenMenuId(null);
+  }
+
+  function cancelDeleteConfirm() {
+    setDeleteConfirmId(null);
+  }
+
+  async function confirmDelete(list: ListItem) {
+    if (deletingId === list.id || openingId || editingId) return;
+    setDeletingId(list.id);
+    try {
+      const result = await deleteList(list.id, messages);
+      if (!result.ok) {
+        setCreateError(result.error);
+        return;
+      }
+      setLists((prev) => prev.filter((item) => item.id !== list.id));
+      setDeleteConfirmId(null);
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   async function openList(list: ListItem) {
     if (openingId || editingId) return;
     setOpeningId(list.id);
@@ -224,143 +262,232 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
 
   const anyOpening = openingId !== null;
 
-  return (
-    <div className={styles.panel}>
-      <form className={styles.createForm} onSubmit={onCreate}>
-        <div className={styles.createRow}>
-          <label className={`${styles.label} ${styles.createField}`}>
-            {t.createLabel}
-            <input
-              className={styles.input}
-              type="text"
-              name="name"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              maxLength={200}
-              autoComplete="off"
-              disabled={creating}
-            />
-          </label>
-          <button className={styles.primary} type="submit" disabled={!canCreate}>
-            {creating ? t.creating : t.createSubmit}
-          </button>
-        </div>
-        {createError ? (
-          <p className={styles.error} role="alert">
-            {createError}
-          </p>
-        ) : null}
-      </form>
+  const startInvite = useCallback((listId: string) => {
+    setInvitingListId(listId);
+    setOpenMenuId(null);
+  }, []);
 
-      {lists.length === 0 ? (
-        <p className={styles.copy}>{t.emptyHint}</p>
-      ) : (
-        <ul className={styles.list}>
-          {lists.map((list) => {
-            const isOwner = list.owner_id === currentUserId;
-            const isEditing = editingId === list.id;
-            const draft = renameDrafts[list.id] ?? list.name;
-            const tone = balanceTone(list.balance_crc);
-            const balanceLabel =
-              tone === "owe"
-                ? t.balanceOwe
-                : tone === "owed"
-                  ? t.balanceOwed
-                  : t.balanceZero;
-            return (
-              <li key={list.id} className={styles.row}>
-                {isEditing ? (
-                  <div className={styles.cardBody}>
-                    <input
-                      ref={renameInputRef}
-                      className={styles.listNameEdit}
-                      type="text"
-                      value={draft}
-                      placeholder={list.name}
-                      aria-label={t.renameAria}
-                      onChange={(e) =>
-                        setRenameDrafts((prev) => ({
-                          ...prev,
-                          [list.id]: e.target.value,
-                        }))
-                      }
-                      onBlur={() => cancelRename(list.id)}
-                      onKeyDown={(e) => onRenameKeyDown(e, list)}
-                      maxLength={200}
-                      autoComplete="off"
-                      disabled={renamingId === list.id}
-                    />
-                    <span className={styles.badge}>
-                      {isOwner ? t.ownedBadge : t.memberBadge}
-                    </span>
-                    <span className={styles.cardDivider} aria-hidden="true" />
-                    <span
-                      className={`${styles.balance} ${
-                        tone === "owe"
-                          ? styles.balanceOwe
-                          : tone === "owed"
-                            ? styles.balanceOwed
-                            : styles.balanceZero
-                      }`}
-                    >
-                      <span className={styles.balanceToken}>{balanceLabel}</span>
-                      <span className={styles.balanceAmount}>
-                        {list.balance_crc ?? "0"}
-                      </span>
-                    </span>
-                  </div>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      className={styles.cardButton}
-                      onClick={() => void openList(list)}
-                      disabled={anyOpening}
-                      aria-label={`${t.openLink}: ${list.name}`}
-                    >
-                      <span className={styles.listName}>{list.name}</span>
+  return (
+    <>
+      <div className={styles.panel}>
+        <form className={styles.createForm} onSubmit={onCreate}>
+          <label className={`${styles.label} ${styles.iconInputLabel}`}>
+            {t.createLabel}
+            <div className={styles.iconInputContainer}>
+              <input
+                className={styles.iconInput}
+                type="text"
+                name="name"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                maxLength={200}
+                autoComplete="off"
+                disabled={creating}
+                placeholder={t.createLabel}
+              />
+              <button
+                className={styles.iconButton}
+                type="submit"
+                disabled={!canCreate}
+                aria-label={creating ? t.creating : t.createSubmit}
+              >
+                <PlusIcon />
+              </button>
+            </div>
+          </label>
+          {createError ? (
+            <p className={styles.error} role="alert">
+              {createError}
+            </p>
+          ) : null}
+        </form>
+
+        {lists.length === 0 ? (
+          <p className={styles.copy}>{t.emptyHint}</p>
+        ) : (
+          <ul className={styles.list}>
+            {lists.map((list) => {
+              const isOwner = list.owner_id === currentUserId;
+              const isEditing = editingId === list.id;
+              const draft = renameDrafts[list.id] ?? list.name;
+              const tone = balanceTone(list.balance_crc);
+              const balanceLabel =
+                tone === "owe"
+                  ? t.balanceOwe
+                  : tone === "owed"
+                    ? t.balanceOwed
+                    : t.balanceZero;
+              return (
+                <li key={list.id} className={styles.row}>
+                  {isEditing ? (
+                    <div className={styles.cardBody}>
+                      <input
+                        ref={renameInputRef}
+                        className={styles.listNameEdit}
+                        type="text"
+                        value={draft}
+                        placeholder={list.name}
+                        aria-label={t.renameAria}
+                        onChange={(e) =>
+                          setRenameDrafts((prev) => ({
+                            ...prev,
+                            [list.id]: e.target.value,
+                          }))
+                        }
+                        onBlur={() => cancelRename(list.id)}
+                        onKeyDown={(e) => onRenameKeyDown(e, list)}
+                        maxLength={200}
+                        autoComplete="off"
+                        disabled={renamingId === list.id}
+                      />
                       <span className={styles.badge}>
                         {isOwner ? t.ownedBadge : t.memberBadge}
                       </span>
                       <span className={styles.cardDivider} aria-hidden="true" />
                       <span
-                        className={`${styles.balance} ${
-                          tone === "owe"
+                        className={`${styles.balance} ${tone === "owe"
                             ? styles.balanceOwe
                             : tone === "owed"
                               ? styles.balanceOwed
                               : styles.balanceZero
-                        }`}
+                          }`}
                       >
                         <span className={styles.balanceToken}>{balanceLabel}</span>
                         <span className={styles.balanceAmount}>
                           {list.balance_crc ?? "0"}
                         </span>
                       </span>
-                    </button>
-                    {isOwner ? (
+                    </div>
+                  ) : (
+                    <>
                       <button
                         type="button"
-                        className={styles.renameIcon}
-                        aria-label={t.renameAria}
-                        onClick={() => startRename(list)}
-                        disabled={anyOpening || renamingId !== null}
+                        className={styles.cardButton}
+                        onClick={() => void openList(list)}
+                        disabled={anyOpening}
+                        aria-label={`${t.openLink}: ${list.name}`}
                       >
-                        <PencilIcon />
+                        <span className={styles.listName}>{list.name}</span>
+                        <span className={styles.badge}>
+                          {isOwner ? t.ownedBadge : t.memberBadge}
+                        </span>
+                        <span className={styles.cardDivider} aria-hidden="true" />
+                        <span
+                          className={`${styles.balance} ${tone === "owe"
+                              ? styles.balanceOwe
+                              : tone === "owed"
+                                ? styles.balanceOwed
+                                : styles.balanceZero
+                            }`}
+                        >
+                          <span className={styles.balanceToken}>{balanceLabel}</span>
+                          <span className={styles.balanceAmount}>
+                            {list.balance_crc ?? "0"}
+                          </span>
+                        </span>
                       </button>
-                    ) : null}
-                  </>
-                )}
-                {renameErrors[list.id] ? (
-                  <p className={`${styles.error} ${styles.cardError}`} role="alert">
-                    {renameErrors[list.id]}
-                  </p>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
+                      {isOwner ? (
+                        <div className={styles.menuContainer} ref={menuRef}>
+                          <button
+                            type="button"
+                            className={styles.renameIcon}
+                            aria-label={t.menuAria}
+                            onClick={() => setOpenMenuId(openMenuId === list.id ? null : list.id)}
+                            disabled={anyOpening || renamingId !== null}
+                            aria-expanded={openMenuId === list.id}
+                            aria-haspopup="menu"
+                          >
+                            <DotsIcon />
+                          </button>
+                          {openMenuId === list.id && deleteConfirmId !== list.id && (
+                            <div className={styles.menu} role="menu">
+                              <button
+                                type="button"
+                                className={styles.menuItem}
+                                onClick={() => startInvite(list.id)}
+                                disabled={anyOpening}
+                                role="menuitem"
+                              >
+                                {t.mobileInviteAria}
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.menuItem}
+                                onClick={() => {
+                                  startRename(list);
+                                  setOpenMenuId(null);
+                                }}
+                                disabled={anyOpening || renamingId !== null}
+                                role="menuitem"
+                              >
+                                {t.renameLabel}
+                              </button>
+                              <button
+                                type="button"
+                                className={`${styles.menuItem} ${styles.menuItemDanger}`}
+                                onClick={() => showDeleteConfirm(list.id)}
+                                disabled={anyOpening || deletingId !== null}
+                                role="menuitem"
+                              >
+                                {t.deleteAria}
+                              </button>
+                            </div>
+                          )}
+                          {deleteConfirmId === list.id && (
+                            <div className={styles.confirmPopover} role="alertdialog">
+                              <p className={styles.confirmText}>{t.deleteConfirm}</p>
+                              <div className={styles.confirmActions}>
+                                <button
+                                  type="button"
+                                  className={styles.secondary}
+                                  onClick={cancelDeleteConfirm}
+                                  disabled={deletingId !== null}
+                                >
+                                  {t.deleteCancel}
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`${styles.primary} ${styles.primaryDanger}`}
+                                  onClick={() => void confirmDelete(list)}
+                                  disabled={deletingId !== null}
+                                >
+                                  {deletingId === list.id ? t.deletingAction : t.deleteAction}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
+                    </>
+                  )}
+                  {renameErrors[list.id] ? (
+                    <p className={`${styles.error} ${styles.cardError}`} role="alert">
+                      {renameErrors[list.id]}
+                    </p>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      {invitingListId ? (
+        <Sheet
+          open={invitingListId !== null}
+          title={t.inviteTitle}
+          closeLabel={t.mobileSheetClose}
+          onClose={closeInviteSheet}
+          body={
+            <InviteForm
+              listId={invitingListId}
+              messages={messages}
+              reserveErrorHeight
+              hideBorder
+            />
+          }
+        />
+      ) : null}
+    </>
   );
 }

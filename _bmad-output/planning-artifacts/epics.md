@@ -283,10 +283,17 @@ Users log shared expenses and see who owes whom in CRC on Soft-Ledger (Warm Bala
 **FRs covered:** FR-19 (define), FR-21, FR-38, FR-40, FR-42, FR-43 (pattern), FR-44, FR-45
 **Demo gate:** J5 + J2
 
+### Epic 3.5: UI styling stack — Tailwind + SCSS
+Migrate `ui` from CSS Modules to Tailwind-first co-located styles, with SCSS only for custom styles. Preserve Warm Balance / Soft-Ledger (AD-12). No new product FRs.
+**FRs covered:** none new (supports UX-DR1–DR6 delivery maintainability)
+**Demo gate:** Soft-Ledger + lists/auth chrome visual parity; CSS Modules removed from `ui/`
+**Sequencing note:** Start after Epic 3 stories 3.5–3.6 are done. Do not start Epic 4 UI until Epic 3.5 demo gate passes.
+
 ### Epic 4: Statement upload & review
 Users register cards by IBAN, set optional manual-expense origin (card / Cash / blank) with a no-origin filter, upload PDFs, detect/split/parse via adapters (BAC credit-card acceptance + Promerica stub), choose routing/review modes, commit with dedup summary. Reuses Epic 3 payer + Soft-Ledger strip — exit = commit updates same settle strip.
 **FRs covered:** FR-11, FR-12, FR-13, FR-14, FR-15, FR-16, FR-17, FR-18, FR-19 (import), FR-20, FR-21 (origin + no-origin filter), FR-31, FR-32, FR-33, FR-34, FR-35, FR-36, FR-37
 **Demo gate:** J1 climax on Soft-Ledger strip
+**Sequencing note:** Do not start Epic 4 until Epic 3.5 demo gate passes.
 
 ### Epic 5: Import resilience (then settle polish)
 Ordered: parse failure/quarantine/hand-fix → wire FR-43 on strip → reassign/rollback → same-price + aliases → then simplify (FR-41) + statement-cycle selector (FR-39).
@@ -867,12 +874,81 @@ So that when Epic 5 wires quarantine data, understated totals are never silent.
 **When** product behavior is tested
 **Then** there is no requirement to fabricate incomplete data — Epic 5 wires FR-43 for real quarantine
 
+## Epic 3.5: UI styling stack — Tailwind + SCSS
+
+Migrate `ui` from CSS Modules to Tailwind-first co-located styles, with SCSS only for custom styles that utilities cannot express cleanly. Preserve Warm Balance / Soft-Ledger look (AD-12). No new product FRs.
+
+**FRs covered:** none new (supports UX-DR1–DR6 delivery maintainability)  
+**Demo gate:** Soft-Ledger + lists/auth chrome visual parity; CSS Modules removed from `ui/`  
+**Sequencing:** Start after Epic 3 stories 3.5–3.6 are done. Do not start Epic 4 until Epic 3.5 demo gate passes.
+
+### Story 3.5.1: Install Tailwind v4 + Sass and Warm Balance theme bridge
+
+As a developer,
+I want Tailwind and Sass wired into the Next.js `ui` app with Warm Balance tokens,
+So that components can use utilities without inheriting kit defaults.
+
+**Acceptance Criteria:**
+
+**Given** `ui/` dependencies
+**When** Tailwind CSS v4 + PostCSS plugin + `sass` are installed and configured
+**Then** `next build` / `typecheck` / existing tests still pass on non-migrated surfaces
+
+**And** Warm Balance light/dark/System tokens remain authoritative (no template/kit palette)
+**And** Soft-Ledger spacing/shape/type tokens remain available to utilities and/or CSS variables
+**And** project docs note: utilities first; SCSS modules only for custom styles
+
+### Story 3.5.2: Migrate Soft-Ledger primitives to Tailwind (+ SCSS where needed)
+
+As a developer,
+I want Soft-Ledger primitives styled without CSS Modules,
+So that the design system is the template for all later UI.
+
+**Acceptance Criteria:**
+
+**Given** Soft-Ledger components under `ui/components/soft-ledger/`
+**When** migrated
+**Then** visual parity with DESIGN.md (Balance strip, Receipt row, Section label, Top nav, Tab bar, Hint, Primary button, Radio/Select if present)
+**And** no Soft-Ledger `*.module.css` remain
+**And** Soft-Ledger tests updated and green
+**And** AD-12 bans still held (no pill primary; kits unstyled only)
+
+### Story 3.5.3: Migrate lists, auth, and account surfaces
+
+As a developer,
+I want feature screens on the same styling stack,
+So that we do not maintain two CSS conventions.
+
+**Acceptance Criteria:**
+
+**Given** lists / signup / account / remaining app CSS Modules
+**When** migrated to Tailwind and/or `*.module.scss`
+**Then** no `*.module.css` remain under `ui/`
+**And** EN/ES chrome + theme switching still work
+**And** critical ui tests + typecheck + lint + build green
+
+### Story 3.5.4: Convention lock — project-context + architecture stack
+
+As a maintainer,
+I want agent/project rules to mandate Tailwind-first + SCSS-custom,
+So that Epic 4+ stories do not reintroduce CSS Modules.
+
+**Acceptance Criteria:**
+
+**Given** architecture spine + `project-context.md`
+**When** updated
+**Then** stack lists Tailwind CSS v4 + Sass
+**And** AD-23 documents the styling delivery convention
+**And** `project-context.md` UI rules forbid new CSS Modules and kit themes
+**And** Epic 4 story prep notes reference Epic 3.5 as prerequisite
+
 ## Epic 4: Statement upload & review
 
 Users register cards by IBAN, set optional manual-expense origin (card / Cash / blank) with a no-origin filter, upload PDFs, detect/split/parse via adapters (BAC credit-card acceptance + Promerica stub), choose routing/review modes, commit with dedup summary. Reuses Epic 3 payer + Soft-Ledger strip — exit = commit updates same settle strip.
 
 **FRs covered:** FR-11, FR-12, FR-13, FR-14, FR-15, FR-16, FR-17, FR-18, FR-19 (import), FR-20, FR-21 (origin + no-origin filter), FR-31, FR-32, FR-33, FR-34, FR-35, FR-36, FR-37  
-**Demo gate:** J1 climax on Soft-Ledger strip
+**Demo gate:** J1 climax on Soft-Ledger strip  
+**Sequencing:** Do not start Epic 4 until Epic 3.5 demo gate passes.
 
 ### Story 4.1: Register and match cards by IBAN
 

@@ -266,6 +266,13 @@ class SqlAlchemyListRepository:
         self._session.flush()
         return ListRecord(id=row.id, name=row.name, owner_id=row.owner_id)
 
+    def delete_list(self, list_id: UUID) -> None:
+        row = self._session.get(ListModel, list_id)
+        if row is None:
+            raise ListNotFoundError()
+        self._session.delete(row)
+        self._session.flush()
+
     def list_for_user(self, user_id: UUID) -> list[ListMembershipSummary]:
         stmt = (
             select(ListModel, ListMembershipModel.role)
@@ -368,6 +375,7 @@ class SqlAlchemyListRepository:
         entry_id: UUID,
         list_id: UUID,
         draft,
+        fx,
     ):
         from datetime import UTC, datetime
         from datetime import date as date_cls
@@ -393,6 +401,10 @@ class SqlAlchemyListRepository:
             receipt_id=None,
             product_id=None,
             external_ref=None,
+            amount_crc=fx.amount_crc,
+            fx_rate=fx.fx_rate,
+            fx_rate_date=fx.fx_rate_date,
+            fx_fallback=fx.fx_fallback,
             created_at=created_at,
         )
         self._session.add(row)
@@ -408,6 +420,10 @@ class SqlAlchemyListRepository:
             line_type=row.line_type or "",
             posted_date=row.posted_date,
             created_at=row.created_at,
+            amount_crc=Decimal(str(row.amount_crc)),
+            fx_rate=Decimal(str(row.fx_rate)),
+            fx_rate_date=row.fx_rate_date,
+            fx_fallback=row.fx_fallback,
             receipt_id=row.receipt_id,
             product_id=row.product_id,
             external_ref=row.external_ref,
@@ -445,6 +461,10 @@ class SqlAlchemyListRepository:
                     line_type=row.line_type,
                     posted_date=row.posted_date,
                     created_at=row.created_at,
+                    amount_crc=Decimal(str(row.amount_crc)),
+                    fx_rate=Decimal(str(row.fx_rate)),
+                    fx_rate_date=row.fx_rate_date,
+                    fx_fallback=row.fx_fallback,
                     receipt_id=row.receipt_id,
                     product_id=row.product_id,
                     external_ref=row.external_ref,

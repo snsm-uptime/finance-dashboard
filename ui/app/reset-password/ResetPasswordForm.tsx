@@ -3,54 +3,17 @@
 import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
 
+import { EyeIcon } from "@/app/icons";
 import {
   passwordResetMessages,
   type Locale,
 } from "@/lib/i18n/password-reset";
-import styles from "../signup/signup.module.css";
+import styles from "../signup/signup.module.scss";
 
 type Props = {
   locale: Locale;
   token: string;
 };
-
-function EyeIcon({ open }: { open: boolean }) {
-  if (open) {
-    return (
-      <svg
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
-        <circle cx="12" cy="12" r="3" />
-      </svg>
-    );
-  }
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
-      <circle cx="12" cy="12" r="3" />
-      <path d="M4 4l16 16" />
-    </svg>
-  );
-}
 
 export function ResetPasswordForm({ locale, token }: Props) {
   const t = passwordResetMessages[locale];
