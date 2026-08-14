@@ -21,9 +21,7 @@ class CardRecord:
 
 
 class CardRepository(Protocol):
-    def create_card(
-        self, *, card_id: UUID, user_id: UUID, label: str, iban: str
-    ) -> CardRecord: ...
+    def create_card(self, *, card_id: UUID, user_id: UUID, label: str, iban: str) -> CardRecord: ...
 
     def get_card_by_iban(self, user_id: UUID, iban_normalized: str) -> CardRecord | None: ...
 

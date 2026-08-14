@@ -310,9 +310,7 @@ class CardIbanAlreadyRegisteredError(DomainError):
     CODE = "card_iban_already_registered"
 
     def __init__(self, existing_label: str) -> None:
-        super().__init__(
-            f"You already have a card named {existing_label} with this IBAN."
-        )
+        super().__init__(f"You already have a card named {existing_label} with this IBAN.")
 
 
 class FxFutureDateError(DomainError):
