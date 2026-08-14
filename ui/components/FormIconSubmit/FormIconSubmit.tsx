@@ -7,6 +7,7 @@ import type {
 } from "react";
 
 import { SaveIcon, SendIcon } from "@/app/icons";
+import { IconButton } from "@/components/IconButton";
 import styles from "./FormIconSubmit.module.scss";
 
 export type FormIconVariant = "save" | "send";
@@ -27,33 +28,48 @@ type FormIconSubmitProps = Omit<
   variant?: FormIconVariant;
   /** Accessible name (also used as tooltip via title). */
   label: string;
+  /** Opt-in: stretch to fill the parent's width. Height stays ~2.5rem. */
+  fill?: boolean;
 };
 
 /**
  * Compact icon form action. Enabled when the form is dirty / ready;
  * muted disabled look when nothing has changed (matches default-split gate).
+ *
+ * Composes IconButton for the interactive base (type/disabled/onClick/a11y)
+ * and layers bordered surface + accent-glyph form chrome on top via the
+ * `className` prop. Tailwind v4 orders generated utilities by internal
+ * category, not by source order, so a same-property override (e.g. this
+ * component's `p-0` vs IconButton's default `p-1`) is not guaranteed to win
+ * just by being listed later in the class string — `!`-important is used on
+ * the handful of utilities that collide with IconButton's ghost defaults
+ * (border, background, text color, padding) to make the win deterministic.
  */
 export function FormIconSubmit({
   variant = "save",
   label,
   type = "submit",
+  fill = false,
   className,
   title,
   ...rest
 }: FormIconSubmitProps) {
-  const baseClasses =
-    "inline-flex items-center justify-center w-[2.5rem] h-[2.5rem] m-0 p-0 border border-border rounded-[8px] bg-surface text-accent cursor-pointer leading-none flex-shrink-0 transition-all duration-150 disabled:text-muted disabled:opacity-65 disabled:cursor-not-allowed";
-  const classes = className ? `${baseClasses} ${styles.button} ${className}` : `${baseClasses} ${styles.button}`;
+  const chromeClasses =
+    "!border border-border !bg-surface enabled:!text-accent !p-0 h-[2.5rem] disabled:!opacity-65";
+  const sizeClasses = fill ? "" : "w-[2.5rem]";
+  const classes = [chromeClasses, sizeClasses, styles.button, className]
+    .filter(Boolean)
+    .join(" ");
   return (
-    <button
+    <IconButton
       type={type}
+      label={label}
+      fill={fill}
       className={classes}
-      aria-label={label}
+      icon={<IconGlyph variant={variant} />}
       title={title ?? label}
       {...rest}
-    >
-      <IconGlyph variant={variant} />
-    </button>
+    />
   );
 }
 

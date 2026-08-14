@@ -373,4 +373,74 @@ describe("ManualExpenseForm", () => {
     // After filling both fields, canSubmit should be true
     expect(onCanSubmitChange).toHaveBeenLastCalledWith(true);
   });
+
+  it("renders the desktop inline save when formRef is omitted, and it fills the row", async () => {
+    await act(async () => {
+      root.render(
+        <ManualExpenseForm
+          listId="list-1"
+          currentUserId="user-a"
+          members={members}
+          messages={messages}
+        />,
+      );
+    });
+
+    const form = container.querySelector("form") as HTMLFormElement;
+    const inlineSave = form.querySelector('button[type="submit"]');
+    expect(inlineSave).not.toBeNull();
+    expect(inlineSave?.className.split(/\s+/)).toContain("!w-full");
+  });
+
+  it("omits the inline save when formRef is provided (e.g. mobile Sheet corner action)", async () => {
+    const formRef = { current: null };
+    await act(async () => {
+      root.render(
+        <ManualExpenseForm
+          listId="list-1"
+          currentUserId="user-a"
+          members={members}
+          messages={messages}
+          formRef={formRef}
+        />,
+      );
+    });
+
+    const form = container.querySelector("form") as HTMLFormElement;
+    expect(form.querySelector('button[type="submit"]')).toBeNull();
+  });
+
+  it("keeps the inline save disabled/enabled matching canSubmit (empty vs filled amount+description)", async () => {
+    await act(async () => {
+      root.render(
+        <ManualExpenseForm
+          listId="list-1"
+          currentUserId="user-a"
+          members={members}
+          messages={messages}
+        />,
+      );
+    });
+
+    const form = container.querySelector("form") as HTMLFormElement;
+    const submitButton = form.querySelector(
+      'button[type="submit"]',
+    ) as HTMLButtonElement;
+    expect(submitButton.disabled).toBe(true);
+
+    const amount = container.querySelector('input[name="amount"]') as HTMLInputElement;
+    const description = container.querySelector(
+      'input[name="description"]',
+    ) as HTMLInputElement;
+
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(amount, "10.00");
+      amount.dispatchEvent(new Event("input", { bubbles: true }));
+      setter?.call(description, "Coffee");
+      description.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    expect(submitButton.disabled).toBe(false);
+  });
 });
