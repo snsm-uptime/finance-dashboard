@@ -20,7 +20,7 @@ This setup ensures each Claude Code session (or developer) can run the full stac
 | --- | --- |
 | `worktree-add.sh` | Create `../finance-dashboard-wt-<slug>` sibling checkout + branch |
 | `worktree-bootstrap.sh` | Copy `.env`, assign unique ports/project/data dir, install deps, optional Compose |
-| `setup-worktree-unix.sh` | Core bootstrap logic: `.env` rewrites, `uv`/`npm`, Compose lifecycle |
+| `setup-worktree-unix.sh` | Core bootstrap logic: `.env` rewrites, `uv`/`npm`, Compose lifecycle (see also its `pr` subcommand below) |
 | `worktree-remove.sh` | Compose-down (best effort) + `git worktree remove` |
 | `worktrees.json` (under `.cursor/`) | Cursor IDE: auto-runs `setup-worktree-unix.sh` on new worktrees |
 
@@ -100,8 +100,16 @@ This launches Claude Code with the worktree as the root. Claude sees only this b
 ### Step 4: Work on your story
 - Write code, run tests, debug with full stack (`api`, `ui`, `postgres`)
 - All Claude Code suggestions/refactorings are scoped to this worktree
-- Commit and push from this branch
-- Open PR when ready
+- Stage your changes, then commit + push + open a PR in one step:
+  ```bash
+  ./scripts/worktree/setup-worktree-unix.sh pr \
+    --title "Add manual origin card" \
+    --body "Implements story 4.2..." \
+    --commit-title "feat: add manual origin card"
+  ```
+  This commits what's staged, pushes the current branch explicitly to `origin/<branch>` (worktree branches intentionally track `origin/main` for easy `git pull`, so a plain `git push` would target the wrong branch), then runs `gh pr create`.
+  - `--commit-title` is required whenever something is staged.
+  - If nothing is staged, it prompts `Continue and just push + open PR? [y/N]` (interactive terminals only — fails fast with an error if stdin isn't a TTY).
 
 ---
 
