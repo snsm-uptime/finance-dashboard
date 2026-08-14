@@ -1,7 +1,7 @@
 /* FormIconSubmit hover and focus states with color-mix */
 
 .button:not(:disabled):hover {
-  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface)) !important;
 }
 
 .button:focus-visible {
@@ -12,7 +12,7 @@
 /* Reset hover state on touch to prevent sticky appearance after tap */
 @media (hover: none) and (pointer: coarse) {
   .button:not(:disabled):active {
-    background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface)) !important;
   }
 
   .button:not(:disabled):active:not(:focus-visible) {

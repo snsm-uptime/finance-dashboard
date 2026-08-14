@@ -2,10 +2,11 @@
 title: 'IconButton fill-container via FormIconSubmit'
 type: 'feature'
 created: '2026-08-13'
-status: 'draft'
+status: 'done'
 review_loop_iteration: 0
 context:
   - '{project-root}/_bmad-output/project-context.md'
+baseline_commit: 'e1b6b9c3b336b7ea65fe3cd773183bdc7d0fc253'
 ---
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
@@ -65,11 +66,11 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `ui/components/IconButton/IconButton.tsx` -- add `fill?: boolean` (default false). When true: `w-full min-w-0`, neutralize `flex-shrink-0` / hugging `inline-flex`. Default path unchanged.
-- [ ] `ui/components/IconButton/IconButton.test.tsx` -- cover default compact vs `fill` stretching in a width-constrained parent; `type` remains overridable via rest (submit).
-- [ ] `ui/components/FormIconSubmit/FormIconSubmit.tsx` -- render `IconButton` with `IconGlyph`, forward `fill` + form chrome `className`. Do not rewrite `FormIconField`.
-- [ ] `ui/app/lists/ManualExpenseForm.tsx` + `ManualExpenseForm.module.scss` -- pass `fill` on the `!formRef` save; make `.submitRow` allow a full-width child to span the pane.
-- [ ] `ui/app/lists/ManualExpenseForm.test.tsx` -- assert desktop inline save present without `formRef`; omitted with `formRef`; `canSubmit` gate still works.
+- [x] `ui/components/IconButton/IconButton.tsx` -- add `fill?: boolean` (default false). When true: `w-full min-w-0`, neutralize `flex-shrink-0` / hugging `inline-flex`. Default path unchanged.
+- [x] `ui/components/IconButton/IconButton.test.tsx` -- cover default compact vs `fill` stretching in a width-constrained parent; `type` remains overridable via rest (submit).
+- [x] `ui/components/FormIconSubmit/FormIconSubmit.tsx` -- render `IconButton` with `IconGlyph`, forward `fill` + form chrome `className`. Do not rewrite `FormIconField`.
+- [x] `ui/app/lists/ManualExpenseForm.tsx` + `ManualExpenseForm.module.scss` -- pass `fill` on the `!formRef` save; make `.submitRow` allow a full-width child to span the pane.
+- [x] `ui/app/lists/ManualExpenseForm.test.tsx` -- assert desktop inline save present without `formRef`; omitted with `formRef`; `canSubmit` gate still works.
 
 **Acceptance Criteria:**
 - Given IconButton without `fill`, when rendered as today, then size, type, and ghost chrome are unchanged.
@@ -106,3 +107,46 @@ context:
 - Desktop list detail sidebar: manual-expense save is a full-width ~2.5rem-tall bar, not a trailing 2.5rem square.
 - Mobile sheet: expense/split corner saves stay compact; no duplicate inline save.
 - Sheet close and share-title IconButtons unchanged.
+
+## Suggested Review Order
+
+**Fill-container primitive**
+
+- Opt-in `fill` prop; `!w-full` guards a future className collision, `flex-shrink-0` kept so a filled button can't shrink below full width.
+  [`IconButton.tsx:14`](../../ui/components/IconButton/IconButton.tsx#L14)
+
+- Class assembly branches on `fill` while leaving the non-fill path byte-identical to the pre-change output.
+  [`IconButton.tsx:45`](../../ui/components/IconButton/IconButton.tsx#L45)
+
+**FormIconSubmit composed from IconButton (review bug fixes here first)**
+
+- Composition replaces FormIconSubmit's standalone `<button>` — chrome now layers on top of IconButton via `className`.
+  [`FormIconSubmit.tsx:64`](../../ui/components/FormIconSubmit/FormIconSubmit.tsx#L64)
+
+- `enabled:!text-accent` (not a bare `!text-accent`) — fixes a disabled-state color bug where accent color beat IconButton's `disabled:text-muted`.
+  [`FormIconSubmit.tsx:58`](../../ui/components/FormIconSubmit/FormIconSubmit.tsx#L58)
+
+- `title ?? label` restored explicitly — composing through IconButton's own `{...rest}` spread silently dropped the old fallback guarantee.
+  [`FormIconSubmit.tsx:70`](../../ui/components/FormIconSubmit/FormIconSubmit.tsx#L70)
+
+- `!important` forces FormIconSubmit's surface/accent hover to win over IconButton's ghost hover — both CSS Modules land on the same composed element with equal specificity.
+  [`FormIconSubmit.module.scss:4`](../../ui/components/FormIconSubmit/FormIconSubmit.module.scss#L4)
+
+**Desktop inline save wiring**
+
+- `fill` passed only on the `!formRef` desktop save — the one call site allowed to stretch.
+  [`ManualExpenseForm.tsx:367`](../../ui/app/lists/ManualExpenseForm.tsx#L367)
+
+- Dropped `justify-content: flex-end` so the full-width child can actually span the row.
+  [`ManualExpenseForm.module.scss:109`](../../ui/app/lists/ManualExpenseForm.module.scss#L109)
+
+**Tests**
+
+- New direct coverage for the most-changed component — chrome, disabled color class, fill sizing, title fallback.
+  [`FormIconSubmit.test.tsx`](../../ui/components/FormIconSubmit/FormIconSubmit.test.tsx)
+
+- Default-compact vs `fill`-stretching, non-fill callers unaffected.
+  [`IconButton.test.tsx`](../../ui/components/IconButton/IconButton.test.tsx)
+
+- Inline save present/absent by `formRef`; `canSubmit` gating unchanged.
+  [`ManualExpenseForm.test.tsx`](../../ui/app/lists/ManualExpenseForm.test.tsx)

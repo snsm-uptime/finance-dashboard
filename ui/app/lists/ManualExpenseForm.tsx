@@ -364,6 +364,7 @@ export function ManualExpenseForm({
             <FormIconSubmit
               type="submit"
               variant="save"
+              fill
               label={pending ? messages.expenseSaving : messages.expenseSubmit}
               disabled={!canSubmit}
             />
