@@ -62,6 +62,7 @@ class UserModel(Base):
         back_populates="inviter",
         foreign_keys="ListInviteTokenModel.inviter_user_id",
     )
+    cards: Mapped[list[CardModel]] = relationship(back_populates="owner")
 
 
 class ListModel(Base):
@@ -319,3 +320,22 @@ class SplitOverrideModel(Base):
     )
 
     list: Mapped[ListModel] = relationship(back_populates="split_overrides")
+
+
+class CardModel(Base):
+    """A user's registered bank card, keyed by IBAN (Story 4.1 / FR-37 / AD-20)."""
+
+    __tablename__ = "cards"
+    __table_args__ = (UniqueConstraint("user_id", "iban", name="uq_cards_user_iban"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    label: Mapped[str] = mapped_column(String(100), nullable=False)
+    iban: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    owner: Mapped[UserModel] = relationship(back_populates="cards")

@@ -284,6 +284,35 @@ class InviteEmailMismatchError(DomainError):
         super().__init__(self.MESSAGE)
 
 
+class InvalidCardLabelError(DomainError):
+    """Raised when a card label is empty, whitespace-only, or too long."""
+
+    MESSAGE = "Enter a card label."
+    CODE = "invalid_card_label"
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(detail or self.MESSAGE)
+
+
+class InvalidCardIbanError(DomainError):
+    """Raised when a card IBAN is empty after normalization or too long."""
+
+    MESSAGE = "Enter a valid IBAN."
+    CODE = "invalid_card_iban"
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(detail or self.MESSAGE)
+
+
+class CardIbanAlreadyRegisteredError(DomainError):
+    """Raised when the actor already has a card registered with this IBAN."""
+
+    CODE = "card_iban_already_registered"
+
+    def __init__(self, existing_label: str) -> None:
+        super().__init__(f"You already have a card named {existing_label} with this IBAN.")
+
+
 class FxFutureDateError(DomainError):
     """Raised when FX materialization is attempted for a future posted_date (AD-7)."""
 

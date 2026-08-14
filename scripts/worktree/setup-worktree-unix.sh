@@ -88,6 +88,29 @@ if [[ -f "$WT_ROOT/.env" ]]; then
   log "PUBLIC_APP_URL=${PUBLIC_APP_URL}"
 fi
 
+# --- bmad and claude configs ---
+# _bmad and .claude are gitignored per-user tool config, so a fresh worktree
+# checkout won't have them; copy from the primary checkout if available.
+if [[ -n "$ROOT_WORKTREE_PATH" ]]; then
+  for dir in _bmad .claude; do
+    src="$ROOT_WORKTREE_PATH/$dir"
+    dest="$WT_ROOT/$dir"
+    if [[ -d "$src" ]]; then
+      if command -v rsync >/dev/null 2>&1; then
+        rsync -a --delete "$src/" "$dest/"
+      else
+        rm -rf "$dest"
+        cp -R "$src" "$dest"
+      fi
+      log "Copied $dir from primary checkout"
+    else
+      warn "No $dir in primary checkout ($ROOT_WORKTREE_PATH) — skipped"
+    fi
+  done
+else
+  warn "ROOT_WORKTREE_PATH not set — skipping _bmad/.claude copy"
+fi
+
 # --- host deps (fast feedback without relying only on container builds) ---
 if command -v uv >/dev/null 2>&1; then
   log "Installing api deps (uv sync --group dev)"
