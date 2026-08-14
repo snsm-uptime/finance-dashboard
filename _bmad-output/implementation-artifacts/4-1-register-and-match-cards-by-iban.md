@@ -4,7 +4,7 @@ baseline_commit: f5256569405a6fd72f4004075190ed6b3335268f
 
 # Story 4.1: Register and match cards by IBAN
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -71,6 +71,17 @@ This is the **first** story in Epic 4. The upload/parse pipeline (Stories 4.4–
   - [x] 5.8 Tests: `ui/app/cards/cardsClient.test.ts` (mirror `listsClient.test.ts`), `ui/app/cards/RegisterCardForm.test.tsx` (mirror `InviteForm.test.tsx` — submit success, validation error, duplicate error, disabled-while-pending).
 
 - [x] Task 6: Story-close overview (required before `done` — see Dev Notes)
+
+### Review Findings
+
+- [x] [Review][Decision] IBAN shown in full plaintext on the Cards page — resolved: mask to last 4 characters, add a copy-to-clipboard button (new `CopyIcon`, `ui/app/icons/`) next to the masked value. Applied — see `ui/app/cards/CardsPanel.tsx`, `ui/app/icons/CopyIcon.tsx`, `ui/lib/i18n/cards.ts` (`copyIban`/`ibanCopied` keys).
+- [x] [Review][Patch] `IntegrityError` catch-all in `create_card` mislabels any DB failure as "already registered" [api/adapters/persistence/cards.py:36-39] — fixed: re-raises the original `IntegrityError` when the post-failure `get_card_by_iban` re-query finds no matching row, instead of guessing a false duplicate-label message (mirrors the existing `update_preferences` convention in `repositories.py:173-178`)
+- [x] [Review][Patch] `RegisterCardBody.label`/`iban` `Field(max_length=...)` validates the raw untrimmed value before domain normalization, producing an uncoded Pydantic 422 that the frontend's `mapError()` can't route to a specific message (falls back to `errorGeneric`) [api/api/schemas/cards.py:15-16] — fixed: dropped the wire-layer cap on `iban` (the field affected by internal-whitespace stripping, unlike `label`, which keeps its cap matching `schemas/lists.py`'s precedent); the domain's `normalize_iban` is now the sole length authority for IBAN
+- [x] [Review][Patch] `asCard` list parsing in `fetchCards` discards the entire card list if one row fails shape validation, instead of skipping just that row [ui/app/cards/cardsClient.ts:81-84] — fixed: malformed rows are now skipped individually instead of failing the whole fetch
+- [x] [Review][Defer] No rate limit or per-user cap on `POST /cards` [api/api/routes/cards.py:32] — deferred, pre-existing (same gap exists on all authenticated CRUD routes — lists, splits — not specific to cards)
+- [x] [Review][Defer] No uniqueness constraint on card `label` — duplicate labels across different IBANs weaken the "You already have a card named X" conflict message [api/adapters/persistence/models.py:137-153] — deferred, pre-existing (cosmetic UX rough edge, no functional harm)
+- [x] [Review][Defer] `list_cards_for_user` has no pagination/limit [api/adapters/persistence/cards.py:52-58] — deferred, pre-existing (same unbounded-query pattern used elsewhere in the app)
+- [x] [Review][Defer] `CardsPanel` load-error message is captured pre-translated and does not re-render in the new language after a locale switch while an error is showing [ui/app/cards/CardsPanel.tsx:30-46] — deferred, pre-existing (minor cosmetic, low traffic path)
 
 ## Dev Notes
 
@@ -205,7 +216,19 @@ This is Epic 4's foundation story (Scope Note) — the import pipeline that will
 - `ui/components/AccountMenu.tsx` (modified — "Manage cards" nav link)
 - `_bmad-output/implementation-artifacts/4-1-register-and-match-cards-by-iban.md` (this story file — frontmatter, tasks, Dev Agent Record, Status)
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` (status tracking)
+- `api/adapters/persistence/cards.py` (modified — narrowed `IntegrityError` handling, review fix)
+- `api/api/schemas/cards.py` (modified — dropped wire-layer `iban` length cap, review fix)
+- `ui/app/cards/cardsClient.ts` (modified — `fetchCards` skips malformed rows instead of failing, review fix)
+- `ui/app/cards/CardsPanel.tsx` (modified — mask IBAN to last 4 chars, add copy-to-clipboard button, review decision)
+- `ui/app/icons/CopyIcon.tsx` (new — review decision)
+- `ui/app/icons/index.ts` (modified — export `CopyIcon`)
+- `ui/app/icons/README.md` (modified — document `CopyIcon`)
+- `ui/components/CopyButton/CopyButton.tsx` (new — reusable copy-to-clipboard wrapper, generalized out of the card-row copy button per Sebas's request, for future reuse e.g. copying a transaction's owed amount)
+- `ui/components/CopyButton/index.ts` (new)
+- `ui/components/CopyButton/CopyButton.test.tsx` (new)
 
 ## Change Log
 
 - 2026-08-14: Story implemented via `bmad-dev-story` — all 6 tasks complete; domain/application/persistence/API/UI slices for card register + match-by-IBAN; 330 api tests passing (incl. 33 new), 179 ui tests passing (incl. 13 new); status → review
+- 2026-08-14: Code review via `bmad-code-review` — Blind Hunter, Edge Case Hunter, and Acceptance Auditor found no AC violations. 1 decision (IBAN plaintext display) resolved with Sebas: mask to last 4 chars + copy-to-clipboard button (`CopyIcon`). 3 patches applied: narrowed `IntegrityError` handling in `create_card` to stop mislabeling non-duplicate DB failures, dropped the wire-layer `iban` length cap that could reject valid IBANs before domain normalization, `fetchCards` now skips malformed rows instead of discarding the whole list. 4 low-severity items deferred (see `deferred-work.md`). Full test suites re-run clean (226 api unit + 179 ui); status → done
+- 2026-08-14: Post-review follow-up — generalized the card-row copy button into a reusable `CopyButton` component (`ui/components/CopyButton/`, wraps a `value` to copy + optional displayed `children`, shows a "Copied!" tooltip) so future stories (e.g. copying a transaction's owed amount) can reuse it without re-deriving the clipboard logic. `CardsPanel.tsx` refactored to consume it. 182 ui tests passing (incl. 3 new); no api changes

@@ -6,3 +6,4 @@ export { DotsIcon } from "./DotsIcon";
 export { ShareIcon } from "./ShareIcon";
 export { PieChartIcon } from "./PieChartIcon";
 export { EyeIcon } from "./EyeIcon";
+export { CopyIcon } from "./CopyIcon";

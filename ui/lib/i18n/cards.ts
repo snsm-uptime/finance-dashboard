@@ -18,6 +18,8 @@ export const cardsMessages = {
     errorInvalidIban: "Enter a valid IBAN.",
     errorDuplicateIban: "You already have a card registered with this IBAN.",
     backToAccount: "Back to account",
+    copyIban: "Copy IBAN",
+    ibanCopied: "Copied!",
   },
   es: {
     title: "Tarjetas",
@@ -35,6 +37,8 @@ export const cardsMessages = {
     errorInvalidIban: "Ingresa un IBAN válido.",
     errorDuplicateIban: "Ya tienes una tarjeta registrada con este IBAN.",
     backToAccount: "Volver a la cuenta",
+    copyIban: "Copiar IBAN",
+    ibanCopied: "¡Copiado!",
   },
 } as const;
 

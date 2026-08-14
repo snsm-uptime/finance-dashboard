@@ -53,6 +53,12 @@ An eye for password visibility toggle. Shows open/closed eye based on `open` pro
 - Required prop: `open` (boolean)
 - Accepts: className, SVG element props
 
+### CopyIcon
+Two overlapping rectangles representing copy-to-clipboard. Used for copy actions (e.g., copying a masked IBAN).
+- ViewBox: `0 0 24 24`
+- Style: Stroke-based
+- Accepts: className, SVG element props
+
 ## Usage
 
 All icons are exported from `@/app/icons`:

@@ -35,8 +35,9 @@ class SqlAlchemyCardRepository:
                 self._session.flush()
         except IntegrityError as exc:
             existing = self.get_card_by_iban(user_id, iban)
-            existing_label = existing.label if existing is not None else label
-            raise CardIbanAlreadyRegisteredError(existing_label) from exc
+            if existing is None:
+                raise
+            raise CardIbanAlreadyRegisteredError(existing.label) from exc
         return _card_record(row)
 
     def get_card_by_iban(self, user_id: UUID, iban_normalized: str) -> CardRecord | None:

@@ -3,10 +3,15 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+import { CopyButton } from "@/components/CopyButton";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { cardsCopy } from "@/lib/i18n/cards";
 import { fetchCards, type CardItem, type CardsClientMessages } from "./cardsClient";
 import { RegisterCardForm } from "./RegisterCardForm";
+
+function maskIban(iban: string): string {
+  return `•••• ${iban.slice(-4)}`;
+}
 
 export function CardsPanel() {
   const { locale } = usePreferences();
@@ -85,7 +90,11 @@ export function CardsPanel() {
                   className="flex items-center justify-between gap-3 py-[0.6rem] px-[0.85rem] rounded-[8px] border border-border bg-surface"
                 >
                   <span className="font-[550] text-foreground text-[0.95rem]">{card.label}</span>
-                  <span className="text-muted text-[0.85rem] tracking-[0.02rem]">{card.iban}</span>
+                  <CopyButton value={card.iban} label={t.copyIban} copiedLabel={t.ibanCopied}>
+                    <span className="text-muted text-[0.85rem] tracking-[0.02rem]">
+                      {maskIban(card.iban)}
+                    </span>
+                  </CopyButton>
                 </li>
               ))}
             </ul>

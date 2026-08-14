@@ -1,5 +1,5 @@
 # generated: 2026-08-03T22:46:31
-# last_updated: 2026-08-14T00:00:01
+# last_updated: 2026-08-14T00:00:02
 
 # project: finance-dashboard
 # project_key: NOKEY
@@ -99,7 +99,7 @@ development_status:
   # Do not start Epic 4 until epic-3-5 demo gate done
 
   epic-4: in-progress
-  4-1-register-and-match-cards-by-iban: review
+  4-1-register-and-match-cards-by-iban: done
   4-2-manual-origin-card-cash-blank-no-origin-filter: backlog
   4-3-card-routing-mode-review-default-list: backlog
   4-4-adapter-contract-canonicalline-bac-normalize: backlog

@@ -158,3 +158,10 @@
 - Task 5's prior explicit constraint ("do not claim CSS Modules removed") was replaced wholesale rather than marked superseded in the Dev Notes — this rewrite predates the current dev session (already staged before work began)
 - AD-23 "enforced end-to-end" claim relies on a file-count proxy (0 `.module.css` / 10 `.module.scss` under `ui/`) without auditing whether the 10 `.module.scss` files are genuinely custom-styles-only — explicitly out of scope for this docs-only story per its own Scope Boundaries
 - Sibling story 3-5-2 remains `review` (not `done`) while 3-5-4 flips to `review`; `epic-3-5-retrospective` still `optional` — epic-level gate bookkeeping, out of scope for 3.5.4
+
+## Deferred from: code review of 4-1-register-and-match-cards-by-iban.md (2026-08-14)
+
+- No rate limit or per-user cap on `POST /cards` (`api/api/routes/cards.py:32`) — same gap exists on all authenticated CRUD routes (lists, splits), not specific to cards
+- No uniqueness constraint on card `label` (`api/adapters/persistence/models.py:137-153`) — duplicate labels across different IBANs weaken the "You already have a card named X" conflict message; cosmetic UX rough edge, no functional harm
+- `list_cards_for_user` has no pagination/limit (`api/adapters/persistence/cards.py:52-58`) — same unbounded-query pattern used elsewhere in the app
+- `CardsPanel` load-error message is captured pre-translated and does not re-render in the new language after a locale switch while an error is showing (`ui/app/cards/CardsPanel.tsx:30-46`) — minor cosmetic, low-traffic path

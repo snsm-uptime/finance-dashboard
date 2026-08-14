@@ -80,8 +80,7 @@ export async function fetchCards(
   const cards: CardItem[] = [];
   for (const row of data.cards) {
     const parsed = asCard(row);
-    if (!parsed) return { ok: false, error: messages.errorGeneric };
-    cards.push(parsed);
+    if (parsed) cards.push(parsed);
   }
   return { ok: true, cards };
 }
