@@ -1,14 +1,14 @@
 "use client";
 
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 
 import { ShareIcon, PieChartIcon, CloseIcon } from "@/app/icons";
+import { FormIconSubmit } from "@/components/FormIconSubmit";
 import type { DefaultSplitPayload, ListMember } from "./listsClient";
 import type { InviteFormMessages } from "./InviteForm";
 import { InviteForm } from "./InviteForm";
 import type { DefaultSplitMessages } from "./DefaultSplitPanel";
 import { DefaultSplitPanel } from "./DefaultSplitPanel";
-import { FormHeaderActionHostProvider } from "./FormChrome";
 import styles from "./TemporalNavigation.module.scss";
 
 type FormKind = "expense" | "invite" | "split" | null;
@@ -23,21 +23,18 @@ type Props = {
 };
 
 type FormWrapperProps = {
-  kind: FormKind;
   title: string;
   onClose: () => void;
+  /** Content for the top-left of the form header (e.g. save icon), matching Sheet.cornerAction */
+  cornerAction?: ReactNode;
   children: ReactNode;
 };
 
-function FormWrapper({ kind, title, onClose, children }: FormWrapperProps) {
-  const [actionHost, setActionHost] = useState<HTMLDivElement | null>(null);
-
-  if (kind === null) return null;
-
+function FormWrapper({ title, onClose, cornerAction, children }: FormWrapperProps) {
   return (
     <div className={styles.formContainer}>
       <div className={styles.formHeader}>
-        <div ref={setActionHost} className={styles.formLeading} />
+        {cornerAction ? <div className={styles.formLeading}>{cornerAction}</div> : null}
         <h3 className={styles.formTitle}>{title}</h3>
         <button
           type="button"
@@ -48,9 +45,7 @@ function FormWrapper({ kind, title, onClose, children }: FormWrapperProps) {
           <CloseIcon className={styles.closeIcon} />
         </button>
       </div>
-      <FormHeaderActionHostProvider host={actionHost}>
-        <div className={styles.formBody}>{children}</div>
-      </FormHeaderActionHostProvider>
+      <div className={styles.formBody}>{children}</div>
     </div>
   );
 }
@@ -64,6 +59,8 @@ export function TemporalNavigation({
   splitMessages,
 }: Props) {
   const [openForm, setOpenForm] = useState<FormKind>(null);
+  const [splitCanSave, setSplitCanSave] = useState(false);
+  const splitSaveRequestRef = useRef<(() => void) | null>(null);
 
   const handleClose = useCallback(() => {
     setOpenForm(null);
@@ -100,16 +97,24 @@ export function TemporalNavigation({
       ) : null}
 
       {openForm === "invite" && showInvite ? (
-        <FormWrapper kind={openForm} title={inviteMessages.inviteTitle} onClose={handleClose}>
+        <FormWrapper title={inviteMessages.inviteTitle} onClose={handleClose}>
           <InviteForm listId={listId} messages={inviteMessages} reserveErrorHeight />
         </FormWrapper>
       ) : null}
 
       {openForm === "split" && isOwner && defaultSplit && members.length > 1 ? (
         <FormWrapper
-          kind={openForm}
           title={splitMessages.defaultSplitTitle}
           onClose={handleClose}
+          cornerAction={
+            <FormIconSubmit
+              type="button"
+              variant="save"
+              label={splitMessages.defaultSplitSave}
+              disabled={!splitCanSave}
+              onClick={() => splitSaveRequestRef.current?.()}
+            />
+          }
         >
           <DefaultSplitPanel
             listId={listId}
@@ -117,6 +122,11 @@ export function TemporalNavigation({
             initial={defaultSplit}
             members={members}
             messages={splitMessages}
+            onSuccess={handleClose}
+            onSaveRequest={(fn) => {
+              splitSaveRequestRef.current = fn;
+            }}
+            onCanSaveChange={setSplitCanSave}
           />
         </FormWrapper>
       ) : null}
