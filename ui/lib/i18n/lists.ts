@@ -28,6 +28,9 @@ export const listsMessages = {
     detailHintEmpty: "Shared expenses will land here.",
     detailReceiptsTitle: "Receipts",
     detailReceiptsEmpty: "No receipts yet.",
+    incompleteDisclosureLabel:
+      "Balances may be incomplete. Check unresolved items to confirm the total.",
+    incompleteDisclosureResolve: "Resolve incomplete",
     backToLists: "All lists",
     detailNotFound: "This list is unavailable.",
     inviteTitle: "Invite someone",
@@ -106,6 +109,9 @@ export const listsMessages = {
     detailHintEmpty: "Los gastos compartidos aparecerán aquí.",
     detailReceiptsTitle: "Recibos",
     detailReceiptsEmpty: "Aún no hay recibos.",
+    incompleteDisclosureLabel:
+      "Los saldos podrían estar incompletos. Revisa los pendientes para confirmar el total.",
+    incompleteDisclosureResolve: "Resolver lo incompleto",
     backToLists: "Todas las listas",
     detailNotFound: "Esta lista no está disponible.",
     inviteTitle: "Invitar a alguien",

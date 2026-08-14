@@ -10,9 +10,9 @@ sections_completed:
   - code_quality
   - workflow_rules
   - dont_miss_rules
-existing_patterns_found: 0
+existing_patterns_found: 5
 status: complete
-rule_count: 114
+rule_count: 119
 optimized_for_llm: true
 sources:
   - _bmad-output/planning-artifacts/architecture/architecture-finance-helper-2026-08-03/ARCHITECTURE-SPINE.md
@@ -20,6 +20,7 @@ sources:
   - _bmad-output/specs/spec-finance-helper/SPEC.md
   - _bmad-output/planning-artifacts/ux-designs/ux-finance-helper-2026-08-03/DESIGN.md
   - _bmad-output/planning-artifacts/ux-designs/ux-finance-helper-2026-08-03/EXPERIENCE.md
+  - "verified against live code in ui/ (Stories 3.1, 3.3, 3.4, 3.6) — 2026-08-14"
 ---
 
 # Project Context for AI Agents
@@ -92,7 +93,7 @@ Pins: match majors; re-verify patches **only when creating lockfiles** (Story 1.
 - Auth: httpOnly Secure cookie / same-origin BFF only — never Bearer in `localStorage` (AD-8)
 - `ui` → HTTP only — no DB/parsers (AD-1)
 - Secrets stay on `api` / env — never `NEXT_PUBLIC_*` for secrets
-- i18n: EN+ES keys for all product chrome
+- i18n: EN+ES keys for all product chrome — implemented as **per-domain TS message objects** (`ui/lib/i18n/<domain>.ts`, e.g. `listsMessages = { en: {...}, es: {...} } as const`), **not** JSON files or a translate-hook. Add new copy as a new key on both `en` and `es` in the matching domain file (create a new domain file only if no existing one fits)
 - Styling (AD-23 / Epic 3.5): **Tailwind utilities co-located** by default; `*.module.scss` only for custom styles; **no new `*.module.css`**
 - Tokens: Warm Balance + Soft-Ledger via CSS vars / Tailwind theme bridge — do not re-pick DESIGN.md hexes; no kit/purple default themes; no pill primary CTAs
 
@@ -139,6 +140,14 @@ Pins: match majors; re-verify patches **only when creating lockfiles** (Story 1.
 - Warm Balance / Soft-Ledger — kits unstyled only (AD-12)
 - Incomplete disclosure **below** strip — never over hero amount
 - Account: EN/ES + Light/Dark/System — not Settings; Simplify never says “paid”
+
+#### Verified Soft-Ledger UI conventions (live in repo since Story 3.1 — grep before inventing new names)
+
+- **Tokens:** all Warm Balance / Soft-Ledger CSS custom properties are defined once in `ui/app/globals.css`: `--muted`, `--surface`, `--border`, `--background`, `--accent`, `--owe`, `--owed`, `--strip-inset`, `--space-1`…`--space-6`, `--page-gutter`, `--nav-x`, `--row-y`, `--rounded-sm/md/lg/full`, `--type-<role>-face/size/weight/tracking/lh` (roles: `brand`, `list-title`, `strip-who`, `strip-amount`, `section-label`, `body`, `meta`, `amount-inline`, `button`, `tab`). These are the real names — **not** `--color-muted`, `--spacing-4`, or other guessed `--color-*`/`--spacing-*` forms that have shown up in draft story text.
+- **Dark mode:** a `html.dark` class (toggled by `PreferencesProvider`, Story 1.6) redefines the same variable names; a `@media (prefers-color-scheme: dark)` block only covers the pre-hydration flash. Components reference the token once (e.g. `color: var(--muted)`) and get both themes for free — never write a second dark-mode-specific rule block.
+- **Component location:** Soft-Ledger primitives live at `ui/components/soft-ledger/<Name>.tsx` + a co-located `<Name>.module.css` (e.g. `BalanceStrip.tsx`, `Hint.tsx`). There is **no** `ui/components/index.ts` barrel — every component is imported by its direct path (`@/components/soft-ledger/<Name>`).
+- **Component tests:** all Soft-Ledger primitives share one file, `ui/components/soft-ledger/soft-ledger.test.tsx` (jsdom env, `react-dom/client` `createRoot`/`act`, `.module.css` mocked via a `Proxy`-based `vi.mock`). Add new component tests there — don't create a new per-component `__tests__/` file.
+- **List-detail / shared-expenses view:** it's `ui/app/lists/[listId]/page.tsx` (App Router; async Server Component using `cookies()`/`fetch`), not a `pages/` directory path. It is never rendered directly in tests — pure, testable logic is extracted into a plain exported function (see `balanceStripPropsFrom` in that file) and unit-tested in a sibling `page.<feature>.test.ts`.
 
 #### Conflicts
 
@@ -287,4 +296,4 @@ Pins: match majors; re-verify patches **only when creating lockfiles** (Story 1.
 - Review after Epic 1 scaffold and quarterly thereafter
 - Remove rules that become obvious once living code encodes them
 
-Last Updated: 2026-08-03
+Last Updated: 2026-08-14 (added "Verified Soft-Ledger UI conventions" — real CSS token names, i18n mechanism, component/test locations — after Story 3.6 found the original scaffold-time doc still described planned-but-superseded names)

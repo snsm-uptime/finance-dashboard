@@ -2,7 +2,7 @@
 name: finance-helper
 description: Household settle-up web app — calm clarity on warm sand; Soft-Ledger hybrid layout within the Ledger Strip family.
 status: final
-updated: 2026-08-03
+updated: 2026-08-14
 colors:
   background: '#F7F3EC'
   surface: '#FFFCF7'
@@ -126,6 +126,12 @@ components:
     color: '{colors.muted}'
     typography: '{typography.meta}'
     margin-inline: '{spacing.strip-inset}'
+  incomplete-disclosure:
+    color: '{colors.muted}'
+    typography: '{typography.meta}'
+    margin-inline: '{spacing.strip-inset}'
+    padding: '{spacing.5} {spacing.4}'
+    background: transparent
 ---
 
 # DESIGN.md — finance-helper
@@ -287,9 +293,9 @@ Short muted line under the strip (e.g. payment happens outside the app). Not a s
 
 Same Warm Balance tokens: list name + balance in owe/owed (or settled/zero). Instant who-owes-whom scan — Splitwise feeling, Soft-Ledger air.
 
-### Incomplete disclosure
+### Incomplete disclosure (`components.incomplete-disclosure`)
 
-Not redrawn on Soft-Ledger hybrid panel; Soft Type panel showed disclosure under the strip. [ASSUMPTION] When needed on Soft-Ledger, place calm muted disclosure **below** the island strip (same inset), not over the amount — balances still lead.
+Not redrawn on Soft-Ledger hybrid panel; Soft Type panel showed disclosure under the strip. **Confirmed and implemented as a slot (Story 3.6):** calm muted disclosure sits **below** the island strip, same `{spacing.strip-inset}` side margin as the strip, transparent over `{colors.background}` (not inside the island), `{typography.meta}` + `{colors.muted}`, padding `{spacing.5} {spacing.4}` (matches the strip's own padding rhythm — looser than `components.hint`'s tighter pad) — never over the amount; balances still lead. Renders nothing when there's nothing incomplete (no false positives). No real quarantine/conflict data is wired yet: Epic 5.2 (accept-with-quarantine) marks a statement incomplete, Epic 5.4 wires the strip to actually show it.
 
 ---
 

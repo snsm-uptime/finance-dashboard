@@ -1,5 +1,5 @@
 # generated: 2026-08-03T22:46:31
-# last_updated: 2026-08-12T21:58:00
+# last_updated: 2026-08-14T00:00:00
 
 # project: finance-dashboard
 # project_key: NOKEY
@@ -42,7 +42,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-03T22:46:31
-last_updated: 2026-08-13T01:10:00
+last_updated: 2026-08-14T00:00:00
 project: finance-dashboard
 project_key: NOKEY
 tracking_system: file-system
@@ -85,7 +85,7 @@ development_status:
   3-3-shared-expenses-view-strip-receipt-list: done
   3-4-settle-up-from-shares-payer-and-line-types: done
   3-5-materialize-fx-to-crc-bccr-for-non-crc-lines: review
-  3-6-incomplete-disclosure-pattern-slot-only: ready-for-dev
+  3-6-incomplete-disclosure-pattern-slot-only: done
   epic-3-retrospective: optional
 
   # Epic 3.5 — Tailwind + SCSS styling stack (before Epic 4; product 3.5–3.6 may still be open)

@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { BalanceStrip } from "./BalanceStrip";
 import { Hint } from "./Hint";
+import { IncompleteDisclosure } from "./IncompleteDisclosure";
 import { PrimaryButton } from "./PrimaryButton";
 import { ReceiptRow } from "./ReceiptRow";
 import { SectionLabel } from "./SectionLabel";
@@ -179,6 +180,111 @@ describe("Soft-Ledger primitives", () => {
       bob.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     });
     expect(onChange).toHaveBeenCalledWith("b");
+  });
+
+  it("IncompleteDisclosure renders nothing when isIncomplete is false or undefined (AC #1)", () => {
+    act(() => {
+      root.render(
+        <IncompleteDisclosure isIncomplete={false} label="Balances may be incomplete." />,
+      );
+    });
+    expect(host.querySelector("[role='status']")).toBeNull();
+    expect(host.textContent).toBe("");
+
+    act(() => {
+      root.render(<IncompleteDisclosure label="Balances may be incomplete." />);
+    });
+    expect(host.querySelector("[role='status']")).toBeNull();
+  });
+
+  it("IncompleteDisclosure renders muted text in a status region when isIncomplete is true (AC #2)", () => {
+    act(() => {
+      root.render(
+        <IncompleteDisclosure
+          isIncomplete={true}
+          label="Balances may be incomplete. Check unresolved items to confirm the total."
+        />,
+      );
+    });
+    const status = host.querySelector("[role='status']");
+    // Not color-only: the visible text itself is the accessible signal (UX-DR19),
+    // announced natively via role="status" — no aria-label override needed.
+    expect(status?.textContent).toContain("Balances may be incomplete.");
+  });
+
+  it("IncompleteDisclosure invokes onResolve via a keyboard-accessible button when provided", () => {
+    const onResolve = vi.fn();
+    act(() => {
+      root.render(
+        <IncompleteDisclosure
+          isIncomplete={true}
+          label="Balances may be incomplete."
+          onResolve={onResolve}
+          resolveLabel="Resolve incomplete"
+        />,
+      );
+    });
+    const button = host.querySelector("button") as HTMLButtonElement;
+    expect(button).not.toBeNull();
+    expect(button.type).toBe("button");
+    expect(button.textContent).toBe("Resolve incomplete");
+    act(() => {
+      button.click();
+    });
+    expect(onResolve).toHaveBeenCalledTimes(1);
+  });
+
+  it("IncompleteDisclosure has no resolve control when onResolve is omitted", () => {
+    act(() => {
+      root.render(
+        <IncompleteDisclosure isIncomplete={true} label="Balances may be incomplete." />,
+      );
+    });
+    expect(host.querySelector("button")).toBeNull();
+  });
+
+  it("shared-expenses composition: strip, then incomplete disclosure (when incomplete), then receipts — same inset, no fabricated data", () => {
+    act(() => {
+      root.render(
+        <>
+          <BalanceStrip who="You owe Partner" amount="₡42,500" polarity="owe" />
+          <IncompleteDisclosure
+            isIncomplete={true}
+            label="Balances may be incomplete. Check unresolved items to confirm the total."
+          />
+          <SectionLabel>Receipts</SectionLabel>
+          <ReceiptRow emptyLabel="No receipts yet." />
+        </>,
+      );
+    });
+    const strip = host.querySelector("section");
+    const disclosure = Array.from(host.querySelectorAll("[role='status']")).find((el) =>
+      el.textContent?.includes("Balances may be incomplete."),
+    );
+    const receiptsLabel = host.querySelector("h2");
+    expect(strip).not.toBeNull();
+    expect(disclosure?.textContent).toContain("Balances may be incomplete.");
+    expect(receiptsLabel?.textContent).toBe("Receipts");
+    // Strip → disclosure → receipts: DOM order preserves Soft-Ledger layout (below strip, above receipts).
+    const order = Array.from(host.children).indexOf(strip as Element);
+    const disclosureIndex = Array.from(host.children).indexOf(disclosure as Element);
+    const receiptsIndex = Array.from(host.children).indexOf(receiptsLabel as Element);
+    expect(order).toBeLessThan(disclosureIndex);
+    expect(disclosureIndex).toBeLessThan(receiptsIndex);
+  });
+
+  it("shared-expenses composition: no incomplete disclosure rendered when isIncomplete is false (no false positives)", () => {
+    act(() => {
+      root.render(
+        <>
+          <BalanceStrip who="Settled" amount="₡0" />
+          <IncompleteDisclosure isIncomplete={false} label="Balances may be incomplete." />
+          <SectionLabel>Receipts</SectionLabel>
+          <ReceiptRow emptyLabel="No receipts yet." />
+        </>,
+      );
+    });
+    expect(host.textContent).not.toContain("Balances may be incomplete.");
   });
 
   it("SoftLedgerRadio renders radio and checkbox with background outline fill", () => {
