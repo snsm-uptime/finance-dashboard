@@ -11,6 +11,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 
+import { IconButton } from "@/components/IconButton";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { listsMessages } from "@/lib/i18n/lists";
 import { DotsIcon, PlusIcon } from "@/app/icons";
@@ -285,14 +286,13 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
                 disabled={creating}
                 placeholder={t.createLabel}
               />
-              <button
+              <IconButton
                 className={styles.iconButton}
                 type="submit"
                 disabled={!canCreate}
-                aria-label={creating ? t.creating : t.createSubmit}
-              >
-                <PlusIcon />
-              </button>
+                label={creating ? t.creating : t.createSubmit}
+                icon={<PlusIcon />}
+              />
             </div>
           </label>
           {createError ? (
@@ -388,17 +388,17 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
                       </button>
                       {isOwner ? (
                         <div className={styles.menuContainer} ref={menuRef}>
-                          <button
+                          <IconButton
                             type="button"
+                            variant="muted"
                             className={styles.renameIcon}
-                            aria-label={t.menuAria}
+                            label={t.menuAria}
                             onClick={() => setOpenMenuId(openMenuId === list.id ? null : list.id)}
                             disabled={anyOpening || renamingId !== null}
                             aria-expanded={openMenuId === list.id}
                             aria-haspopup="menu"
-                          >
-                            <DotsIcon />
-                          </button>
+                            icon={<DotsIcon />}
+                          />
                           {openMenuId === list.id && deleteConfirmId !== list.id && (
                             <div className={styles.menu} role="menu">
                               <button

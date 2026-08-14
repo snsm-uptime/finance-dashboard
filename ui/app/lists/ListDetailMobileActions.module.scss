@@ -26,30 +26,27 @@
   overflow: hidden;
 }
 
+/* Structural + hover/focus overrides on top of IconButton's own base chrome
+   (see ui/components/IconButton) — anything IconButton's Tailwind base
+   classes or its module also set needs !important to win deterministically
+   (mirrors FormIconSubmit.module.scss's established pattern for this). */
 .fabHalf {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0;
-  padding: 0.7rem 0;
-  border: none;
-  background: transparent;
-  color: var(--accent);
-  cursor: pointer;
-  line-height: 0;
+  padding: 0.7rem 0 !important;
+  color: var(--accent) !important;
+  line-height: 0 !important;
 }
 
 .fabHalf:not(:last-child) {
   border-bottom: 1px solid var(--border);
 }
 
-.fabHalf:hover {
-  background: color-mix(in srgb, var(--border) 35%, transparent);
+.fabHalf:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--border) 35%, transparent) !important;
 }
 
 .fabHalf:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
-  outline-offset: -2px;
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent) !important;
+  outline-offset: -2px !important;
 }
 
 .fabIcon {

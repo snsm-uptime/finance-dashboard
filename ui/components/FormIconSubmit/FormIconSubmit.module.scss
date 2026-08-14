@@ -30,10 +30,10 @@
 }
 
 .suffix:not(:disabled):hover {
-  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface)) !important;
 }
 
 .suffix:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
-  outline-offset: -2px;
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent) !important;
+  outline-offset: -2px !important;
 }

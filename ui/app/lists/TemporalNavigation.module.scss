@@ -21,21 +21,19 @@
   overflow: visible;
 }
 
+/* Structural + hover/focus overrides on top of IconButton's own base chrome
+   (see ui/components/IconButton) — anything IconButton's Tailwind base
+   classes or its module also set needs !important to win deterministically
+   (mirrors FormIconSubmit.module.scss's established pattern for this). */
 .navButton {
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   width: 2.75rem;
   height: 2.75rem;
-  padding: var(--temporal-nav-button-padding, 0);
-  margin: 0;
-  border: none;
+  padding: var(--temporal-nav-button-padding, 0) !important;
   border-right: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--temporal-icon-color);
-  cursor: pointer;
-  line-height: 0;
+  background: var(--surface) !important;
+  color: var(--temporal-icon-color) !important;
+  line-height: 0 !important;
   transition: background 0.2s, color 0.2s;
 }
 
@@ -48,25 +46,25 @@
 }
 
 .navButton:first-child {
-  border-radius: var(--temporal-nav-radius) 0 0 var(--temporal-nav-radius);
+  border-radius: var(--temporal-nav-radius) 0 0 var(--temporal-nav-radius) !important;
 }
 
 .navButton:last-child {
-  border-radius: 0 var(--temporal-nav-radius) var(--temporal-nav-radius) 0;
+  border-radius: 0 var(--temporal-nav-radius) var(--temporal-nav-radius) 0 !important;
 }
 
 .navButton:first-child:last-child {
-  border-radius: var(--temporal-nav-radius);
+  border-radius: var(--temporal-nav-radius) !important;
 }
 
-.navButton:hover {
-  background: color-mix(in srgb, var(--temporal-icon-hover-color) 8%, var(--surface));
-  color: var(--temporal-icon-hover-color);
+.navButton:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--temporal-icon-hover-color) 8%, var(--surface)) !important;
+  color: var(--temporal-icon-hover-color) !important;
 }
 
 .navButton:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
-  outline-offset: -2px;
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent) !important;
+  outline-offset: -2px !important;
 }
 
 .navIcon {
@@ -109,32 +107,15 @@
   min-width: 0;
 }
 
+/* Sizing only — hover/focus states come from IconButton's built-in default
+   variant chrome, which already matches these exactly. */
 .formClose {
   flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   width: 1.75rem;
   height: 1.75rem;
-  padding: 0.25rem;
-  margin: 0;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  line-height: 0;
-  transition: background 0.2s, color 0.2s;
-}
-
-.formClose:hover {
-  background: color-mix(in srgb, var(--border) 30%, transparent);
-  color: var(--foreground);
-}
-
-.formClose:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
-  outline-offset: 2px;
+  padding: 0.25rem !important;
+  border-radius: 4px !important;
+  line-height: 0 !important;
 }
 
 .closeIcon {

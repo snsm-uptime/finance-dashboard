@@ -4,6 +4,7 @@ import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
 
 import { EyeIcon } from "@/app/icons";
+import { IconButton } from "@/components/IconButton";
 import { signInMessages, type Locale } from "@/lib/i18n/signin";
 import { attemptSignIn } from "./signInClient";
 import styles from "../signup/signup.module.scss";
@@ -75,15 +76,14 @@ export function SignInForm({ locale, returnTo }: Props) {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          <button
+          <IconButton
             type="button"
             className={styles.eyeButton}
             onClick={() => setShowPassword((v) => !v)}
-            aria-label={showPassword ? t.hidePassword : t.showPassword}
+            label={showPassword ? t.hidePassword : t.showPassword}
             aria-pressed={showPassword}
-          >
-            <EyeIcon open={showPassword} />
-          </button>
+            icon={<EyeIcon open={showPassword} />}
+          />
         </span>
       </label>
       {error ? (

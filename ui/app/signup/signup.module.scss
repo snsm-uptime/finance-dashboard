@@ -97,32 +97,29 @@
   outline-offset: 1px;
 }
 
+/* Structural + hover/focus overrides on top of IconButton's own base chrome
+   (see ui/components/IconButton) — anything IconButton's Tailwind base
+   classes or its module also set needs !important to win deterministically
+   (mirrors FormIconSubmit.module.scss's established pattern for this). */
 .eyeButton {
   position: absolute;
   top: 50%;
   right: 0.35rem;
   transform: translateY(-50%);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   width: 2.25rem;
   height: 2.25rem;
-  padding: 0;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
+  padding: 0 !important;
+  border-radius: 6px !important;
 }
 
-.eyeButton:hover {
-  color: var(--foreground);
-  background: color-mix(in srgb, var(--border) 45%, transparent);
+.eyeButton:hover:not(:disabled) {
+  color: var(--foreground) !important;
+  background: color-mix(in srgb, var(--border) 45%, transparent) !important;
 }
 
 .eyeButton:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
-  outline-offset: 1px;
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent) !important;
+  outline-offset: 1px !important;
 }
 
 .hint {

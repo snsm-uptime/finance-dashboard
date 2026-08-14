@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { EyeIcon } from "@/app/icons";
+import { IconButton } from "@/components/IconButton";
 import { resolveAuthenticatedLanding } from "@/lib/landing";
 import { inviteMessages } from "@/lib/i18n/invite";
 import { signupMessages, type Locale } from "@/lib/i18n/signup";
@@ -173,15 +174,14 @@ export function SignupForm({ locale, inviteToken }: Props) {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          <button
+          <IconButton
             type="button"
             className={styles.eyeButton}
             onClick={() => setShowPassword((v) => !v)}
-            aria-label={showPassword ? t.hidePassword : t.showPassword}
+            label={showPassword ? t.hidePassword : t.showPassword}
             aria-pressed={showPassword}
-          >
-            <EyeIcon open={showPassword} />
-          </button>
+            icon={<EyeIcon open={showPassword} />}
+          />
         </span>
         <span className={styles.hint}>{t.passwordHint}</span>
       </label>

@@ -4,6 +4,7 @@ import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
 
 import { EyeIcon } from "@/app/icons";
+import { IconButton } from "@/components/IconButton";
 import {
   passwordResetMessages,
   type Locale,
@@ -102,15 +103,14 @@ export function ResetPasswordForm({ locale, token }: Props) {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          <button
+          <IconButton
             type="button"
             className={styles.eyeButton}
             onClick={() => setShowPassword((v) => !v)}
-            aria-label={showPassword ? t.hidePassword : t.showPassword}
+            label={showPassword ? t.hidePassword : t.showPassword}
             aria-pressed={showPassword}
-          >
-            <EyeIcon open={showPassword} />
-          </button>
+            icon={<EyeIcon open={showPassword} />}
+          />
         </span>
       </label>
       {error ? (

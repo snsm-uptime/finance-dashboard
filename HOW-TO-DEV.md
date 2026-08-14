@@ -5,7 +5,7 @@ Relative paths assume your primary clone directory is named `finance-dashboard`.
 ## Prerequisites
 
 - Docker with Compose v2
-- Optional (faster host feedback): [`uv`](https://docs.astral.sh/uv/) and Node/`npm`
+- Optional (faster host feedback): `[uv](https://docs.astral.sh/uv/)` and Node/`npm`
 - Disk for Postgres **outside** the repo (default: `~/finance-helper`)
 
 ## 1. First-time install (primary checkout)
@@ -29,8 +29,8 @@ Start the hot-reload stack (`db` / `api` / `ui`):
 
 Health (defaults `8000` / `3000` unless you changed `.env`):
 
-- API: http://localhost:8000/health
-- UI: http://localhost:3000/health
+- API: [http://localhost:8000/health](http://localhost:8000/health)
+- UI: [http://localhost:3000/health](http://localhost:3000/health)
 
 URLs are printed before `up` starts (foreground) and again after a detached start.
 
@@ -131,17 +131,38 @@ Prefer stopping Compose first; `worktree-remove` also attempts `compose-down` wh
 
 Postgres data under `~/finance-helper-wt/` is left alone unless you delete that directory on disk.
 
+## 3. UI component conventions
+
+**Any icon-only button composes `ui/components/IconButton`** — never hand-roll a raw `<button>` around an icon. `IconButton` owns the interactive base: `type`, `disabled`, `onClick`, `aria-label`/`title`, and the ghost-button chrome (padding, border, transitions, disabled state).
+
+To build a custom-looking icon button, wrap `IconButton` and layer your chrome on top via `className`, instead of writing your own `<button>`:
+
+```tsx
+<IconButton
+  icon={<SomeIcon />}
+  label="Accessible name"
+  className="!border border-border !bg-surface enabled:!text-accent" // your custom look
+  onClick={...}
+/>
+```
+
+Tailwind v4 orders generated utilities by internal category, not source order, so a same-property override (e.g. your `bg-surface` vs `IconButton`'s default `bg-transparent`) is not guaranteed to win just by being listed later — use `!important` on the utilities that need to beat `IconButton`'s ghost defaults (see `FormIconSubmit.tsx` for a worked example: bordered/accent submit chrome layered on `IconButton`).
+
+For a button that also needs local state around the click (e.g. a "copied!" confirmation), wrap `IconButton` inside your own component rather than duplicating its button markup — see `ui/components/CopyButton/CopyButton.tsx`.
+
+Raw `<button>` stays fine for **text-labeled** buttons (form submits, choice/toggle buttons) — this convention is specifically for icon-only controls.
+
 ---
 
 ## Cheat sheet
 
-| Step | Command |
-| --- | --- |
-| First run | `cp .env.example .env` → `./scripts/compose-up.sh` |
-| Stop | `./scripts/compose-down.sh` |
-| Restart | `./scripts/compose-restart.sh -d` |
-| Add worktree | `./scripts/worktree/worktree-add.sh <slug> <branch>` |
-| Bootstrap | `cd ../finance-dashboard-wt-<slug>` → `<primary>/scripts/worktree/worktree-bootstrap.sh` |
-| Remove worktree | `./scripts/worktree/worktree-remove.sh <slug>` |
+| Step            | Command                                                                                  |
+| --------------- | ---------------------------------------------------------------------------------------- |
+| First run       | `cp .env.example .env` → `./scripts/compose-up.sh`                                       |
+| Stop            | `./scripts/compose-down.sh`                                                              |
+| Restart         | `./scripts/compose-restart.sh -d`                                                        |
+| Add worktree    | `./scripts/worktree/worktree-add.sh <slug> <branch>`                                     |
+| Bootstrap       | `cd ../finance-dashboard-wt-<slug>` → `<primary>/scripts/worktree/worktree-bootstrap.sh` |
+| Remove worktree | `./scripts/worktree/worktree-remove.sh <slug>`                                           |
 
 More detail on Cursor’s worktree hook: `scripts/worktree/README.md`.

@@ -16,6 +16,7 @@ import { DefaultSplitPanel } from "./DefaultSplitPanel";
 import type { DefaultSplitPayload, ListMember } from "./listsClient";
 import { Sheet } from "./Sheet";
 import { FormIconSubmit } from "@/components/FormIconSubmit";
+import { IconButton } from "@/components/IconButton";
 import styles from "./ListDetailMobileActions.module.scss";
 
 type SheetKind = "expense" | "invite" | "split" | null;
@@ -83,43 +84,37 @@ export function ListDetailMobileActions({
     <div className={styles.chrome}>
       <div className={styles.fab} role="group" aria-label={groupLabel}>
         {canAddExpense ? (
-          <button
+          <IconButton
             ref={expenseButtonRef}
             type="button"
             className={styles.fabHalf}
-            aria-label={addExpenseAria}
+            label={addExpenseAria}
             aria-expanded={sheet === "expense"}
             onClick={() => setSheet("expense")}
-            title={addExpenseAria}
-          >
-            <PlusIcon className={styles.fabIcon} />
-          </button>
+            icon={<PlusIcon className={styles.fabIcon} />}
+          />
         ) : null}
         {canShowSplit ? (
-          <button
+          <IconButton
             ref={splitButtonRef}
             type="button"
             className={styles.fabHalf}
-            aria-label={splitMessages.defaultSplitTitle}
+            label={splitMessages.defaultSplitTitle}
             aria-expanded={sheet === "split"}
             onClick={() => setSheet("split")}
-            title={splitMessages.defaultSplitTitle}
-          >
-            <PieChartIcon className={styles.fabIcon} />
-          </button>
+            icon={<PieChartIcon className={styles.fabIcon} />}
+          />
         ) : null}
         {canInvite ? (
-          <button
+          <IconButton
             ref={inviteButtonRef}
             type="button"
             className={styles.fabHalf}
-            aria-label={inviteAria}
+            label={inviteAria}
             aria-expanded={sheet === "invite"}
             onClick={() => setSheet("invite")}
-            title={inviteAria}
-          >
-            <ShareIcon className={styles.fabIcon} />
-          </button>
+            icon={<ShareIcon className={styles.fabIcon} />}
+          />
         ) : null}
       </div>
 

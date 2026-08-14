@@ -4,6 +4,7 @@ import { useCallback, useRef, useState, type ReactNode } from "react";
 
 import { ShareIcon, PieChartIcon, CloseIcon } from "@/app/icons";
 import { FormIconSubmit } from "@/components/FormIconSubmit";
+import { IconButton } from "@/components/IconButton";
 import type { DefaultSplitPayload, ListMember } from "./listsClient";
 import type { InviteFormMessages } from "./InviteForm";
 import { InviteForm } from "./InviteForm";
@@ -36,14 +37,13 @@ function FormWrapper({ title, onClose, cornerAction, children }: FormWrapperProp
       <div className={styles.formHeader}>
         {cornerAction ? <div className={styles.formLeading}>{cornerAction}</div> : null}
         <h3 className={styles.formTitle}>{title}</h3>
-        <button
+        <IconButton
           type="button"
           className={styles.formClose}
-          aria-label={`Close ${title}`}
+          label={`Close ${title}`}
           onClick={onClose}
-        >
-          <CloseIcon className={styles.closeIcon} />
-        </button>
+          icon={<CloseIcon className={styles.closeIcon} />}
+        />
       </div>
       <div className={styles.formBody}>{children}</div>
     </div>
@@ -73,25 +73,21 @@ export function TemporalNavigation({
     <div className={styles.chrome}>
       {showNav ? (
         <div className={styles.navGroup} role="group">
-          <button
+          <IconButton
             type="button"
             className={styles.navButton}
-            title="Share / Invite"
+            label="Share / Invite"
             onClick={() => setOpenForm("invite")}
-            aria-label="Share / Invite"
-          >
-            <ShareIcon className={styles.navIcon} />
-          </button>
+            icon={<ShareIcon className={styles.navIcon} />}
+          />
           {isOwner && defaultSplit && members.length > 1 ? (
-            <button
+            <IconButton
               type="button"
               className={styles.navButton}
-              title="Split Settings"
+              label="Split Settings"
               onClick={() => setOpenForm("split")}
-              aria-label="Split Settings"
-            >
-              <PieChartIcon className={styles.navIcon} />
-            </button>
+              icon={<PieChartIcon className={styles.navIcon} />}
+            />
           ) : null}
         </div>
       ) : null}

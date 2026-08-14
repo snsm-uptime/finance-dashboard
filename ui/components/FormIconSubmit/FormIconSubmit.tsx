@@ -115,8 +115,13 @@ export function FormIconField({
     "flex items-stretch w-full min-w-0 box-border border border-border rounded-[8px] bg-[var(--background,var(--surface))] overflow-hidden transition-all duration-150 disabled:opacity-65 disabled:cursor-not-allowed";
   const inputClasses =
     "block flex-1 min-w-0 w-full box-border m-0 py-[0.6rem] px-[0.75rem] border-0 rounded-l-[8px] bg-transparent text-foreground text-base font-normal leading-[1.4] appearance-none disabled:opacity-65 disabled:cursor-not-allowed";
+  // Structural-only overrides on top of IconButton's own base chrome (see
+  // ui/components/IconButton) — the rest (flex layout, cursor, transitions,
+  // disabled look) is already identical to IconButton's defaults. `!` forces
+  // the utilities that collide with IconButton's own Tailwind base classes
+  // (padding, background, text color, left border) to win deterministically.
   const suffixClasses =
-    "inline-flex items-center justify-center flex-shrink-0 w-[2.75rem] m-0 p-0 border-0 border-l border-l-border rounded-r-[8px] bg-surface text-accent cursor-pointer leading-none transition-all duration-150 disabled:text-muted disabled:opacity-45 disabled:cursor-not-allowed";
+    "w-[2.75rem] !p-0 !border-l !border-l-border rounded-r-[8px] !bg-surface !text-accent";
   const rootClass = className
     ? `${rootClasses} ${className}`
     : rootClasses;
@@ -138,15 +143,13 @@ export function FormIconField({
           disabled={disabled}
           onChange={onChange}
         />
-        <button
+        <IconButton
           type="submit"
           className={`${suffixClasses} ${styles.suffix}`}
-          aria-label={submitLabel}
-          title={submitLabel}
+          label={submitLabel}
           disabled={submitDisabled ?? disabled}
-        >
-          <IconGlyph variant={variant} />
-        </button>
+          icon={<IconGlyph variant={variant} />}
+        />
       </div>
     </div>
   );
