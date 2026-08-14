@@ -119,6 +119,26 @@ describe("InviteForm", () => {
     expect(container.querySelector('[role="status"]')?.textContent).toBe(
       listsMessages.en.inviteSent,
     );
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it("does not keep the reserved error slot when the sent message is showing", async () => {
+    inviteMember.mockResolvedValue({
+      ok: true,
+      invite: { status: "sent", template_kind: "join", invite_id: "inv-1" },
+    });
+
+    await act(async () => {
+      root.render(<InviteForm listId="list-1" messages={messages} reserveErrorHeight />);
+    });
+
+    await setEmailAndSubmit(container, "peer@example.com");
+
+    expect(container.querySelector('[role="status"]')?.textContent).toBe(
+      listsMessages.en.inviteSent,
+    );
+    expect(container.querySelector(".inviteErrorSlot")).toBeNull();
+    expect(container.querySelector('[role="alert"]')).toBeNull();
   });
 
   it("shows error and does not claim sent on SMTP failure", async () => {
