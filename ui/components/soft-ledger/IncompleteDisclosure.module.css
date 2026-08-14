@@ -1,5 +1,5 @@
 .disclosure {
-  margin: 0 var(--strip-inset) var(--space-4);
+  margin: 0 var(--strip-inset);
   padding: var(--space-5) var(--space-4);
   background: transparent;
   font-family: var(--type-meta-face);

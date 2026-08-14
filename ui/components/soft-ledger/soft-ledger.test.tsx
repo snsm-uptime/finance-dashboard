@@ -207,44 +207,31 @@ describe("Soft-Ledger primitives", () => {
   it("IncompleteDisclosure renders nothing when isIncomplete is false or undefined (AC #1)", () => {
     act(() => {
       root.render(
-        <IncompleteDisclosure
-          isIncomplete={false}
-          label="Balances may be incomplete."
-          ariaLabel="Balances are incomplete: contains unresolved quarantine or conflicts."
-        />,
+        <IncompleteDisclosure isIncomplete={false} label="Balances may be incomplete." />,
       );
     });
-    expect(host.querySelector("p")).toBeNull();
+    expect(host.querySelector("[role='status']")).toBeNull();
     expect(host.textContent).toBe("");
 
     act(() => {
-      root.render(
-        <IncompleteDisclosure
-          label="Balances may be incomplete."
-          ariaLabel="Balances are incomplete: contains unresolved quarantine or conflicts."
-        />,
-      );
+      root.render(<IncompleteDisclosure label="Balances may be incomplete." />);
     });
-    expect(host.querySelector("p")).toBeNull();
+    expect(host.querySelector("[role='status']")).toBeNull();
   });
 
-  it("IncompleteDisclosure renders muted text with a screen-reader aria-label when isIncomplete is true (AC #2)", () => {
+  it("IncompleteDisclosure renders muted text in a status region when isIncomplete is true (AC #2)", () => {
     act(() => {
       root.render(
         <IncompleteDisclosure
           isIncomplete={true}
           label="Balances may be incomplete. Check unresolved items to confirm the total."
-          ariaLabel="Balances are incomplete: contains unresolved quarantine or conflicts."
         />,
       );
     });
-    const p = host.querySelector("p");
-    expect(p?.textContent).toContain("Balances may be incomplete.");
-    expect(p?.getAttribute("aria-label")).toBe(
-      "Balances are incomplete: contains unresolved quarantine or conflicts.",
-    );
-    // Not color-only: the disclosure text itself is the accessible signal (UX-DR19).
-    expect(p?.getAttribute("aria-label")?.length).toBeGreaterThan(0);
+    const status = host.querySelector("[role='status']");
+    // Not color-only: the visible text itself is the accessible signal (UX-DR19),
+    // announced natively via role="status" — no aria-label override needed.
+    expect(status?.textContent).toContain("Balances may be incomplete.");
   });
 
   it("IncompleteDisclosure invokes onResolve via a keyboard-accessible button when provided", () => {
@@ -254,7 +241,6 @@ describe("Soft-Ledger primitives", () => {
         <IncompleteDisclosure
           isIncomplete={true}
           label="Balances may be incomplete."
-          ariaLabel="Balances are incomplete."
           onResolve={onResolve}
           resolveLabel="Resolve incomplete"
         />,
@@ -273,11 +259,7 @@ describe("Soft-Ledger primitives", () => {
   it("IncompleteDisclosure has no resolve control when onResolve is omitted", () => {
     act(() => {
       root.render(
-        <IncompleteDisclosure
-          isIncomplete={true}
-          label="Balances may be incomplete."
-          ariaLabel="Balances are incomplete."
-        />,
+        <IncompleteDisclosure isIncomplete={true} label="Balances may be incomplete." />,
       );
     });
     expect(host.querySelector("button")).toBeNull();
@@ -299,7 +281,6 @@ describe("Soft-Ledger primitives", () => {
           <IncompleteDisclosure
             isIncomplete={true}
             label="Balances may be incomplete. Check unresolved items to confirm the total."
-            ariaLabel="Balances are incomplete: contains unresolved quarantine or conflicts."
           />
           <SectionLabel>Receipts</SectionLabel>
           <ReceiptRow emptyLabel="No receipts yet." />
@@ -307,7 +288,9 @@ describe("Soft-Ledger primitives", () => {
       );
     });
     const strip = host.querySelector("section");
-    const disclosure = host.querySelector("p[aria-label]");
+    const disclosure = Array.from(host.querySelectorAll("[role='status']")).find((el) =>
+      el.textContent?.includes("Balances may be incomplete."),
+    );
     const receiptsLabel = host.querySelector("h2");
     expect(strip).not.toBeNull();
     expect(disclosure?.textContent).toContain("Balances may be incomplete.");
@@ -325,17 +308,12 @@ describe("Soft-Ledger primitives", () => {
       root.render(
         <>
           <BalanceStrip who="Settled" amount="₡0" />
-          <IncompleteDisclosure
-            isIncomplete={false}
-            label="Balances may be incomplete."
-            ariaLabel="Balances are incomplete."
-          />
+          <IncompleteDisclosure isIncomplete={false} label="Balances may be incomplete." />
           <SectionLabel>Receipts</SectionLabel>
           <ReceiptRow emptyLabel="No receipts yet." />
         </>,
       );
     });
-    expect(host.querySelector("p[aria-label]")).toBeNull();
     expect(host.textContent).not.toContain("Balances may be incomplete.");
   });
 });

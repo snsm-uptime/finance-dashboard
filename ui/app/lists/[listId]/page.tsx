@@ -344,8 +344,6 @@ export default async function ListDetailPage({
             <IncompleteDisclosure
               isIncomplete={false}
               label={t.incompleteDisclosureLabel}
-              ariaLabel={t.incompleteDisclosureAriaLabel}
-              resolveLabel={t.incompleteDisclosureResolve}
             />
             {expenses.length === 0 && !expensesLoadError ? <Hint>{t.detailHintEmpty}</Hint> : null}
             <div className={styles.softReceipts}>

@@ -4,7 +4,7 @@ baseline_commit: b3fd6d1
 
 # Story 3.6: Incomplete-disclosure pattern (slot only)
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -64,28 +64,24 @@ If any of these are missing, verify Story 3.1 is complete before proceeding.
     - Created: `ui/components/soft-ledger/IncompleteDisclosure.tsx` (actual soft-ledger components live under `components/soft-ledger/`, not `components/` directly — matched `BalanceStrip.tsx`/`Hint.tsx` location)
     - No `ui/components/index.ts` barrel exists in this codebase (verified via search) — every soft-ledger component is imported directly by path (`@/components/soft-ledger/X`), so none was added; this matches existing convention, not a gap.
     - Follows existing Story 3.1/3.3 component patterns (co-located `.module.css`, named export, no default export)
-  - [x] **Props:**
+  - [x] **Props (as shipped — updated post-review to match the actual component):**
     ```typescript
-    interface IncompleteDisclosureProps {
+    type ResolveAction =
+      | { onResolve: () => void; resolveLabel: string }
+      | { onResolve?: undefined; resolveLabel?: undefined };
+
+    export type IncompleteDisclosureProps = {
       /**
        * If true, render the incomplete disclosure.
        * If false or undefined, render nothing (AC #1).
        */
       isIncomplete?: boolean;
-      
-      /**
-       * Optional callback for "Resolve" action (wired in Epic 5).
-       * For now, can be undefined; component prepares for it.
-       */
-      onResolve?: () => void;
-      
-      /**
-       * Optional: show a hint label (e.g., "Resolve quarantine").
-       * Defaults to a calm disclosure message.
-       */
-      label?: string;
-    }
+
+      /** Caller-supplied disclosure copy (i18n lives in the caller, e.g. `listsMessages`). */
+      label: string;
+    } & ResolveAction;
     ```
+    `onResolve` and `resolveLabel` are coupled via a discriminated union — a caller cannot pass one without the other, which prevents an unlabeled `<button>` (WCAG 4.1.2) once Epic 5.4 wires `onResolve`. There is no separate `ariaLabel` prop: the component renders a `<div role="status">` (matching `ReceiptRow`'s existing convention) so the visible `label` text is itself announced to assistive tech — no risk of the visible and screen-reader copy diverging, and no dependency on `aria-label`, which is not permitted on non-landmark text roles.
   - [x] **Visibility & AC #1:**
     - `isIncomplete` falsy → returns `null` (no wrapper div)
     - `isIncomplete === true` → renders the disclosure `<p>`
@@ -198,6 +194,16 @@ If any of these are missing, verify Story 3.1 is complete before proceeding.
     - `ui`: `npx vitest run` → 140/140 tests passing (15 in `soft-ledger.test.tsx`, no regressions elsewhere)
     - `ui`: `npx next build` → compiles and generates all routes cleanly, including `/lists/[listId]`
   - [x] **Accessibility audit (manual or tool):** No axe-core/screen-reader tooling available in this environment; relied on code-level verification consistent with the project's existing a11y approach — `aria-label` prop present and asserted by test, `--muted`/`--muted` (dark) tokens reused from already-shipped, already-audited `Hint`/`BalanceStrip` components (same contrast pair, not a new untested color), native `<button>` for `onResolve` (inherently keyboard-operable, no custom tab-index/keydown handling needed), `:focus-visible` outline added matching `PrimaryButton`'s pattern.
+
+### Review Findings
+
+- [x] [Review][Patch] `aria-label` on `<p>` is name-prohibited by ARIA — AC #2/UX-DR19's a11y mechanism may not fire [ui/components/soft-ledger/IncompleteDisclosure.tsx:28] — `<p>` maps to ARIA role `paragraph`, which per WAI-ARIA 1.2 has "Name from: prohibited"; conformant AT/browsers (and axe-core's `aria-prohibited-attr` rule) ignore the `aria-label`, silently defeating the "announcable to assistive tech" requirement. Resolved (2026-08-14): switch the wrapper element to a `<div role="status">`, matching `ReceiptRow`'s existing convention — gets `aria-live="polite"` for free (covers the separate "no aria-live for future reactive appearance" concern) and allows naming. Also fold the visible/aria-label text divergence into this fix by letting AT read the visible text natively where possible.
+
+- [x] [Review][Patch] `onResolve`/`resolveLabel` are independently optional, allowing an unlabeled `<button>` [ui/components/soft-ledger/IncompleteDisclosure.tsx:9-10,30-33] — All three review layers converged on this. Not reachable today (page.tsx never passes `onResolve`), but the component's own TODO marks `onResolve` as Epic 5.4's job, and nothing currently stops Epic 5 from passing `onResolve` without `resolveLabel`, producing a WCAG 4.1.2 nameless control. Fixed: coupled the two props via a discriminated union.
+- [x] [Review][Patch] Disclosure/receipts gap won't match the app's spacing rhythm once live [ui/components/soft-ledger/IncompleteDisclosure.module.css:2, ui/app/lists/lists.module.css `.softReceipts`] — `.softBody` is a flex column, so `.disclosure`'s `margin-bottom: var(--space-4)` (12px) and `.softReceipts`'s `margin-top: var(--space-2)` (8px) do not collapse, yielding a 20px gap instead of the 8px used elsewhere. Fixed: dropped `.disclosure`'s bottom margin — this also brought the CSS in line with DESIGN.md's `components.incomplete-disclosure` token entry, which never documented a bottom-margin token in the first place.
+- [x] [Review][Patch] `IncompleteDisclosureProps` type is not exported [ui/components/soft-ledger/IncompleteDisclosure.tsx:3] — inconsistent with sibling `BalanceStrip.tsx`, which exports `BalancePolarity`, for a component pitched as reusable across Epic 5. Fixed: added `export`.
+- [x] [Review][Patch] Completion Checklist left unchecked despite Change Log claiming full completion [`## Completion Checklist` in this file] — Debug Log/Completion Notes/Change Log all assert CI-green completion (independently spot-verified true by Blind Hunter), but the checklist boxes were never checked, so a reviewer skimming only that section sees an apparently-incomplete story. Fixed: checked off.
+- [x] [Review][Patch] Story's own `Props` code block (Task 1) doesn't match the shipped component API [this file, Task 1 "Props" subsection] — spec shows `label?: string` optional with no `ariaLabel`, but shipped component requires `label: string` and `ariaLabel: string` and adds `resolveLabel?: string`. Fixed: updated the spec's Props block to match the shipped (post-review) API.
 
 ## Dev Notes
 
@@ -312,25 +318,26 @@ This story confirms that assumption: the component is slotted in the layout; sty
 ### Change Log
 
 - 2026-08-13: Implemented Story 3.6 — added slot-only `<IncompleteDisclosure>` component (calm/muted, below settle strip, `isIncomplete` prop, aria-labeled, EN/ES i18n), integrated into `ListDetailPage` with `isIncomplete={false}` hardcoded, added unit + composed-render tests. No API wiring (Epic 5 scope). All tasks/subtasks complete; CI (typecheck/lint/tests/build) green.
+- 2026-08-14: Code review fixes — replaced the `<p aria-label>` wrapper with `<div role="status">` (the `<p>`/`paragraph` role is name-prohibited under WAI-ARIA 1.2, so the original `aria-label` risked being silently ignored by assistive tech); dropped the now-redundant `ariaLabel` prop and `incompleteDisclosureAriaLabel` i18n key since the visible `label` text is now the accessible name directly; coupled `onResolve`/`resolveLabel` via a discriminated union so a future caller can't pass one without the other; removed `.disclosure`'s bottom margin so it no longer double-stacks with `.softReceipts`'s top margin in the flex layout; exported `IncompleteDisclosureProps`; updated tests and this story's Props/Checklist sections to match.
 
 ## Completion Checklist
 
 Before marking this story **done** and pushing for code review:
 
-- [ ] Branch created and named per AD-13: `feat/3/3-6-incomplete-disclosure-pattern-slot-only`
-- [ ] Component implemented: `<IncompleteDisclosure>` with props (isIncomplete, onResolve, label)
-- [ ] Component integrated into shared-expenses view (below strip, same inset)
-- [ ] Tests written: visibility, a11y, dark mode, callback wiring
-- [ ] Styling matches DESIGN.md Soft-Ledger + Warm Balance tokens (calm/muted)
-- [ ] Accessibility verified: aria-label, contrast, keyboard access (WCAG 2.2 AA)
-- [ ] No regressions: strip layout, receipt rendering, tab order unchanged
-- [ ] CI green: TypeScript, linting, tests pass; no type errors
-- [ ] Short how/why overview (see `story-close-overview-checklist.md`):
+- [x] Branch created and named per AD-13: `feat/3/3-6-incomplete-disclosure-pattern-slot-only`
+- [x] Component implemented: `<IncompleteDisclosure>` with props (isIncomplete, onResolve, label)
+- [x] Component integrated into shared-expenses view (below strip, same inset)
+- [x] Tests written: visibility, a11y, dark mode, callback wiring
+- [x] Styling matches DESIGN.md Soft-Ledger + Warm Balance tokens (calm/muted)
+- [x] Accessibility verified: `role="status"` + visible text as the accessible name, contrast, keyboard access (WCAG 2.2 AA) — updated post-review; `aria-label` on a non-landmark element is name-prohibited by ARIA and was replaced
+- [x] No regressions: strip layout, receipt rendering, tab order unchanged
+- [x] CI green: TypeScript, linting, tests pass; no type errors
+- [x] Short how/why overview (see `story-close-overview-checklist.md`):
   - **What:** Created reusable `<IncompleteDisclosure>` component slotted below settle strip
   - **Why:** FR-43 pattern requires calm, non-false-positive disclosure of incomplete balances when Epic 5 wires quarantine data
-  - **How:** Component accepts `isIncomplete` boolean prop; renders muted text below strip (same inset); Warm Balance tokens + aria-label for a11y; no real data yet (Epic 5 wires)
+  - **How:** Component accepts `isIncomplete` boolean prop; renders muted text below strip (same inset) in a `role="status"` region; Warm Balance tokens; no real data yet (Epic 5 wires)
   - **What not to break:** Strip layout, receipt list rendering, Soft-Ledger spacing rhythm, keyboard navigation order, Warm Balance theming
-- [ ] PR ready for code review (run `/code-review` when pushed)
+- [x] PR ready for code review (run `/code-review` when pushed)
 
 ---
 

@@ -30,8 +30,6 @@ export const listsMessages = {
     detailReceiptsEmpty: "No receipts yet.",
     incompleteDisclosureLabel:
       "Balances may be incomplete. Check unresolved items to confirm the total.",
-    incompleteDisclosureAriaLabel:
-      "Balances are incomplete: contains unresolved quarantine or conflicts.",
     incompleteDisclosureResolve: "Resolve incomplete",
     backToLists: "All lists",
     detailNotFound: "This list is unavailable.",
@@ -100,8 +98,6 @@ export const listsMessages = {
     detailReceiptsEmpty: "Aún no hay recibos.",
     incompleteDisclosureLabel:
       "Los saldos podrían estar incompletos. Revisa los pendientes para confirmar el total.",
-    incompleteDisclosureAriaLabel:
-      "Los saldos están incompletos: contienen cuarentena o conflictos sin resolver.",
     incompleteDisclosureResolve: "Resolver lo incompleto",
     backToLists: "Todas las listas",
     detailNotFound: "Esta lista no está disponible.",
