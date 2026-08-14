@@ -247,14 +247,14 @@ def test_usd_expense_materializes_fx_and_audit_trail(client_with_fx: TestClient)
     assert body["currency"] == "USD"
     assert body["amount"] == "100.00"
     assert body["amount_crc"] == "52500.00"
-    assert body["fx_rate"] == "525.00"
+    assert body["fx_rate"] == "525.0000"
     assert body["fx_fallback"] is False
 
     listing = client_with_fx.get(f"/lists/{list_id}/expenses")
     assert listing.status_code == 200, listing.text
     row = listing.json()["expenses"][0]
     assert row["amount_crc"] == "52500.00"
-    assert row["fx_rate"] == "525.00"
+    assert row["fx_rate"] == "525.0000"
     assert row["fx_rate_date"]
     assert row["fx_fallback"] is False
 
@@ -276,7 +276,7 @@ def test_crc_expense_fx_passthrough(client_with_fx: TestClient) -> None:
     assert expense.status_code == 201, expense.text
     body = expense.json()
     assert body["amount_crc"] == "10.00"
-    assert body["fx_rate"] == "1"
+    assert body["fx_rate"] == "1.0000"
     assert body["fx_fallback"] is False
 
 

@@ -506,7 +506,8 @@ Claude Sonnet 5 (claude-sonnet-5)
 - `.venv/bin/python -m ruff check . && ruff format . --check` → clean
 - `npx vitest run` (ui) → 141 passed
 - `npx tsc --noEmit` → clean; `npx eslint .` → 0 errors (4 pre-existing warnings, unrelated files)
-- Live smoke test against the running worktree stack (`fh-feat-3-3-5-materialize-fx...`, Postgres 16 via `docker exec ... alembic upgrade head`): migration applied cleanly, `\d ledger_entries` confirmed new columns; curl end-to-end run confirmed CRC pass-through (`amount_crc="10.00"`, `fx_rate="1"`), USD without a wired BCCR adapter fails loud with 503 `fx_service_unavailable`, and EUR is rejected with 422 `invalid_manual_expense` (v1 scope is CRC+USD)
+- Live smoke test against the running worktree stack (`fh-feat-3-3-5-materialize-fx...`, Postgres 16 via `docker exec ... alembic upgrade head`): migration applied cleanly, `\d ledger_entries` confirmed new columns; curl end-to-end run confirmed CRC pass-through (`amount_crc="10.00"`, `fx_rate="1.0000"`), USD without a wired BCCR adapter fails loud with 503 `fx_service_unavailable`, and EUR is rejected with 422 `invalid_manual_expense` (v1 scope is CRC+USD)
+- **CI follow-up fix:** CI caught a real bug the local unit suite couldn't (`DATABASE_URL` unset locally → integration tests skipped): `fx_rate` (`NUMERIC(10,4)`) wasn't quantized before being returned in-memory, so the freshly-created response showed `"525.00"` while the receipt-list read-back (round-tripped through the DB column's fixed scale) showed `"525.0000"` — same value, inconsistent string. Fixed by quantizing `fx_rate` to `Decimal("0.0001")` at the point of materialization in `MaterializeFxService` (all three return paths), so the in-memory value always matches what a later read of the persisted row yields. Re-verified live against the running Postgres: create→list round-trip now returns `"1.0000"` both times. Updated the two affected string assertions in `test_manual_expense_api.py` (`"1"` → `"1.0000"`, `"525.00"` → `"525.0000"`); `test_fx_service.py`'s `Decimal` comparisons were unaffected (value-based equality).
 
 ### Completion Notes List
 
@@ -562,3 +563,4 @@ Claude Sonnet 5 (claude-sonnet-5)
 ## Change Log
 
 - 2026-08-13: Implemented Story 3.5 — FX materialization to CRC at commit (BCCR), settle-up + receipt list on materialized `amount_crc`, USD manual expenses now accepted (BCCR adapter itself deferred/stubbed, fails loud). Status → review.
+- 2026-08-13: CI fix — quantize `fx_rate` to `NUMERIC(10,4)` scale at materialization time so create-response and receipt-list-read-back agree (`"525.00"` vs `"525.0000"` mismatch caught by CI's integration suite).

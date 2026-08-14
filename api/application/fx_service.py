@@ -22,6 +22,10 @@ from application.ports import BccrClient
 
 CRC_CURRENCY = "CRC"
 CRC_QUANTUM = Decimal("0.01")
+# Matches ledger_entries.fx_rate NUMERIC(10,4) — quantize here so the in-memory
+# value returned at commit matches what a later read of the persisted row
+# yields; otherwise "525.00" (fresh) vs "525.0000" (DB round-trip) diverge.
+FX_RATE_QUANTUM = Decimal("0.0001")
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,7 +61,7 @@ class MaterializeFxService:
         if cur == CRC_CURRENCY or amount == 0:
             return MaterializedFx(
                 amount_crc=amount,
-                fx_rate=Decimal("1"),
+                fx_rate=_quantize_rate(Decimal("1")),
                 fx_rate_date=posted_date,
                 fx_fallback=False,
             )
@@ -72,7 +76,7 @@ class MaterializeFxService:
         if rate is not None:
             return MaterializedFx(
                 amount_crc=_quantize(amount * rate),
-                fx_rate=rate,
+                fx_rate=_quantize_rate(rate),
                 fx_rate_date=posted_date,
                 fx_fallback=False,
             )
@@ -88,7 +92,7 @@ class MaterializeFxService:
             )
             return MaterializedFx(
                 amount_crc=_quantize(amount * fallback_rate),
-                fx_rate=fallback_rate,
+                fx_rate=_quantize_rate(fallback_rate),
                 fx_rate_date=fallback_date,
                 fx_fallback=True,
             )
@@ -101,6 +105,10 @@ class MaterializeFxService:
 
 def _quantize(value: Decimal) -> Decimal:
     return value.quantize(CRC_QUANTUM, rounding=ROUND_HALF_EVEN)
+
+
+def _quantize_rate(value: Decimal) -> Decimal:
+    return value.quantize(FX_RATE_QUANTUM, rounding=ROUND_HALF_EVEN)
 
 
 __all__ = ["MaterializeFxService", "MaterializedFx"]
