@@ -17,6 +17,7 @@ import type { Locale } from "@/lib/i18n/locale";
 import { fetchSession } from "@/lib/session";
 import { ListDetailMobileActions } from "../ListDetailMobileActions";
 import { ManualExpenseForm } from "../ManualExpenseForm";
+import { NoOriginFilter } from "../NoOriginFilter";
 import { TemporalNavigation } from "../TemporalNavigation";
 import { balanceTone, type DefaultSplitPayload, type ExpenseItem, type ListMember } from "../listsClient";
 import styles from "../lists.module.scss";
@@ -400,6 +401,25 @@ export default async function ListDetailPage({
               ) : null}
               <div className={styles.softReceipts}>
                 <SectionLabel>{t.detailReceiptsTitle}</SectionLabel>
+                {!expensesLoadError ? (
+                  <NoOriginFilter
+                    listId={listId}
+                    expenses={expenses}
+                    messages={{
+                      noOriginFilterToggle: t.noOriginFilterToggle,
+                      noOriginFilterEmpty: t.noOriginFilterEmpty,
+                      noOriginFilterAssign: t.noOriginFilterAssign,
+                      noOriginFilterAssigning: t.noOriginFilterAssigning,
+                      noOriginFilterSelectAll: t.noOriginFilterSelectAll,
+                      expenseOriginBlank: t.expenseOriginBlank,
+                      expenseOriginCash: t.expenseOriginCash,
+                      errorGeneric: t.errorGeneric,
+                      errorInvalidName: t.errorInvalidName,
+                      errorForbidden: t.errorForbidden,
+                      errorUnauthorized: t.errorUnauthorized,
+                    }}
+                  />
+                ) : null}
                 {expensesLoadError ? (
                   <p className={styles.copy} role="alert">
                     {t.loadError}
@@ -455,6 +475,9 @@ export default async function ListDetailPage({
                     expenseModeAbsolute: t.expenseModeAbsolute,
                     expenseModePercentage: t.expenseModePercentage,
                     expenseAssignee: t.expenseAssignee,
+                    expenseOriginLabel: t.expenseOriginLabel,
+                    expenseOriginBlank: t.expenseOriginBlank,
+                    expenseOriginCash: t.expenseOriginCash,
                     errorGeneric: t.errorGeneric,
                     errorInvalidName: t.errorInvalidName,
                     errorForbidden: t.errorForbidden,
@@ -529,6 +552,9 @@ export default async function ListDetailPage({
                 expenseModeAbsolute: t.expenseModeAbsolute,
                 expenseModePercentage: t.expenseModePercentage,
                 expenseAssignee: t.expenseAssignee,
+                expenseOriginLabel: t.expenseOriginLabel,
+                expenseOriginBlank: t.expenseOriginBlank,
+                expenseOriginCash: t.expenseOriginCash,
                 errorGeneric: t.errorGeneric,
                 errorInvalidName: t.errorInvalidName,
                 errorForbidden: t.errorForbidden,

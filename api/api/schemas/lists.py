@@ -62,6 +62,9 @@ class ExpenseItemResponse(BaseModel):
     fx_rate: str
     fx_rate_date: str | None = None
     fx_fallback: bool = False
+    # Origin (card / Cash / blank) — Story 4.2 / FR-21.
+    origin_kind: Literal["card", "cash"] | None = None
+    origin_card_id: UUID | None = None
 
 
 class ListExpensesStubResponse(BaseModel):
@@ -75,6 +78,8 @@ class CreateExpenseBody(BaseModel):
     description: str
     payer_id: UUID
     split_override: SetSplitOverrideBody | None = None
+    origin_kind: Literal["card", "cash"] | None = None
+    origin_card_id: UUID | None = None
 
 
 class CreateExpenseResponse(BaseModel):
@@ -92,6 +97,13 @@ class CreateExpenseResponse(BaseModel):
     fx_rate: str
     fx_rate_date: str | None = None
     fx_fallback: bool = False
+    origin_kind: Literal["card", "cash"] | None = None
+    origin_card_id: UUID | None = None
+
+
+class UpdateExpenseOriginBody(BaseModel):
+    origin_kind: Literal["card", "cash"] | None = None
+    origin_card_id: UUID | None = None
 
 
 class ListMemberItem(BaseModel):

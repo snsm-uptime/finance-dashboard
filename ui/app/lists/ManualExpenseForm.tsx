@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useId, useState } from "react";
+import { FormEvent, useEffect, useId, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { useFormSubmission, useFormStateSync } from "@/hooks";
@@ -8,6 +8,7 @@ import { SoftLedgerRadio } from "@/components/soft-ledger/Radio";
 import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
 import { FormIconSubmit } from "@/components/FormIconSubmit";
 
+import { fetchCards, type CardItem } from "../cards/cardsClient";
 import { PercentageSplitTrack } from "./PercentageSplitTrack";
 import {
   createExpense,
@@ -30,6 +31,9 @@ export type ManualExpenseMessages = ListsClientMessages & {
   expenseModeAbsolute: string;
   expenseModePercentage: string;
   expenseAssignee: string;
+  expenseOriginLabel: string;
+  expenseOriginBlank: string;
+  expenseOriginCash: string;
 };
 
 type Props = {
@@ -76,10 +80,7 @@ function nonEmptyEntries(map: Record<string, string>): Record<string, string> | 
   return Object.keys(out).length > 0 ? out : null;
 }
 
-/**
- * Manual expense form (Story 3.2).
- * Origin (card / Cash / blank) intentionally omitted — Story 4.2 extension point only.
- */
+/** Manual expense form (Story 3.2) with optional origin (card / Cash / blank, Story 4.2). */
 export function ManualExpenseForm({
   listId,
   currentUserId,
@@ -101,6 +102,8 @@ export function ManualExpenseForm({
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [payerId, setPayerId] = useState(currentUserId);
+  const [originValue, setOriginValue] = useState("");
+  const [cards, setCards] = useState<CardItem[]>([]);
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [mode, setMode] = useState<SplitMode>("whole_assignee");
   const [assigneeId, setAssigneeId] = useState(currentUserId);
@@ -110,6 +113,25 @@ export function ManualExpenseForm({
   const [percentages, setPercentages] = useState<Record<string, string>>(() =>
     evenPercentMap(members),
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    // Origin is optional — a failed card fetch just narrows the dropdown to
+    // blank/Cash; it must not block the rest of the form.
+    fetchCards({
+      errorGeneric: messages.errorGeneric,
+      errorUnauthorized: messages.errorUnauthorized,
+      errorInvalidLabel: messages.errorGeneric,
+      errorInvalidIban: messages.errorGeneric,
+      errorDuplicateIban: messages.errorGeneric,
+    }).then((result) => {
+      if (!cancelled && result.ok) setCards(result.cards);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function resetAdjustFields() {
     setAdjustOpen(false);
@@ -158,6 +180,7 @@ export function ManualExpenseForm({
         setAmount("");
         setDescription("");
         setPayerId(currentUserId);
+        setOriginValue("");
         resetAdjustFields();
         router.refresh();
         onSuccess?.();
@@ -170,6 +193,12 @@ export function ManualExpenseForm({
 
   useFormStateSync(canSubmit, onCanSubmitChange);
 
+  function originFields(): Pick<CreateExpenseBody, "origin_kind" | "origin_card_id"> {
+    if (originValue === "") return { origin_kind: null, origin_card_id: null };
+    if (originValue === "cash") return { origin_kind: "cash", origin_card_id: null };
+    return { origin_kind: "card", origin_card_id: originValue };
+  }
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     await submit({
@@ -178,6 +207,7 @@ export function ManualExpenseForm({
       description: description.trim(),
       payer_id: payerId,
       split_override: undefined,
+      ...originFields(),
     });
   }
 
@@ -250,7 +280,24 @@ export function ManualExpenseForm({
           />
         </div>
 
-        {/* Origin extension point (Story 4.2): card / Cash / blank — do not ship a stub control. */}
+        <div className={styles.field}>
+          <span className={styles.label} id={`${baseId}-origin-label`}>
+            {messages.expenseOriginLabel}
+          </span>
+          <SoftLedgerSelect
+            id={`${baseId}-origin`}
+            name="origin"
+            value={originValue}
+            options={[
+              { value: "", label: messages.expenseOriginBlank },
+              { value: "cash", label: messages.expenseOriginCash },
+              ...cards.map((c) => ({ value: c.id, label: c.label })),
+            ]}
+            disabled={pending}
+            aria-labelledby={`${baseId}-origin-label`}
+            onChange={setOriginValue}
+          />
+        </div>
 
         <details
           className={styles.adjust}

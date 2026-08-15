@@ -272,9 +272,17 @@ class LedgerEntryModel(Base):
     provenance: Mapped[str | None] = mapped_column(String(16), nullable=True)
     line_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
     posted_date: Mapped[date | None] = mapped_column(Date, nullable=True)
-    # Import stubs — no FK; cards/origin land in Epic 4 (do not add origin_* here).
+    # Import stub — no FK; reserved for the future bank-adapter pipeline (product code).
     product_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     external_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Origin (card / Cash / blank) — Story 4.2. Distinct from product_id above.
+    origin_kind: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    origin_card_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("cards.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     # FX materialized at commit (Story 3.5 / AD-7) — CRC entries pass through 1:1.
     amount_crc: Mapped[Decimal] = mapped_column(Numeric(19, 2), nullable=False, server_default="0")
     fx_rate: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False, server_default="1")

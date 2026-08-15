@@ -10,9 +10,10 @@ from typing import Protocol
 from uuid import UUID, uuid4
 
 from domain.errors import InvalidManualExpenseError, ListNotFoundError
-from domain.expenses import ManualExpenseDraft, validate_manual_expense
+from domain.expenses import ManualExpenseDraft, validate_manual_expense, validate_origin_update
 from domain.splits import SUBJECT_ITEM
 
+from application.cards import CardRecord
 from application.fx_service import MaterializedFx, MaterializeFxService
 from application.list_access import (
     AuthorizeListAccessCommand,
@@ -46,6 +47,8 @@ class LedgerEntryRecord:
     receipt_id: UUID | None = None
     product_id: UUID | None = None
     external_ref: str | None = None
+    origin_kind: str | None = None
+    origin_card_id: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +88,17 @@ class ExpenseRepository(Protocol):
 
     def list_members_with_alias(self, list_id: UUID) -> list[ListMemberView]: ...
 
+    def get_card_for_owner(self, user_id: UUID, card_id: UUID) -> CardRecord | None: ...
+
+    def update_ledger_entry_origin(
+        self,
+        *,
+        list_id: UUID,
+        entry_id: UUID,
+        origin_kind: str | None,
+        origin_card_id: UUID | None,
+    ) -> LedgerEntryRecord: ...
+
     def atomic(self) -> AbstractContextManager[None]:
         """Savepoint so create+override failures do not need a full session rollback."""
         ...
@@ -99,6 +113,17 @@ class CreateManualExpenseCommand:
     description: str
     payer_id: UUID
     split_override: SplitOverrideInput | None = None
+    origin_kind: str | None = None
+    origin_card_id: UUID | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class UpdateExpenseOriginCommand:
+    actor_user_id: UUID
+    list_id: UUID
+    entry_id: UUID
+    origin_kind: str | None
+    origin_card_id: UUID | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,6 +150,17 @@ class ListMembersResult:
     members: tuple[ListMemberView, ...]
 
 
+def _reject_unowned_card_origin(
+    repo: ExpenseRepository, *, actor_user_id: UUID, origin_kind: str | None, origin_card_id: UUID | None
+) -> None:
+    """Fail loud before any write — a stranger's card id must never land as an origin."""
+    if origin_kind != "card":
+        return
+    owned_card = repo.get_card_for_owner(actor_user_id, origin_card_id)
+    if owned_card is None:
+        raise InvalidManualExpenseError("Selected card is not registered to you.")
+
+
 class CreateManualExpenseService:
     """Create a hand ledger entry; optionally attach item split override in one txn."""
 
@@ -147,6 +183,14 @@ class CreateManualExpenseService:
             description=command.description,
             payer_id=command.payer_id,
             member_ids=members,
+            origin_kind=command.origin_kind,
+            origin_card_id=command.origin_card_id,
+        )
+        _reject_unowned_card_origin(
+            self._repo,
+            actor_user_id=command.actor_user_id,
+            origin_kind=draft.origin_kind,
+            origin_card_id=draft.origin_card_id,
         )
         # Materialize FX before any write — a failed BCCR lookup must not persist
         # a half-written entry (fail loud, AD-7). CRC drafts pass through 1:1.
@@ -180,6 +224,37 @@ class CreateManualExpenseService:
                     )
                 )
             return created
+
+
+class UpdateExpenseOriginService:
+    """Set/clear origin (card / Cash / blank) on an existing manual expense (FR-21)."""
+
+    def __init__(self, repo: ExpenseRepository) -> None:
+        self._repo = repo
+
+    def execute(self, command: UpdateExpenseOriginCommand) -> LedgerEntryRecord:
+        AuthorizeListAccessService(self._repo).execute(
+            AuthorizeListAccessCommand(
+                acting_user_id=command.actor_user_id,
+                list_id=command.list_id,
+                action="write_expense",
+            )
+        )
+        origin_kind, origin_card_id = validate_origin_update(
+            origin_kind=command.origin_kind, origin_card_id=command.origin_card_id
+        )
+        _reject_unowned_card_origin(
+            self._repo,
+            actor_user_id=command.actor_user_id,
+            origin_kind=origin_kind,
+            origin_card_id=origin_card_id,
+        )
+        return self._repo.update_ledger_entry_origin(
+            list_id=command.list_id,
+            entry_id=command.entry_id,
+            origin_kind=origin_kind,
+            origin_card_id=origin_card_id,
+        )
 
 
 class ListExpensesService:
@@ -236,4 +311,6 @@ __all__ = [
     "SplitOverrideInput",
     "SplitRepository",
     "ListNotFoundError",
+    "UpdateExpenseOriginCommand",
+    "UpdateExpenseOriginService",
 ]
