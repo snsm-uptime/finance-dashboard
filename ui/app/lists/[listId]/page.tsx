@@ -157,8 +157,8 @@ export function receiptRowFxPropsFrom(
     .replace("{crc}", formatCrcNumber(e.amount_crc));
   const fxDetail = e.fx_rate_date
     ? t.expenseFxRateDetailTemplate
-        .replace("{rate}", e.fx_rate)
-        .replace("{date}", e.fx_rate_date)
+      .replace("{rate}", e.fx_rate)
+      .replace("{date}", e.fx_rate_date)
     : undefined;
   return {
     title: `${e.description} (${original}${fallbackSuffix})`,
@@ -430,9 +430,46 @@ export default async function ListDetailPage({
             </div>
             <aside className={styles.detailSidebar}>
               {members.length > 0 && (
-                <h1 className={styles.expenseTitle}>
-                  <span>{listTitle}</span>
-                </h1>
+                <div>
+                  <h1 className={styles.expenseTitle}>
+                    <span>{listTitle}</span>
+                  </h1>
+                  <TemporalNavigation
+                    listId={listId}
+                    members={members}
+                    isOwner={isOwner}
+                    defaultSplit={defaultSplit}
+                    inviteMessages={{
+                      inviteTitle: t.inviteTitle,
+                      inviteLabel: t.inviteLabel,
+                      inviteSubmit: t.inviteSubmit,
+                      inviteSending: t.inviteSending,
+                      inviteSent: t.inviteSent,
+                      errorGeneric: t.errorGeneric,
+                      errorInvalidName: t.errorInvalidName,
+                      errorInvalidEmail: t.errorInvalidEmail,
+                      errorForbidden: t.errorInviteForbidden,
+                      errorUnauthorized: t.errorUnauthorized,
+                      errorAlreadyMember: t.errorAlreadyMember,
+                      errorSmtp: t.errorSmtp,
+                    }}
+                    splitMessages={{
+                      errorGeneric: t.errorGeneric,
+                      errorInvalidName: t.errorInvalidName,
+                      errorForbidden: t.errorForbidden,
+                      errorUnauthorized: t.errorUnauthorized,
+                      defaultSplitTitle: t.defaultSplitTitle,
+                      defaultSplitEven: t.defaultSplitEven,
+                      defaultSplitCustom: t.defaultSplitCustom,
+                      defaultSplitSum: t.defaultSplitSum,
+                      defaultSplitSave: t.defaultSplitSave,
+                      defaultSplitSaving: t.defaultSplitSaving,
+                      defaultSplitReadOnly: t.defaultSplitReadOnly,
+                      errorInvalidSplit: t.errorInvalidSplit,
+                    }}
+                  />
+                </div>
+
               )}
               {membersLoadError ? (
                 <p className={styles.copy} role="alert">
@@ -462,42 +499,6 @@ export default async function ListDetailPage({
                   }}
                 />
               ) : null}
-              {members.length > 0 && (
-                <TemporalNavigation
-                  listId={listId}
-                  members={members}
-                  isOwner={isOwner}
-                  defaultSplit={defaultSplit}
-                  inviteMessages={{
-                    inviteTitle: t.inviteTitle,
-                    inviteLabel: t.inviteLabel,
-                    inviteSubmit: t.inviteSubmit,
-                    inviteSending: t.inviteSending,
-                    inviteSent: t.inviteSent,
-                    errorGeneric: t.errorGeneric,
-                    errorInvalidName: t.errorInvalidName,
-                    errorInvalidEmail: t.errorInvalidEmail,
-                    errorForbidden: t.errorInviteForbidden,
-                    errorUnauthorized: t.errorUnauthorized,
-                    errorAlreadyMember: t.errorAlreadyMember,
-                    errorSmtp: t.errorSmtp,
-                  }}
-                  splitMessages={{
-                    errorGeneric: t.errorGeneric,
-                    errorInvalidName: t.errorInvalidName,
-                    errorForbidden: t.errorForbidden,
-                    errorUnauthorized: t.errorUnauthorized,
-                    defaultSplitTitle: t.defaultSplitTitle,
-                    defaultSplitEven: t.defaultSplitEven,
-                    defaultSplitCustom: t.defaultSplitCustom,
-                    defaultSplitSum: t.defaultSplitSum,
-                    defaultSplitSave: t.defaultSplitSave,
-                    defaultSplitSaving: t.defaultSplitSaving,
-                    defaultSplitReadOnly: t.defaultSplitReadOnly,
-                    errorInvalidSplit: t.errorInvalidSplit,
-                  }}
-                />
-              )}
               {isOwner && splitLoadError ? (
                 <p className={styles.copy} role="alert">
                   {t.errorDefaultSplitLoad}
