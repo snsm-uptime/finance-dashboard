@@ -14,8 +14,8 @@ type SearchParams = Promise<{ returnTo?: string | string[] }>;
 function resolveContinueHref(raw: string | string[] | undefined): string {
   const value = typeof raw === "string" ? raw : Array.isArray(raw) ? raw[0] : undefined;
   const safe = safeReturnTo(value);
-  // Never bounce back into setup, and prefer lists over the marketing root.
-  if (safe === "/" || safe.startsWith("/alias")) return "/lists";
+  // Never bounce back into setup, and prefer Home over the marketing root.
+  if (safe === "/" || safe.startsWith("/alias")) return "/home";
   return safe;
 }
 

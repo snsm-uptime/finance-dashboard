@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import { resolveAuthenticatedLanding } from "./landing";
 
 describe("resolveAuthenticatedLanding", () => {
-  it("defaults to Lists homepage", () => {
-    expect(resolveAuthenticatedLanding()).toBe("/lists");
+  it("defaults to Home", () => {
+    expect(resolveAuthenticatedLanding()).toBe("/home");
   });
 
   it("prefers invite deep link for Story 2.4", () => {
@@ -29,6 +29,6 @@ describe("resolveAuthenticatedLanding", () => {
         lastOpenedListId: "abc",
         lastOpenedStillAccessible: false,
       }),
-    ).toBe("/lists");
+    ).toBe("/home");
   });
 });

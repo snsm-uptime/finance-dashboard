@@ -19,5 +19,5 @@ export function resolveAuthenticatedLanding(
   if (remembered && input.lastOpenedStillAccessible) {
     return `/lists/${encodeURIComponent(remembered)}`;
   }
-  return "/lists";
+  return "/home";
 }

@@ -127,7 +127,7 @@ describe("invite landing", () => {
     expect(
       resolveAuthenticatedLanding({ inviteListId: "invite-list" }),
     ).toBe("/lists/invite-list");
-    expect(resolveAuthenticatedLanding()).toBe("/lists");
+    expect(resolveAuthenticatedLanding()).toBe("/home");
   });
 
   it("maps expired preview to calm error", async () => {

@@ -3,8 +3,9 @@
 export const listsMessages = {
   en: {
     brand: "finance-helper",
-    title: "Lists",
-    subtitle: "Lists you belong to. Open one, create another, or rename one you own.",
+    title: "Home",
+    subtitle:
+      "Your lists and cards, all in one place. Open a list, create another, or manage your cards.",
     createLabel: "New list name",
     createSubmit: "Create list",
     creating: "Creating…",
@@ -31,7 +32,7 @@ export const listsMessages = {
     incompleteDisclosureLabel:
       "Balances may be incomplete. Check unresolved items to confirm the total.",
     incompleteDisclosureResolve: "Resolve incomplete",
-    backToLists: "All lists",
+    backToLists: "Home",
     detailNotFound: "This list is unavailable.",
     inviteTitle: "Invite someone",
     inviteLabel: "Email address",
@@ -83,9 +84,9 @@ export const listsMessages = {
   },
   es: {
     brand: "finance-helper",
-    title: "Listas",
+    title: "Inicio",
     subtitle:
-      "Listas a las que perteneces. Abre una, crea otra o renombra una que poseas.",
+      "Tus listas y tarjetas, todo en un solo lugar. Abre una lista, crea otra o administra tus tarjetas.",
     createLabel: "Nombre de la nueva lista",
     createSubmit: "Crear lista",
     creating: "Creando…",
@@ -112,7 +113,7 @@ export const listsMessages = {
     incompleteDisclosureLabel:
       "Los saldos podrían estar incompletos. Revisa los pendientes para confirmar el total.",
     incompleteDisclosureResolve: "Resolver lo incompleto",
-    backToLists: "Todas las listas",
+    backToLists: "Inicio",
     detailNotFound: "Esta lista no está disponible.",
     inviteTitle: "Invitar a alguien",
     inviteLabel: "Correo electrónico",

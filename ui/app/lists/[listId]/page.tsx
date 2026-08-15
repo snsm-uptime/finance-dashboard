@@ -368,7 +368,7 @@ export default async function ListDetailPage({
           <>
             <h1 className={styles.title}>{t.detailNotFound}</h1>
             <p className={`${styles.copy} ${styles.softBack}`}>
-              <Link className={styles.link} href="/lists">
+              <Link className={styles.link} href="/home">
                 {t.backToLists}
               </Link>
             </p>
@@ -377,7 +377,7 @@ export default async function ListDetailPage({
           <>
             <h1 className={styles.title}>{t.loadError}</h1>
             <p className={`${styles.copy} ${styles.softBack}`}>
-              <Link className={styles.link} href="/lists">
+              <Link className={styles.link} href="/home">
                 {t.backToLists}
               </Link>
             </p>
@@ -423,7 +423,7 @@ export default async function ListDetailPage({
                 )}
               </div>
               <p className={`${styles.copy} ${styles.mobileBack}`}>
-                <Link className={styles.link} href="/lists">
+                <Link className={styles.link} href="/home">
                   {t.backToLists}
                 </Link>
               </p>
@@ -504,7 +504,7 @@ export default async function ListDetailPage({
                 </p>
               ) : null}
               <p className={styles.copy}>
-                <Link className={styles.link} href="/lists">
+                <Link className={styles.link} href="/home">
                   {t.backToLists}
                 </Link>
               </p>
