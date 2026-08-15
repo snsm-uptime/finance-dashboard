@@ -148,13 +148,13 @@ def _command(
 def test_create_with_owned_card_succeeds() -> None:
     actor = uuid4()
     repo = _FakeExpenseRepo(list_id=uuid4(), member_ids=[actor])
-    card = CardRecord(id=uuid4(), user_id=actor, label="My Visa", iban="CR05", created_at=datetime.now(UTC))
+    card = CardRecord(
+        id=uuid4(), user_id=actor, label="My Visa", iban="CR05", created_at=datetime.now(UTC)
+    )
     repo.cards = [card]
     service = CreateManualExpenseService(repo, MaterializeFxService(_FakeBccrClient()))
 
-    result = service.execute(
-        _command(repo, actor, origin_kind="card", origin_card_id=card.id)
-    )
+    result = service.execute(_command(repo, actor, origin_kind="card", origin_card_id=card.id))
 
     assert result.origin_kind == "card"
     assert result.origin_card_id == card.id
@@ -199,7 +199,9 @@ def test_create_with_no_origin_succeeds() -> None:
 def test_update_origin_blank_to_cash_to_card_to_blank() -> None:
     actor = uuid4()
     repo = _FakeExpenseRepo(list_id=uuid4(), member_ids=[actor])
-    card = CardRecord(id=uuid4(), user_id=actor, label="My Visa", iban="CR05", created_at=datetime.now(UTC))
+    card = CardRecord(
+        id=uuid4(), user_id=actor, label="My Visa", iban="CR05", created_at=datetime.now(UTC)
+    )
     repo.cards = [card]
     create_service = CreateManualExpenseService(repo, MaterializeFxService(_FakeBccrClient()))
     created = create_service.execute(_command(repo, actor))

@@ -151,7 +151,11 @@ class ListMembersResult:
 
 
 def _reject_unowned_card_origin(
-    repo: ExpenseRepository, *, actor_user_id: UUID, origin_kind: str | None, origin_card_id: UUID | None
+    repo: ExpenseRepository,
+    *,
+    actor_user_id: UUID,
+    origin_kind: str | None,
+    origin_card_id: UUID | None,
 ) -> None:
     """Fail loud before any write — a stranger's card id must never land as an origin."""
     if origin_kind != "card":
