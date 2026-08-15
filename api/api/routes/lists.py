@@ -20,6 +20,8 @@ from application.expenses import (
     ListMembersCommand,
     ListMembersService,
     SplitOverrideInput,
+    UpdateExpenseOriginCommand,
+    UpdateExpenseOriginService,
 )
 from application.fx_service import MaterializeFxService
 from application.list_invite import InviteMemberToListCommand, InviteMemberToListService
@@ -59,6 +61,7 @@ from domain.errors import (
     NotListOwnerError,
     SmtpConfigurationError,
     SmtpSendError,
+    SubjectNotFoundError,
 )
 from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse, Response
@@ -84,6 +87,7 @@ from api.schemas.lists import (
     ListResponse,
     RenameListBody,
     SetDefaultSplitBody,
+    UpdateExpenseOriginBody,
 )
 from api.settings import AuthSettings
 
@@ -112,6 +116,13 @@ def _list_not_found() -> JSONResponse:
     )
 
 
+def _subject_not_found() -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={"detail": SubjectNotFoundError.MESSAGE, "code": "subject_not_found"},
+    )
+
+
 def _money_str(value: Decimal) -> str:
     return format(value, "f")
 
@@ -132,6 +143,8 @@ def _expense_item(row) -> ExpenseItemResponse:
         fx_rate=_money_str(row.fx_rate),
         fx_rate_date=row.fx_rate_date.isoformat() if row.fx_rate_date else None,
         fx_fallback=row.fx_fallback,
+        origin_kind=row.origin_kind,
+        origin_card_id=row.origin_card_id,
     )
 
 
@@ -391,6 +404,8 @@ def create_list_expense(
                 description=body.description,
                 payer_id=body.payer_id,
                 split_override=parsed_override,
+                origin_kind=body.origin_kind,
+                origin_card_id=body.origin_card_id,
             )
         )
     except InvalidManualExpenseError as exc:
@@ -438,7 +453,47 @@ def create_list_expense(
         fx_rate=_money_str(created.fx_rate),
         fx_rate_date=created.fx_rate_date.isoformat() if created.fx_rate_date else None,
         fx_fallback=created.fx_fallback,
+        origin_kind=created.origin_kind,
+        origin_card_id=created.origin_card_id,
     )
+
+
+@router.patch("/{list_id}/expenses/{entry_id}/origin", response_model=ExpenseItemResponse)
+def update_list_expense_origin(
+    list_id: uuid.UUID,
+    entry_id: uuid.UUID,
+    body: UpdateExpenseOriginBody,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> ExpenseItemResponse | JSONResponse:
+    service = UpdateExpenseOriginService(SqlAlchemyListRepository(db))
+    try:
+        updated = service.execute(
+            UpdateExpenseOriginCommand(
+                actor_user_id=user_id,
+                list_id=list_id,
+                entry_id=entry_id,
+                origin_kind=body.origin_kind,
+                origin_card_id=body.origin_card_id,
+            )
+        )
+    except InvalidManualExpenseError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            content={"detail": str(exc), "code": "invalid_manual_expense"},
+        )
+    except SubjectNotFoundError:
+        return _subject_not_found()
+    except (ListNotFoundError, NotListMemberError):
+        return _access_denied()
+
+    logger.info(
+        "manual_expense_origin_updated list_id=%s entry_id=%s origin_kind=%s",
+        list_id,
+        entry_id,
+        updated.origin_kind,
+    )
+    return _expense_item(updated)
 
 
 @router.get("/{list_id}/members", response_model=ListMembersResponse)

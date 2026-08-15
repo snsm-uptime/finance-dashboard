@@ -15,6 +15,7 @@ from domain.expenses import (
     MANUAL_CURRENCY_CRC,
     PROVENANCE_HAND,
     validate_manual_expense,
+    validate_origin_update,
 )
 
 
@@ -47,8 +48,9 @@ def test_validate_accepts_crc_positive_amount_and_member_payer() -> None:
     assert draft.provenance == PROVENANCE_HAND
     assert draft.line_type == LINE_TYPE_PURCHASE
     assert draft.posted_date == "2026-08-06"
-    # Origin / cards are Epic 4 — draft must not invent origin fields.
-    assert not hasattr(draft, "origin_kind")
+    # Origin defaults to blank when not provided (Story 4.2).
+    assert draft.origin_kind is None
+    assert draft.origin_card_id is None
 
 
 def test_validate_accepts_usd_amount() -> None:
@@ -156,3 +158,132 @@ def test_validate_rejects_oversized_description() -> None:
             payer_id=payer,
             member_ids=[payer],
         )
+
+
+def test_validate_accepts_blank_origin_with_no_registered_cards() -> None:
+    """AC #4: blank origin is always valid, even with zero registered cards."""
+    payer = uuid4()
+    draft = validate_manual_expense(
+        amount="1.00",
+        currency="CRC",
+        description="Coffee",
+        payer_id=payer,
+        member_ids=[payer],
+    )
+    assert draft.origin_kind is None
+    assert draft.origin_card_id is None
+
+
+def test_validate_accepts_cash_origin() -> None:
+    payer = uuid4()
+    draft = validate_manual_expense(
+        amount="1.00",
+        currency="CRC",
+        description="Coffee",
+        payer_id=payer,
+        member_ids=[payer],
+        origin_kind="cash",
+    )
+    assert draft.origin_kind == "cash"
+    assert draft.origin_card_id is None
+
+
+def test_validate_accepts_card_origin() -> None:
+    payer = uuid4()
+    card_id = uuid4()
+    draft = validate_manual_expense(
+        amount="1.00",
+        currency="CRC",
+        description="Coffee",
+        payer_id=payer,
+        member_ids=[payer],
+        origin_kind="card",
+        origin_card_id=card_id,
+    )
+    assert draft.origin_kind == "card"
+    assert draft.origin_card_id == card_id
+
+
+def test_validate_rejects_card_origin_without_card_id() -> None:
+    payer = uuid4()
+    with pytest.raises(InvalidManualExpenseError, match="card"):
+        validate_manual_expense(
+            amount="1.00",
+            currency="CRC",
+            description="Coffee",
+            payer_id=payer,
+            member_ids=[payer],
+            origin_kind="card",
+        )
+
+
+def test_validate_rejects_non_card_origin_with_card_id() -> None:
+    payer = uuid4()
+    card_id = uuid4()
+    with pytest.raises(InvalidManualExpenseError):
+        validate_manual_expense(
+            amount="1.00",
+            currency="CRC",
+            description="Coffee",
+            payer_id=payer,
+            member_ids=[payer],
+            origin_kind="cash",
+            origin_card_id=card_id,
+        )
+    with pytest.raises(InvalidManualExpenseError):
+        validate_manual_expense(
+            amount="1.00",
+            currency="CRC",
+            description="Coffee",
+            payer_id=payer,
+            member_ids=[payer],
+            origin_kind=None,
+            origin_card_id=card_id,
+        )
+
+
+def test_validate_rejects_unknown_origin_kind() -> None:
+    payer = uuid4()
+    with pytest.raises(InvalidManualExpenseError):
+        validate_manual_expense(
+            amount="1.00",
+            currency="CRC",
+            description="Coffee",
+            payer_id=payer,
+            member_ids=[payer],
+            origin_kind="crypto",
+        )
+
+
+def test_validate_origin_update_accepts_blank() -> None:
+    assert validate_origin_update(origin_kind=None, origin_card_id=None) == (None, None)
+
+
+def test_validate_origin_update_accepts_cash() -> None:
+    assert validate_origin_update(origin_kind="cash", origin_card_id=None) == ("cash", None)
+
+
+def test_validate_origin_update_accepts_card() -> None:
+    card_id = uuid4()
+    assert validate_origin_update(origin_kind="card", origin_card_id=card_id) == (
+        "card",
+        card_id,
+    )
+
+
+def test_validate_origin_update_rejects_card_without_id() -> None:
+    with pytest.raises(InvalidManualExpenseError, match="card"):
+        validate_origin_update(origin_kind="card", origin_card_id=None)
+
+
+def test_validate_origin_update_rejects_non_card_with_id() -> None:
+    card_id = uuid4()
+    with pytest.raises(InvalidManualExpenseError):
+        validate_origin_update(origin_kind="cash", origin_card_id=card_id)
+    with pytest.raises(InvalidManualExpenseError):
+        validate_origin_update(origin_kind=None, origin_card_id=card_id)
+
+
+def test_validate_origin_update_rejects_unknown_kind() -> None:
+    with pytest.raises(InvalidManualExpenseError):
+        validate_origin_update(origin_kind="crypto", origin_card_id=None)

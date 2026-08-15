@@ -173,3 +173,11 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-home-screen-lists-cards.md`
   summary: No test coverage for the new /home route (unauth redirect, alias-gate redirect, dual-panel render, fetchMembershipLists failure branch) or the /lists redirect stub's actual behavior
   evidence: Review — diff only updates pre-existing unit tests' literal "/lists" → "/home" strings; new page logic in ui/app/home/page.tsx and ui/app/lists/page.tsx is unverified by tests
+
+## Deferred from: code review of 4-2-manual-origin-card-cash-blank-no-origin-filter.md (2026-08-15)
+
+- Card deletion leaves `origin_kind="card"` with `origin_card_id=NULL` after `ON DELETE SET NULL` (`api/adapters/persistence/models.py:280-285`) — already flagged as a deliberately-deferred gap in this story's own Dev Notes/Completion Notes; also currently unreachable since no card-delete endpoint exists anywhere in the app
+- `NoOriginFilter`'s `origin_kind === null` filter can't surface that future corrupted origin state either (`ui/app/lists/NoOriginFilter.tsx:63`) — same root cause and deferral as the card-deletion gap above
+- TOCTOU gap between the card-ownership check and the entry write could surface a raw `IntegrityError` (500) instead of a clean 422 if a card is deleted concurrently (`api/application/expenses.py:357-364,389-392`) — currently unreachable, no card-delete feature exists yet
+- `fetchCards()` call sites in `NoOriginFilter.tsx`/`ManualExpenseForm.tsx` stuff the generic error string into card-creation-specific message fields (`errorInvalidLabel`/`errorInvalidIban`/`errorDuplicateIban`) — inherited from Story 4.1's `fetchCards()` signature, not introduced by this diff
+- Card labels aren't disambiguated in the origin dropdowns (no IBAN suffix) — same underlying gap as 4.1's "No uniqueness constraint on card label" entry above, now also visible in the new origin selectors

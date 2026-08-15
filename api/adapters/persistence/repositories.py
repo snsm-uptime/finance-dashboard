@@ -5,6 +5,7 @@ from __future__ import annotations
 from decimal import Decimal
 from uuid import UUID, uuid4
 
+from application.cards import CardRecord
 from application.lists import (
     PLACEHOLDER_BALANCE_CRC,
     ListMembershipSummary,
@@ -31,6 +32,7 @@ from domain.errors import (
     ListWriteError,
     NotListMemberError,
     PrincipalNotFoundError,
+    SubjectNotFoundError,
 )
 from domain.splits import (
     KIND_ABSOLUTE_AMOUNTS,
@@ -42,6 +44,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from adapters.persistence.models import (
+    CardModel,
     LedgerEntryModel,
     ListDefaultSplitShareModel,
     ListMembershipModel,
@@ -401,6 +404,8 @@ class SqlAlchemyListRepository:
             receipt_id=None,
             product_id=None,
             external_ref=None,
+            origin_kind=draft.origin_kind,
+            origin_card_id=draft.origin_card_id,
             amount_crc=fx.amount_crc,
             fx_rate=fx.fx_rate,
             fx_rate_date=fx.fx_rate_date,
@@ -427,6 +432,8 @@ class SqlAlchemyListRepository:
             receipt_id=row.receipt_id,
             product_id=row.product_id,
             external_ref=row.external_ref,
+            origin_kind=row.origin_kind,
+            origin_card_id=row.origin_card_id,
         )
 
     def list_ledger_entries(self, list_id: UUID):
@@ -468,9 +475,71 @@ class SqlAlchemyListRepository:
                     receipt_id=row.receipt_id,
                     product_id=row.product_id,
                     external_ref=row.external_ref,
+                    origin_kind=row.origin_kind,
+                    origin_card_id=row.origin_card_id,
                 )
             )
         return result
+
+    def get_card_for_owner(self, user_id: UUID, card_id: UUID) -> CardRecord | None:
+        row = self._session.scalar(
+            select(CardModel).where(CardModel.id == card_id, CardModel.user_id == user_id).limit(1)
+        )
+        if row is None:
+            return None
+        return CardRecord(
+            id=row.id,
+            user_id=row.user_id,
+            label=row.label,
+            iban=row.iban,
+            created_at=row.created_at,
+        )
+
+    def update_ledger_entry_origin(
+        self,
+        *,
+        list_id: UUID,
+        entry_id: UUID,
+        origin_kind: str | None,
+        origin_card_id: UUID | None,
+    ):
+        from application.expenses import LedgerEntryRecord
+
+        row = self._session.get(LedgerEntryModel, entry_id)
+        if (
+            row is None
+            or row.list_id != list_id
+            or row.normalized_description is None
+            or row.payer_id is None
+            or row.provenance is None
+            or row.line_type is None
+            or row.posted_date is None
+        ):
+            raise SubjectNotFoundError()
+        row.origin_kind = origin_kind
+        row.origin_card_id = origin_card_id
+        self._session.flush()
+        return LedgerEntryRecord(
+            id=row.id,
+            list_id=row.list_id,
+            amount=Decimal(str(row.amount)),
+            currency=row.currency,
+            normalized_description=row.normalized_description,
+            payer_id=row.payer_id,
+            provenance=row.provenance,
+            line_type=row.line_type,
+            posted_date=row.posted_date,
+            created_at=row.created_at,
+            amount_crc=Decimal(str(row.amount_crc)),
+            fx_rate=Decimal(str(row.fx_rate)),
+            fx_rate_date=row.fx_rate_date,
+            fx_fallback=row.fx_fallback,
+            receipt_id=row.receipt_id,
+            product_id=row.product_id,
+            external_ref=row.external_ref,
+            origin_kind=row.origin_kind,
+            origin_card_id=row.origin_card_id,
+        )
 
     def list_members_with_alias(self, list_id: UUID):
         """Roster labels are aliases — email is an identity surface, never a label."""

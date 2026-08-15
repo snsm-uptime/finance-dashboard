@@ -354,6 +354,9 @@ export type ExpenseItem = {
   fx_rate: string;
   fx_rate_date: string | null;
   fx_fallback: boolean;
+  /** Origin (card / Cash / blank) — Story 4.2. */
+  origin_kind: string | null;
+  origin_card_id: string | null;
 };
 
 export type CreateExpenseBody = {
@@ -367,6 +370,8 @@ export type CreateExpenseBody = {
     amounts?: Record<string, string>;
     percentages?: Record<string, string>;
   };
+  origin_kind?: "card" | "cash" | null;
+  origin_card_id?: string | null;
 };
 
 type OkExpense = { ok: true; expense: ExpenseItem };
@@ -415,6 +420,8 @@ function asExpense(data: unknown): ExpenseItem | null {
     ...(row as ExpenseItem),
     fx_rate_date: typeof row.fx_rate_date === "string" ? row.fx_rate_date : null,
     fx_fallback: row.fx_fallback === true,
+    origin_kind: typeof row.origin_kind === "string" ? row.origin_kind : null,
+    origin_card_id: typeof row.origin_card_id === "string" ? row.origin_card_id : null,
   };
 }
 
@@ -463,6 +470,8 @@ export async function createExpense(
     description: body.description,
     payer_id: body.payer_id,
     ...(body.split_override ? { split_override: body.split_override } : {}),
+    ...(body.origin_kind !== undefined ? { origin_kind: body.origin_kind } : {}),
+    ...(body.origin_card_id !== undefined ? { origin_card_id: body.origin_card_id } : {}),
   };
   let response: Response;
   try {
@@ -472,6 +481,38 @@ export async function createExpense(
       credentials: "same-origin",
       body: JSON.stringify(payload),
     });
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  if (!response.ok) {
+    const parsed = (await parseJson(response)) as {
+      detail?: unknown;
+      code?: unknown;
+    } | null;
+    return { ok: false, error: detailOrMapped(response.status, parsed, messages) };
+  }
+  const expense = asExpense(await parseJson(response));
+  if (!expense) return { ok: false, error: messages.errorGeneric };
+  return { ok: true, expense };
+}
+
+export async function updateExpenseOrigin(
+  listId: string,
+  entryId: string,
+  origin: { origin_kind: "card" | "cash" | null; origin_card_id: string | null },
+  messages: ListsClientMessages,
+): Promise<OkExpense | ErrorResult> {
+  let response: Response;
+  try {
+    response = await fetch(
+      `/api/lists/${encodeURIComponent(listId)}/expenses/${encodeURIComponent(entryId)}/origin`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify(origin),
+      },
+    );
   } catch {
     return { ok: false, error: messages.errorGeneric };
   }

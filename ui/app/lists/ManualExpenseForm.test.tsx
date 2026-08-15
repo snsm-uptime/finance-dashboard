@@ -76,6 +76,12 @@ vi.mock("./listsClient", async () => {
   };
 });
 
+const fetchCards = vi.fn();
+
+vi.mock("../cards/cardsClient", () => ({
+  fetchCards: (...args: unknown[]) => fetchCards(...args),
+}));
+
 const members = [
   { user_id: "user-a", alias: "alice" },
   { user_id: "user-b", alias: "bob" },
@@ -93,6 +99,9 @@ const messages = {
   expenseModeAbsolute: listsMessages.en.expenseModeAbsolute,
   expenseModePercentage: listsMessages.en.expenseModePercentage,
   expenseAssignee: listsMessages.en.expenseAssignee,
+  expenseOriginLabel: listsMessages.en.expenseOriginLabel,
+  expenseOriginBlank: listsMessages.en.expenseOriginBlank,
+  expenseOriginCash: listsMessages.en.expenseOriginCash,
   errorGeneric: listsMessages.en.errorGeneric,
   errorInvalidName: listsMessages.en.errorInvalidName,
   errorForbidden: listsMessages.en.errorForbidden,
@@ -106,6 +115,11 @@ describe("ManualExpenseForm", () => {
   beforeEach(() => {
     createExpense.mockReset();
     refresh.mockReset();
+    fetchCards.mockReset();
+    fetchCards.mockResolvedValue({
+      ok: true,
+      cards: [{ id: "card-1", label: "My Visa", iban: "CR05", created_at: "2026-08-06T12:00:00Z" }],
+    });
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -432,6 +446,177 @@ describe("ManualExpenseForm", () => {
     const description = container.querySelector(
       'input[name="description"]',
     ) as HTMLInputElement;
+
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(amount, "10.00");
+      amount.dispatchEvent(new Event("input", { bubbles: true }));
+      setter?.call(description, "Coffee");
+      description.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    expect(submitButton.disabled).toBe(false);
+  });
+
+  it("origin defaults to blank", async () => {
+    await act(async () => {
+      root.render(
+        <ManualExpenseForm
+          listId="list-1"
+          currentUserId="user-a"
+          members={members}
+          messages={messages}
+        />,
+      );
+    });
+    const origin = container.querySelector('select[name="origin"]') as HTMLSelectElement;
+    expect(origin.value).toBe("");
+  });
+
+  it("selecting Cash then submitting sends origin_kind cash", async () => {
+    createExpense.mockResolvedValue({
+      ok: true,
+      expense: {
+        id: "e3",
+        list_id: "list-1",
+        amount: "10.00",
+        currency: "CRC",
+        description: "Coffee",
+        payer_id: "user-a",
+        provenance: "hand",
+        line_type: "purchase",
+        posted_date: "2026-08-06",
+        created_at: "2026-08-06T12:00:00Z",
+      },
+    });
+
+    await act(async () => {
+      root.render(
+        <ManualExpenseForm
+          listId="list-1"
+          currentUserId="user-a"
+          members={members}
+          messages={messages}
+        />,
+      );
+    });
+
+    const amount = container.querySelector('input[name="amount"]') as HTMLInputElement;
+    const description = container.querySelector(
+      'input[name="description"]',
+    ) as HTMLInputElement;
+    const origin = container.querySelector('select[name="origin"]') as HTMLSelectElement;
+    const form = container.querySelector("form") as HTMLFormElement;
+
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(amount, "10.00");
+      amount.dispatchEvent(new Event("input", { bubbles: true }));
+      setter?.call(description, "Coffee");
+      description.dispatchEvent(new Event("input", { bubbles: true }));
+      const selectSetter = Object.getOwnPropertyDescriptor(
+        HTMLSelectElement.prototype,
+        "value",
+      )?.set;
+      selectSetter?.call(origin, "cash");
+      origin.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await act(async () => {
+      form.requestSubmit();
+    });
+
+    expect(createExpense).toHaveBeenCalledWith(
+      "list-1",
+      expect.objectContaining({ origin_kind: "cash", origin_card_id: null }),
+      expect.anything(),
+    );
+  });
+
+  it("selecting a card then submitting sends origin_kind card with the card id", async () => {
+    createExpense.mockResolvedValue({
+      ok: true,
+      expense: {
+        id: "e4",
+        list_id: "list-1",
+        amount: "10.00",
+        currency: "CRC",
+        description: "Coffee",
+        payer_id: "user-a",
+        provenance: "hand",
+        line_type: "purchase",
+        posted_date: "2026-08-06",
+        created_at: "2026-08-06T12:00:00Z",
+      },
+    });
+
+    await act(async () => {
+      root.render(
+        <ManualExpenseForm
+          listId="list-1"
+          currentUserId="user-a"
+          members={members}
+          messages={messages}
+        />,
+      );
+    });
+
+    const amount = container.querySelector('input[name="amount"]') as HTMLInputElement;
+    const description = container.querySelector(
+      'input[name="description"]',
+    ) as HTMLInputElement;
+    const origin = container.querySelector('select[name="origin"]') as HTMLSelectElement;
+    const form = container.querySelector("form") as HTMLFormElement;
+
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(amount, "10.00");
+      amount.dispatchEvent(new Event("input", { bubbles: true }));
+      setter?.call(description, "Coffee");
+      description.dispatchEvent(new Event("input", { bubbles: true }));
+      const selectSetter = Object.getOwnPropertyDescriptor(
+        HTMLSelectElement.prototype,
+        "value",
+      )?.set;
+      selectSetter?.call(origin, "card-1");
+      origin.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await act(async () => {
+      form.requestSubmit();
+    });
+
+    expect(createExpense).toHaveBeenCalledWith(
+      "list-1",
+      expect.objectContaining({ origin_kind: "card", origin_card_id: "card-1" }),
+      expect.anything(),
+    );
+  });
+
+  it("zero cards: dropdown still renders with just blank/Cash and submit is not blocked", async () => {
+    fetchCards.mockResolvedValue({ ok: true, cards: [] });
+
+    await act(async () => {
+      root.render(
+        <ManualExpenseForm
+          listId="list-1"
+          currentUserId="user-a"
+          members={members}
+          messages={messages}
+        />,
+      );
+    });
+
+    const origin = container.querySelector('select[name="origin"]') as HTMLSelectElement;
+    const optionValues = Array.from(origin.querySelectorAll("option")).map((o) => o.value);
+    expect(optionValues).toEqual(["", "cash"]);
+
+    const amount = container.querySelector('input[name="amount"]') as HTMLInputElement;
+    const description = container.querySelector(
+      'input[name="description"]',
+    ) as HTMLInputElement;
+    const form = container.querySelector("form") as HTMLFormElement;
+    const submitButton = form.querySelector('button[type="submit"]') as HTMLButtonElement;
 
     await act(async () => {
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;

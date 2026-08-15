@@ -73,7 +73,7 @@
 <body>
   <header>
     <h1>finance-helper · Architecture</h1>
-    <div class="meta">build-substrate · 2026-08-03 · AD-1…22</div>
+    <div class="meta">build-substrate · 2026-08-14 · AD-1…24</div>
   </header>
   <main>
     <div class="deck" id="deck">
@@ -208,7 +208,34 @@
           <li><code>/health</code> on api + ui; operator volume snapshots for PG + PDFs</li>
           <li>Phone swipe required; desktop buttons; EXPERIENCE/DESIGN bind IA/visual</li>
         </ul>
-        <p style="margin-top:1.5rem">Next recommended: adopt this spine as a <code>bmad-spec</code> companion, then <code>bmad-create-epics-and-stories</code>.</p>
+      </section>
+
+      <section class="slide" data-i="8">
+        <p class="eyebrow">09 · Type delivery (AD-24)</p>
+        <h2>Load once · Tailwind families · consume roles</h2>
+        <div class="grid2">
+          <div>
+            <ul>
+              <li><code>next/font</code> only at root layout → <code>--face-ui</code> / <code>--face-brand</code></li>
+              <li><code>@theme</code> maps <code>--font-ui</code> / <code>--font-brand</code> (families only)</li>
+              <li>DESIGN.md roles → <code>type-*</code> utilities from <code>:root --type-*</code></li>
+              <li><code>body</code> gets the body role; tags are not the type API</li>
+              <li>Soft-Ledger primitive when DESIGN.md has a component; else one <code>type-*</code> class</li>
+            </ul>
+          </div>
+          <svg viewBox="0 0 360 200" role="img" aria-label="Type delivery pipeline">
+            <rect x="10" y="20" width="100" height="40" rx="4" fill="#57534e"/><text x="60" y="44" text-anchor="middle" fill="#fafaf9" font-size="11" font-family="monospace">next/font</text>
+            <rect x="130" y="20" width="100" height="40" rx="4" fill="#78716c"/><text x="180" y="44" text-anchor="middle" fill="#fafaf9" font-size="11" font-family="monospace">--face-*</text>
+            <rect x="250" y="20" width="100" height="40" rx="4" fill="#a8a29e"/><text x="300" y="44" text-anchor="middle" fill="#1c1917" font-size="11" font-family="monospace">@theme</text>
+            <rect x="70" y="120" width="220" height="50" rx="4" fill="#fde68a"/><text x="180" y="140" text-anchor="middle" fill="#1c1917" font-size="12" font-family="monospace" font-weight="700">type-* roles</text>
+            <text x="180" y="158" text-anchor="middle" fill="#1c1917" font-size="10" font-family="monospace">:root --type-* tokens</text>
+            <line x1="110" y1="40" x2="128" y2="40" stroke="#a8a29e" stroke-width="2"/>
+            <line x1="230" y1="40" x2="248" y2="40" stroke="#a8a29e" stroke-width="2"/>
+            <line x1="300" y1="60" x2="180" y2="118" stroke="#a8a29e" stroke-width="2"/>
+          </svg>
+        </div>
+        <p style="margin-top:1rem">Forbidden: inline <code>fontFamily</code>, kit <code>font-sans</code>+metrics, a second loader, inventing Inter. Grandfather existing bags — do not extend them.</p>
+        <p style="margin-top:1.25rem">Next: refresh <code>project-context.md</code> with the how-to, then implement the bridge + <code>type-*</code> utilities. Adopt this spine as a <code>bmad-spec</code> companion if the spec should cite AD-24.</p>
       </section>
 
     </div>

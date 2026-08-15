@@ -21,7 +21,9 @@ DESCRIPTION_MAX_LENGTH = 500
 # Numeric(18, 4) ceiling; CRC uses 2dp so keep a safe integer-digit bound.
 AMOUNT_MAX = Decimal("99999999999999.99")
 
-# Origin (card / Cash / blank) is Story 4.2 — do not add origin_kind / origin_card_id here.
+ORIGIN_KIND_CARD = "card"
+ORIGIN_KIND_CASH = "cash"
+ORIGIN_KINDS = frozenset({ORIGIN_KIND_CARD, ORIGIN_KIND_CASH})
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,6 +37,28 @@ class ManualExpenseDraft:
     provenance: str
     line_type: str
     posted_date: str
+    origin_kind: str | None = None
+    origin_card_id: UUID | None = None
+
+
+def _validate_origin(
+    *, origin_kind: str | None, origin_card_id: UUID | None
+) -> tuple[str | None, UUID | None]:
+    """Shared origin-shape checks for both create and origin-only update paths."""
+    if origin_kind is not None and origin_kind not in ORIGIN_KINDS:
+        raise InvalidManualExpenseError("Origin must be an existing card, Cash, or blank.")
+    if origin_kind == ORIGIN_KIND_CARD and origin_card_id is None:
+        raise InvalidManualExpenseError("Choose a card, or leave origin blank.")
+    if origin_kind != ORIGIN_KIND_CARD and origin_card_id is not None:
+        raise InvalidManualExpenseError("Cash or blank origin must not carry a card id.")
+    return origin_kind, origin_card_id
+
+
+def validate_origin_update(
+    *, origin_kind: str | None, origin_card_id: UUID | None
+) -> tuple[str | None, UUID | None]:
+    """Validate an origin-only update (existing card / Cash / blank) — no expense shape."""
+    return _validate_origin(origin_kind=origin_kind, origin_card_id=origin_card_id)
 
 
 def validate_manual_expense(
@@ -45,6 +69,8 @@ def validate_manual_expense(
     payer_id: UUID,
     member_ids: list[UUID],
     now: datetime | None = None,
+    origin_kind: str | None = None,
+    origin_card_id: UUID | None = None,
 ) -> ManualExpenseDraft:
     """Validate a manual (hand) expense create. v1 supports CRC and USD (Story 3.5 FX)."""
     cur = (currency or "").strip().upper()
@@ -79,6 +105,10 @@ def validate_manual_expense(
     if payer_id not in members:
         raise InvalidManualExpenseError("Payer must be a current list member.")
 
+    validated_origin_kind, validated_origin_card_id = _validate_origin(
+        origin_kind=origin_kind, origin_card_id=origin_card_id
+    )
+
     return ManualExpenseDraft(
         amount=parsed,
         currency=cur,
@@ -87,4 +117,6 @@ def validate_manual_expense(
         provenance=PROVENANCE_HAND,
         line_type=LINE_TYPE_PURCHASE,
         posted_date=today_costa_rica_iso(now),
+        origin_kind=validated_origin_kind,
+        origin_card_id=validated_origin_card_id,
     )

@@ -7,7 +7,7 @@ paradigm: 'hexagonal / ports-and-adapters'
 scope: 'finance-helper v1 thin vertical slice (upload → parse → store → shared-expenses) and bank-adapter extension surface'
 status: final
 created: '2026-08-03'
-updated: '2026-08-03'
+updated: '2026-08-14'
 binds:
   - auth
   - lists
@@ -144,7 +144,7 @@ flowchart LR
 - **Binds:** `ui` styling, IA, interaction choreography
 - **Prevents:** shadcn/template defaults becoming brand; inventing IA that contradicts UX spines
 - **Rule:** `DESIGN.md` + `EXPERIENCE.md` are **binding companions**. Warm Balance tokens / Soft-Ledger / IA / interaction primitives own product behavior and look. Architecture chooses stack only. Component kits may supply unstyled primitives only.
-- **Addendum (Epic 3.5):** Delivery stack is Tailwind + SCSS (AD-23). AD-12 still owns appearance — utilities/theme mapping must express Warm Balance / Soft-Ledger, not replace them with kit defaults.
+- **Addendum (Epic 3.5):** Delivery stack is Tailwind + SCSS (AD-23). AD-12 still owns appearance — utilities/theme mapping must express Warm Balance / Soft-Ledger, not replace them with kit defaults. Type *faces and roles* stay in DESIGN.md; type *delivery* is AD-24. If DESIGN.md defines a **component** (`balance-strip`, `top-nav`, `tab-bar`, `receipt-row`, `section-label`, `hint`, `button-primary`, …), UI MUST use the matching Soft-Ledger primitive — do not re-implement that chrome with raw `type-*` classes.
 
 ### AD-13 — Story branch naming [ADOPTED]
 
@@ -214,8 +214,33 @@ flowchart LR
 
 - **Binds:** `ui` style authoring (Epic 3.5+)
 - **Prevents:** CSS Modules sprawl; kit theme inheritance; dual styling stacks into Epic 4
-- **Rule:** Prefer **Tailwind utilities co-located on components**. Use **SCSS modules (`*.module.scss`)** only for custom styles that utilities cannot express cleanly. Warm Balance / Soft-Ledger tokens remain authoritative via CSS variables and/or Tailwind `@theme` mapping (AD-12 still binds look). **Forbidden:** new `*.module.css`; shipping starter/kit default palettes; re-picking DESIGN.md hexes inside feature work.
+- **Rule:** Prefer **Tailwind utilities co-located on components**. Use **SCSS modules (`*.module.scss`)** only for custom styles that utilities cannot express cleanly. Warm Balance / Soft-Ledger **color** tokens remain authoritative via CSS variables and/or Tailwind `@theme` mapping (AD-12 still binds look). **Type metrics** are not an “and/or”: `--type-*` live on `:root` only; `@theme` maps families only (AD-24). **Forbidden:** new `*.module.css`; shipping starter/kit default palettes; re-picking DESIGN.md hexes inside feature work.
 - **Sprint change:** `_bmad-output/planning-artifacts/sprint-change-proposal-2026-08-10.md`
+
+### AD-24 — Type delivery [ADOPTED]
+
+- **Binds:** all `ui` typography; DESIGN.md type roles; Tailwind `@theme` / `@utility`; Soft-Ledger primitives
+- **Prevents:** Per-file family strings; inline `fontFamily` / `--type-*` style bags; HTML-tag→face maps that fight DESIGN.md (list title is UI face; money/wordmark are brand face); `next/font` and `@theme` sharing one CSS variable; a second font loader; `font-ui`/`font-sans`+local metrics as a shadow type system; a second role catalog; a generic type wrapper; extending grandfathered brownfield type
+- **Rule:**
+  - **Load once.** Root layout `next/font` is the only font loader. Loaded-face vars are `--face-ui` and `--face-brand` only — never `--font-ui` / `--font-brand`. Forbidden: `@import` fonts, `@font-face`, extra font `<link>`, `FontFace` API, per-route `next/font`, family-name literals in TSX or SCSS. Subset/weight/display (including `latin-ext` for ES) edit the root loader only. Rename live layout `--font-ui` / `--font-brand` in the **same** change that adds the `@theme` bridge.
+  - **Bridge.** The same `@theme` surface that owns Warm Balance colors maps `--font-ui` / `--font-brand` (product names) to `var(--face-ui)` / `var(--face-brand)` plus DESIGN.md fallbacks. That generates `font-ui` / `font-brand`. Do **not** alias `font-sans` / `font-serif` / `font-mono` to product faces. `@theme` maps **families only**.
+  - **One registry.** `--type-*` tokens live on `:root` only (not inside `@theme`). `@utility type-*` references those vars — never DESIGN.md rem/weight literals. Each DESIGN.md typography key has exactly one matching `type-*` class. Snapshot (not a competing catalog): `brand`, `list-title`, `strip-who`, `strip-amount`, `section-label`, `body`, `meta`, `amount-inline`, `button`, `tab`. Do not invent or skip roles. New roles require a DESIGN.md change first (AD-12), then the matching token + utility.
+  - **Consume.** `type-*` applies **every typographic note** on that DESIGN.md role: face, size, weight, tracking, line-height, `text-transform`, `font-variant-numeric`. Color stays out (AD-12). Any amount (strip, row, FX parenthetical, split total, disclosure figure) uses `type-amount-inline` or `type-strip-amount` — never `type-meta` / `type-body` for the numeric run. Role weight is the token (550 stays 550; do not round to Tailwind’s 100-step scale on the node). If DESIGN.md defines a component, use the Soft-Ledger primitive (AD-12 addendum). `type-*` on a raw node only when **no** primitive exists for that component. No product `<Text>` / `<Copy>` wrapper. Prop form is allowed only on an existing Soft-Ledger component; the value is the DESIGN.md role key. Feature TSX otherwise adds one `type-*` class and does not set fonts. SCSS is layout/spacing only — no `font-family` and no role metrics.
+  - **Tag defaults.** `body` applies the **`body` role** (not merely the UI face). Form controls `font: inherit` unless a money or button role applies. Field values use `body`; hints/labels use `meta`. Tags are **not** the type API — do not map `h1`→Petrona / `p`→Manrope.
+  - **Grandfather.** Existing inline `fontFamily`, `--type-*` style bags, and SCSS `font-family` may remain until the backfill chore. Do **not** add or extend that pattern. Any **new or edited** typography uses `type-*` (or a Soft-Ledger prop). SCSS touched for layout must not gain new font/size/weight/tracking/line-height rules. Fallback stack is DESIGN.md only (`Times New Roman` / `system-ui`) — Georgia is drift.
+  - **Forbidden:** `font-sans` / `font-serif` / `font-mono` (and any `font-*` family utility) on feature TSX or primitives except inside `@utility type-*` or the root `body` rule; composing `type-*` with local `text-*` / `font-*` (weight) / `tracking-*` / `leading-*` or arbitrary metric classes; inline `fontFamily` or `--type-*` style bags; inventing Inter/Roboto or any face not in DESIGN.md.
+
+```mermaid
+flowchart LR
+  NF[next/font root layout]
+  FACE["--face-ui / --face-brand"]
+  TH["@theme --font-ui / --font-brand"]
+  ROLE["@utility type-*"]
+  TOK["--type-* on :root"]
+  NF --> FACE --> TH
+  TOK --> ROLE
+  TH -.->|family only| ROLE
+```
 
 ## Consistency Conventions
 
@@ -233,6 +258,7 @@ flowchart LR
 | i18n | EN + ES from v1; keys in `ui`; preference remembered on account (Account menu); first visit from browser |
 | Appearance | Light / Dark / System from Account menu; remembered on account; default System (OS/browser); Warm Balance token sets from DESIGN.md |
 | UI styling | Tailwind utilities co-located; SCSS modules for custom only — AD-23 |
+| Type | `next/font` → `--face-*` → `@theme font-ui`/`font-brand` → `@utility type-*` from `:root --type-*`; `body` gets body role — AD-24 |
 | Logging | No raw statement PII at info; correlate by session/statement/batch ids |
 | Branches | `<type>/<epic>/<us-id>` — AD-13 |
 | Versioning | Single app SemVer tag — AD-14 |
@@ -241,7 +267,7 @@ flowchart LR
 
 ## Stack
 
-Versions verified 2026-08-03 (`stack-options.md` + gate re-check). Code owns exact pins once scaffolding exists.
+Versions verified 2026-08-03 (`stack-options.md` + gate re-check). Type-delivery APIs (`next/font`, Tailwind v4 `@theme --font-*`, `@utility`) re-checked 2026-08-14 against Tailwind docs + live `ui/app/layout.tsx` — no new pins. Code owns exact pins once scaffolding exists.
 
 | Name | Version |
 | --- | --- |
@@ -257,7 +283,7 @@ Versions verified 2026-08-03 (`stack-options.md` + gate re-check). Code owns exa
 | pytest | 9.x |
 | Next.js (`ui`) | 16.2.x (`output: 'standalone'`) |
 | React (via Next) | 19.2.x |
-| Tailwind CSS (`ui`) | 4.x (Warm Balance `@theme` / CSS-var bridge — AD-12, AD-23) |
+| Tailwind CSS (`ui`) | 4.x (Warm Balance `@theme` / CSS-var bridge — AD-12, AD-23, AD-24) |
 | Sass (`ui`) | 1.x (custom styles / `*.module.scss` only — AD-23) |
 | react-pdf | 10.4.x (owns bundled `pdfjs-dist` — do not pin a conflicting standalone pdfjs) |
 | @use-gesture/react | 10.3.x |
@@ -327,6 +353,7 @@ erDiagram
 | Auth signup/signin/reset | `api` auth + SMTP; `ui` account | AD-8, AD-1, AD-22 — see [auth-mail-interaction-map.md](./auth-mail-interaction-map.md) |
 | Lists, membership, splits, ACL | `domain` + persistence | AD-19, AD-5, AD-6 — see [membership-acl-enforcement-sketch.md](./membership-acl-enforcement-sketch.md) |
 | Cards / IBAN registration | `domain` + persistence; `ui` interrupt | AD-20, AD-12 |
+| Type / fonts | `ui` `@theme` + `@utility type-*`; Soft-Ledger primitives | AD-24, AD-12, AD-23 |
 | Detect / split / parse / normalize | `adapters/bank/*` | Paradigm, AD-2, AD-11, AD-16 |
 | Import Session review | `application` + `ui` | AD-4, AD-9, AD-12 |
 | Commit / dedup / batch rollback | `domain` + persistence | AD-4, AD-16, AD-18 |
@@ -355,3 +382,7 @@ erDiagram
 | SemVer bump automation tooling | Policy locked; tool at scaffold |
 | BCCR API transport details (token/endpoint codes) | Source/behavior locked in AD-7; wire format is implementation spike |
 | Payer field / absolute sub-amount split UX edge cases | Product rules in PRD; implement under AD-5/6/19 without new paradigm |
+| Backfill existing `fontFamily` / `--type-*` bags / SCSS `font-family` onto `type-*` | Grandfather + do-not-extend is in AD-24; chore is the migration, not a second contract |
+| `font-sans` / `font-serif` aliases for the same faces | Would create two names; product names only (AD-24) |
+| `next/font` weight/subset/display pins | Single root loader; edit that file only (AD-24) — no second AD |
+| Class-attribute / JSX prop order | House style — `project-context.md` / linter, never an AD |
