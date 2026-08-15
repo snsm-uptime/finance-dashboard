@@ -75,7 +75,7 @@ export default async function Home() {
       <p className={listsStyles.copy}>{t.subtitle}</p>
 
       <div className={styles.layout}>
-        <div className={styles.primary}>
+        <div className={styles.listsColumn}>
           {loaded.ok ? (
             <ListsPanel
               initialLists={loaded.lists}
@@ -88,7 +88,7 @@ export default async function Home() {
           )}
         </div>
         <section
-          className={styles.secondary}
+          className={styles.cardsColumn}
           aria-labelledby="home-cards-title"
         >
           <h2 id="home-cards-title" className={listsStyles.sectionTitle}>

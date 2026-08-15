@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 
 import { CopyButton } from "@/components/CopyButton";
 import { usePreferences } from "@/components/PreferencesProvider";
@@ -21,6 +21,11 @@ type Props = {
 export function CardsPanel({ embedded = false }: Props) {
   const { locale } = usePreferences();
   const t = cardsCopy(locale);
+  const baseId = useId();
+  const listTitleId = `${baseId}-list-title`;
+  const registerTitleId = `${baseId}-register-title`;
+  // Embedded contexts (e.g. Home) nest Cards under their own <h2>, so these drop a level to <h3>.
+  const HeadingTag = embedded ? "h3" : "h2";
   const [cards, setCards] = useState<CardItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -59,14 +64,14 @@ export function CardsPanel({ embedded = false }: Props) {
   }
 
   const sections = (
-    <div className="flex flex-col gap-8 max-w-[32rem]">
-      <section aria-labelledby="cards-list-title">
-        <h2
-          id="cards-list-title"
+    <div className={`flex flex-col gap-8 ${embedded ? "" : "max-w-[32rem]"}`}>
+      <section aria-labelledby={listTitleId}>
+        <HeadingTag
+          id={listTitleId}
           className="m-0 mb-[0.6rem] text-[0.72rem] font-[550] text-muted tracking-[0.02rem]"
         >
           {t.listTitle}
-        </h2>
+        </HeadingTag>
         {loading ? (
           <p className="text-muted text-[0.85rem]">{t.loading}</p>
         ) : loadError ? (
@@ -94,13 +99,13 @@ export function CardsPanel({ embedded = false }: Props) {
         )}
       </section>
 
-      <section aria-labelledby="cards-register-title">
-        <h2
-          id="cards-register-title"
+      <section aria-labelledby={registerTitleId}>
+        <HeadingTag
+          id={registerTitleId}
           className="m-0 mb-[0.6rem] text-[0.72rem] font-[550] text-muted tracking-[0.02rem]"
         >
           {t.submit}
-        </h2>
+        </HeadingTag>
         <RegisterCardForm
           messages={{
             ...messages,

@@ -7,11 +7,11 @@
   margin: 0 0 1.5rem;
 }
 
-.primary {
+.listsColumn {
   min-width: 0;
 }
 
-.secondary {
+.cardsColumn {
   min-width: 0;
   padding-top: 1.5rem;
   border-top: 1px solid var(--border);
@@ -24,11 +24,11 @@
     align-items: flex-start;
   }
 
-  .primary {
+  .listsColumn {
     flex: 2 1 0;
   }
 
-  .secondary {
+  .cardsColumn {
     flex: 1 1 0;
     max-width: 24rem;
     padding-top: 0;

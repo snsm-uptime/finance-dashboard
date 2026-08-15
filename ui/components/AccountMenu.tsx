@@ -92,7 +92,7 @@ export function AccountMenu() {
           className="text-accent font-semibold no-underline text-[0.9rem]"
           href="/home"
         >
-          {t.backToLists}
+          {t.backToHome}
         </Link>
       </div>
       <h1 className="m-0 mb-[0.35rem] text-[1.75rem] font-[550] text-foreground">

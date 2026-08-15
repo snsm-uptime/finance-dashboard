@@ -165,3 +165,11 @@
 - No uniqueness constraint on card `label` (`api/adapters/persistence/models.py:137-153`) — duplicate labels across different IBANs weaken the "You already have a card named X" conflict message; cosmetic UX rough edge, no functional harm
 - `list_cards_for_user` has no pagination/limit (`api/adapters/persistence/cards.py:52-58`) — same unbounded-query pattern used elsewhere in the app
 - `CardsPanel` load-error message is captured pre-translated and does not re-render in the new language after a locale switch while an error is showing (`ui/app/cards/CardsPanel.tsx:30-46`) — minor cosmetic, low-traffic path
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-home-screen-lists-cards.md`
+  summary: Home's Cards section heading/subtitle are cookie-locale server text while the embedded CardsPanel's own headings are usePreferences-locale client text, so the two can briefly disagree on EN/ES
+  evidence: Review — extends the same SSR-cookie-vs-client-usePreferences locale split already present on the Lists page (h1/subtitle from cookie, ListsPanel internals from usePreferences) to a second, more visible surface; fixing properly means centralizing locale resolution, out of scope for this refactor
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-home-screen-lists-cards.md`
+  summary: No test coverage for the new /home route (unauth redirect, alias-gate redirect, dual-panel render, fetchMembershipLists failure branch) or the /lists redirect stub's actual behavior
+  evidence: Review — diff only updates pre-existing unit tests' literal "/lists" → "/home" strings; new page logic in ui/app/home/page.tsx and ui/app/lists/page.tsx is unverified by tests
