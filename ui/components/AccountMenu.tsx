@@ -90,7 +90,7 @@ export function AccountMenu() {
         </p>
         <Link
           className="text-accent font-semibold no-underline text-[0.9rem]"
-          href="/lists"
+          href="/home"
         >
           {t.backToLists}
         </Link>

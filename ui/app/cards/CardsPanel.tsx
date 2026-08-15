@@ -13,7 +13,12 @@ function maskIban(iban: string): string {
   return `•••• ${iban.slice(-4)}`;
 }
 
-export function CardsPanel() {
+type Props = {
+  /** Skips the standalone page chrome (main/header/title) for use inside another page's layout, e.g. Home. */
+  embedded?: boolean;
+};
+
+export function CardsPanel({ embedded = false }: Props) {
   const { locale } = usePreferences();
   const t = cardsCopy(locale);
   const [cards, setCards] = useState<CardItem[]>([]);
@@ -53,6 +58,67 @@ export function CardsPanel() {
     setCards((prev) => [card, ...prev]);
   }
 
+  const sections = (
+    <div className="flex flex-col gap-8 max-w-[32rem]">
+      <section aria-labelledby="cards-list-title">
+        <h2
+          id="cards-list-title"
+          className="m-0 mb-[0.6rem] text-[0.72rem] font-[550] text-muted tracking-[0.02rem]"
+        >
+          {t.listTitle}
+        </h2>
+        {loading ? (
+          <p className="text-muted text-[0.85rem]">{t.loading}</p>
+        ) : loadError ? (
+          <p className="text-owe text-[0.9rem]" role="alert">
+            {loadError}
+          </p>
+        ) : cards.length === 0 ? (
+          <p className="text-muted text-[0.85rem]">{t.emptyState}</p>
+        ) : (
+          <ul className="list-none m-0 p-0 flex flex-col gap-2">
+            {cards.map((card) => (
+              <li
+                key={card.id}
+                className="flex items-center justify-between gap-3 py-[0.6rem] px-[0.85rem] rounded-[8px] border border-border bg-surface"
+              >
+                <span className="font-[550] text-foreground text-[0.95rem]">{card.label}</span>
+                <CopyButton value={card.iban} label={t.copyIban} copiedLabel={t.ibanCopied}>
+                  <span className="text-muted text-[0.85rem] tracking-[0.02rem]">
+                    {maskIban(card.iban)}
+                  </span>
+                </CopyButton>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section aria-labelledby="cards-register-title">
+        <h2
+          id="cards-register-title"
+          className="m-0 mb-[0.6rem] text-[0.72rem] font-[550] text-muted tracking-[0.02rem]"
+        >
+          {t.submit}
+        </h2>
+        <RegisterCardForm
+          messages={{
+            ...messages,
+            labelField: t.labelField,
+            ibanField: t.ibanField,
+            submit: t.submit,
+            submitting: t.submitting,
+          }}
+          onRegistered={onRegistered}
+        />
+      </section>
+    </div>
+  );
+
+  if (embedded) {
+    return sections;
+  }
+
   return (
     <main className="min-h-screen py-[2.5rem] px-[1.5rem]" style={{ fontFamily: "var(--font-ui), Manrope, system-ui, sans-serif" }}>
       <div className="flex items-center justify-between gap-4 mb-2">
@@ -65,61 +131,7 @@ export function CardsPanel() {
       <p className="m-0 mb-[1.75rem] max-w-[28rem] text-muted leading-[1.45] text-[0.95rem]">
         {t.subtitle}
       </p>
-
-      <div className="flex flex-col gap-8 max-w-[32rem]">
-        <section aria-labelledby="cards-list-title">
-          <h2
-            id="cards-list-title"
-            className="m-0 mb-[0.6rem] text-[0.72rem] font-[550] text-muted tracking-[0.02rem]"
-          >
-            {t.listTitle}
-          </h2>
-          {loading ? (
-            <p className="text-muted text-[0.85rem]">{t.loading}</p>
-          ) : loadError ? (
-            <p className="text-owe text-[0.9rem]" role="alert">
-              {loadError}
-            </p>
-          ) : cards.length === 0 ? (
-            <p className="text-muted text-[0.85rem]">{t.emptyState}</p>
-          ) : (
-            <ul className="list-none m-0 p-0 flex flex-col gap-2">
-              {cards.map((card) => (
-                <li
-                  key={card.id}
-                  className="flex items-center justify-between gap-3 py-[0.6rem] px-[0.85rem] rounded-[8px] border border-border bg-surface"
-                >
-                  <span className="font-[550] text-foreground text-[0.95rem]">{card.label}</span>
-                  <CopyButton value={card.iban} label={t.copyIban} copiedLabel={t.ibanCopied}>
-                    <span className="text-muted text-[0.85rem] tracking-[0.02rem]">
-                      {maskIban(card.iban)}
-                    </span>
-                  </CopyButton>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <section aria-labelledby="cards-register-title">
-          <h2
-            id="cards-register-title"
-            className="m-0 mb-[0.6rem] text-[0.72rem] font-[550] text-muted tracking-[0.02rem]"
-          >
-            {t.submit}
-          </h2>
-          <RegisterCardForm
-            messages={{
-              ...messages,
-              labelField: t.labelField,
-              ibanField: t.ibanField,
-              submit: t.submit,
-              submitting: t.submitting,
-            }}
-            onRegistered={onRegistered}
-          />
-        </section>
-      </div>
+      {sections}
     </main>
   );
 }

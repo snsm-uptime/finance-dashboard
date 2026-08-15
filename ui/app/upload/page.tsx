@@ -28,8 +28,8 @@ export default async function UploadPage() {
         can be verified now.
       </p>
       <p className={styles.copy}>
-        <Link className={styles.link} href="/lists">
-          Back to lists
+        <Link className={styles.link} href="/home">
+          Back to home
         </Link>
       </p>
     </main>
