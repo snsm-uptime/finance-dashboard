@@ -471,6 +471,115 @@ def test_patch_expense_origin_by_non_member_forbidden(client: TestClient) -> Non
     assert resp.json()["code"] == "not_list_member"
 
 
+def test_create_expense_with_non_self_payer_forces_origin_blank(
+    client: TestClient, db_session: Session
+) -> None:
+    """Origin belongs to the payer — an actor entering an expense for another
+    member can't attach their own card as its origin (Story 4.2 follow-up)."""
+    from uuid import UUID
+
+    from adapters.persistence.models import ListMembershipModel
+
+    _register(client, "owner-origin-non-self@example.com")
+    card_id = _register_card(client)
+    created = client.post("/lists", json={"name": "Origin non-self payer"})
+    list_id = created.json()["id"]
+
+    # Add second member directly (invite flow is heavier than needed here).
+    payer_id = _register(client, "payer-origin-non-self@example.com")
+    db_session.add(
+        ListMembershipModel(
+            id=uuid4(),
+            list_id=UUID(list_id),
+            user_id=UUID(payer_id),
+            role="member",
+        )
+    )
+    db_session.flush()
+
+    client.post("/auth/sign-out")
+    client.post(
+        "/auth/sign-in",
+        json={"email": "owner-origin-non-self@example.com", "password": "password1"},
+    )
+
+    expense = client.post(
+        f"/lists/{list_id}/expenses",
+        json={
+            "amount": "10.00",
+            "currency": "CRC",
+            "description": "Groceries",
+            "payer_id": payer_id,
+            "origin_kind": "card",
+            "origin_card_id": card_id,
+        },
+    )
+    assert expense.status_code == 201, expense.text
+    assert expense.json()["payer_id"] == payer_id
+    assert expense.json()["origin_kind"] is None
+    assert expense.json()["origin_card_id"] is None
+
+
+def test_patch_expense_origin_by_non_payer_member_forbidden(
+    client: TestClient, db_session: Session
+) -> None:
+    """Even a fellow list member can't set origin on an entry they didn't pay."""
+    from uuid import UUID
+
+    from adapters.persistence.models import ListMembershipModel
+
+    owner_id = _register(client, "owner-origin-nonpayer@example.com")
+    created = client.post("/lists", json={"name": "Origin non-payer"})
+    list_id = created.json()["id"]
+
+    member_id = _register(client, "member-origin-nonpayer@example.com")
+    db_session.add(
+        ListMembershipModel(
+            id=uuid4(),
+            list_id=UUID(list_id),
+            user_id=UUID(member_id),
+            role="member",
+        )
+    )
+    db_session.flush()
+
+    client.post("/auth/sign-out")
+    client.post(
+        "/auth/sign-in",
+        json={"email": "owner-origin-nonpayer@example.com", "password": "password1"},
+    )
+
+    expense = client.post(
+        f"/lists/{list_id}/expenses",
+        json={
+            "amount": "10.00",
+            "currency": "CRC",
+            "description": "Groceries",
+            "payer_id": owner_id,
+        },
+    )
+    entry_id = expense.json()["id"]
+
+    client.post("/auth/sign-out")
+    client.post(
+        "/auth/sign-in",
+        json={"email": "member-origin-nonpayer@example.com", "password": "password1"},
+    )
+
+    resp = client.patch(
+        f"/lists/{list_id}/expenses/{entry_id}/origin",
+        json={"origin_kind": "cash"},
+    )
+    assert resp.status_code == 403, resp.text
+    assert resp.json()["code"] == "not_entry_payer"
+
+    # The rejected PATCH must not have mutated the row.
+    listing = client.get(f"/lists/{list_id}/expenses")
+    assert listing.status_code == 200, listing.text
+    persisted = next(e for e in listing.json()["expenses"] if e["id"] == entry_id)
+    assert persisted["origin_kind"] is None
+
+
 def test_list_members_roster_labels_with_alias(client: TestClient, db_session: Session) -> None:
     from uuid import UUID
 

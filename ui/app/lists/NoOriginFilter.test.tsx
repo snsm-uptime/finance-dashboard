@@ -131,6 +131,7 @@ describe("NoOriginFilter", () => {
       root.render(
         <NoOriginFilter
           listId="list-1"
+          currentUserId="user-a"
           expenses={[
             expense({ id: "e1", description: "No origin" }),
             expense({ id: "e2", description: "Has cash", origin_kind: "cash" }),
@@ -144,11 +145,31 @@ describe("NoOriginFilter", () => {
     expect(container.textContent).not.toContain("Has cash");
   });
 
+  it("excludes no-origin items that don't belong to the viewer", async () => {
+    await act(async () => {
+      root.render(
+        <NoOriginFilter
+          listId="list-1"
+          currentUserId="user-a"
+          expenses={[
+            expense({ id: "e1", description: "Mine", payer_id: "user-a" }),
+            expense({ id: "e2", description: "Not mine", payer_id: "user-b" }),
+          ]}
+          messages={messages}
+        />,
+      );
+    });
+
+    expect(container.textContent).toContain("Mine");
+    expect(container.textContent).not.toContain("Not mine");
+  });
+
   it("shows empty-state copy when none are blank-origin", async () => {
     await act(async () => {
       root.render(
         <NoOriginFilter
           listId="list-1"
+          currentUserId="user-a"
           expenses={[expense({ id: "e2", origin_kind: "cash" })]}
           messages={messages}
         />,
@@ -165,6 +186,7 @@ describe("NoOriginFilter", () => {
       root.render(
         <NoOriginFilter
           listId="list-1"
+          currentUserId="user-a"
           expenses={[expense({ id: "e1" })]}
           messages={messages}
         />,
@@ -200,6 +222,7 @@ describe("NoOriginFilter", () => {
       root.render(
         <NoOriginFilter
           listId="list-1"
+          currentUserId="user-a"
           expenses={[expense({ id: "e1" }), expense({ id: "e2" })]}
           messages={messages}
         />,
@@ -233,6 +256,7 @@ describe("NoOriginFilter", () => {
       root.render(
         <NoOriginFilter
           listId="list-1"
+          currentUserId="user-a"
           expenses={[
             expense({ id: "e1", description: "Groceries" }),
             expense({ id: "e2", description: "Coffee" }),
@@ -269,6 +293,7 @@ describe("NoOriginFilter", () => {
       root.render(
         <NoOriginFilter
           listId="list-1"
+          currentUserId="user-a"
           expenses={[
             expense({ id: "e1", description: "Groceries" }),
             expense({ id: "e2", description: "Coffee" }),
@@ -306,6 +331,7 @@ describe("NoOriginFilter", () => {
       root.render(
         <NoOriginFilter
           listId="list-1"
+          currentUserId="user-a"
           expenses={[expense({ id: "e1" })]}
           messages={messages}
         />,

@@ -237,6 +237,15 @@ class SubjectNotFoundError(DomainError):
         super().__init__(self.MESSAGE)
 
 
+class NotEntryPayerError(DomainError):
+    """Raised when the acting user tries to set origin on an expense they didn't pay."""
+
+    MESSAGE = "Only the payer can set this expense's origin."
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
 class SplitOverrideNotFoundError(DomainError):
     """Raised when no override is stored for a subject."""
 

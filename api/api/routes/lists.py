@@ -57,6 +57,7 @@ from domain.errors import (
     InvalidSplitOverrideError,
     ListNotFoundError,
     ListWriteError,
+    NotEntryPayerError,
     NotListMemberError,
     NotListOwnerError,
     SmtpConfigurationError,
@@ -484,6 +485,11 @@ def update_list_expense_origin(
         )
     except SubjectNotFoundError:
         return _subject_not_found()
+    except NotEntryPayerError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={"detail": str(exc), "code": "not_entry_payer"},
+        )
     except (ListNotFoundError, NotListMemberError):
         return _access_denied()
 
