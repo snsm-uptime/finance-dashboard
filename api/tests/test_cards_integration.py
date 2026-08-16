@@ -5,6 +5,8 @@ Requires DATABASE_URL (Compose db or CI Postgres 16). Skips when unset.
 
 from __future__ import annotations
 
+from uuid import uuid4
+
 import pytest
 from fastapi.testclient import TestClient
 from tests.integration_db import claim_alias, database_url
@@ -90,3 +92,90 @@ def test_blank_iban_rejected(client: TestClient) -> None:
     response = client.post("/cards", json={"label": "My Visa", "iban": "   "})
     assert response.status_code == 422
     assert response.json()["code"] == "invalid_card_iban"
+
+
+def _own_list_id(client: TestClient) -> str:
+    listed = client.get("/lists")
+    assert listed.status_code == 200, listed.text
+    return listed.json()["lists"][0]["id"]
+
+
+def test_registered_card_defaults_to_review_routing(client: TestClient) -> None:
+    _register(client, "routingdefault@example.com")
+    created = client.post("/cards", json={"label": "My Visa", "iban": "CR20"})
+    assert created.status_code == 201, created.text
+    assert created.json()["routing_mode"] == "review"
+    assert created.json()["fixed_list_id"] is None
+
+    listed = client.get("/cards")
+    assert listed.json()["cards"][0]["routing_mode"] == "review"
+    assert listed.json()["cards"][0]["fixed_list_id"] is None
+
+
+def test_set_card_routing_fixed_to_own_list(client: TestClient) -> None:
+    _register(client, "routingfixed@example.com")
+    list_id = _own_list_id(client)
+    created = client.post("/cards", json={"label": "My Visa", "iban": "CR21"})
+    card_id = created.json()["id"]
+
+    patched = client.patch(
+        f"/cards/{card_id}/routing",
+        json={"routing_mode": "fixed", "fixed_list_id": list_id},
+    )
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["routing_mode"] == "fixed"
+    assert patched.json()["fixed_list_id"] == list_id
+
+
+def test_set_card_routing_fixed_to_non_member_list_denied(client: TestClient) -> None:
+    _register(client, "routingownera@example.com")
+    other_list_id = _own_list_id(client)
+
+    client.post("/auth/sign-out")
+    _register(client, "routingownerb@example.com")
+    created = client.post("/cards", json={"label": "My Visa", "iban": "CR22"})
+    card_id = created.json()["id"]
+
+    denied = client.patch(
+        f"/cards/{card_id}/routing",
+        json={"routing_mode": "fixed", "fixed_list_id": other_list_id},
+    )
+    assert denied.status_code == 403
+    assert denied.json()["code"] == "not_list_member"
+
+
+def test_set_card_routing_review_clears_fixed_list(client: TestClient) -> None:
+    _register(client, "routingclear@example.com")
+    list_id = _own_list_id(client)
+    created = client.post("/cards", json={"label": "My Visa", "iban": "CR23"})
+    card_id = created.json()["id"]
+
+    client.patch(
+        f"/cards/{card_id}/routing",
+        json={"routing_mode": "fixed", "fixed_list_id": list_id},
+    )
+    reverted = client.patch(f"/cards/{card_id}/routing", json={"routing_mode": "review"})
+    assert reverted.status_code == 200, reverted.text
+    assert reverted.json()["routing_mode"] == "review"
+    assert reverted.json()["fixed_list_id"] is None
+
+
+def test_set_card_routing_unauthenticated_rejected(client: TestClient) -> None:
+    response = client.patch(f"/cards/{uuid4()}/routing", json={"routing_mode": "review"})
+    assert response.status_code == 401
+
+
+def test_set_card_routing_unknown_card_not_found(client: TestClient) -> None:
+    _register(client, "routingnotfound@example.com")
+    response = client.patch(f"/cards/{uuid4()}/routing", json={"routing_mode": "review"})
+    assert response.status_code == 404
+    assert response.json()["code"] == "card_not_found"
+
+
+def test_set_card_routing_invalid_mode_rejected(client: TestClient) -> None:
+    _register(client, "routinginvalid@example.com")
+    created = client.post("/cards", json={"label": "My Visa", "iban": "CR24"})
+    card_id = created.json()["id"]
+
+    response = client.patch(f"/cards/{card_id}/routing", json={"routing_mode": "bogus"})
+    assert response.status_code == 422

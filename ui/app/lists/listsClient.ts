@@ -62,6 +62,32 @@ function asListPayload(data: unknown): ListPayload | null {
   return data as ListPayload;
 }
 
+type OkLists = { ok: true; lists: ListItem[] };
+
+export async function fetchLists(
+  messages: ListsClientMessages,
+): Promise<OkLists | ErrorResult> {
+  let response: Response;
+  try {
+    response = await fetch("/api/lists", {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+    });
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  if (!response.ok) {
+    const body = (await parseJson(response)) as { detail?: unknown; code?: unknown } | null;
+    return { ok: false, error: mapError(response.status, body, messages) };
+  }
+  const data = (await parseJson(response)) as { lists?: unknown } | null;
+  if (!data || !Array.isArray(data.lists)) {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  return { ok: true, lists: data.lists as ListItem[] };
+}
+
 export async function createList(
   name: string,
   messages: ListsClientMessages,
@@ -157,6 +183,32 @@ export async function setLastOpenedList(
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       credentials: "same-origin",
       body: JSON.stringify({ last_opened_list_id: listId }),
+    });
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  if (!response.ok) {
+    const body = (await parseJson(response)) as {
+      detail?: unknown;
+      code?: unknown;
+    } | null;
+    return { ok: false, error: mapError(response.status, body, messages) };
+  }
+  return { ok: true };
+}
+
+/** Persist default review-routing destination via /auth/me (account column, Story 4.3). */
+export async function setDefaultImportList(
+  listId: string,
+  messages: ListsClientMessages,
+): Promise<OkSimple | ErrorResult> {
+  let response: Response;
+  try {
+    response = await fetch("/api/auth/me", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ default_import_list_id: listId }),
     });
   } catch {
     return { ok: false, error: messages.errorGeneric };

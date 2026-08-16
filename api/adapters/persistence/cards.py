@@ -5,7 +5,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from application.cards import CardRecord
-from domain.errors import CardIbanAlreadyRegisteredError
+from domain.errors import CardIbanAlreadyRegisteredError, CardNotFoundError
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -20,6 +20,8 @@ def _card_record(row: CardModel) -> CardRecord:
         label=row.label,
         iban=row.iban,
         created_at=row.created_at,
+        routing_mode=row.routing_mode,
+        fixed_list_id=row.fixed_list_id,
     )
 
 
@@ -58,3 +60,24 @@ class SqlAlchemyCardRepository:
         )
         rows = self._session.scalars(stmt).all()
         return [_card_record(row) for row in rows]
+
+    def get_card(self, card_id: UUID, user_id: UUID) -> CardRecord | None:
+        row = self._session.scalar(
+            select(CardModel).where(CardModel.id == card_id, CardModel.user_id == user_id).limit(1)
+        )
+        if row is None:
+            return None
+        return _card_record(row)
+
+    def update_routing(
+        self, *, card_id: UUID, user_id: UUID, routing_mode: str, fixed_list_id: UUID | None
+    ) -> CardRecord:
+        row = self._session.scalar(
+            select(CardModel).where(CardModel.id == card_id, CardModel.user_id == user_id).limit(1)
+        )
+        if row is None:
+            raise CardNotFoundError()
+        row.routing_mode = routing_mode
+        row.fixed_list_id = fixed_list_id
+        self._session.flush()
+        return _card_record(row)

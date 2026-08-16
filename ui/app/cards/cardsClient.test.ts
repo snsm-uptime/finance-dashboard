@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { fetchCards, registerCard } from "./cardsClient";
+import { fetchCards, registerCard, setCardRouting } from "./cardsClient";
 
 const messages = {
   errorGeneric: "generic",
@@ -8,6 +8,8 @@ const messages = {
   errorInvalidLabel: "invalid-label",
   errorInvalidIban: "invalid-iban",
   errorDuplicateIban: "duplicate",
+  errorForbidden: "forbidden",
+  errorCardNotFound: "not-found",
 };
 
 afterEach(() => {
@@ -33,7 +35,14 @@ describe("cardsClient", () => {
     const result = await registerCard("My Visa", "CR05", messages);
     expect(result).toEqual({
       ok: true,
-      card: { id: "c1", label: "My Visa", iban: "CR05", created_at: "2026-08-14T00:00:00Z" },
+      card: {
+        id: "c1",
+        label: "My Visa",
+        iban: "CR05",
+        created_at: "2026-08-14T00:00:00Z",
+        routing_mode: "review",
+        fixed_list_id: null,
+      },
     });
   });
 
@@ -127,7 +136,16 @@ describe("cardsClient", () => {
     const result = await fetchCards(messages);
     expect(result).toEqual({
       ok: true,
-      cards: [{ id: "c1", label: "My Visa", iban: "CR05", created_at: "2026-08-14T00:00:00Z" }],
+      cards: [
+        {
+          id: "c1",
+          label: "My Visa",
+          iban: "CR05",
+          created_at: "2026-08-14T00:00:00Z",
+          routing_mode: "review",
+          fixed_list_id: null,
+        },
+      ],
     });
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/cards",
@@ -153,5 +171,102 @@ describe("cardsClient", () => {
       "/api/cards",
       expect.objectContaining({ method: "POST" }),
     );
+  });
+
+  it("setCardRouting patches /api/cards/{id}/routing and returns the updated card", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        id: "c1",
+        label: "My Visa",
+        iban: "CR05",
+        created_at: "2026-08-14T00:00:00Z",
+        routing_mode: "fixed",
+        fixed_list_id: "list-1",
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await setCardRouting(
+      "c1",
+      { routing_mode: "fixed", fixed_list_id: "list-1" },
+      messages,
+    );
+    expect(result).toEqual({
+      ok: true,
+      card: {
+        id: "c1",
+        label: "My Visa",
+        iban: "CR05",
+        created_at: "2026-08-14T00:00:00Z",
+        routing_mode: "fixed",
+        fixed_list_id: "list-1",
+      },
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/cards/c1/routing",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ routing_mode: "fixed", fixed_list_id: "list-1" }),
+      }),
+    );
+  });
+
+  it("setCardRouting review mode returns fixed_list_id null", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: "c1",
+          label: "My Visa",
+          iban: "CR05",
+          created_at: "2026-08-14T00:00:00Z",
+          routing_mode: "review",
+          fixed_list_id: null,
+        }),
+      }),
+    );
+
+    const result = await setCardRouting(
+      "c1",
+      { routing_mode: "review", fixed_list_id: null },
+      messages,
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.card.routing_mode).toBe("review");
+      expect(result.card.fixed_list_id).toBeNull();
+    }
+  });
+
+  it("setCardRouting maps 403 to errorForbidden", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 403,
+        json: async () => ({ code: "not_list_member", detail: "nope" }),
+      }),
+    );
+
+    const result = await setCardRouting("c1", { routing_mode: "review", fixed_list_id: null }, messages);
+    expect(result).toEqual({ ok: false, error: "forbidden" });
+  });
+
+  it("setCardRouting maps 404 to errorCardNotFound", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        json: async () => ({ code: "card_not_found", detail: "nope" }),
+      }),
+    );
+
+    const result = await setCardRouting("c1", { routing_mode: "review", fixed_list_id: null }, messages);
+    expect(result).toEqual({ ok: false, error: "not-found" });
   });
 });

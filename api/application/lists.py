@@ -164,6 +164,12 @@ class SetLastOpenedListCommand:
 
 
 @dataclass(frozen=True, slots=True)
+class SetDefaultImportListCommand:
+    actor_user_id: UUID
+    list_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
 class GetListDefaultSplitCommand:
     actor_user_id: UUID
     list_id: UUID
@@ -386,6 +392,32 @@ class SetLastOpenedListService:
         self._prefs_repo.update_preferences(
             command.actor_user_id,
             last_opened_list_id=command.list_id,
+        )
+        return command.list_id
+
+
+class SetDefaultImportListService:
+    """Configurable review-routing default destination — Story 4.3 (FR-12).
+
+    Same authorize_list_access(set_default_import_list) → 403 on deny shape as
+    SetLastOpenedListService — membership, not ownership.
+    """
+
+    def __init__(self, list_repo: ListRepository, prefs_repo: PreferencesRepository) -> None:
+        self._list_repo = list_repo
+        self._prefs_repo = prefs_repo
+
+    def execute(self, command: SetDefaultImportListCommand) -> UUID:
+        AuthorizeListAccessService(self._list_repo).execute(
+            AuthorizeListAccessCommand(
+                acting_user_id=command.actor_user_id,
+                list_id=command.list_id,
+                action="set_default_import_list",
+            )
+        )
+        self._prefs_repo.update_preferences(
+            command.actor_user_id,
+            default_import_list_id=command.list_id,
         )
         return command.list_id
 

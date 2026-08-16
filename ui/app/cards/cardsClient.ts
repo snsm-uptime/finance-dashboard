@@ -5,6 +5,9 @@ export type CardItem = {
   label: string;
   iban: string;
   created_at: string;
+  /** Routing mode (Story 4.3) — defaults to "review" when a response omits it. */
+  routing_mode: "fixed" | "review";
+  fixed_list_id: string | null;
 };
 
 export type CardsClientMessages = {
@@ -13,6 +16,9 @@ export type CardsClientMessages = {
   errorInvalidLabel: string;
   errorInvalidIban: string;
   errorDuplicateIban: string;
+  /** Only needed by routing calls (Story 4.3) — optional so existing callers need not supply them. */
+  errorForbidden?: string;
+  errorCardNotFound?: string;
 };
 
 type ErrorResult = { ok: false; error: string };
@@ -31,6 +37,12 @@ function mapError(
   }
   if (code === "invalid_card_label") return messages.errorInvalidLabel;
   if (code === "invalid_card_iban") return messages.errorInvalidIban;
+  if (status === 403 || code === "not_list_member") {
+    return messages.errorForbidden ?? messages.errorGeneric;
+  }
+  if (status === 404 || code === "card_not_found") {
+    return messages.errorCardNotFound ?? messages.errorGeneric;
+  }
   return messages.errorGeneric;
 }
 
@@ -53,7 +65,14 @@ function asCard(data: unknown): CardItem | null {
   ) {
     return null;
   }
-  return { id: row.id, label: row.label, iban: row.iban, created_at: row.created_at };
+  return {
+    id: row.id,
+    label: row.label,
+    iban: row.iban,
+    created_at: row.created_at,
+    routing_mode: row.routing_mode === "fixed" ? "fixed" : "review",
+    fixed_list_id: typeof row.fixed_list_id === "string" ? row.fixed_list_id : null,
+  };
 }
 
 export async function fetchCards(
@@ -104,6 +123,31 @@ export async function registerCard(
   if (!response.ok) {
     const body = (await parseJson(response)) as { detail?: unknown; code?: unknown } | null;
     return { ok: false, error: mapError(response.status, body, messages) };
+  }
+  const card = asCard(await parseJson(response));
+  if (!card) return { ok: false, error: messages.errorGeneric };
+  return { ok: true, card };
+}
+
+export async function setCardRouting(
+  cardId: string,
+  body: { routing_mode: "fixed" | "review"; fixed_list_id: string | null },
+  messages: CardsClientMessages,
+): Promise<OkCard | ErrorResult> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/cards/${encodeURIComponent(cardId)}/routing`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify(body),
+    });
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  if (!response.ok) {
+    const parsed = (await parseJson(response)) as { detail?: unknown; code?: unknown } | null;
+    return { ok: false, error: mapError(response.status, parsed, messages) };
   }
   const card = asCard(await parseJson(response));
   if (!card) return { ok: false, error: messages.errorGeneric };

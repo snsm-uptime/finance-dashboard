@@ -21,6 +21,8 @@ ListAccessAction = Literal[
     "rename_list",
     "invite_member",
     "edit_default_split",
+    "route_card_to_list",
+    "set_default_import_list",
 ]
 
 _ACTION_ALIASES: dict[str, str] = {
@@ -43,6 +45,8 @@ _MEMBER_MUTATION_ACTIONS = frozenset(
         "write_ledger",
         "import_to_list",
         "set_last_opened_list",
+        "route_card_to_list",
+        "set_default_import_list",
     }
 )
 

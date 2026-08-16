@@ -62,6 +62,7 @@ def _preferences_record(row: UserModel) -> UserPreferencesRecord:
         language=row.language,
         theme=row.theme,
         last_opened_list_id=row.last_opened_list_id,
+        default_import_list_id=row.default_import_list_id,
         alias=row.alias,
     )
 
@@ -161,6 +162,8 @@ class SqlAlchemyAuthUserRepository:
         theme: str | None = None,
         last_opened_list_id: UUID | None = None,
         clear_last_opened_list_id: bool = False,
+        default_import_list_id: UUID | None = None,
+        clear_default_import_list_id: bool = False,
     ) -> UserPreferencesRecord:
         row = self._session.get(UserModel, user_id)
         if row is None:
@@ -173,10 +176,14 @@ class SqlAlchemyAuthUserRepository:
             row.last_opened_list_id = None
         elif last_opened_list_id is not None:
             row.last_opened_list_id = last_opened_list_id
+        if clear_default_import_list_id:
+            row.default_import_list_id = None
+        elif default_import_list_id is not None:
+            row.default_import_list_id = default_import_list_id
         try:
             self._session.flush()
         except IntegrityError as exc:
-            if last_opened_list_id is not None:
+            if last_opened_list_id is not None or default_import_list_id is not None:
                 raise NotListMemberError() from exc
             raise
         return _preferences_record(row)
@@ -493,6 +500,8 @@ class SqlAlchemyListRepository:
             label=row.label,
             iban=row.iban,
             created_at=row.created_at,
+            routing_mode=row.routing_mode,
+            fixed_list_id=row.fixed_list_id,
         )
 
     def update_ledger_entry_origin(
