@@ -628,4 +628,143 @@ describe("ManualExpenseForm", () => {
 
     expect(submitButton.disabled).toBe(false);
   });
+
+  it("hides the Origin select when a non-self payer is selected", async () => {
+    await act(async () => {
+      root.render(
+        <ManualExpenseForm
+          listId="list-1"
+          currentUserId="user-a"
+          members={members}
+          messages={messages}
+        />,
+      );
+    });
+
+    expect(container.querySelector('select[name="origin"]')).not.toBeNull();
+
+    const payer = container.querySelector('select[name="payer_id"]') as HTMLSelectElement;
+    await act(async () => {
+      const selectSetter = Object.getOwnPropertyDescriptor(
+        HTMLSelectElement.prototype,
+        "value",
+      )?.set;
+      selectSetter?.call(payer, "user-b");
+      payer.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    expect(container.querySelector('select[name="origin"]')).toBeNull();
+  });
+
+  it("clears the origin selection and omits it from the request when switching to a non-self payer", async () => {
+    createExpense.mockResolvedValue({
+      ok: true,
+      expense: {
+        id: "e5",
+        list_id: "list-1",
+        amount: "10.00",
+        currency: "CRC",
+        description: "Coffee",
+        payer_id: "user-b",
+        provenance: "hand",
+        line_type: "purchase",
+        posted_date: "2026-08-06",
+        created_at: "2026-08-06T12:00:00Z",
+      },
+    });
+
+    await act(async () => {
+      root.render(
+        <ManualExpenseForm
+          listId="list-1"
+          currentUserId="user-a"
+          members={members}
+          messages={messages}
+        />,
+      );
+    });
+
+    const amount = container.querySelector('input[name="amount"]') as HTMLInputElement;
+    const description = container.querySelector(
+      'input[name="description"]',
+    ) as HTMLInputElement;
+    const origin = container.querySelector('select[name="origin"]') as HTMLSelectElement;
+    const payer = container.querySelector('select[name="payer_id"]') as HTMLSelectElement;
+    const selectSetter = Object.getOwnPropertyDescriptor(
+      HTMLSelectElement.prototype,
+      "value",
+    )?.set;
+
+    await act(async () => {
+      const inputSetter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )?.set;
+      inputSetter?.call(amount, "10.00");
+      amount.dispatchEvent(new Event("input", { bubbles: true }));
+      inputSetter?.call(description, "Coffee");
+      description.dispatchEvent(new Event("input", { bubbles: true }));
+      selectSetter?.call(origin, "card-1");
+      origin.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await act(async () => {
+      selectSetter?.call(payer, "user-b");
+      payer.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const form = container.querySelector("form") as HTMLFormElement;
+    await act(async () => {
+      form.requestSubmit();
+    });
+
+    expect(createExpense).toHaveBeenCalledWith(
+      "list-1",
+      expect.objectContaining({
+        payer_id: "user-b",
+        origin_kind: null,
+        origin_card_id: null,
+      }),
+      expect.anything(),
+    );
+  });
+
+  it("resets Origin to blank when switching back to self after a non-self detour", async () => {
+    await act(async () => {
+      root.render(
+        <ManualExpenseForm
+          listId="list-1"
+          currentUserId="user-a"
+          members={members}
+          messages={messages}
+        />,
+      );
+    });
+
+    const payer = container.querySelector('select[name="payer_id"]') as HTMLSelectElement;
+    const selectSetter = Object.getOwnPropertyDescriptor(
+      HTMLSelectElement.prototype,
+      "value",
+    )?.set;
+    const origin = container.querySelector('select[name="origin"]') as HTMLSelectElement;
+
+    await act(async () => {
+      selectSetter?.call(origin, "card-1");
+      origin.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await act(async () => {
+      selectSetter?.call(payer, "user-b");
+      payer.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await act(async () => {
+      selectSetter?.call(payer, "user-a");
+      payer.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const originAfter = container.querySelector('select[name="origin"]') as HTMLSelectElement;
+    expect(originAfter).not.toBeNull();
+    expect(originAfter.value).toBe("");
+  });
 });

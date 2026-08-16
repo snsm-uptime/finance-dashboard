@@ -21,6 +21,7 @@ export type NoOriginFilterMessages = ListsClientMessages & {
 
 type Props = {
   listId: string;
+  currentUserId: string;
   expenses: ExpenseItem[];
   messages: NoOriginFilterMessages;
 };
@@ -33,7 +34,7 @@ function originFieldsFromValue(
   return { origin_kind: "card", origin_card_id: value };
 }
 
-export function NoOriginFilter({ listId, expenses, messages }: Props) {
+export function NoOriginFilter({ listId, currentUserId, expenses, messages }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [cards, setCards] = useState<CardItem[]>([]);
@@ -60,7 +61,9 @@ export function NoOriginFilter({ listId, expenses, messages }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const noOrigin = expenses.filter((e) => e.origin_kind === null);
+  const noOrigin = expenses.filter(
+    (e) => e.origin_kind === null && e.payer_id === currentUserId,
+  );
   const originOptions = [
     { value: "", label: messages.expenseOriginBlank },
     { value: "cash", label: messages.expenseOriginCash },

@@ -404,6 +404,7 @@ export default async function ListDetailPage({
                 {!expensesLoadError ? (
                   <NoOriginFilter
                     listId={listId}
+                    currentUserId={session.user_id}
                     expenses={expenses}
                     messages={{
                       noOriginFilterToggle: t.noOriginFilterToggle,

@@ -38,6 +38,7 @@ def test_validate_accepts_crc_positive_amount_and_member_payer() -> None:
         currency="CRC",
         description="  Groceries  ",
         payer_id=payer,
+        actor_user_id=payer,
         member_ids=[payer, other],
         now=datetime(2026, 8, 6, 12, 0, tzinfo=COSTA_RICA_TZ),
     )
@@ -61,6 +62,7 @@ def test_validate_accepts_usd_amount() -> None:
         currency="usd",
         description="Dinner",
         payer_id=payer,
+        actor_user_id=payer,
         member_ids=[payer, other],
         now=datetime(2026, 8, 6, 12, 0, tzinfo=COSTA_RICA_TZ),
     )
@@ -76,6 +78,7 @@ def test_validate_rejects_unsupported_currency() -> None:
             currency="EUR",
             description="Coffee",
             payer_id=payer,
+            actor_user_id=payer,
             member_ids=[payer],
         )
 
@@ -88,6 +91,7 @@ def test_validate_rejects_non_positive_amount() -> None:
             currency="CRC",
             description="X",
             payer_id=payer,
+            actor_user_id=payer,
             member_ids=[payer],
         )
     with pytest.raises(InvalidManualExpenseError):
@@ -96,6 +100,7 @@ def test_validate_rejects_non_positive_amount() -> None:
             currency="CRC",
             description="X",
             payer_id=payer,
+            actor_user_id=payer,
             member_ids=[payer],
         )
 
@@ -108,6 +113,7 @@ def test_validate_rejects_blank_description() -> None:
             currency="CRC",
             description="   ",
             payer_id=payer,
+            actor_user_id=payer,
             member_ids=[payer],
         )
 
@@ -120,6 +126,7 @@ def test_validate_rejects_payer_outside_member_set() -> None:
             currency="CRC",
             description="Taxi",
             payer_id=outsider,
+            actor_user_id=outsider,
             member_ids=[member],
         )
 
@@ -132,6 +139,7 @@ def test_validate_rejects_non_decimal_amount_string() -> None:
             currency="CRC",
             description="X",
             payer_id=payer,
+            actor_user_id=payer,
             member_ids=[payer],
         )
 
@@ -144,6 +152,7 @@ def test_validate_rejects_more_than_two_decimal_places() -> None:
             currency="CRC",
             description="X",
             payer_id=payer,
+            actor_user_id=payer,
             member_ids=[payer],
         )
 
@@ -156,6 +165,7 @@ def test_validate_rejects_oversized_description() -> None:
             currency="CRC",
             description="x" * 501,
             payer_id=payer,
+            actor_user_id=payer,
             member_ids=[payer],
         )
 
@@ -168,6 +178,7 @@ def test_validate_accepts_blank_origin_with_no_registered_cards() -> None:
         currency="CRC",
         description="Coffee",
         payer_id=payer,
+        actor_user_id=payer,
         member_ids=[payer],
     )
     assert draft.origin_kind is None
@@ -181,6 +192,7 @@ def test_validate_accepts_cash_origin() -> None:
         currency="CRC",
         description="Coffee",
         payer_id=payer,
+        actor_user_id=payer,
         member_ids=[payer],
         origin_kind="cash",
     )
@@ -196,6 +208,7 @@ def test_validate_accepts_card_origin() -> None:
         currency="CRC",
         description="Coffee",
         payer_id=payer,
+        actor_user_id=payer,
         member_ids=[payer],
         origin_kind="card",
         origin_card_id=card_id,
@@ -212,6 +225,7 @@ def test_validate_rejects_card_origin_without_card_id() -> None:
             currency="CRC",
             description="Coffee",
             payer_id=payer,
+            actor_user_id=payer,
             member_ids=[payer],
             origin_kind="card",
         )
@@ -226,6 +240,7 @@ def test_validate_rejects_non_card_origin_with_card_id() -> None:
             currency="CRC",
             description="Coffee",
             payer_id=payer,
+            actor_user_id=payer,
             member_ids=[payer],
             origin_kind="cash",
             origin_card_id=card_id,
@@ -236,6 +251,7 @@ def test_validate_rejects_non_card_origin_with_card_id() -> None:
             currency="CRC",
             description="Coffee",
             payer_id=payer,
+            actor_user_id=payer,
             member_ids=[payer],
             origin_kind=None,
             origin_card_id=card_id,
@@ -250,8 +266,59 @@ def test_validate_rejects_unknown_origin_kind() -> None:
             currency="CRC",
             description="Coffee",
             payer_id=payer,
+            actor_user_id=payer,
             member_ids=[payer],
             origin_kind="crypto",
+        )
+
+
+def test_validate_forces_blank_card_origin_when_payer_is_not_actor() -> None:
+    """Origin belongs to the payer — an actor entering someone else's expense
+    can't attach their own card as its origin (later validated by the payer)."""
+    actor, payer = uuid4(), uuid4()
+    card_id = uuid4()
+    draft = validate_manual_expense(
+        amount="1.00",
+        currency="CRC",
+        description="Coffee",
+        payer_id=payer,
+        actor_user_id=actor,
+        member_ids=[actor, payer],
+        origin_kind="card",
+        origin_card_id=card_id,
+    )
+    assert draft.origin_kind is None
+    assert draft.origin_card_id is None
+
+
+def test_validate_forces_blank_cash_origin_when_payer_is_not_actor() -> None:
+    actor, payer = uuid4(), uuid4()
+    draft = validate_manual_expense(
+        amount="1.00",
+        currency="CRC",
+        description="Coffee",
+        payer_id=payer,
+        actor_user_id=actor,
+        member_ids=[actor, payer],
+        origin_kind="cash",
+    )
+    assert draft.origin_kind is None
+    assert draft.origin_card_id is None
+
+
+def test_validate_rejects_malformed_origin_even_when_payer_is_not_actor() -> None:
+    """Shape validation still runs before the payer-mismatch override — a
+    malformed origin must 422, not silently vanish."""
+    actor, payer = uuid4(), uuid4()
+    with pytest.raises(InvalidManualExpenseError, match="card"):
+        validate_manual_expense(
+            amount="1.00",
+            currency="CRC",
+            description="Coffee",
+            payer_id=payer,
+            actor_user_id=actor,
+            member_ids=[actor, payer],
+            origin_kind="card",
         )
 
 

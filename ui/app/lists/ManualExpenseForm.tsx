@@ -275,29 +275,34 @@ export function ManualExpenseForm({
             aria-describedby={error ? errorId : undefined}
             onChange={(next) => {
               setPayerId(next);
+              // Origin belongs to the payer — clear any selection made while a
+              // different payer was picked so it can't leak back in on reselect.
+              if (next !== currentUserId) setOriginValue("");
               clearError();
             }}
           />
         </div>
 
-        <div className={styles.field}>
-          <span className={styles.label} id={`${baseId}-origin-label`}>
-            {messages.expenseOriginLabel}
-          </span>
-          <SoftLedgerSelect
-            id={`${baseId}-origin`}
-            name="origin"
-            value={originValue}
-            options={[
-              { value: "", label: messages.expenseOriginBlank },
-              { value: "cash", label: messages.expenseOriginCash },
-              ...cards.map((c) => ({ value: c.id, label: c.label })),
-            ]}
-            disabled={pending}
-            aria-labelledby={`${baseId}-origin-label`}
-            onChange={setOriginValue}
-          />
-        </div>
+        {payerId === currentUserId ? (
+          <div className={styles.field}>
+            <span className={styles.label} id={`${baseId}-origin-label`}>
+              {messages.expenseOriginLabel}
+            </span>
+            <SoftLedgerSelect
+              id={`${baseId}-origin`}
+              name="origin"
+              value={originValue}
+              options={[
+                { value: "", label: messages.expenseOriginBlank },
+                { value: "cash", label: messages.expenseOriginCash },
+                ...cards.map((c) => ({ value: c.id, label: c.label })),
+              ]}
+              disabled={pending}
+              aria-labelledby={`${baseId}-origin-label`}
+              onChange={setOriginValue}
+            />
+          </div>
+        ) : null}
 
         <details
           className={styles.adjust}

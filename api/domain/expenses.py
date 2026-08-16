@@ -67,6 +67,7 @@ def validate_manual_expense(
     currency: str,
     description: str,
     payer_id: UUID,
+    actor_user_id: UUID,
     member_ids: list[UUID],
     now: datetime | None = None,
     origin_kind: str | None = None,
@@ -108,6 +109,15 @@ def validate_manual_expense(
     validated_origin_kind, validated_origin_card_id = _validate_origin(
         origin_kind=origin_kind, origin_card_id=origin_card_id
     )
+
+    # Origin belongs to the payer, not whoever is entering the expense — an
+    # actor logging someone else's expense can't attach their own card/Cash
+    # as its origin. Forced silently (not a raise) since the expense itself
+    # is still valid; the real payer sets origin later via PATCH .../origin,
+    # which is itself restricted to the entry's payer.
+    if payer_id != actor_user_id:
+        validated_origin_kind = None
+        validated_origin_card_id = None
 
     return ManualExpenseDraft(
         amount=parsed,

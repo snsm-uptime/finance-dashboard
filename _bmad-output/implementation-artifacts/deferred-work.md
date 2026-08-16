@@ -181,3 +181,7 @@
 - TOCTOU gap between the card-ownership check and the entry write could surface a raw `IntegrityError` (500) instead of a clean 422 if a card is deleted concurrently (`api/application/expenses.py:357-364,389-392`) — currently unreachable, no card-delete feature exists yet
 - `fetchCards()` call sites in `NoOriginFilter.tsx`/`ManualExpenseForm.tsx` stuff the generic error string into card-creation-specific message fields (`errorInvalidLabel`/`errorInvalidIban`/`errorDuplicateIban`) — inherited from Story 4.1's `fetchCards()` signature, not introduced by this diff
 - Card labels aren't disambiguated in the origin dropdowns (no IBAN suffix) — same underlying gap as 4.1's "No uniqueness constraint on card label" entry above, now also visible in the new origin selectors
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-fix-manual-expense-origin-non-self-payer.md`
+  summary: `listsClient.ts`'s error-code mapping for `createExpense`/`updateExpenseOrigin` has no specific message for the new `not_entry_payer` (403) code, so a user who somehow hits it (stale page, race with a payer reassignment, non-UI API caller) only sees the generic fallback error text
+  evidence: Review (Blind Hunter) — the UI's own flows (hidden Origin field for non-self payer, `NoOriginFilter` scoped to the viewer's own items) already prevent normal users from reaching this 403, so it's low-frequency; not blocking this fix

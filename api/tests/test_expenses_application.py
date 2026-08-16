@@ -23,7 +23,12 @@ from application.expenses import (
 )
 from application.fx_service import MaterializeFxService
 from application.lists import ListRecord, MembershipRecord
-from domain.errors import InvalidManualExpenseError, NotListMemberError, SubjectNotFoundError
+from domain.errors import (
+    InvalidManualExpenseError,
+    NotEntryPayerError,
+    NotListMemberError,
+    SubjectNotFoundError,
+)
 
 
 class _FakeBccrClient:
@@ -66,6 +71,12 @@ class _FakeExpenseRepo:
     def list_members_with_alias(self, list_id: UUID) -> list[ListMemberView]:
         return [ListMemberView(user_id=u, alias=None) for u in self.member_ids]
 
+    def get_ledger_entry_payer(self, *, list_id: UUID, entry_id: UUID) -> UUID | None:
+        existing = self.entries.get(entry_id)
+        if existing is None or existing.list_id != list_id:
+            return None
+        return existing.payer_id
+
     def get_card_for_owner(self, user_id: UUID, card_id: UUID) -> CardRecord | None:
         for card in self.cards:
             if card.id == card_id and card.user_id == user_id:
@@ -95,11 +106,13 @@ class _FakeExpenseRepo:
         return record
 
     def update_ledger_entry_origin(
-        self, *, list_id: UUID, entry_id: UUID, origin_kind, origin_card_id
+        self, *, list_id: UUID, entry_id: UUID, actor_user_id: UUID, origin_kind, origin_card_id
     ) -> LedgerEntryRecord:
         existing = self.entries.get(entry_id)
         if existing is None or existing.list_id != list_id:
             raise SubjectNotFoundError()
+        if existing.payer_id != actor_user_id:
+            raise NotEntryPayerError()
         updated = LedgerEntryRecord(
             id=existing.id,
             list_id=existing.list_id,
@@ -130,6 +143,7 @@ def _command(
     repo: _FakeExpenseRepo,
     actor: UUID,
     *,
+    payer: UUID | None = None,
     origin_kind: str | None = None,
     origin_card_id: UUID | None = None,
 ) -> CreateManualExpenseCommand:
@@ -139,7 +153,7 @@ def _command(
         amount="10.00",
         currency="CRC",
         description="Coffee",
-        payer_id=actor,
+        payer_id=payer if payer is not None else actor,
         origin_kind=origin_kind,
         origin_card_id=origin_card_id,
     )
@@ -304,5 +318,73 @@ def test_update_origin_with_card_owned_by_different_user_rejected() -> None:
                 entry_id=created.id,
                 origin_kind="card",
                 origin_card_id=foreign_card.id,
+            )
+        )
+
+
+def test_create_with_non_self_payer_forces_origin_blank() -> None:
+    """Origin belongs to the payer, not the actor entering the expense on their behalf."""
+    actor = uuid4()
+    payer = uuid4()
+    repo = _FakeExpenseRepo(list_id=uuid4(), member_ids=[actor, payer])
+    card = CardRecord(
+        id=uuid4(), user_id=actor, label="My Visa", iban="CR05", created_at=datetime.now(UTC)
+    )
+    repo.cards = [card]
+    service = CreateManualExpenseService(repo, MaterializeFxService(_FakeBccrClient()))
+
+    result = service.execute(
+        _command(repo, actor, payer=payer, origin_kind="card", origin_card_id=card.id)
+    )
+
+    assert result.payer_id == payer
+    assert result.origin_kind is None
+    assert result.origin_card_id is None
+
+
+def test_update_origin_by_non_payer_member_rejected() -> None:
+    """Even a fellow list member can't set origin on an entry they didn't pay."""
+    actor = uuid4()
+    payer = uuid4()
+    repo = _FakeExpenseRepo(list_id=uuid4(), member_ids=[actor, payer])
+    created = CreateManualExpenseService(repo, MaterializeFxService(_FakeBccrClient())).execute(
+        _command(repo, actor, payer=payer)
+    )
+    service = UpdateExpenseOriginService(repo)
+
+    with pytest.raises(NotEntryPayerError):
+        service.execute(
+            UpdateExpenseOriginCommand(
+                actor_user_id=actor,
+                list_id=repo.list_id,
+                entry_id=created.id,
+                origin_kind="cash",
+                origin_card_id=None,
+            )
+        )
+
+
+def test_update_origin_by_non_payer_member_with_unowned_card_still_rejects_as_not_entry_payer() -> (
+    None
+):
+    """Authorization (payer identity) is resolved before input-shape checks like
+    card ownership — a non-payer must always get NotEntryPayerError, never the
+    card-ownership InvalidManualExpenseError, regardless of which card they send."""
+    actor = uuid4()
+    payer = uuid4()
+    repo = _FakeExpenseRepo(list_id=uuid4(), member_ids=[actor, payer])
+    created = CreateManualExpenseService(repo, MaterializeFxService(_FakeBccrClient())).execute(
+        _command(repo, actor, payer=payer)
+    )
+    service = UpdateExpenseOriginService(repo)
+
+    with pytest.raises(NotEntryPayerError):
+        service.execute(
+            UpdateExpenseOriginCommand(
+                actor_user_id=actor,
+                list_id=repo.list_id,
+                entry_id=created.id,
+                origin_kind="card",
+                origin_card_id=uuid4(),
             )
         )

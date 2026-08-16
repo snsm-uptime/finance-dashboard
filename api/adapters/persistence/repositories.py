@@ -30,6 +30,7 @@ from domain.errors import (
     InvalidDefaultSplitError,
     ListNotFoundError,
     ListWriteError,
+    NotEntryPayerError,
     NotListMemberError,
     PrincipalNotFoundError,
     SubjectNotFoundError,
@@ -495,11 +496,26 @@ class SqlAlchemyListRepository:
             created_at=row.created_at,
         )
 
+    def get_ledger_entry_payer(self, *, list_id: UUID, entry_id: UUID) -> UUID | None:
+        row = self._session.get(LedgerEntryModel, entry_id)
+        if (
+            row is None
+            or row.list_id != list_id
+            or row.normalized_description is None
+            or row.payer_id is None
+            or row.provenance is None
+            or row.line_type is None
+            or row.posted_date is None
+        ):
+            return None
+        return row.payer_id
+
     def update_ledger_entry_origin(
         self,
         *,
         list_id: UUID,
         entry_id: UUID,
+        actor_user_id: UUID,
         origin_kind: str | None,
         origin_card_id: UUID | None,
     ):
@@ -516,6 +532,8 @@ class SqlAlchemyListRepository:
             or row.posted_date is None
         ):
             raise SubjectNotFoundError()
+        if row.payer_id != actor_user_id:
+            raise NotEntryPayerError()
         row.origin_kind = origin_kind
         row.origin_card_id = origin_card_id
         self._session.flush()

@@ -9,7 +9,12 @@ from decimal import Decimal
 from typing import Protocol
 from uuid import UUID, uuid4
 
-from domain.errors import InvalidManualExpenseError, ListNotFoundError
+from domain.errors import (
+    InvalidManualExpenseError,
+    ListNotFoundError,
+    NotEntryPayerError,
+    SubjectNotFoundError,
+)
 from domain.expenses import ManualExpenseDraft, validate_manual_expense, validate_origin_update
 from domain.splits import SUBJECT_ITEM
 
@@ -90,11 +95,14 @@ class ExpenseRepository(Protocol):
 
     def get_card_for_owner(self, user_id: UUID, card_id: UUID) -> CardRecord | None: ...
 
+    def get_ledger_entry_payer(self, *, list_id: UUID, entry_id: UUID) -> UUID | None: ...
+
     def update_ledger_entry_origin(
         self,
         *,
         list_id: UUID,
         entry_id: UUID,
+        actor_user_id: UUID,
         origin_kind: str | None,
         origin_card_id: UUID | None,
     ) -> LedgerEntryRecord: ...
@@ -186,6 +194,7 @@ class CreateManualExpenseService:
             currency=command.currency,
             description=command.description,
             payer_id=command.payer_id,
+            actor_user_id=command.actor_user_id,
             member_ids=members,
             origin_kind=command.origin_kind,
             origin_card_id=command.origin_card_id,
@@ -244,6 +253,16 @@ class UpdateExpenseOriginService:
                 action="write_expense",
             )
         )
+        # Authorization (who this entry belongs to) is resolved before validating
+        # incidental input shape (e.g. an unowned card id) — a non-payer must always
+        # see 403 not_entry_payer, never a 422 that leaks past the real rejection.
+        payer_id = self._repo.get_ledger_entry_payer(
+            list_id=command.list_id, entry_id=command.entry_id
+        )
+        if payer_id is None:
+            raise SubjectNotFoundError()
+        if payer_id != command.actor_user_id:
+            raise NotEntryPayerError()
         origin_kind, origin_card_id = validate_origin_update(
             origin_kind=command.origin_kind, origin_card_id=command.origin_card_id
         )
@@ -256,6 +275,7 @@ class UpdateExpenseOriginService:
         return self._repo.update_ledger_entry_origin(
             list_id=command.list_id,
             entry_id=command.entry_id,
+            actor_user_id=command.actor_user_id,
             origin_kind=origin_kind,
             origin_card_id=origin_card_id,
         )
