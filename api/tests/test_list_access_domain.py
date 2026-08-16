@@ -22,6 +22,8 @@ from application.lists import (
     ListMembershipSummary,
     ListRecord,
     MembershipRecord,
+    SetDefaultImportListCommand,
+    SetDefaultImportListService,
     SetLastOpenedListCommand,
     SetLastOpenedListService,
 )
@@ -129,6 +131,8 @@ class FakePrefsRepo:
         theme: str | None = None,
         last_opened_list_id: UUID | None = None,
         clear_last_opened_list_id: bool = False,
+        default_import_list_id: UUID | None = None,
+        clear_default_import_list_id: bool = False,
     ) -> UserPreferencesRecord:
         current = self.prefs[user_id]
         opened = current.last_opened_list_id
@@ -136,12 +140,18 @@ class FakePrefsRepo:
             opened = None
         elif last_opened_list_id is not None:
             opened = last_opened_list_id
+        default_import = current.default_import_list_id
+        if clear_default_import_list_id:
+            default_import = None
+        elif default_import_list_id is not None:
+            default_import = default_import_list_id
         updated = UserPreferencesRecord(
             id=current.id,
             email=current.email,
             language=language if language is not None else current.language,
             theme=theme if theme is not None else current.theme,
             last_opened_list_id=opened,
+            default_import_list_id=default_import,
         )
         self.prefs[user_id] = updated
         return updated
@@ -255,6 +265,93 @@ def test_set_last_opened_member_persists() -> None:
         SetLastOpenedListCommand(actor_user_id=owner, list_id=list_id)
     )
     assert prefs.prefs[owner].last_opened_list_id == list_id
+
+
+def test_route_card_to_list_member_allowed() -> None:
+    repo = FakeListRepo()
+    owner = uuid4()
+    list_id = _seed_owned(repo, owner=owner)
+
+    grant = AuthorizeListAccessService(repo).execute(
+        AuthorizeListAccessCommand(
+            acting_user_id=owner, list_id=list_id, action="route_card_to_list"
+        )
+    )
+    assert grant.list_id == list_id
+    assert grant.action == "route_card_to_list"
+
+
+def test_route_card_to_list_non_member_denied() -> None:
+    repo = FakeListRepo()
+    owner = uuid4()
+    stranger = uuid4()
+    list_id = _seed_owned(repo, owner=owner)
+
+    with pytest.raises(NotListMemberError):
+        AuthorizeListAccessService(repo).execute(
+            AuthorizeListAccessCommand(
+                acting_user_id=stranger, list_id=list_id, action="route_card_to_list"
+            )
+        )
+
+
+def test_set_default_import_list_action_member_allowed() -> None:
+    repo = FakeListRepo()
+    owner = uuid4()
+    list_id = _seed_owned(repo, owner=owner)
+
+    grant = AuthorizeListAccessService(repo).execute(
+        AuthorizeListAccessCommand(
+            acting_user_id=owner, list_id=list_id, action="set_default_import_list"
+        )
+    )
+    assert grant.list_id == list_id
+    assert grant.action == "set_default_import_list"
+
+
+def test_set_default_import_list_action_non_member_denied() -> None:
+    repo = FakeListRepo()
+    owner = uuid4()
+    stranger = uuid4()
+    list_id = _seed_owned(repo, owner=owner)
+
+    with pytest.raises(NotListMemberError):
+        AuthorizeListAccessService(repo).execute(
+            AuthorizeListAccessCommand(
+                acting_user_id=stranger, list_id=list_id, action="set_default_import_list"
+            )
+        )
+
+
+def test_set_default_import_list_non_member_denied() -> None:
+    repo = FakeListRepo()
+    owner = uuid4()
+    stranger = uuid4()
+    list_id = _seed_owned(repo, owner=owner)
+    prefs = FakePrefsRepo()
+    prefs.prefs[stranger] = UserPreferencesRecord(
+        id=stranger, email="stranger@example.com", language=None, theme=None
+    )
+
+    with pytest.raises(NotListMemberError):
+        SetDefaultImportListService(repo, prefs).execute(
+            SetDefaultImportListCommand(actor_user_id=stranger, list_id=list_id)
+        )
+
+
+def test_set_default_import_list_member_persists() -> None:
+    repo = FakeListRepo()
+    owner = uuid4()
+    list_id = _seed_owned(repo, owner=owner)
+    prefs = FakePrefsRepo()
+    prefs.prefs[owner] = UserPreferencesRecord(
+        id=owner, email="owner@example.com", language=None, theme=None
+    )
+
+    SetDefaultImportListService(repo, prefs).execute(
+        SetDefaultImportListCommand(actor_user_id=owner, list_id=list_id)
+    )
+    assert prefs.prefs[owner].default_import_list_id == list_id
 
 
 def test_detail_and_stubs_use_acl() -> None:

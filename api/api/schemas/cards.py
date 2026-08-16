@@ -1,8 +1,9 @@
-"""Pydantic DTOs for card register / list (Story 4.1)."""
+"""Pydantic DTOs for card register / list / routing (Story 4.1 / 4.3)."""
 
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from domain.cards import CARD_LABEL_MAX_LENGTH
@@ -25,7 +26,14 @@ class CardResponse(BaseModel):
     label: str
     iban: str
     created_at: datetime
+    routing_mode: str
+    fixed_list_id: UUID | None = None
 
 
 class CardsListResponse(BaseModel):
     cards: list[CardResponse] = Field(default_factory=list)
+
+
+class SetCardRoutingBody(BaseModel):
+    routing_mode: Literal["fixed", "review"]
+    fixed_list_id: UUID | None = None

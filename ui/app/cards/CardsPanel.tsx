@@ -6,7 +6,10 @@ import { useEffect, useId, useMemo, useState } from "react";
 import { CopyButton } from "@/components/CopyButton";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { cardsCopy } from "@/lib/i18n/cards";
+import { fetchLists, type ListItem } from "../lists/listsClient";
 import { fetchCards, type CardItem, type CardsClientMessages } from "./cardsClient";
+import { CardRoutingControl } from "./CardRoutingControl";
+import { DefaultImportListControl } from "./DefaultImportListControl";
 import { RegisterCardForm } from "./RegisterCardForm";
 
 function maskIban(iban: string): string {
@@ -27,6 +30,7 @@ export function CardsPanel({ embedded = false }: Props) {
   // Embedded contexts (e.g. Home) nest Cards under their own <h2>, so these drop a level to <h3>.
   const HeadingTag = embedded ? "h3" : "h2";
   const [cards, setCards] = useState<CardItem[]>([]);
+  const [lists, setLists] = useState<ListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -37,30 +41,45 @@ export function CardsPanel({ embedded = false }: Props) {
       errorInvalidLabel: t.errorInvalidLabel,
       errorInvalidIban: t.errorInvalidIban,
       errorDuplicateIban: t.errorDuplicateIban,
+      errorForbidden: t.errorForbidden,
+      errorCardNotFound: t.errorCardNotFound,
     }),
     [t],
   );
 
   useEffect(() => {
     let cancelled = false;
-    fetchCards(messages).then((result) => {
+    Promise.all([
+      fetchCards(messages),
+      fetchLists({
+        errorGeneric: t.errorGeneric,
+        errorInvalidName: t.errorGeneric,
+        errorForbidden: t.errorForbidden,
+        errorUnauthorized: t.errorUnauthorized,
+      }),
+    ]).then(([cardsResult, listsResult]) => {
       if (cancelled) return;
-      if (!result.ok) {
-        setLoadError(result.error);
+      if (!cardsResult.ok) {
+        setLoadError(cardsResult.error);
       } else {
-        setCards(result.cards);
+        setCards(cardsResult.cards);
       }
+      if (listsResult.ok) setLists(listsResult.lists);
       setLoading(false);
     });
     return () => {
       cancelled = true;
     };
-    // Card data does not depend on locale; fetch once on mount.
+    // Card/list data does not depend on locale; fetch once on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function onRegistered(card: CardItem) {
     setCards((prev) => [card, ...prev]);
+  }
+
+  function onRoutingUpdated(updated: CardItem) {
+    setCards((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
   }
 
   const sections = (
@@ -85,19 +104,45 @@ export function CardsPanel({ embedded = false }: Props) {
             {cards.map((card) => (
               <li
                 key={card.id}
-                className="flex items-center justify-between gap-3 py-[0.6rem] px-[0.85rem] rounded-[8px] border border-border bg-surface"
+                className="flex flex-col gap-1 py-[0.6rem] px-[0.85rem] rounded-[8px] border border-border bg-surface"
               >
-                <span className="font-[550] text-foreground text-[0.95rem]">{card.label}</span>
-                <CopyButton value={card.iban} label={t.copyIban} copiedLabel={t.ibanCopied}>
-                  <span className="text-muted text-[0.85rem] tracking-[0.02rem]">
-                    {maskIban(card.iban)}
-                  </span>
-                </CopyButton>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-[550] text-foreground text-[0.95rem]">{card.label}</span>
+                  <CopyButton value={card.iban} label={t.copyIban} copiedLabel={t.ibanCopied}>
+                    <span className="text-muted text-[0.85rem] tracking-[0.02rem]">
+                      {maskIban(card.iban)}
+                    </span>
+                  </CopyButton>
+                </div>
+                <CardRoutingControl
+                  card={card}
+                  lists={lists}
+                  messages={{
+                    ...messages,
+                    routingModeFixed: t.routingModeFixed,
+                    routingModeReview: t.routingModeReview,
+                    routingListLabel: t.routingListLabel,
+                    routingSave: t.routingSave,
+                    routingSaving: t.routingSaving,
+                  }}
+                  onUpdated={onRoutingUpdated}
+                />
               </li>
             ))}
           </ul>
         )}
       </section>
+
+      <DefaultImportListControl
+        lists={lists}
+        messages={{
+          defaultListTitle: t.defaultListTitle,
+          defaultListHint: t.defaultListHint,
+          errorGeneric: t.errorGeneric,
+          errorUnauthorized: t.errorUnauthorized,
+          errorForbidden: t.errorForbidden,
+        }}
+      />
 
       <section aria-labelledby={registerTitleId}>
         <HeadingTag

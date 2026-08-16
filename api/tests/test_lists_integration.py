@@ -231,3 +231,26 @@ def test_set_last_opened_list_member_and_non_member(client: TestClient) -> None:
     assert missing.status_code == 403
     assert missing.json()["code"] == "not_list_member"
     assert missing.json()["detail"] == "You do not have access to this list."
+
+
+def test_set_default_import_list_member_and_non_member(client: TestClient) -> None:
+    _register(client, "importdefault@example.com")
+    created = client.post("/lists", json={"name": "Trip"})
+    list_id = created.json()["id"]
+
+    patched = client.patch("/auth/me", json={"default_import_list_id": list_id})
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["default_import_list_id"] == list_id
+
+    me = client.get("/auth/me")
+    assert me.json()["default_import_list_id"] == list_id
+
+    client.post("/auth/sign-out")
+    _register(client, "importdefaultnosy@example.com")
+    denied = client.patch("/auth/me", json={"default_import_list_id": list_id})
+    assert denied.status_code == 403
+    assert denied.json()["code"] == "not_list_member"
+
+    missing = client.patch("/auth/me", json={"default_import_list_id": str(uuid4())})
+    assert missing.status_code == 403
+    assert missing.json()["code"] == "not_list_member"

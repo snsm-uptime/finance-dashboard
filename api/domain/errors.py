@@ -313,6 +313,26 @@ class CardIbanAlreadyRegisteredError(DomainError):
         super().__init__(f"You already have a card named {existing_label} with this IBAN.")
 
 
+class InvalidCardRoutingModeError(DomainError):
+    """Raised when a card routing mode/fixed-list combination fails validation (FR-11)."""
+
+    MESSAGE = "Choose fixed-list or review-routing."
+    CODE = "invalid_card_routing_mode"
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(detail or self.MESSAGE)
+
+
+class CardNotFoundError(DomainError):
+    """Raised when a card id does not exist for the acting user."""
+
+    MESSAGE = "Card not found."
+    CODE = "card_not_found"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
 class FxFutureDateError(DomainError):
     """Raised when FX materialization is attempted for a future posted_date (AD-7)."""
 

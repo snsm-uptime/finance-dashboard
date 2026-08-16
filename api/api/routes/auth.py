@@ -27,7 +27,12 @@ from application.list_invite_accept import (
     SignUpWithInviteCommand,
     SignUpWithInviteService,
 )
-from application.lists import SetLastOpenedListCommand, SetLastOpenedListService
+from application.lists import (
+    SetDefaultImportListCommand,
+    SetDefaultImportListService,
+    SetLastOpenedListCommand,
+    SetLastOpenedListService,
+)
 from application.password_reset import (
     CompletePasswordResetCommand,
     CompletePasswordResetService,
@@ -146,6 +151,7 @@ def _me_response(result) -> MeResponse:
         language=result.language,
         theme=result.theme,
         last_opened_list_id=result.last_opened_list_id,
+        default_import_list_id=result.default_import_list_id,
     )
 
 
@@ -259,6 +265,16 @@ def patch_current_user(
                     list_id=body.last_opened_list_id,
                 )
             )
+        if body.default_import_list_id is not None:
+            SetDefaultImportListService(
+                SqlAlchemyListRepository(db),
+                prefs,
+            ).execute(
+                SetDefaultImportListCommand(
+                    actor_user_id=user_id,
+                    list_id=body.default_import_list_id,
+                )
+            )
         result = UpdatePreferencesService(prefs).execute(
             UpdatePreferencesCommand(
                 user_id=user_id,
@@ -303,7 +319,10 @@ def patch_current_user(
         )
     if body.alias is not None:
         logger.info("user_alias_set user_id=%s", user_id)
-    if wrote_prefs or body.last_opened_list_id is not None:
+    wrote_list_prefs = (
+        body.last_opened_list_id is not None or body.default_import_list_id is not None
+    )
+    if wrote_prefs or wrote_list_prefs:
         logger.info("user_preferences_updated user_id=%s", user_id)
     return _me_response(result)
 

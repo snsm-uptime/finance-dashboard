@@ -1,6 +1,13 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 
-import { createList, inviteMember, renameList, saveDefaultSplit } from "./listsClient";
+import {
+  createList,
+  fetchLists,
+  inviteMember,
+  renameList,
+  saveDefaultSplit,
+  setDefaultImportList,
+} from "./listsClient";
 
 const messages = {
   errorGeneric: "generic",
@@ -28,6 +35,67 @@ describe("listsClient", () => {
     );
 
     const result = await renameList("list-1", "New", messages);
+    expect(result).toEqual({ ok: false, error: "forbidden" });
+  });
+
+  it("fetchLists returns membership lists on success", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        lists: [{ id: "l1", name: "Household", owner_id: "u1", role: "owner" }],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await fetchLists(messages);
+    expect(result).toEqual({
+      ok: true,
+      lists: [{ id: "l1", name: "Household", owner_id: "u1", role: "owner" }],
+    });
+    expect(fetchMock).toHaveBeenCalledWith("/api/lists", expect.objectContaining({ method: "GET" }));
+  });
+
+  it("fetchLists maps a failure response to the generic message", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        json: async () => ({ detail: "Not authenticated." }),
+      }),
+    );
+
+    const result = await fetchLists(messages);
+    expect(result).toEqual({ ok: false, error: "unauthorized" });
+  });
+
+  it("setDefaultImportList patches /api/auth/me with default_import_list_id", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await setDefaultImportList("list-1", messages);
+    expect(result).toEqual({ ok: true });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/auth/me",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ default_import_list_id: "list-1" }),
+      }),
+    );
+  });
+
+  it("setDefaultImportList maps 403 to forbidden message", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 403,
+        json: async () => ({ code: "not_list_member", detail: "nope" }),
+      }),
+    );
+
+    const result = await setDefaultImportList("list-1", messages);
     expect(result).toEqual({ ok: false, error: "forbidden" });
   });
 

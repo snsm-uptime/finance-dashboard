@@ -15,11 +15,16 @@ from application.cards import (
     MatchCardByIbanService,
     RegisterCardCommand,
     RegisterCardService,
+    SetCardRoutingCommand,
+    SetCardRoutingService,
 )
 from domain.errors import (
     CardIbanAlreadyRegisteredError,
+    CardNotFoundError,
     InvalidCardIbanError,
     InvalidCardLabelError,
+    InvalidCardRoutingModeError,
+    NotListMemberError,
 )
 
 
@@ -50,6 +55,64 @@ class _FakeCardRepo:
             key=lambda c: c.created_at,
             reverse=True,
         )
+
+    def get_card(self, card_id: UUID, user_id: UUID) -> CardRecord | None:
+        for card in self.cards:
+            if card.id == card_id and card.user_id == user_id:
+                return card
+        return None
+
+    def update_routing(
+        self, *, card_id: UUID, user_id: UUID, routing_mode: str, fixed_list_id: UUID | None
+    ) -> CardRecord:
+        for i, card in enumerate(self.cards):
+            if card.id == card_id and card.user_id == user_id:
+                updated = CardRecord(
+                    id=card.id,
+                    user_id=card.user_id,
+                    label=card.label,
+                    iban=card.iban,
+                    created_at=card.created_at,
+                    routing_mode=routing_mode,
+                    fixed_list_id=fixed_list_id,
+                )
+                self.cards[i] = updated
+                return updated
+        raise CardNotFoundError()
+
+
+@dataclass
+class _FakeListPeek:
+    id: UUID
+    owner_id: UUID
+
+
+@dataclass
+class _FakeMembershipPeek:
+    user_id: UUID
+    role: str = "member"
+
+
+@dataclass
+class _FakeListLookup:
+    """Minimal ListAccessLookup double — separate from test_list_access_domain.py's
+    FakeListRepo to keep this file self-contained (Dev Notes Task 4.6)."""
+
+    lists: dict[UUID, _FakeListPeek] = field(default_factory=dict)
+    memberships: dict[UUID, list[_FakeMembershipPeek]] = field(default_factory=dict)
+
+    def add_member(self, list_id: UUID, owner_id: UUID, user_id: UUID) -> None:
+        self.lists.setdefault(list_id, _FakeListPeek(id=list_id, owner_id=owner_id))
+        self.memberships.setdefault(list_id, []).append(_FakeMembershipPeek(user_id=user_id))
+
+    def get_list(self, list_id: UUID) -> _FakeListPeek | None:
+        return self.lists.get(list_id)
+
+    def get_membership(self, list_id: UUID, user_id: UUID) -> _FakeMembershipPeek | None:
+        for m in self.memberships.get(list_id, []):
+            if m.user_id == user_id:
+                return m
+        return None
 
 
 def test_register_card_success() -> None:
@@ -183,3 +246,98 @@ def test_list_cards_scoped_to_actor_user() -> None:
 
     result = ListCardsService(repo).execute(ListCardsCommand(actor_user_id=stranger))
     assert result == []
+
+
+def test_set_card_routing_fixed_member_succeeds() -> None:
+    repo = _FakeCardRepo()
+    lookup = _FakeListLookup()
+    actor = uuid4()
+    list_id = uuid4()
+    lookup.add_member(list_id, owner_id=actor, user_id=actor)
+    card = RegisterCardService(repo).execute(
+        RegisterCardCommand(actor_user_id=actor, label="My Visa", iban="CR05")
+    )
+
+    result = SetCardRoutingService(repo, lookup).execute(
+        SetCardRoutingCommand(
+            actor_user_id=actor, card_id=card.id, routing_mode="fixed", fixed_list_id=list_id
+        )
+    )
+
+    assert result.routing_mode == "fixed"
+    assert result.fixed_list_id == list_id
+
+
+def test_set_card_routing_fixed_non_member_denied() -> None:
+    repo = _FakeCardRepo()
+    lookup = _FakeListLookup()
+    actor = uuid4()
+    owner = uuid4()
+    list_id = uuid4()
+    lookup.add_member(list_id, owner_id=owner, user_id=owner)
+    card = RegisterCardService(repo).execute(
+        RegisterCardCommand(actor_user_id=actor, label="My Visa", iban="CR05")
+    )
+
+    with pytest.raises(NotListMemberError):
+        SetCardRoutingService(repo, lookup).execute(
+            SetCardRoutingCommand(
+                actor_user_id=actor, card_id=card.id, routing_mode="fixed", fixed_list_id=list_id
+            )
+        )
+    assert repo.cards[0].routing_mode == "review"
+
+
+def test_set_card_routing_review_clears_stray_fixed_list_id() -> None:
+    repo = _FakeCardRepo()
+    lookup = _FakeListLookup()
+    actor = uuid4()
+    list_id = uuid4()
+    lookup.add_member(list_id, owner_id=actor, user_id=actor)
+    card = RegisterCardService(repo).execute(
+        RegisterCardCommand(actor_user_id=actor, label="My Visa", iban="CR05")
+    )
+    SetCardRoutingService(repo, lookup).execute(
+        SetCardRoutingCommand(
+            actor_user_id=actor, card_id=card.id, routing_mode="fixed", fixed_list_id=list_id
+        )
+    )
+
+    result = SetCardRoutingService(repo, lookup).execute(
+        SetCardRoutingCommand(
+            actor_user_id=actor, card_id=card.id, routing_mode="review", fixed_list_id=list_id
+        )
+    )
+
+    assert result.routing_mode == "review"
+    assert result.fixed_list_id is None
+
+
+def test_set_card_routing_unowned_card_not_found() -> None:
+    repo = _FakeCardRepo()
+    lookup = _FakeListLookup()
+    owner = uuid4()
+    stranger = uuid4()
+    card = RegisterCardService(repo).execute(
+        RegisterCardCommand(actor_user_id=owner, label="My Visa", iban="CR05")
+    )
+
+    with pytest.raises(CardNotFoundError):
+        SetCardRoutingService(repo, lookup).execute(
+            SetCardRoutingCommand(actor_user_id=stranger, card_id=card.id, routing_mode="review")
+        )
+
+
+def test_set_card_routing_invalid_mode_rejected_before_any_io() -> None:
+    repo = _FakeCardRepo()
+    lookup = _FakeListLookup()
+    actor = uuid4()
+    card = RegisterCardService(repo).execute(
+        RegisterCardCommand(actor_user_id=actor, label="My Visa", iban="CR05")
+    )
+
+    with pytest.raises(InvalidCardRoutingModeError):
+        SetCardRoutingService(repo, lookup).execute(
+            SetCardRoutingCommand(actor_user_id=actor, card_id=card.id, routing_mode="bogus")
+        )
+    assert repo.cards[0].routing_mode == "review"

@@ -42,6 +42,12 @@ class UserModel(Base):
     last_opened_list_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("lists.id", ondelete="SET NULL"), nullable=True
     )
+    default_import_list_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("lists.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -342,6 +348,17 @@ class CardModel(Base):
     )
     label: Mapped[str] = mapped_column(String(100), nullable=False)
     iban: Mapped[str] = mapped_column(String(64), nullable=False)
+    # Routing mode (Story 4.3, FR-11/FR-16) — "review" default so no card
+    # silently assumes an always-personal-list destination (AC #4).
+    routing_mode: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="review", server_default="review"
+    )
+    fixed_list_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("lists.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

@@ -43,6 +43,7 @@ class UserPreferencesRecord:
     language: str | None
     theme: str | None
     last_opened_list_id: UUID | None = None
+    default_import_list_id: UUID | None = None
     alias: str | None = None
 
 
@@ -93,6 +94,8 @@ class PreferencesRepository(Protocol):
         theme: str | None = None,
         last_opened_list_id: UUID | None = None,
         clear_last_opened_list_id: bool = False,
+        default_import_list_id: UUID | None = None,
+        clear_default_import_list_id: bool = False,
     ) -> UserPreferencesRecord: ...
 
     def claim_alias(self, user_id: UUID, alias: str) -> UserPreferencesRecord:

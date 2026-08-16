@@ -45,6 +45,7 @@ class MePreferencesResult:
     language: str | None
     theme: str | None
     last_opened_list_id: UUID | None
+    default_import_list_id: UUID | None = None
     alias: str | None = None
 
 
@@ -86,6 +87,7 @@ def _to_result(row: UserPreferencesRecord) -> MePreferencesResult:
         language=_coerce_language(row.language),
         theme=_coerce_theme(row.theme),
         last_opened_list_id=row.last_opened_list_id,
+        default_import_list_id=row.default_import_list_id,
         alias=row.alias,
     )
 
