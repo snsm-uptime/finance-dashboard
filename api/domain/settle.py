@@ -17,7 +17,9 @@ from dataclasses import dataclass
 from decimal import Decimal
 from uuid import UUID
 
-INCLUDED_LINE_TYPES = frozenset({"purchase", "classified_purchase_reversal"})
+from domain.line_types import LINE_TYPE_CLASSIFIED_PURCHASE_REVERSAL, LINE_TYPE_PURCHASE
+
+INCLUDED_LINE_TYPES = frozenset({LINE_TYPE_PURCHASE, LINE_TYPE_CLASSIFIED_PURCHASE_REVERSAL})
 
 
 @dataclass(frozen=True, slots=True)
