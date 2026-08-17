@@ -385,3 +385,33 @@ class FxAuthenticationError(DomainError):
 
     def __init__(self, detail: str | None = None) -> None:
         super().__init__(detail or "BCCR authentication failed. Check BCCR_* configuration.")
+
+
+class InvalidCanonicalLineError(DomainError):
+    """Raised when an adapter-emitted statement row fails contract validation (Story 4.4)."""
+
+    MESSAGE = "Statement row failed contract validation."
+    CODE = "invalid_canonical_line"
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(detail or self.MESSAGE)
+
+
+class UnknownBankAdapterError(DomainError):
+    """Raised when no registered adapter matches the uploaded file (Story 4.4, FR-14)."""
+
+    MESSAGE = "Could not identify the bank or product for this file."
+    CODE = "unknown_bank_adapter"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
+class AmbiguousBankAdapterError(DomainError):
+    """Raised when more than one adapter matches — no silent mis-association (NFR-8)."""
+
+    MESSAGE = "Multiple banks matched this file — cannot detect automatically."
+    CODE = "ambiguous_bank_adapter"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
