@@ -11,6 +11,10 @@
 bank_data/
 **/bank_data/
 
+# statement_recon.py output (safe/anonymized, but scratch by default —
+# `git add -f` a specific file to promote it into a real test fixture)
+api/tests/fixtures/bank_recon/
+
 # Python
 __pycache__/
 *.py[cod]

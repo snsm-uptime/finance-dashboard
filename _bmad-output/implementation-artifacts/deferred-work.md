@@ -174,6 +174,11 @@
   summary: No test coverage for the new /home route (unauth redirect, alias-gate redirect, dual-panel render, fetchMembershipLists failure branch) or the /lists redirect stub's actual behavior
   evidence: Review — diff only updates pre-existing unit tests' literal "/lists" → "/home" strings; new page logic in ui/app/home/page.tsx and ui/app/lists/page.tsx is unverified by tests
 
+## Deferred from: code review of 4-4-adapter-contract-canonicalline-bac-normalize.md (2026-08-17)
+
+- Sign convention (positive charges / negative payments+credit-notes) was invented without a real BAC statement to validate against — `_signed_amount` (`api/adapters/bank/bac_credit/adapter.py:97-98`) would double-flip an amount if the source ever prints a row already signed; already flagged as a judgment call in this story's own Completion Notes for Story 4.5 to validate against real data
+- `LINE_TYPE_CREDIT_NOTE` has no section mapping in `BacCreditAdapter` (`api/adapters/bank/bac_credit/adapter.py:48-59,64`) — unreachable; a real BAC credit-note/refund section would currently fall into the unmapped-section path. Acceptable per this story's Scope Note ("not full statement coverage"); tracked for Story 4.5
+
 ## Deferred from: code review of 4-2-manual-origin-card-cash-blank-no-origin-filter.md (2026-08-15)
 
 - Card deletion leaves `origin_kind="card"` with `origin_card_id=NULL` after `ON DELETE SET NULL` (`api/adapters/persistence/models.py:280-285`) — already flagged as a deliberately-deferred gap in this story's own Dev Notes/Completion Notes; also currently unreachable since no card-delete endpoint exists anywhere in the app

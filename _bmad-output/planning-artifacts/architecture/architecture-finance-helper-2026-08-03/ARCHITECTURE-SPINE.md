@@ -242,6 +242,24 @@ flowchart LR
   TH -.->|family only| ROLE
 ```
 
+### AD-25 — Section header contract [ADOPTED]
+
+- **Binds:** bank adapters' `parse()` step; section/line-type mapping (extends AD-16)
+- **Prevents:** each adapter reimplementing its own title/column-header state machine; a stray boilerplate or column-label line between a section title and its data rows being misread as a data row or as an unmapped section
+- **Rule:** Adapters declare sections as a `SectionSpec` list (`domain/statement_layout.py`): `title` (the printed section title line), `line_type`, `policy` (`SECTION_POLICIES`), and an optional `column_header` (the printed column sub-header line, for banks that print one — real statements print a two-level header: section title, then a column sub-header, e.g. "NO. REFERENCIA FECHA CONCEPTO DÉBITOS CRÉDITOS"). A shared `SectionCursor` walks an adapter's extracted lines against that declared list — recognizing a title, silently consuming exactly one immediately-following declared `column_header` without ending the "just saw a header" state, then classifying subsequent lines as data / ignored / unmapped per the active section's policy. Adapters MUST declare sections via `SectionSpec`, not a private title→policy dict; the header state machine lives once in `SectionCursor`, not reimplemented per adapter.
+
+### AD-26 — Per-product date-format contract [ADOPTED]
+
+- **Binds:** bank adapters' row-level date parsing (extends AD-16's `posted_date`)
+- **Prevents:** locale-dependent month parsing (`datetime`/`strptime`'s `%b` resolves against the system locale, not guaranteed `es_CR`); a hand-rolled date parser per adapter/product; a fabricated year silently misdating a row
+- **Rule:** Each adapter declares a `date_format` string (e.g. `"%d-%b-%y"` for BAC credit's `DD-MMM-YY`, `"%b/%d"` for BAC debit's `MMM/DD`) — its own token vocabulary, resolved by a shared `domain/statement_dates.py` tokenizer against a fixed Spanish-month table, never against `datetime`'s locale machinery. When a declared format has no year token, the adapter supplies the source PDF's `/CreationDate` metadata (read once per statement chunk, not per row) as `reference_date`; the shared parser assigns each row's `(month, day)` the nearest year at or before `reference_date` — try `reference_date.year`; if that combination would fall after `reference_date`, roll back one year. Adapters MUST NOT infer years via ad-hoc per-row logic or a majority-vote pass over the statement; nearest-prior-to-`reference_date` is the one source of truth (mirrors AD-7's FX nearest-prior-date fallback).
+
+### AD-27 — Statement-boundary detection [ADOPTED]
+
+- **Binds:** bank adapters' `split()` step (extends AD-16's multi-statement split, NFR-12)
+- **Prevents:** a repeating page marker (bank name/letterhead printed on every page) being mistaken for a statement boundary; each adapter reimplementing its own boundary-detection fallback chain
+- **Rule:** Statement boundaries are detected via one shared priority chain (`domain/statement_layout.py`), strongest evidence first: (1) a printed page counter (e.g. "Página X de Y") resetting to 1 — real evidence of a new statement starting, not just a repeating running header; (2) a repeating per-statement marker line, used only when no page counter is found anywhere in the document (weaker signal — cannot distinguish a per-statement marker from a running page title on a single long statement); (3) no evidence found → assume one statement. `split()` implementations MUST call the shared detector rather than hand-rolling their own boundary heuristic; which method fired is retained (not silently discarded) for adapter test/debug visibility.
+
 ## Consistency Conventions
 
 | Concern | Convention |
@@ -354,7 +372,7 @@ erDiagram
 | Lists, membership, splits, ACL | `domain` + persistence | AD-19, AD-5, AD-6 — see [membership-acl-enforcement-sketch.md](./membership-acl-enforcement-sketch.md) |
 | Cards / IBAN registration | `domain` + persistence; `ui` interrupt | AD-20, AD-12 |
 | Type / fonts | `ui` `@theme` + `@utility type-*`; Soft-Ledger primitives | AD-24, AD-12, AD-23 |
-| Detect / split / parse / normalize | `adapters/bank/*` | Paradigm, AD-2, AD-11, AD-16 |
+| Detect / split / parse / normalize | `adapters/bank/*` | Paradigm, AD-2, AD-11, AD-16, AD-25, AD-26, AD-27 |
 | Import Session review | `application` + `ui` | AD-4, AD-9, AD-12 |
 | Commit / dedup / batch rollback | `domain` + persistence | AD-4, AD-16, AD-18 |
 | Quarantine + incomplete disclosure | `domain` + settle views | AD-17 |

@@ -9,10 +9,10 @@ from uuid import UUID
 
 from domain.dates import today_costa_rica_iso
 from domain.errors import InvalidManualExpenseError
+from domain.line_types import LINE_TYPE_PURCHASE
 
 PROVENANCE_HAND = "hand"
 PROVENANCE_PARSER = "parser"
-LINE_TYPE_PURCHASE = "purchase"
 MANUAL_CURRENCY_CRC = "CRC"
 # v1 FX scope is USD+CRC only (Story 3.5 / AD-7); other currencies deferred.
 MANUAL_SUPPORTED_CURRENCIES = frozenset({"CRC", "USD"})

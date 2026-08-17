@@ -12,6 +12,7 @@ dependencies = [
   "psycopg[binary]==3.3.4",
   "argon2-cffi==25.1.0",
   "aiosmtplib==5.1.2",
+  "pdfplumber==0.11.10",
 ]
 
 [dependency-groups]
@@ -19,6 +20,7 @@ dev = [
   "pytest==9.1.1",
   "ruff==0.14.7",
   "httpx==0.28.1",
+  "fpdf2==2.8.5",
 ]
 
 [tool.uv]

@@ -152,6 +152,21 @@ For a button that also needs local state around the click (e.g. a "copied!" conf
 
 Raw `<button>` stays fine for **text-labeled** buttons (form submits, choice/toggle buttons) — this convention is specifically for icon-only controls.
 
+## 4. Bank statement dev tools
+
+Full docs: `api/scripts/README.md`.
+
+To build/test a new `BankAdapter` (`api/adapters/bank/`), turn a real statement PDF into a safe-to-commit mock + structure mapping:
+
+```bash
+cd api
+uv run python scripts/statement_recon.py /path/to/real_statement.pdf --bank <bank_id>
+```
+
+Writes `tests/fixtures/bank_recon/<bank_id>/mapping.yaml` (structure only) and `mock_statement.pdf` (synthetic, safe to commit). Review `mapping.yaml`'s `statement_marker`/`header` fields for personal data before committing — those two fields are real text lifted from the source PDF; nothing else is.
+
+Real statement PDFs for local testing go in `bank_data/` at the repo root (gitignored) — never commit them. `api/scripts/README.md` also covers recovering the ones that were briefly committed early in this project's history and later removed from tracking (still in git history, not on disk).
+
 ---
 
 ## Cheat sheet
@@ -164,5 +179,6 @@ Raw `<button>` stays fine for **text-labeled** buttons (form submits, choice/tog
 | Add worktree    | `./scripts/worktree/worktree-add.sh <slug> <branch>`                                     |
 | Bootstrap       | `cd ../finance-dashboard-wt-<slug>` → `<primary>/scripts/worktree/worktree-bootstrap.sh` |
 | Remove worktree | `./scripts/worktree/worktree-remove.sh <slug>`                                           |
+| Statement → mock + mapping | `cd api && uv run python scripts/statement_recon.py <pdf> --bank <id>`                   |
 
 More detail on Cursor’s worktree hook: `scripts/worktree/README.md`.
