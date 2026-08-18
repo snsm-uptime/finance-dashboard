@@ -18,6 +18,8 @@ So that multi-statement files are detected and split before I commit anything.
 4. **Given** review has not committed, **when** I discard the session, **then** only uncommitted session state is dropped — no ledger writes. (AD-4)
 5. **Given** a typical single multi-card BAC PDF on the operator's self-hosted hardware, **when** upload → detect/split → review staging completes, **then** the path finishes within an interactive session — review is not an overnight batch job. (NFR-12)
 
+**Correct-course pointer (2026-08-17):** Story 4.4 is now `done`. A validation pass confirmed this story's `ImportPipeline`/`NoAdaptersRegisteredPipeline` port was a reasonable placeholder but does not match what 4.4 actually built (`BankAdapter` + `detect_bank_adapter()` — no multi-adapter orchestrator exists yet; `DetectedStatement`/`DetectedCandidateRow` DTOs are close but not identical to `CanonicalLine`). This needs a real redraft of Task 2 (and the Dev Notes below), not just renames — see `_bmad-output/planning-artifacts/sprint-change-proposal-2026-08-17.md` for the full analysis. **Do not start `dev-story` on this file as-is** — re-run `create-story` (or a manual Dev Notes rewrite) against the real 4.4/4.5 code first, once 4.5 is also `done`.
+
 ## Scope Note — read before starting (this story was drafted ahead of its prerequisites)
 
 **This story was created deliberately ahead of Stories 4.4 and 4.5** (a "head start" draft, by explicit user request during creation). Verified against the live codebase at story-creation time (2026-08-16, `main` @ `0557bcb`):
