@@ -1,0 +1,116 @@
+"""Expected CanonicalLine rows for bac_credit_acceptance_bar.pdf (Story 4.5, Task 2.4).
+
+This is the v1 parsing acceptance bar (AC #1, FR-35): every must-parse row
+of the BAC credit baseline section map, run through the real pipeline
+(detect_bank_adapter -> BacCreditAdapter.split -> .parse), asserted equal
+here with zero manual edits (see test_bac_credit_fixture_acceptance.py).
+
+Saldo Anterior is deliberately excluded — its section policy is "ignore",
+so it must produce no CanonicalLine at all.
+
+Sign convention: purchases/interest/fee/voluntary_service/
+installment_schedule are positive charges; payments are negative
+(balance-reducing) — see adapter.py's _NEGATIVE_LINE_TYPES. Confirmed not
+contradicted by a real BAC credit statement recovered locally for this
+story's Task 2.1a sanity check (real statements print amounts unsigned in
+both sections; the negative-for-payments convention is a software-level
+modeling choice, not something the source PDF disputes) — see this story's
+Completion Notes.
+"""
+
+from __future__ import annotations
+
+from decimal import Decimal
+
+from domain.expenses import PROVENANCE_PARSER
+
+GOLDENS: list[dict[str, object]] = [
+    {
+        "posted_date": "2026-01-03",
+        "amount": Decimal("9750.00"),
+        "currency": "CRC",
+        "product_id": "bac_credit",
+        "line_type": "purchase",
+        "normalized_description": "FARMACIA CENTRAL",
+        "provenance": PROVENANCE_PARSER,
+        "external_ref": None,
+        "ref_quality": None,
+    },
+    {
+        "posted_date": "2026-01-04",
+        "amount": Decimal("14200.00"),
+        "currency": "CRC",
+        "product_id": "bac_credit",
+        "line_type": "purchase",
+        "normalized_description": "SUPERMERCADO ABC",
+        "provenance": PROVENANCE_PARSER,
+        "external_ref": None,
+        "ref_quality": None,
+    },
+    {
+        "posted_date": "2026-01-06",
+        "amount": Decimal("72.50"),
+        "currency": "USD",
+        "product_id": "bac_credit",
+        "line_type": "purchase",
+        "normalized_description": "AMAZON STORE",
+        "provenance": PROVENANCE_PARSER,
+        "external_ref": None,
+        "ref_quality": None,
+    },
+    {
+        "posted_date": "2026-01-08",
+        "amount": Decimal("-60000.00"),
+        "currency": "CRC",
+        "product_id": "bac_credit",
+        "line_type": "payment",
+        "normalized_description": "PAGO SINPE MOVIL",
+        "provenance": PROVENANCE_PARSER,
+        "external_ref": None,
+        "ref_quality": None,
+    },
+    {
+        "posted_date": "2026-01-10",
+        "amount": Decimal("1850.00"),
+        "currency": "CRC",
+        "product_id": "bac_credit",
+        "line_type": "interest",
+        "normalized_description": "INTERESES CORRIENTES",
+        "provenance": PROVENANCE_PARSER,
+        "external_ref": None,
+        "ref_quality": None,
+    },
+    {
+        "posted_date": "2026-01-12",
+        "amount": Decimal("4100.00"),
+        "currency": "CRC",
+        "product_id": "bac_credit",
+        "line_type": "fee",
+        "normalized_description": "CUOTA DE MANEJO",
+        "provenance": PROVENANCE_PARSER,
+        "external_ref": None,
+        "ref_quality": None,
+    },
+    {
+        "posted_date": "2026-01-14",
+        "amount": Decimal("2300.00"),
+        "currency": "CRC",
+        "product_id": "bac_credit",
+        "line_type": "voluntary_service",
+        "normalized_description": "SEGURO TARJETA",
+        "provenance": PROVENANCE_PARSER,
+        "external_ref": None,
+        "ref_quality": None,
+    },
+    {
+        "posted_date": "2026-01-16",
+        "amount": Decimal("18500.00"),
+        "currency": "CRC",
+        "product_id": "bac_credit",
+        "line_type": "installment_schedule",
+        "normalized_description": "CUOTA FINANCIAMIENTO EQUIPO",
+        "provenance": PROVENANCE_PARSER,
+        "external_ref": None,
+        "ref_quality": None,
+    },
+]
