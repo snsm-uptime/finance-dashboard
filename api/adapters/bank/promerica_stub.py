@@ -1,41 +1,34 @@
-"""BAC credit-card adapter — first concrete BankAdapter (Story 4.4, AC #1/#3/#4/#6).
+"""Promerica stub adapter — proves the BankAdapter contract extends (Story 4.5, AC #2).
 
-Per AD-1/AD-16 this returns normalized CanonicalLine rows to the application
-layer and does nothing else: it never commits, touches lists/membership, or
-calls other adapters. It has zero knowledge of Import Session/Batch.
+Not a real Promerica parser: real Promerica parsing is out of scope until
+real statement samples exist (PRD). This exists only to prove that adding a
+second bank/product needs zero edits to domain/canonical_line.py or
+application/bank_adapters.py — only a new adapter module plus a registry
+entry (adapters/bank/__init__.py). Detection is a deliberately fake
+signature, not real content heuristics.
 
-This is a *proving* adapter for the contract, not the Story 4.5 official
-acceptance-bar parser — section/table extraction here is intentionally a
-simple line-based reader over pdfplumber's extracted text (adequate for the
-synthetic fixture this story ships), not geometry-driven table extraction.
+Uses the same shared contracts BacCreditAdapter uses (AD-25/AD-26/AD-27):
+SectionSpec/SectionCursor for section vocabulary, parse_statement_date for
+dates, detect_statement_boundaries for the split() multi-statement proof —
+a stub that hand-rolled its own section dict or date parsing would prove
+less than AC #2 requires.
 """
 
 from __future__ import annotations
 
 import io
 import logging
-from decimal import Decimal, InvalidOperation
+from decimal import InvalidOperation
 
 import pdfplumber
 import pypdfium2 as pdfium
 from domain.canonical_line import (
-    SECTION_POLICY_BEST_EFFORT,
-    SECTION_POLICY_IGNORE,
     SECTION_POLICY_MUST_PARSE,
     CanonicalLine,
-    normalize_dual_column_amount,
     validate_canonical_line,
 )
 from domain.errors import InvalidCanonicalLineError
-from domain.line_types import (
-    LINE_TYPE_CREDIT_NOTE,
-    LINE_TYPE_FEE,
-    LINE_TYPE_INSTALLMENT_SCHEDULE,
-    LINE_TYPE_INTEREST,
-    LINE_TYPE_PAYMENT,
-    LINE_TYPE_PURCHASE,
-    LINE_TYPE_VOLUNTARY_SERVICE,
-)
+from domain.line_types import LINE_TYPE_PURCHASE
 from domain.statement_dates import parse_statement_date
 from domain.statement_layout import SectionCursor, SectionSpec, detect_statement_boundaries
 
@@ -43,69 +36,40 @@ from adapters.bank._shared import parse_amount_field, sniff_content_marker
 
 _logger = logging.getLogger(__name__)
 
-# Content-sniff marker: printed once per statement page. Also doubles as the
-# split() statement-boundary marker (BAC multi-card PDFs bundle N per-card
-# statements — NFR-12).
-_STATEMENT_HEADER_MARKER = "ESTADO DE CUENTA BAC CREDITO"
+# Clearly fake — this is a stub proving pluggability, not a real Promerica
+# content signature (none exists yet; no real samples to derive one from).
+_STATEMENT_HEADER_MARKER = "ESTADO DE CUENTA PROMERICA STUB"
 
 _DATE_FORMAT = "%d-%b-%y"
 
-# BAC credit baseline section map (authoritative — PRD "Parsing and adapter
-# requirements > BAC credit baseline"). Do not invent alternate section names
-# or policies here — the fixture and the shared SectionCursor (AD-25) must
-# agree on vocabulary.
+# Minimal, single-section vocabulary — enough to prove the contract's
+# section-declaration mechanism generalizes, not a real Promerica layout.
 _SECTIONS = [
-    SectionSpec("Detalle de compras", LINE_TYPE_PURCHASE, SECTION_POLICY_MUST_PARSE),
-    SectionSpec("Detalle de pago", LINE_TYPE_PAYMENT, SECTION_POLICY_MUST_PARSE),
-    SectionSpec("Detalle de intereses", LINE_TYPE_INTEREST, SECTION_POLICY_MUST_PARSE),
-    SectionSpec("Otros cargos", LINE_TYPE_FEE, SECTION_POLICY_MUST_PARSE),
-    SectionSpec(
-        "Productos y servicios de elección voluntaria",
-        LINE_TYPE_VOLUNTARY_SERVICE,
-        SECTION_POLICY_BEST_EFFORT,
-    ),
-    # "on account_kind='credit'" per the PRD table — always true for this adapter.
-    SectionSpec(
-        "Otras líneas de financiamiento", LINE_TYPE_INSTALLMENT_SCHEDULE, SECTION_POLICY_MUST_PARSE
-    ),
-    SectionSpec("Saldo Anterior", None, SECTION_POLICY_IGNORE),
+    SectionSpec("Detalle de movimientos", LINE_TYPE_PURCHASE, SECTION_POLICY_MUST_PARSE),
 ]
 
-# Sign convention (undetermined by PRD — chosen here, applied consistently):
-# purchases/fees/interest/installment_schedule/voluntary_service are positive
-# charges; payments/credit-notes are negative (balance-reducing).
-_NEGATIVE_LINE_TYPES = frozenset({LINE_TYPE_PAYMENT, LINE_TYPE_CREDIT_NOTE})
 
+class PromericaStubAdapter:
+    """BankAdapter implementation proving the contract extends beyond BAC."""
 
-def _signed_amount(amount: Decimal, line_type: str) -> Decimal:
-    return -amount if line_type in _NEGATIVE_LINE_TYPES else amount
+    bank_id = "promerica"
+    product_id = "promerica_stub"
+    # "other" rather than "credit": this is not a real product, and signaling
+    # that here avoids implying a real Promerica credit-card contract exists.
+    account_kind = "other"
 
-
-class BacCreditAdapter:
-    """BankAdapter implementation for BAC's credit-card statement product."""
-
-    bank_id = "bac"
-    product_id = "bac_credit"
-    account_kind = "credit"
-
-    # AD-27: which boundary-detection rule fired on the last split() call —
-    # not part of the BankAdapter Protocol, retained for test/debug visibility.
     last_split_boundary_method: str | None = None
 
     def detect(self, *, filename: str, content_sample: bytes) -> bool:
-        filename_match = "bac" in filename.lower()
+        filename_match = "promerica" in filename.lower()
         if not content_sample:
             return filename_match
 
-        # A content sniff that fails to parse just means "not recognized as
-        # BAC" (detect_bank_adapter falls through to UnknownBankAdapterError
-        # if nothing else matches) — logged so a corrupt-but-genuine BAC PDF
-        # leaves a diagnostic trail instead of a bare False.
         content_match = sniff_content_marker(
             content_sample,
             _STATEMENT_HEADER_MARKER,
             logger=_logger,
-            adapter_name="BacCreditAdapter",
+            adapter_name="PromericaStubAdapter",
         )
         return filename_match or content_match
 
@@ -120,7 +84,7 @@ class BacCreditAdapter:
             raise InvalidCanonicalLineError("Statement PDF has no pages.")
 
         boundaries, method = detect_statement_boundaries(pages, marker=_STATEMENT_HEADER_MARKER)
-        self.last_split_boundary_method = method  # AD-27: retained for test/debug visibility.
+        self.last_split_boundary_method = method
 
         src = pdfium.PdfDocument(pdf_bytes)
         chunks: list[bytes] = []
@@ -152,12 +116,11 @@ class BacCreditAdapter:
                 continue
 
             if "|" not in line:
-                if line == _STATEMENT_HEADER_MARKER or line.startswith("Cuenta:"):
+                if line == _STATEMENT_HEADER_MARKER:
                     continue
                 cursor.see_header_line(line)
                 continue
 
-            # Data row.
             kind, spec = cursor.classify_data_row()
             if kind == "ignored":
                 continue
@@ -168,25 +131,21 @@ class BacCreditAdapter:
 
             line_type = spec.line_type
             try:
-                date_raw, description, crc_raw, usd_raw = line.split("|")
+                date_raw, description, amount_raw = line.split("|")
             except ValueError as exc:
                 raise InvalidCanonicalLineError(f"Malformed statement row: {line!r}.") from exc
 
             try:
                 posted_date = parse_statement_date(date_raw, date_format=_DATE_FORMAT)
-                crc_amount = parse_amount_field(crc_raw)
-                usd_amount = parse_amount_field(usd_raw)
+                amount = parse_amount_field(amount_raw)
             except (ValueError, KeyError, InvalidOperation) as exc:
                 raise InvalidCanonicalLineError(f"Malformed statement row: {line!r}.") from exc
 
-            currency, amount = normalize_dual_column_amount(crc_amount, usd_amount)
             assert line_type is not None  # SECTION_POLICY_IGNORE rows never reach here.
-            amount = _signed_amount(amount, line_type)
-
             canonical_line = CanonicalLine(
                 posted_date=posted_date,
                 amount=amount,
-                currency=currency,
+                currency="CRC",
                 product_id=self.product_id,
                 line_type=line_type,
                 normalized_description=description.strip(),
