@@ -8,6 +8,8 @@ Status: ready-for-dev
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
+**Correct-course pointer (2026-08-17):** Story 4.4 is now `done`, but Story 4.6 (this story's direct prerequisite for the Import Session schema) has been flagged for a structural redraft — its guessed `ImportPipeline` port doesn't match 4.4's real `BankAdapter`/`detect_bank_adapter()` shape. See `_bmad-output/planning-artifacts/sprint-change-proposal-2026-08-17.md`. This story's own Task 0 gate (below) already requires 4.4–4.6 all `done` before re-verification — that condition is not yet met (4.6 needs its redraft first). No change to this story's own text otherwise; revisit once 4.6 actually lands.
+
 ## ⚠️ Prerequisites gap — read before starting
 
 **Stories 4.4, 4.5, and 4.6 are `backlog` (not implemented) as of this story's creation.** This story was created out of epic order at explicit user request (sprint order in `epics.md` and `project-context.md`'s "Order & independence: follow epics.md" rule would normally block this). Confirmed via repo search: **zero** import/upload/statement/session code exists anywhere in `api/` or `ui/` (only unrelated matches like `uvicorn/importer.py`).
