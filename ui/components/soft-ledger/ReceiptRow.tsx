@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 import { Chip } from "@/components/Chip";
 
 import { ReceiptRowMenu, type ReceiptRowMenuMessages } from "./ReceiptRowMenu";
@@ -18,24 +20,29 @@ export type ReceiptRowProps = {
   fxDetail?: string;
 };
 
-const bodyType = {
-  fontFamily: "var(--type-body-face)",
-  fontSize: "var(--type-body-size)",
-  fontWeight: "var(--type-body-weight)",
-  lineHeight: "var(--type-body-lh)",
-} as const;
+const ICON_PX = 40;
 
-const metaType = {
-  fontFamily: "var(--type-meta-face)",
-  fontSize: "var(--type-meta-size)",
-  fontWeight: "var(--type-meta-weight)",
-} as const;
+const rowChrome =
+  "py-[var(--row-y)] px-[var(--space-1)] border-b border-border";
 
-const amountType = {
-  fontFamily: "var(--type-amount-inline-face)",
-  fontSize: "var(--type-amount-inline-size)",
-  fontWeight: "var(--type-amount-inline-weight)",
-} as const;
+const typeStyle = {
+  body: {
+    fontFamily: "var(--type-body-face)",
+    fontSize: "var(--type-body-size)",
+    fontWeight: "var(--type-body-weight)",
+    lineHeight: "var(--type-body-lh)",
+  },
+  meta: {
+    fontFamily: "var(--type-meta-face)",
+    fontSize: "var(--type-meta-size)",
+    fontWeight: "var(--type-meta-weight)",
+  },
+  amount: {
+    fontFamily: "var(--type-amount-inline-face)",
+    fontSize: "var(--type-amount-inline-size)",
+    fontWeight: "var(--type-amount-inline-weight)",
+  },
+} as const satisfies Record<string, CSSProperties>;
 
 export function ReceiptRow({
   title,
@@ -52,11 +59,8 @@ export function ReceiptRow({
 }: ReceiptRowProps) {
   if (emptyLabel && !title) {
     return (
-      <div
-        className="grid grid-cols-1 gap-y-[var(--space-2)] gap-x-[var(--space-4)] py-[var(--row-y)] px-[var(--space-1)] border-b border-border"
-        role="status"
-      >
-        <span style={metaType} className="text-muted">
+      <div className={`grid grid-cols-1 ${rowChrome}`} role="status">
+        <span style={typeStyle.meta} className="text-muted">
           {emptyLabel}
         </span>
       </div>
@@ -65,57 +69,81 @@ export function ReceiptRow({
 
   const netClass =
     netPolarity === "owe" ? "text-owe" : netPolarity === "owed" ? "text-owed" : "text-muted";
+  const showFx = Boolean(fxSummary && fxDetail);
 
   return (
-    <div className="flex items-center gap-x-[var(--space-4)] py-[var(--row-y)] px-[var(--space-1)] border-b border-border">
-      <div className="box-border h-10 w-10 p-2 shrink-0" aria-hidden="true">
+    <div
+      className={`grid items-center gap-x-[var(--space-4)] gap-y-[2px] ${rowChrome}`}
+      style={{
+        gridTemplateColumns: `${ICON_PX}px minmax(0, 1fr) auto auto`,
+        gridTemplateAreas: [
+          `"icon title amount menu"`,
+          `"icon meta net menu"`,
+          ...(showFx ? [`". fx fx ."`] : []),
+        ].join(" "),
+      }}
+    >
+      <div
+        data-slot="type-icon"
+        className="box-border p-2 self-center"
+        style={{ gridArea: "icon", width: ICON_PX, height: ICON_PX }}
+        aria-hidden="true"
+      >
         <div className="h-full w-full rounded-[6px] border border-border" />
       </div>
-      <div className="min-w-0 flex-1 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-[var(--space-4)] gap-y-[2px]">
-        <div className="flex items-center gap-2 min-w-0">
-          <span style={bodyType} className="text-foreground truncate">
-            {title}
-          </span>
-          {originChip ? <Chip>{originChip}</Chip> : null}
+
+      <div className="flex min-w-0 items-center gap-2" style={{ gridArea: "title" }}>
+        <span style={typeStyle.body} className="truncate text-foreground">
+          {title}
+        </span>
+        {originChip ? <Chip>{originChip}</Chip> : null}
+      </div>
+
+      {amount ? (
+        <span
+          style={{ ...typeStyle.amount, gridArea: "amount" }}
+          className="text-right tabular-nums text-muted"
+        >
+          {amount}
+        </span>
+      ) : null}
+
+      {menu ? (
+        <div className="self-center" style={{ gridArea: "menu" }}>
+          <ReceiptRowMenu messages={menu} />
         </div>
-        {amount ? (
-          <span style={amountType} className="tabular-nums text-muted text-right">
-            {amount}
+      ) : null}
+
+      <div className="flex min-w-0 items-center gap-2" style={{ gridArea: "meta" }}>
+        {when ? (
+          <span style={typeStyle.meta} className="text-muted">
+            {when}
           </span>
-        ) : (
-          <span />
-        )}
-        <div className="flex items-center justify-between gap-2 min-w-0">
-          {when ? (
-            <span style={metaType} className="text-muted">
-              {when}
-            </span>
-          ) : (
-            <span />
-          )}
-          {shareLabel ? (
-            <span style={metaType} className="text-accent tabular-nums">
-              {shareLabel}
-            </span>
-          ) : null}
-        </div>
-        {netLabel ? (
-          <span style={amountType} className={`tabular-nums text-right ${netClass}`}>
-            {netLabel}
+        ) : null}
+        {shareLabel ? (
+          <span style={typeStyle.meta} className="ml-auto tabular-nums text-accent">
+            {shareLabel}
           </span>
-        ) : (
-          <span />
-        )}
-        {fxSummary && fxDetail ? (
-          <details className="col-span-2 text-muted">
-            <summary style={{ ...metaType, cursor: "pointer" }} aria-label={fxDetail}>
-              {fxSummary}
-            </summary>
-            <p style={metaType}>{fxDetail}</p>
-          </details>
         ) : null}
       </div>
-      {menu ? <ReceiptRowMenu messages={menu} /> : null}
+
+      {netLabel ? (
+        <span
+          style={{ ...typeStyle.amount, gridArea: "net" }}
+          className={`text-right tabular-nums ${netClass}`}
+        >
+          {netLabel}
+        </span>
+      ) : null}
+
+      {showFx ? (
+        <details className="text-muted" style={{ gridArea: "fx" }}>
+          <summary style={typeStyle.meta} className="cursor-pointer" aria-label={fxDetail}>
+            {fxSummary}
+          </summary>
+          <p style={typeStyle.meta}>{fxDetail}</p>
+        </details>
+      ) : null}
     </div>
   );
 }

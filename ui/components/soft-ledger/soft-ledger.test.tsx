@@ -139,6 +139,7 @@ describe("Soft-Ledger primitives", () => {
         />,
       );
     });
+    expect(host.querySelector('[data-slot="type-icon"]')).not.toBeNull();
     expect(host.textContent).toContain("1000 colones");
     expect(host.textContent).toContain("Cash");
     expect(host.textContent).toContain("10%");
