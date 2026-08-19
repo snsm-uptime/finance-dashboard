@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { useId, useRef, useState, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import { chipClassName, type ChipTone } from "@/components/Chip";
@@ -95,13 +95,25 @@ export function OriginChipPicker({
   const [cardId, setCardId] = useState<string | null>(originCardId);
   const [label, setLabel] = useState(originLabel);
   const [tone, setTone] = useState<ChipTone>(originTone);
+  const [prevOrigin, setPrevOrigin] = useState({
+    kind: originKind,
+    cardId: originCardId,
+    label: originLabel,
+    tone: originTone,
+  });
 
-  useEffect(() => {
+  if (
+    prevOrigin.kind !== originKind ||
+    prevOrigin.cardId !== originCardId ||
+    prevOrigin.label !== originLabel ||
+    prevOrigin.tone !== originTone
+  ) {
+    setPrevOrigin({ kind: originKind, cardId: originCardId, label: originLabel, tone: originTone });
     setKind(originKind);
     setCardId(originCardId);
     setLabel(originLabel);
     setTone(originTone);
-  }, [originKind, originCardId, originLabel, originTone]);
+  }
 
   const current = { kind, cardId };
   const options = originOptionsFrom(

@@ -31,6 +31,7 @@ jobs:
       SESSION_SECRET: ci-session-secret-not-for-prod
       SESSION_COOKIE_SECURE: "false"
       EMAIL_VERIFICATION_REQUIRED: "false"
+      PDF_STORAGE_PATH: /tmp/finance-dashboard-ci-pdfs
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
