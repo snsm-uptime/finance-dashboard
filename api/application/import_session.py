@@ -21,6 +21,7 @@ from domain.expenses import ManualExpenseDraft
 from domain.import_session import (
     STATEMENT_STATUS_FAILED,
     STATEMENT_STATUS_STAGED,
+    validate_bulk_candidate_row,
     validate_bulk_commit_eligible,
     validate_pdf_upload,
 )
@@ -275,6 +276,13 @@ class AssignBulkImportService:
         self._fx_service = fx_service
 
     def execute(self, command: AssignBulkImportCommand) -> AssignBulkImportResult:
+        # AC #1 assumes Bulk only ever sees review-routed cards, but no card
+        # / routing_mode linkage exists on a statement yet (Stories 4.4/4.6's
+        # territory, per this story's Prerequisites gap) — there is nothing
+        # to check here today. `test_staged_statement_record_has_no_unchecked_
+        # card_routing_field` in test_import_session_application.py fails
+        # loud if that linkage lands without a routing_mode gate being added
+        # here — do not remove this comment or that test until it is.
         session = self._session_repo.get_session(command.session_id, command.actor_user_id)
         if session is None:
             raise ImportSessionNotFoundError()
@@ -298,6 +306,10 @@ class AssignBulkImportService:
                 continue
             rows: list[tuple[ManualExpenseDraft, MaterializedFx]] = []
             for candidate in statement.candidate_rows:
+                validate_bulk_candidate_row(
+                    amount=candidate.amount,
+                    normalized_description=candidate.normalized_description,
+                )
                 draft = ManualExpenseDraft(
                     amount=candidate.amount,
                     currency=candidate.currency,

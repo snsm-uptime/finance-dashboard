@@ -14,10 +14,15 @@ from application.import_session import (
     StagedStatementRecord,
 )
 from domain.canonical_line import CanonicalLine
-from domain.errors import ImportSessionNotFoundError, InvalidCanonicalLineError
+from domain.errors import (
+    ImportSessionAlreadyCommittedError,
+    ImportSessionNotFoundError,
+    InvalidCanonicalLineError,
+)
 from domain.expenses import ManualExpenseDraft
 from domain.import_session import STATEMENT_STATUS_COMMITTED, STATEMENT_STATUS_STAGED
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from adapters.persistence.models import (
@@ -166,6 +171,12 @@ class SqlAlchemyImportSessionRepository:
         # Batch row is flushed before any ledger entry references it via
         # import_batch_id (FK ordering) — a mid-loop failure rolls back the
         # whole request (get_db), so there is no orphaned batch either way.
+        #
+        # Wrapped in a SAVEPOINT: a concurrent double bulk-commit for the
+        # same statement trips uq_import_batches_statement_id right here —
+        # surfaced as the same domain error the sequential double-commit
+        # path already raises, instead of an unhandled IntegrityError
+        # (Story 4.7 review finding).
         batch_row = ImportBatchModel(
             id=batch_id,
             session_id=session_id,
@@ -173,8 +184,12 @@ class SqlAlchemyImportSessionRepository:
             list_id=list_id,
             actor_user_id=actor_user_id,
         )
-        self._session.add(batch_row)
-        self._session.flush()
+        try:
+            with self._session.begin_nested():
+                self._session.add(batch_row)
+                self._session.flush()
+        except IntegrityError as exc:
+            raise ImportSessionAlreadyCommittedError() from exc
 
         entry_ids: list[UUID] = []
         for draft, fx in rows:
@@ -204,6 +219,8 @@ class SqlAlchemyImportSessionRepository:
             entry_ids.append(entry.id)
 
         statement_row = self._session.get(ImportStatementModel, statement_id)
+        if statement_row is None:
+            raise ImportSessionNotFoundError()
         statement_row.status = STATEMENT_STATUS_COMMITTED
 
         self._session.flush()

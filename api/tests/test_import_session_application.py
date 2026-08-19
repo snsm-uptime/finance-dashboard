@@ -607,3 +607,55 @@ def test_bulk_assign_already_committed_session_rejected_no_double_commit() -> No
     with pytest.raises(ImportSessionAlreadyCommittedError):
         service.execute(command)
     assert len(repo.commit_calls) == 1
+
+
+def test_bulk_assign_rejects_candidate_row_with_invalid_amount_no_commit() -> None:
+    """Story 4.7 review finding: a malformed row (more than 2 decimal places
+    here) must fail loud via validate_bulk_candidate_row, not silently land
+    in ledger_entries — mirrors validate_manual_expense's invariants for
+    hand expenses on the same table."""
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    lookup = _FakeListLookup()
+    actor = uuid4()
+    list_id = uuid4()
+    lookup.add_member(list_id, owner_id=actor, user_id=actor)
+    bad_row = CanonicalLine(
+        posted_date="2026-01-01",
+        amount=Decimal("10.005"),
+        currency="CRC",
+        product_id="fake_product",
+        line_type="purchase",
+        normalized_description="fractional cents",
+    )
+    session_id = _multi_statement_session(repo, storage, user_id=actor, parse_results=[[bad_row]])
+
+    with pytest.raises(InvalidCanonicalLineError):
+        AssignBulkImportService(repo, lookup, _FakeFxService()).execute(
+            AssignBulkImportCommand(actor_user_id=actor, session_id=session_id, list_id=list_id)
+        )
+    assert len(repo.commit_calls) == 0
+
+
+def test_staged_statement_record_has_no_unchecked_card_routing_field() -> None:
+    """Canary (Story 4.7 code review): AC #1 assumes Bulk only ever sees
+    review-routed cards, but no card/routing_mode linkage exists on a
+    statement today (that's Stories 4.4/4.6's territory) — so
+    AssignBulkImportService.execute has no gate to enforce it and none is
+    needed yet.
+
+    If a future story adds `card_id` / `routing_mode` to
+    `StagedStatementRecord` or `DetectedStatement` without also adding an
+    explicit routing_mode check in AssignBulkImportService.execute, this
+    test fails loud instead of the gap silently persisting.
+    """
+    from dataclasses import fields
+
+    staged_names = {f.name for f in fields(StagedStatementRecord)}
+    detected_names = {f.name for f in fields(DetectedStatement)}
+    leaked = (staged_names | detected_names) & {"card_id", "routing_mode"}
+    assert not leaked, (
+        f"{leaked} landed on a statement record without a routing_mode gate in "
+        "AssignBulkImportService.execute (Story 4.7 review finding) — add the "
+        "AC #1 review-routing check before removing this canary."
+    )

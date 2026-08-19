@@ -106,7 +106,7 @@ development_status:
   4-4-adapter-contract-canonicalline-bac-normalize: done
   4-5-bac-credit-card-acceptance-bar-promerica-stub: done
   4-6-upload-pdf-detect-split-import-session: done
-  4-7-bulk-review-assign-commit-path: review
+  4-7-bulk-review-assign-commit-path: done
   4-8-individual-review-swipe-desktop-buttons: backlog
   4-9-commit-batch-dedup-summary-land-on-settle-strip: backlog
   4-10-multi-file-upload-pending-queue-dedup: backlog

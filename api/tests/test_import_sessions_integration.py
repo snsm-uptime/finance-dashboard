@@ -16,10 +16,14 @@ from collections.abc import Iterator
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
+from adapters.persistence.import_sessions import SqlAlchemyImportSessionRepository
+from adapters.persistence.models import LedgerEntryModel
+from domain.errors import ImportSessionAlreadyCommittedError
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tests.integration_db import claim_alias, database_url, make_client
 
@@ -241,6 +245,7 @@ def test_bulk_commit_non_crc_row_without_bccr_wired_fails_loud_503(client: TestC
 
 def test_bulk_commit_happy_path_lands_ledger_rows_payer_is_actor(
     client_with_fx: TestClient,
+    db_session: Session,
 ) -> None:
     client = client_with_fx
     _register(client, "bulkhappy@example.com")
@@ -255,6 +260,7 @@ def test_bulk_commit_happy_path_lands_ledger_rows_payer_is_actor(
     assert body["session_id"] == session_id
     assert body["list_id"] == list_id
     assert len(body["batches"]) == 1
+    batch_id = body["batches"][0]["id"]
     assert body["batches"][0]["ledger_entry_count"] == len(goldens.GOLDENS)
 
     expenses = client.get(f"/lists/{list_id}/expenses")
@@ -264,6 +270,48 @@ def test_bulk_commit_happy_path_lands_ledger_rows_payer_is_actor(
     me = client.get("/auth/me").json()
     assert all(row["payer_id"] == me["user_id"] for row in rows)
     assert all(row["provenance"] == "parser" for row in rows)
+
+    # Story 4.7 review finding: AD-4's central guarantee (a committed ledger
+    # row traces back to the batch that created it) is not exposed via the
+    # API — assert it directly against the DB column.
+    ledger_rows = db_session.scalars(
+        select(LedgerEntryModel).where(LedgerEntryModel.list_id == UUID(list_id))
+    ).all()
+    assert len(ledger_rows) == len(goldens.GOLDENS)
+    assert all(str(row.import_batch_id) == batch_id for row in ledger_rows)
+
+
+def test_bulk_commit_duplicate_batch_insert_raises_already_committed_not_integrity_error(
+    client_with_fx: TestClient,
+    db_session: Session,
+) -> None:
+    """Story 4.7 review finding: two concurrent bulk-commit requests for the
+    same statement can both pass validate_bulk_commit_eligible before either
+    persists — uq_import_batches_statement_id is the real backstop.
+    Simulate the race by calling the repository directly a second time for
+    an already-committed statement and assert it surfaces the same clean
+    domain error the sequential double-commit path already returns, not a
+    bare IntegrityError."""
+    client = client_with_fx
+    _register(client, "bulkrace@example.com")
+    session_id = _upload_bac_session(client)
+    list_id = _own_list_id(client)
+    actor_id = client.get("/auth/me").json()["user_id"]
+
+    first = client.post(f"/import/sessions/{session_id}/bulk-commit", json={"list_id": list_id})
+    assert first.status_code == 200, first.text
+    statement_id = first.json()["batches"][0]["statement_id"]
+
+    repo = SqlAlchemyImportSessionRepository(db_session)
+    with pytest.raises(ImportSessionAlreadyCommittedError):
+        repo.commit_statement_batch(
+            batch_id=uuid4(),
+            session_id=UUID(session_id),
+            statement_id=UUID(statement_id),
+            list_id=UUID(list_id),
+            actor_user_id=UUID(actor_id),
+            rows=[],
+        )
 
 
 def test_bulk_commit_non_member_list_denied(client: TestClient) -> None:
