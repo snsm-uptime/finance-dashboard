@@ -199,3 +199,7 @@
 - Task 2.4's "quarantined list" concept has no equivalent in the real `BankAdapter.parse()` contract — `parse()` is all-or-nothing (`list[CanonicalLine]` or raise, confirmed in `api/application/bank_adapters.py`); this stale reference predates the story and the 2026-08-17 correct-course pass missed it.
 - `SectionCursor` doesn't distinguish `best_effort` from `must_parse` behavior (`api/domain/statement_layout.py:75-84`) — only `ignore` is special-cased in `classify_data_row()`; domain code untouched by this diff (Story 4.4).
 - `LINE_TYPE_CREDIT_NOTE` still has no section mapping in `BacCreditAdapter` (`api/adapters/bank/bac_credit/adapter.py:56-69`) — carried forward again from the 4.4 deferred-work entry above (which explicitly tracked it "for Story 4.5"); this story's section map has no credit-note section either, so still unreachable/unexercised.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-hide-no-origin-filter-when-empty.md`
+  summary: List-detail `asExpenses` does not coerce a missing `origin_kind` to null the way `listsClient.asExpense` does
+  evidence: Review (Blind Hunter) — `page.tsx` spreads SSR rows without the string-or-null coercion used in `listsClient.asExpense`; `ownBlankOriginExpenses` uses `origin_kind === null`. Pre-existing parser mismatch; hide-when-idle also removes the old empty-state reminder if those rows were ever omitted from the actionable set.

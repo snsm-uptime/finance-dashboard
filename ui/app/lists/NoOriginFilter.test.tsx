@@ -68,7 +68,6 @@ vi.mock("./listsClient", async () => {
 
 const messages = {
   noOriginFilterToggle: listsMessages.en.noOriginFilterToggle,
-  noOriginFilterEmpty: listsMessages.en.noOriginFilterEmpty,
   noOriginFilterAssign: listsMessages.en.noOriginFilterAssign,
   noOriginFilterAssigning: listsMessages.en.noOriginFilterAssigning,
   noOriginFilterSelectAll: listsMessages.en.noOriginFilterSelectAll,
@@ -141,8 +140,26 @@ describe("NoOriginFilter", () => {
       );
     });
 
+    expect(container.textContent).toContain(`${messages.noOriginFilterToggle} (1)`);
     expect(container.textContent).toContain("No origin");
     expect(container.textContent).not.toContain("Has cash");
+    expect(fetchCards).toHaveBeenCalled();
+  });
+
+  it("renders nothing when the expenses list is empty", async () => {
+    await act(async () => {
+      root.render(
+        <NoOriginFilter
+          listId="list-1"
+          currentUserId="user-a"
+          expenses={[]}
+          messages={messages}
+        />,
+      );
+    });
+
+    expect(container.querySelector("details")).toBeNull();
+    expect(fetchCards).not.toHaveBeenCalled();
   });
 
   it("excludes no-origin items that don't belong to the viewer", async () => {
@@ -164,7 +181,7 @@ describe("NoOriginFilter", () => {
     expect(container.textContent).not.toContain("Not mine");
   });
 
-  it("shows empty-state copy when none are blank-origin", async () => {
+  it("renders nothing when the viewer has no own blank-origin expenses", async () => {
     await act(async () => {
       root.render(
         <NoOriginFilter
@@ -176,7 +193,54 @@ describe("NoOriginFilter", () => {
       );
     });
 
-    expect(container.textContent).toContain(messages.noOriginFilterEmpty);
+    expect(container.querySelector("details")).toBeNull();
+    expect(container.textContent).not.toContain(messages.noOriginFilterToggle);
+    expect(fetchCards).not.toHaveBeenCalled();
+  });
+
+  it("renders nothing when only another user's expense is blank-origin", async () => {
+    await act(async () => {
+      root.render(
+        <NoOriginFilter
+          listId="list-1"
+          currentUserId="user-a"
+          expenses={[expense({ id: "e2", description: "Not mine", payer_id: "user-b" })]}
+          messages={messages}
+        />,
+      );
+    });
+
+    expect(container.querySelector("details")).toBeNull();
+    expect(container.textContent).not.toContain("Not mine");
+    expect(container.textContent).not.toContain(messages.noOriginFilterToggle);
+    expect(fetchCards).not.toHaveBeenCalled();
+  });
+
+  it("unmounts when a later render has no remaining own blanks", async () => {
+    await act(async () => {
+      root.render(
+        <NoOriginFilter
+          listId="list-1"
+          currentUserId="user-a"
+          expenses={[expense({ id: "e1" })]}
+          messages={messages}
+        />,
+      );
+    });
+    expect(container.querySelector("details")).not.toBeNull();
+
+    await act(async () => {
+      root.render(
+        <NoOriginFilter
+          listId="list-1"
+          currentUserId="user-a"
+          expenses={[expense({ id: "e1", origin_kind: "cash" })]}
+          messages={messages}
+        />,
+      );
+    });
+    expect(container.querySelector("details")).toBeNull();
+    expect(container.textContent).not.toContain(messages.noOriginFilterToggle);
   });
 
   it("individual assign calls updateExpenseOrigin once with the right ids", async () => {
