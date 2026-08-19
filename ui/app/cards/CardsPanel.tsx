@@ -33,6 +33,7 @@ export function CardsPanel({ embedded = false }: Props) {
   const [lists, setLists] = useState<ListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [registeredStatus, setRegisteredStatus] = useState("");
 
   const messages: CardsClientMessages = useMemo(
     () => ({
@@ -76,6 +77,7 @@ export function CardsPanel({ embedded = false }: Props) {
 
   function onRegistered(card: CardItem) {
     setCards((prev) => [card, ...prev]);
+    setRegisteredStatus(t.cardRegistered);
   }
 
   function onRoutingUpdated(updated: CardItem) {
@@ -83,67 +85,14 @@ export function CardsPanel({ embedded = false }: Props) {
   }
 
   const sections = (
-    <div className={`flex flex-col gap-8 ${embedded ? "" : "max-w-[32rem]"}`}>
-      <section aria-labelledby={listTitleId}>
-        <HeadingTag
-          id={listTitleId}
-          className="m-0 mb-[0.6rem] text-[0.72rem] font-[550] text-muted tracking-[0.02rem]"
-        >
-          {t.listTitle}
-        </HeadingTag>
-        {loading ? (
-          <p className="text-muted text-[0.85rem]">{t.loading}</p>
-        ) : loadError ? (
-          <p className="text-owe text-[0.9rem]" role="alert">
-            {loadError}
-          </p>
-        ) : cards.length === 0 ? (
-          <p className="text-muted text-[0.85rem]">{t.emptyState}</p>
-        ) : (
-          <ul className="list-none m-0 p-0 flex flex-col gap-2">
-            {cards.map((card) => (
-              <li
-                key={card.id}
-                className="flex flex-col gap-1 py-[0.6rem] px-[0.85rem] rounded-[8px] border border-border bg-surface"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <span className="font-[550] text-foreground text-[0.95rem]">{card.label}</span>
-                  <CopyButton value={card.iban} label={t.copyIban} copiedLabel={t.ibanCopied}>
-                    <span className="text-muted text-[0.85rem] tracking-[0.02rem]">
-                      {maskIban(card.iban)}
-                    </span>
-                  </CopyButton>
-                </div>
-                <CardRoutingControl
-                  card={card}
-                  lists={lists}
-                  messages={{
-                    ...messages,
-                    routingModeFixed: t.routingModeFixed,
-                    routingModeReview: t.routingModeReview,
-                    routingListLabel: t.routingListLabel,
-                    routingSave: t.routingSave,
-                    routingSaving: t.routingSaving,
-                  }}
-                  onUpdated={onRoutingUpdated}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <DefaultImportListControl
-        lists={lists}
-        messages={{
-          defaultListTitle: t.defaultListTitle,
-          defaultListHint: t.defaultListHint,
-          errorGeneric: t.errorGeneric,
-          errorUnauthorized: t.errorUnauthorized,
-          errorForbidden: t.errorForbidden,
-        }}
-      />
-
+    // Source order = mobile stack (Register, default destination, list).
+    // md:flex-col-reverse restores desktop (list, default, Register).
+    // md:justify-end keeps a reversed column top-aligned if a parent stretches it.
+    // Tailwind md is 768px — same breakpoint as Home's lists/cards split (home.module.scss).
+    // Keep these three children in this order; a new sibling would reverse on desktop.
+    <div
+      className={`flex flex-col gap-8 md:flex-col-reverse md:justify-end ${embedded ? "" : "max-w-[32rem]"}`}
+    >
       <section aria-labelledby={registerTitleId}>
         <HeadingTag
           id={registerTitleId}
@@ -161,6 +110,73 @@ export function CardsPanel({ embedded = false }: Props) {
           }}
           onRegistered={onRegistered}
         />
+      </section>
+
+      <div className="empty:hidden">
+        <DefaultImportListControl
+          lists={lists}
+          messages={{
+            defaultListTitle: t.defaultListTitle,
+            defaultListHint: t.defaultListHint,
+            errorGeneric: t.errorGeneric,
+            errorUnauthorized: t.errorUnauthorized,
+            errorForbidden: t.errorForbidden,
+          }}
+        />
+      </div>
+
+      <section aria-labelledby={listTitleId}>
+        <HeadingTag
+          id={listTitleId}
+          className="m-0 mb-[0.6rem] text-[0.72rem] font-[550] text-muted tracking-[0.02rem]"
+        >
+          {t.listTitle}
+        </HeadingTag>
+        <p className="sr-only" aria-live="polite">
+          {registeredStatus}
+        </p>
+        {loading ? (
+          <p className="text-muted text-[0.85rem]">{t.loading}</p>
+        ) : loadError ? (
+          <p className="text-owe text-[0.9rem]" role="alert">
+            {loadError}
+          </p>
+        ) : cards.length === 0 ? (
+          <p className="text-muted text-[0.85rem]">{t.emptyState}</p>
+        ) : (
+          <ul className="list-none m-0 p-0 flex flex-col gap-2">
+            {cards.map((card) => (
+              <li
+                key={card.id}
+                className="py-[0.6rem] px-[0.85rem] rounded-[8px] border border-border bg-surface"
+              >
+                <CardRoutingControl
+                  card={card}
+                  lists={lists}
+                  trailing={
+                    <CopyButton value={card.iban} label={t.copyIban} copiedLabel={t.ibanCopied}>
+                      <span className="text-muted text-[0.85rem] tracking-[0.02rem]">
+                        {maskIban(card.iban)}
+                      </span>
+                    </CopyButton>
+                  }
+                  messages={{
+                    ...messages,
+                    routingTitle: t.routingTitle,
+                    routingChipFixed: t.routingChipFixed,
+                    routingChipReview: t.routingChipReview,
+                    routingModeFixed: t.routingModeFixed,
+                    routingModeReview: t.routingModeReview,
+                    routingListLabel: t.routingListLabel,
+                    routingSave: t.routingSave,
+                    routingSaving: t.routingSaving,
+                  }}
+                  onUpdated={onRoutingUpdated}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </div>
   );

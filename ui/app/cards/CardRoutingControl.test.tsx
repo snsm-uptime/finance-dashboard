@@ -27,6 +27,9 @@ const messages = {
   errorDuplicateIban: cardsMessages.en.errorDuplicateIban,
   errorForbidden: cardsMessages.en.errorForbidden,
   errorCardNotFound: cardsMessages.en.errorCardNotFound,
+  routingTitle: cardsMessages.en.routingTitle,
+  routingChipFixed: cardsMessages.en.routingChipFixed,
+  routingChipReview: cardsMessages.en.routingChipReview,
   routingModeFixed: cardsMessages.en.routingModeFixed,
   routingModeReview: cardsMessages.en.routingModeReview,
   routingListLabel: cardsMessages.en.routingListLabel,
@@ -54,11 +57,23 @@ function saveButton(container: HTMLElement): HTMLButtonElement {
   ) as HTMLButtonElement;
 }
 
+function routingChip(container: HTMLElement): HTMLButtonElement {
+  return container.querySelector('button[aria-controls]') as HTMLButtonElement;
+}
+
 function radioFor(container: HTMLElement, label: string): HTMLInputElement {
   const wrapper = Array.from(container.querySelectorAll("label")).find((l) =>
     l.textContent?.includes(label),
   );
   return wrapper?.querySelector('input[type="radio"]') as HTMLInputElement;
+}
+
+async function expandRouting(container: HTMLElement) {
+  const chip = routingChip(container);
+  if (chip.getAttribute("aria-expanded") === "true") return;
+  await act(async () => {
+    chip.click();
+  });
 }
 
 async function chooseListOption(container: HTMLElement, label: string) {
@@ -94,15 +109,68 @@ describe("CardRoutingControl", () => {
     container.remove();
   });
 
-  it("defaults to the card's current mode and hides the list select in review mode", async () => {
+  it("renders a compact row with a Review chip and keeps the form collapsed", async () => {
     await act(async () => {
       root.render(
         <CardRoutingControl card={card} lists={lists} messages={messages} onUpdated={onUpdated} />,
       );
     });
 
+    const chip = routingChip(container);
+    expect(container.textContent).toContain("My Visa");
+    expect(chip.textContent).toContain(messages.routingChipReview);
+    expect(chip.getAttribute("aria-expanded")).toBe("false");
+    expect(container.querySelector('[role="region"]')?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("shows a Fixed chip for a card whose saved routing is fixed", async () => {
+    const fixedCard: CardItem = { ...card, routing_mode: "fixed", fixed_list_id: "list-1" };
+    await act(async () => {
+      root.render(
+        <CardRoutingControl
+          card={fixedCard}
+          lists={lists}
+          messages={messages}
+          onUpdated={onUpdated}
+        />,
+      );
+    });
+
+    expect(routingChip(container).textContent).toContain(messages.routingChipFixed);
+    expect(routingChip(container).getAttribute("aria-label")).toBe(
+      `${messages.routingTitle}: ${messages.routingChipFixed}`,
+    );
+  });
+
+  it("slides the current routing form open when the chip is clicked", async () => {
+    await act(async () => {
+      root.render(
+        <CardRoutingControl card={card} lists={lists} messages={messages} onUpdated={onUpdated} />,
+      );
+    });
+
+    await expandRouting(container);
+
+    expect(routingChip(container).getAttribute("aria-expanded")).toBe("true");
     expect(radioFor(container, messages.routingModeReview).checked).toBe(true);
     expect(container.querySelector('button[aria-haspopup="listbox"]')).toBeNull();
+  });
+
+  it("clicking the card label does not open the form", async () => {
+    await act(async () => {
+      root.render(
+        <CardRoutingControl card={card} lists={lists} messages={messages} onUpdated={onUpdated} />,
+      );
+    });
+
+    const label = Array.from(container.querySelectorAll("span")).find(
+      (el) => el.textContent === "My Visa",
+    ) as HTMLSpanElement;
+    await act(async () => {
+      label.click();
+    });
+
+    expect(routingChip(container).getAttribute("aria-expanded")).toBe("false");
   });
 
   it("switching to Fixed disables Save until a list is chosen", async () => {
@@ -112,6 +180,7 @@ describe("CardRoutingControl", () => {
       );
     });
 
+    await expandRouting(container);
     await act(async () => {
       radioFor(container, messages.routingModeFixed).click();
     });
@@ -123,7 +192,7 @@ describe("CardRoutingControl", () => {
     expect(saveButton(container).disabled).toBe(false);
   });
 
-  it("Save in Fixed mode calls setCardRouting with the chosen list", async () => {
+  it("Save in Fixed mode calls setCardRouting with the chosen list and collapses", async () => {
     setCardRouting.mockResolvedValue({
       ok: true,
       card: { ...card, routing_mode: "fixed", fixed_list_id: "list-1" },
@@ -135,6 +204,7 @@ describe("CardRoutingControl", () => {
       );
     });
 
+    await expandRouting(container);
     await act(async () => {
       radioFor(container, messages.routingModeFixed).click();
     });
@@ -149,6 +219,7 @@ describe("CardRoutingControl", () => {
       messages,
     );
     expect(onUpdated).toHaveBeenCalledWith({ ...card, routing_mode: "fixed", fixed_list_id: "list-1" });
+    expect(routingChip(container).getAttribute("aria-expanded")).toBe("false");
   });
 
   it("switching to Review then Save clears fixed_list_id", async () => {
@@ -164,6 +235,7 @@ describe("CardRoutingControl", () => {
       );
     });
 
+    await expandRouting(container);
     await act(async () => {
       radioFor(container, messages.routingModeReview).click();
     });
@@ -178,6 +250,21 @@ describe("CardRoutingControl", () => {
     );
   });
 
+  it("keeps the chip on the saved mode while the draft is unsaved", async () => {
+    await act(async () => {
+      root.render(
+        <CardRoutingControl card={card} lists={lists} messages={messages} onUpdated={onUpdated} />,
+      );
+    });
+
+    await expandRouting(container);
+    await act(async () => {
+      radioFor(container, messages.routingModeFixed).click();
+    });
+
+    expect(routingChip(container).textContent).toContain(messages.routingChipReview);
+  });
+
   it("shows a 403 error via the error region", async () => {
     setCardRouting.mockResolvedValue({ ok: false, error: messages.errorForbidden });
 
@@ -187,6 +274,7 @@ describe("CardRoutingControl", () => {
       );
     });
 
+    await expandRouting(container);
     await act(async () => {
       radioFor(container, messages.routingModeFixed).click();
     });
@@ -197,5 +285,6 @@ describe("CardRoutingControl", () => {
 
     expect(container.querySelector('[role="alert"]')?.textContent).toBe(messages.errorForbidden);
     expect(onUpdated).not.toHaveBeenCalled();
+    expect(routingChip(container).getAttribute("aria-expanded")).toBe("true");
   });
 });
