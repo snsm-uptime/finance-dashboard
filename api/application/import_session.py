@@ -164,9 +164,7 @@ class UploadStatementPdfService:
             try:
                 self._pdf_storage.delete(whole_pdf_path)
             except OSError:
-                logger.warning(
-                    "import_session_upload_cleanup_failed pdf_path=%s", whole_pdf_path
-                )
+                logger.warning("import_session_upload_cleanup_failed pdf_path=%s", whole_pdf_path)
             raise
 
 
