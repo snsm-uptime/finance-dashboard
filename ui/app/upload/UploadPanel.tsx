@@ -55,7 +55,7 @@ export function UploadPanel() {
   async function onFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file) return;
+    if (!file || session) return;
     setDiscarded(false);
     await upload.submit(file);
   }
@@ -77,7 +77,7 @@ export function UploadPanel() {
             id={inputId}
             type="file"
             accept="application/pdf"
-            disabled={upload.pending}
+            disabled={upload.pending || !!session}
             onChange={onFileChange}
             className="block w-full text-[0.9rem] text-foreground file:mr-3 file:py-[9px] file:px-3 file:rounded-sm file:border-none file:bg-accent file:text-on-accent file:cursor-pointer disabled:opacity-55"
           />
@@ -86,6 +86,9 @@ export function UploadPanel() {
         <div aria-live="polite">
           {upload.pending ? (
             <p className="text-muted text-[0.85rem] m-0">{t.uploading}</p>
+          ) : null}
+          {!upload.pending && session ? (
+            <p className="text-muted text-[0.85rem] m-0">{t.activeSessionBlocksUpload}</p>
           ) : null}
           {upload.error ? (
             <p className="text-owe text-[0.9rem] m-0" role="alert">

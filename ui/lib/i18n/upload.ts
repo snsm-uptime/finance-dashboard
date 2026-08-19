@@ -11,6 +11,7 @@ export const uploadMessages = {
     discard: "Discard",
     discarding: "Discarding…",
     discarded: "Discarded.",
+    activeSessionBlocksUpload: "Discard this session before uploading another statement.",
     errorUnsupportedFileType: "Only PDF files are supported.",
     errorUnknownStatement: "Could not recognize the bank or card for this file.",
     errorAmbiguousStatement: "This file matches more than one bank or card — please contact support.",
@@ -27,6 +28,7 @@ export const uploadMessages = {
     discard: "Descartar",
     discarding: "Descartando…",
     discarded: "Descartado.",
+    activeSessionBlocksUpload: "Descarta esta sesión antes de subir otro estado de cuenta.",
     errorUnsupportedFileType: "Solo se admiten archivos PDF.",
     errorUnknownStatement: "No se pudo reconocer el banco o tarjeta de este archivo.",
     errorAmbiguousStatement:

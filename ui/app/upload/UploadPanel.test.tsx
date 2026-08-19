@@ -128,4 +128,43 @@ describe("UploadPanel", () => {
     expect(container.querySelector("ul")).toBeNull();
     expect(container.textContent).toContain("Discarded.");
   });
+
+  it("blocks a second upload while a session is active, until discarded", async () => {
+    uploadStatement.mockResolvedValue({
+      ok: true,
+      session: {
+        id: "s1",
+        created_at: "2026-08-18T00:00:00Z",
+        discarded_at: null,
+        statements: [
+          { id: "st1", product_id: "bac_credit", status: "staged", candidate_row_count: 3 },
+        ],
+      },
+    });
+    discardSession.mockResolvedValue({ ok: true });
+
+    await act(async () => {
+      root.render(<UploadPanel />);
+    });
+    await selectFile(container, fakeFile());
+
+    expect(uploadStatement).toHaveBeenCalledTimes(1);
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    expect(input.disabled).toBe(true);
+    expect(container.textContent).toContain("Discard this session before uploading another");
+
+    await selectFile(container, fakeFile());
+    expect(uploadStatement).toHaveBeenCalledTimes(1);
+
+    const discardButton = Array.from(container.querySelectorAll("button")).find(
+      (b) => b.textContent === "Discard",
+    ) as HTMLButtonElement;
+    await act(async () => {
+      discardButton.click();
+    });
+
+    expect(input.disabled).toBe(false);
+    await selectFile(container, fakeFile());
+    expect(uploadStatement).toHaveBeenCalledTimes(2);
+  });
 });
