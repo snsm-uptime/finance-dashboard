@@ -19,7 +19,13 @@ import { ListDetailMobileActions } from "../ListDetailMobileActions";
 import { ManualExpenseForm } from "../ManualExpenseForm";
 import { NoOriginFilter } from "../NoOriginFilter";
 import { TemporalNavigation } from "../TemporalNavigation";
-import { balanceTone, type DefaultSplitPayload, type ExpenseItem, type ListMember } from "../listsClient";
+import {
+  balanceTone,
+  memberLabel,
+  type DefaultSplitPayload,
+  type ExpenseItem,
+  type ListMember,
+} from "../listsClient";
 import styles from "../lists.module.scss";
 
 export const dynamic = "force-dynamic";
@@ -110,6 +116,21 @@ function asExpenses(data: unknown): ExpenseItem[] {
       ...(e as ExpenseItem),
       fx_rate_date: typeof e.fx_rate_date === "string" ? e.fx_rate_date : null,
       fx_fallback: e.fx_fallback === true,
+      origin_kind: typeof e.origin_kind === "string" ? e.origin_kind : null,
+      origin_card_id: typeof e.origin_card_id === "string" ? e.origin_card_id : null,
+      origin_card_label: typeof e.origin_card_label === "string" ? e.origin_card_label : null,
+      viewer_share_kind:
+        e.viewer_share_kind === "percentage" || e.viewer_share_kind === "absolute"
+          ? e.viewer_share_kind
+          : null,
+      viewer_share_value: typeof e.viewer_share_value === "string" ? e.viewer_share_value : null,
+      viewer_net_crc: typeof e.viewer_net_crc === "string" ? e.viewer_net_crc : null,
+      viewer_net_polarity:
+        e.viewer_net_polarity === "owe" ||
+        e.viewer_net_polarity === "owed" ||
+        e.viewer_net_polarity === "zero"
+          ? e.viewer_net_polarity
+          : null,
     });
   }
   return out;
@@ -127,6 +148,52 @@ function formatCrcNumber(amount: string): string {
 /** Soft-Ledger plain CRC voice (UX-DR17) — e.g. ₡10.00 / ₡42,500. */
 function formatCrcAmount(amount: string): string {
   return `₡${formatCrcNumber(amount)}`;
+}
+
+export function formatShareLabel(
+  kind: ExpenseItem["viewer_share_kind"],
+  value: string | null,
+): string | undefined {
+  if (!kind || !value) return undefined;
+  if (kind === "percentage") {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return `${value}%`;
+    return `${parsed}%`;
+  }
+  return formatCrcAmount(value);
+}
+
+export function formatNetLabel(
+  crc: string | null,
+  polarity: ExpenseItem["viewer_net_polarity"],
+): { label: string; polarity: "owe" | "owed" } | undefined {
+  if (!crc || (polarity !== "owe" && polarity !== "owed")) return undefined;
+  const amount = formatCrcAmount(crc);
+  return {
+    label: polarity === "owe" ? `-${amount}` : `+${amount}`,
+    polarity,
+  };
+}
+
+export function originChipFrom(
+  e: ExpenseItem,
+  currentUserId: string,
+  t: { expenseOriginCash: string; expenseOriginCard: string; expenseOriginUnknown: string },
+): string | undefined {
+  if (e.origin_kind === "cash") return t.expenseOriginCash;
+  if (e.origin_kind === "card") {
+    if (e.payer_id === currentUserId && e.origin_card_label) return e.origin_card_label;
+    return t.expenseOriginCard;
+  }
+  if (e.payer_id !== currentUserId) return t.expenseOriginUnknown;
+  return undefined;
+}
+
+/** Roster alias for a receipt row; short id if the payer has not claimed one yet. */
+export function payerAliasFrom(payerId: string, members: ListMember[]): string {
+  const member = members.find((m) => m.user_id === payerId);
+  if (member) return memberLabel(member);
+  return `${payerId.slice(0, 8)}…`;
 }
 
 type ExpenseFxMessages = {
@@ -390,6 +457,68 @@ export default async function ListDetailPage({
                 who={stripProps.who}
                 amount={stripProps.amount}
                 polarity={stripProps.polarity}
+                action={
+                  <ListDetailMobileActions
+                    listId={listId}
+                    currentUserId={session.user_id}
+                    members={members}
+                    isOwner={isOwner}
+                    canAddExpense={!membersLoadError && members.length > 0}
+                    canInvite={isOwner}
+                    defaultSplit={defaultSplit}
+                    expenseMessages={{
+                      expenseTitle: t.expenseTitle,
+                      expenseAmount: t.expenseAmount,
+                      expenseDescription: t.expenseDescription,
+                      expensePayer: t.expensePayer,
+                      expenseSubmit: t.expenseSubmit,
+                      expenseSaving: t.expenseSaving,
+                      expenseAdjustSplit: t.expenseAdjustSplit,
+                      expenseModeWhole: t.expenseModeWhole,
+                      expenseModeAbsolute: t.expenseModeAbsolute,
+                      expenseModePercentage: t.expenseModePercentage,
+                      expenseAssignee: t.expenseAssignee,
+                      expenseOriginLabel: t.expenseOriginLabel,
+                      expenseOriginBlank: t.expenseOriginBlank,
+                      expenseOriginCash: t.expenseOriginCash,
+                      errorGeneric: t.errorGeneric,
+                      errorInvalidName: t.errorInvalidName,
+                      errorForbidden: t.errorForbidden,
+                      errorUnauthorized: t.errorUnauthorized,
+                    }}
+                    inviteMessages={{
+                      inviteTitle: t.inviteTitle,
+                      inviteLabel: t.inviteLabel,
+                      inviteSubmit: t.inviteSubmit,
+                      inviteSending: t.inviteSending,
+                      inviteSent: t.inviteSent,
+                      errorGeneric: t.errorGeneric,
+                      errorInvalidName: t.errorInvalidName,
+                      errorInvalidEmail: t.errorInvalidEmail,
+                      errorForbidden: t.errorInviteForbidden,
+                      errorUnauthorized: t.errorUnauthorized,
+                      errorAlreadyMember: t.errorAlreadyMember,
+                      errorSmtp: t.errorSmtp,
+                    }}
+                    splitMessages={{
+                      errorGeneric: t.errorGeneric,
+                      errorInvalidName: t.errorInvalidName,
+                      errorForbidden: t.errorForbidden,
+                      errorUnauthorized: t.errorUnauthorized,
+                      defaultSplitTitle: t.defaultSplitTitle,
+                      defaultSplitEven: t.defaultSplitEven,
+                      defaultSplitCustom: t.defaultSplitCustom,
+                      defaultSplitSum: t.defaultSplitSum,
+                      defaultSplitSave: t.defaultSplitSave,
+                      defaultSplitSaving: t.defaultSplitSaving,
+                      defaultSplitReadOnly: t.defaultSplitReadOnly,
+                      errorInvalidSplit: t.errorInvalidSplit,
+                    }}
+                    addExpenseAria={t.mobileAddExpenseAria}
+                    inviteAria={t.mobileInviteAria}
+                    closeLabel={t.mobileSheetClose}
+                  />
+                }
               />
               {/* Slot only (Story 3.6): no balanceStatus in the API yet; Epic 5.4 wires isIncomplete. */}
               <IncompleteDisclosure
@@ -408,7 +537,6 @@ export default async function ListDetailPage({
                     expenses={expenses}
                     messages={{
                       noOriginFilterToggle: t.noOriginFilterToggle,
-                      noOriginFilterEmpty: t.noOriginFilterEmpty,
                       noOriginFilterAssign: t.noOriginFilterAssign,
                       noOriginFilterAssigning: t.noOriginFilterAssigning,
                       noOriginFilterSelectAll: t.noOriginFilterSelectAll,
@@ -430,12 +558,23 @@ export default async function ListDetailPage({
                 ) : (
                   expenses.map((e) => {
                     const rowProps = receiptRowFxPropsFrom(e, t);
+                    const net = formatNetLabel(e.viewer_net_crc, e.viewer_net_polarity);
                     return (
                       <ReceiptRow
                         key={e.id}
                         title={rowProps.title}
+                        payerAlias={payerAliasFrom(e.payer_id, members)}
                         when={e.posted_date}
                         amount={rowProps.amount}
+                        originChip={originChipFrom(e, session.user_id, t)}
+                        shareLabel={formatShareLabel(e.viewer_share_kind, e.viewer_share_value)}
+                        netLabel={net?.label}
+                        netPolarity={net?.polarity}
+                        menu={{
+                          menuAria: t.receiptMenuAria,
+                          editLabel: t.receiptEdit,
+                          deleteLabel: t.receiptDelete,
+                        }}
                         fxSummary={rowProps.fxSummary}
                         fxDetail={rowProps.fxDetail}
                       />
@@ -534,66 +673,6 @@ export default async function ListDetailPage({
                 </Link>
               </p>
             </aside>
-            <ListDetailMobileActions
-              listId={listId}
-              currentUserId={session.user_id}
-              members={members}
-              isOwner={isOwner}
-              canAddExpense={!membersLoadError && members.length > 0}
-              canInvite={isOwner}
-              defaultSplit={defaultSplit}
-              expenseMessages={{
-                expenseTitle: t.expenseTitle,
-                expenseAmount: t.expenseAmount,
-                expenseDescription: t.expenseDescription,
-                expensePayer: t.expensePayer,
-                expenseSubmit: t.expenseSubmit,
-                expenseSaving: t.expenseSaving,
-                expenseAdjustSplit: t.expenseAdjustSplit,
-                expenseModeWhole: t.expenseModeWhole,
-                expenseModeAbsolute: t.expenseModeAbsolute,
-                expenseModePercentage: t.expenseModePercentage,
-                expenseAssignee: t.expenseAssignee,
-                expenseOriginLabel: t.expenseOriginLabel,
-                expenseOriginBlank: t.expenseOriginBlank,
-                expenseOriginCash: t.expenseOriginCash,
-                errorGeneric: t.errorGeneric,
-                errorInvalidName: t.errorInvalidName,
-                errorForbidden: t.errorForbidden,
-                errorUnauthorized: t.errorUnauthorized,
-              }}
-              inviteMessages={{
-                inviteTitle: t.inviteTitle,
-                inviteLabel: t.inviteLabel,
-                inviteSubmit: t.inviteSubmit,
-                inviteSending: t.inviteSending,
-                inviteSent: t.inviteSent,
-                errorGeneric: t.errorGeneric,
-                errorInvalidName: t.errorInvalidName,
-                errorInvalidEmail: t.errorInvalidEmail,
-                errorForbidden: t.errorInviteForbidden,
-                errorUnauthorized: t.errorUnauthorized,
-                errorAlreadyMember: t.errorAlreadyMember,
-                errorSmtp: t.errorSmtp,
-              }}
-              splitMessages={{
-                errorGeneric: t.errorGeneric,
-                errorInvalidName: t.errorInvalidName,
-                errorForbidden: t.errorForbidden,
-                errorUnauthorized: t.errorUnauthorized,
-                defaultSplitTitle: t.defaultSplitTitle,
-                defaultSplitEven: t.defaultSplitEven,
-                defaultSplitCustom: t.defaultSplitCustom,
-                defaultSplitSum: t.defaultSplitSum,
-                defaultSplitSave: t.defaultSplitSave,
-                defaultSplitSaving: t.defaultSplitSaving,
-                defaultSplitReadOnly: t.defaultSplitReadOnly,
-                errorInvalidSplit: t.errorInvalidSplit,
-              }}
-              addExpenseAria={t.mobileAddExpenseAria}
-              inviteAria={t.mobileInviteAria}
-              closeLabel={t.mobileSheetClose}
-            />
           </div>
         )}
       </div>

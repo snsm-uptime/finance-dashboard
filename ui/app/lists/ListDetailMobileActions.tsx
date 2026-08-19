@@ -38,8 +38,9 @@ type Props = {
 };
 
 /**
- * Mobile-only actions for list detail: vertical FAB + bottom sheets.
- * Hidden from md breakpoint up (sidebar owns the same forms there).
+ * Mobile-only list actions. Renders as a ghost cluster for BalanceStrip's
+ * right-edge slot (no FAB, so receipt-row menus stay tappable). Hidden from
+ * md up — sidebar owns the same forms there. Sheets portal to document.
  */
 export function ListDetailMobileActions({
   listId,
@@ -82,38 +83,38 @@ export function ListDetailMobileActions({
 
   return (
     <div className={styles.chrome}>
-      <div className={styles.fab} role="group" aria-label={groupLabel}>
+      <div className={styles.cluster} role="group" aria-label={groupLabel}>
         {canAddExpense ? (
           <IconButton
             ref={expenseButtonRef}
             type="button"
-            className={styles.fabHalf}
+            variant="ghost"
             label={addExpenseAria}
             aria-expanded={sheet === "expense"}
             onClick={() => setSheet("expense")}
-            icon={<PlusIcon className={styles.fabIcon} />}
+            icon={<PlusIcon className={styles.icon} />}
           />
         ) : null}
         {canShowSplit ? (
           <IconButton
             ref={splitButtonRef}
             type="button"
-            className={styles.fabHalf}
+            variant="ghost"
             label={splitMessages.defaultSplitTitle}
             aria-expanded={sheet === "split"}
             onClick={() => setSheet("split")}
-            icon={<PieChartIcon className={styles.fabIcon} />}
+            icon={<PieChartIcon className={styles.icon} />}
           />
         ) : null}
         {canInvite ? (
           <IconButton
             ref={inviteButtonRef}
             type="button"
-            className={styles.fabHalf}
+            variant="ghost"
             label={inviteAria}
             aria-expanded={sheet === "invite"}
             onClick={() => setSheet("invite")}
-            icon={<ShareIcon className={styles.fabIcon} />}
+            icon={<ShareIcon className={styles.icon} />}
           />
         ) : null}
       </div>

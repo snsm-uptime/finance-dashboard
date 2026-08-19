@@ -65,6 +65,12 @@ class ExpenseItemResponse(BaseModel):
     # Origin (card / Cash / blank) — Story 4.2 / FR-21.
     origin_kind: Literal["card", "cash"] | None = None
     origin_card_id: UUID | None = None
+    # Viewer lens for the receipt row (stated share + CRC net). Null when omitted.
+    viewer_share_kind: Literal["percentage", "absolute"] | None = None
+    viewer_share_value: str | None = None
+    viewer_net_crc: str | None = None
+    viewer_net_polarity: Literal["owe", "owed", "zero"] | None = None
+    origin_card_label: str | None = None
 
 
 class ListExpensesStubResponse(BaseModel):

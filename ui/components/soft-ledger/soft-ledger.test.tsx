@@ -35,6 +35,15 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+vi.mock("@/components/IconButton/IconButton.module.scss", () => ({
+  default: new Proxy(
+    {},
+    {
+      get: (_target, key) => (typeof key === "string" ? key : "mod"),
+    },
+  ),
+}));
+
 describe("Soft-Ledger primitives", () => {
   let host: HTMLDivElement;
   let root: Root;
@@ -98,6 +107,24 @@ describe("Soft-Ledger primitives", () => {
     expect(section?.getAttribute("aria-label")).toBe("Settled");
   });
 
+  it("renders an optional action in the strip's trailing column", () => {
+    act(() => {
+      root.render(
+        <BalanceStrip
+          who="You owe Partner"
+          amount="₡42,500"
+          polarity="owe"
+          action={<button type="button">Add expense</button>}
+        />,
+      );
+    });
+    const section = host.querySelector("section");
+    const action = host.querySelector("button");
+    expect(section).not.toBeNull();
+    expect(action?.textContent).toBe("Add expense");
+    expect(section?.contains(action)).toBe(true);
+  });
+
   it("renders Hint and SectionLabel and empty ReceiptRow", () => {
     act(() => {
       root.render(
@@ -113,6 +140,69 @@ describe("Soft-Ledger primitives", () => {
     expect(host.querySelector("[role='status']")?.textContent).toBe(
       "No receipts yet.",
     );
+  });
+
+  it("renders origin chip, accent share, owed net, and an Edit/Delete menu", () => {
+    act(() => {
+      root.render(
+        <ReceiptRow
+          title="1000 colones"
+          payerAlias="sebas"
+          when="2026-08-19"
+          amount="₡1,000"
+          originChip="Cash"
+          shareLabel="10%"
+          netLabel="+₡900"
+          netPolarity="owed"
+          menu={{ menuAria: "Expense options", editLabel: "Edit", deleteLabel: "Delete" }}
+        />,
+      );
+    });
+    expect(host.querySelector('[data-slot="type-icon"]')).not.toBeNull();
+    expect(host.textContent).toContain("1000 colones");
+    expect(host.textContent).toContain("@sebas");
+    expect(host.textContent).toContain("2026-08-19");
+    expect(host.textContent).toContain("Cash");
+    expect(host.textContent).toContain("10%");
+    expect(host.textContent).toContain("+₡900");
+    const handle = Array.from(host.querySelectorAll("span")).find((el) => el.textContent === "@sebas");
+    expect(handle?.className).toContain("text-accent");
+    const net = Array.from(host.querySelectorAll("span")).find((el) => el.textContent === "+₡900");
+    expect(net?.className).toContain("text-owed");
+    const trigger = host.querySelector("button[aria-haspopup='menu']") as HTMLButtonElement;
+    expect(trigger).not.toBeNull();
+    act(() => {
+      trigger.click();
+    });
+    expect(host.textContent).toContain("Edit");
+    expect(host.textContent).toContain("Delete");
+  });
+
+  it("hides share, net, and payer alias when those props are omitted", () => {
+    act(() => {
+      root.render(<ReceiptRow title="Coffee" when="2026-08-19" amount="₡10" />);
+    });
+    expect(host.textContent).toContain("Coffee");
+    expect(host.textContent).toContain("₡10");
+    expect(host.textContent).not.toContain("%");
+    expect(host.textContent).not.toContain("+");
+    expect(host.textContent).not.toContain("@");
+  });
+
+  it("renders Unknown origin chip for another member's blank origin", () => {
+    act(() => {
+      root.render(
+        <ReceiptRow
+          title="grill out"
+          payerAlias="dotmail"
+          when="2026-08-19"
+          amount="₡10,000"
+          originChip="Unknown"
+        />,
+      );
+    });
+    expect(host.textContent).toContain("Unknown");
+    expect(host.textContent).toContain("@dotmail");
   });
 
   it("TabBar exposes nav + aria-current on active List tab", () => {

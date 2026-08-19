@@ -44,6 +44,35 @@
   }
 }
 
+/* Ghost: no chrome. Resting glyph stays close to muted so it recedes on
+   the cream island; hover is color-only, no fill. */
+.ghost {
+  color: var(--muted) !important;
+  background: transparent !important;
+}
+
+@supports (color: color-mix(in srgb, white, black)) {
+  .ghost {
+    color: color-mix(in srgb, var(--muted) 90%, var(--foreground)) !important;
+  }
+}
+
+.ghost:not(:disabled):hover {
+  color: var(--foreground) !important;
+  background: transparent !important;
+}
+
+.ghost:focus-visible {
+  outline: 2px solid rgba(63, 107, 69, 0.55);
+  outline-offset: 2px;
+}
+
+@supports (outline: color-mix(in srgb, white, transparent)) {
+  .ghost:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+}
+
 /* Reset hover state on touch to prevent sticky appearance after tap */
 @media (hover: none) and (pointer: coarse) {
   .button:not(:disabled):active {
@@ -62,6 +91,11 @@
     background: transparent;
   }
 
+  .ghost:not(:disabled):active,
+  .ghost:not(:disabled):active:not(:focus-visible) {
+    background: transparent !important;
+  }
+
   @supports (background: color-mix(in srgb, white, transparent)) {
     .button:not(:disabled):active {
       background: color-mix(in srgb, var(--border) 30%, transparent);
@@ -69,6 +103,10 @@
 
     .muted:not(:disabled):active {
       background: color-mix(in srgb, var(--accent) 12%, transparent);
+    }
+
+    .ghost:not(:disabled):active {
+      background: transparent !important;
     }
   }
 }

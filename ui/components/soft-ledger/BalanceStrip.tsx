@@ -54,7 +54,7 @@ export function BalanceStrip({
           {amount}
         </p>
       </div>
-      {action ? <div className="flex items-center">{action}</div> : null}
+      {action}
     </section>
   );
 }

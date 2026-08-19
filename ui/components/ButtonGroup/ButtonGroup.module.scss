@@ -1,0 +1,80 @@
+.group {
+  --button-group-radius: var(--rounded-sm, 8px);
+
+  display: inline-flex;
+  width: 3.25rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--button-group-radius);
+  background: var(--surface);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--foreground) 12%, transparent);
+  overflow: hidden;
+}
+
+.horizontal {
+  flex-direction: row;
+  align-items: stretch;
+  width: auto;
+}
+
+.vertical {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+/* Structural + hover/focus overrides on top of IconButton's own base chrome
+   (see ui/components/IconButton) — anything IconButton's Tailwind base
+   classes or its module also set needs !important to win deterministically
+   (mirrors FormIconSubmit.module.scss's established pattern for this). */
+.item {
+  padding: 0.7rem 0 !important;
+  border-radius: 0 !important;
+  color: var(--accent) !important;
+  line-height: 0 !important;
+}
+
+.item:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--border) 35%, transparent) !important;
+}
+
+.horizontal .item {
+  flex: 1 1 auto;
+  padding: 0.7rem !important;
+}
+
+.vertical .item {
+  width: 100%;
+}
+
+.horizontal .item:not(:last-child) {
+  border-right: 1px solid var(--border);
+}
+
+.vertical .item:not(:last-child) {
+  border-bottom: 1px solid var(--border);
+}
+
+.horizontal .item:first-child {
+  border-radius: var(--button-group-radius) 0 0 var(--button-group-radius) !important;
+}
+
+.horizontal .item:last-child {
+  border-radius: 0 var(--button-group-radius) var(--button-group-radius) 0 !important;
+}
+
+.vertical .item:first-child {
+  border-radius: var(--button-group-radius) var(--button-group-radius) 0 0 !important;
+}
+
+.vertical .item:last-child {
+  border-radius: 0 0 var(--button-group-radius) var(--button-group-radius) !important;
+}
+
+.item:first-child:last-child {
+  border-radius: var(--button-group-radius) !important;
+}
+
+.item:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent) !important;
+  outline-offset: -2px !important;
+}
