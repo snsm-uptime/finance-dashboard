@@ -7,11 +7,9 @@ import { Hint } from "@/components/soft-ledger/Hint";
 import { IncompleteDisclosure } from "@/components/soft-ledger/IncompleteDisclosure";
 import { ReceiptRow } from "@/components/soft-ledger/ReceiptRow";
 import { SectionLabel } from "@/components/soft-ledger/SectionLabel";
-import { TabBar } from "@/components/soft-ledger/TabBar";
 import { TopNav } from "@/components/soft-ledger/TopNav";
 import { requireAlias } from "@/lib/alias";
 import { getApiInternalUrl } from "@/lib/api";
-import { accountCopy } from "@/lib/i18n/account";
 import { listsMessages } from "@/lib/i18n/lists";
 import type { Locale } from "@/lib/i18n/locale";
 import { fetchSession } from "@/lib/session";
@@ -171,13 +169,32 @@ export function formatNetLabel(
   return { label: formatCrcAmount(crc), polarity };
 }
 
+function formatPercentagePrefix(
+  kind: ExpenseItem["viewer_share_kind"] | undefined,
+  value: string | null | undefined,
+): string | undefined {
+  if (kind !== "percentage" || !value) return undefined;
+  const parsed = Number(value);
+  return `%${Number.isFinite(parsed) ? parsed : value}`;
+}
+
 export function directionLabelFrom(
   polarity: ExpenseItem["viewer_net_polarity"],
   t: { expenseYouBorrowed: string; expenseYouLent: string },
+  share?: {
+    kind: ExpenseItem["viewer_share_kind"];
+    value: string | null;
+  },
 ): string | undefined {
-  if (polarity === "owe") return t.expenseYouBorrowed;
-  if (polarity === "owed") return t.expenseYouLent;
-  return undefined;
+  const base =
+    polarity === "owe"
+      ? t.expenseYouBorrowed
+      : polarity === "owed"
+        ? t.expenseYouLent
+        : undefined;
+  if (!base) return undefined;
+  const pct = formatPercentagePrefix(share?.kind, share?.value);
+  return pct ? `${base} ${pct}` : base;
 }
 
 export function originChipFrom(
@@ -311,7 +328,6 @@ export default async function ListDetailPage({
   const jar = await cookies();
   const locale = resolvePageLocale(jar.get("fh_lang_cache")?.value);
   const t = listsMessages[locale];
-  const account = accountCopy(locale);
   const header = await cookieHeader();
 
   let detail: DetailPayload | null = null;
@@ -534,64 +550,66 @@ export default async function ListDetailPage({
                 <Hint>{t.detailHintEmpty}</Hint>
               ) : null}
               <div className={styles.softReceipts}>
-                <SectionLabel>{t.detailReceiptsTitle}</SectionLabel>
-                {!expensesLoadError ? (
-                  <NoOriginFilter
-                    listId={listId}
-                    currentUserId={session.user_id}
-                    expenses={expenses}
-                    messages={{
-                      noOriginFilterToggle: t.noOriginFilterToggle,
-                      noOriginFilterAssign: t.noOriginFilterAssign,
-                      noOriginFilterAssigning: t.noOriginFilterAssigning,
-                      noOriginFilterSelectAll: t.noOriginFilterSelectAll,
-                      expenseOriginBlank: t.expenseOriginBlank,
-                      expenseOriginCash: t.expenseOriginCash,
-                      errorGeneric: t.errorGeneric,
-                      errorInvalidName: t.errorInvalidName,
-                      errorForbidden: t.errorForbidden,
-                      errorUnauthorized: t.errorUnauthorized,
-                    }}
-                  />
-                ) : null}
-                {expensesLoadError ? (
-                  <p className={styles.copy} role="alert">
-                    {t.loadError}
-                  </p>
-                ) : expenses.length === 0 ? (
-                  <ReceiptRow emptyLabel={t.detailReceiptsEmpty} />
-                ) : (
-                  expenses.map((e) => {
-                    const rowProps = receiptRowFxPropsFrom(e, t);
-                    const net = formatNetLabel(e.viewer_net_crc, e.viewer_net_polarity);
-                    return (
-                      <ReceiptRow
-                        key={e.id}
-                        title={rowProps.title}
-                        payerAlias={payerAliasFrom(e.payer_id, members)}
-                        when={e.posted_date}
-                        amount={rowProps.amount}
-                        originChip={originChipFrom(e, session.user_id, t)}
-                        directionLabel={directionLabelFrom(e.viewer_net_polarity, t)}
-                        netLabel={net?.label}
-                        netPolarity={net?.polarity}
-                        menu={{
-                          menuAria: t.receiptMenuAria,
-                          editLabel: t.receiptEdit,
-                          deleteLabel: t.receiptDelete,
-                        }}
-                        fxSummary={rowProps.fxSummary}
-                        fxDetail={rowProps.fxDetail}
-                      />
-                    );
-                  })
-                )}
+                <div className={styles.softReceiptsChrome}>
+                  <SectionLabel>{t.detailReceiptsTitle}</SectionLabel>
+                  {!expensesLoadError ? (
+                    <NoOriginFilter
+                      listId={listId}
+                      currentUserId={session.user_id}
+                      expenses={expenses}
+                      messages={{
+                        noOriginFilterToggle: t.noOriginFilterToggle,
+                        noOriginFilterAssign: t.noOriginFilterAssign,
+                        noOriginFilterAssigning: t.noOriginFilterAssigning,
+                        noOriginFilterSelectAll: t.noOriginFilterSelectAll,
+                        expenseOriginBlank: t.expenseOriginBlank,
+                        expenseOriginCash: t.expenseOriginCash,
+                        errorGeneric: t.errorGeneric,
+                        errorInvalidName: t.errorInvalidName,
+                        errorForbidden: t.errorForbidden,
+                        errorUnauthorized: t.errorUnauthorized,
+                      }}
+                    />
+                  ) : null}
+                </div>
+                <div className={styles.softReceiptsList}>
+                  {expensesLoadError ? (
+                    <p className={styles.copy} role="alert">
+                      {t.loadError}
+                    </p>
+                  ) : expenses.length === 0 ? (
+                    <ReceiptRow emptyLabel={t.detailReceiptsEmpty} />
+                  ) : (
+                    expenses.map((e) => {
+                      const rowProps = receiptRowFxPropsFrom(e, t);
+                      const net = formatNetLabel(e.viewer_net_crc, e.viewer_net_polarity);
+                      return (
+                        <ReceiptRow
+                          key={e.id}
+                          title={rowProps.title}
+                          payerAlias={payerAliasFrom(e.payer_id, members)}
+                          when={e.posted_date}
+                          amount={rowProps.amount}
+                          originChip={originChipFrom(e, session.user_id, t)}
+                          directionLabel={directionLabelFrom(e.viewer_net_polarity, t, {
+                            kind: e.viewer_share_kind,
+                            value: e.viewer_share_value,
+                          })}
+                          netLabel={net?.label}
+                          netPolarity={net?.polarity}
+                          menu={{
+                            menuAria: t.receiptMenuAria,
+                            editLabel: t.receiptEdit,
+                            deleteLabel: t.receiptDelete,
+                          }}
+                          fxSummary={rowProps.fxSummary}
+                          fxDetail={rowProps.fxDetail}
+                        />
+                      );
+                    })
+                  )}
+                </div>
               </div>
-              <p className={`${styles.copy} ${styles.mobileBack}`}>
-                <Link className={styles.link} href="/home">
-                  {t.backToLists}
-                </Link>
-              </p>
             </div>
             <aside className={styles.detailSidebar}>
               {members.length > 0 && (
@@ -681,16 +699,6 @@ export default async function ListDetailPage({
           </div>
         )}
       </div>
-      <TabBar
-        listHref={`/lists/${encodeURIComponent(listId)}`}
-        uploadHref="/upload"
-        accountHref="/account"
-        listLabel={t.tabList}
-        uploadLabel={t.uploadLink}
-        accountLabel={account.navAccount}
-        ariaLabel={t.tabNavAria}
-        active="list"
-      />
     </main>
   );
 }

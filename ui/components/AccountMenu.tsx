@@ -83,7 +83,7 @@ export function AccountMenu() {
   const signOutClass = `font-inherit text-[0.9rem] font-semibold py-[0.55rem] px-[1rem] rounded-[8px] border border-border bg-surface text-foreground cursor-pointer ${styles.signOut}`;
 
   return (
-    <main className="min-h-screen py-[2.5rem] px-[1.5rem]" style={{ fontFamily: "var(--font-ui), Manrope, system-ui, sans-serif" }}>
+    <main className="py-[2.5rem] px-[1.5rem]" style={{ fontFamily: "var(--font-ui), Manrope, system-ui, sans-serif" }}>
       <div className="flex items-center justify-between gap-4 mb-2">
         <p className="m-0 text-[1.25rem] font-medium text-muted tracking-[0.03rem]" style={{ fontFamily: "var(--font-brand), Georgia, serif" }}>
           {t.brand}

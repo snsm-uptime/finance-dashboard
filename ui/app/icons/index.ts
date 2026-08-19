@@ -7,3 +7,7 @@ export { ShareIcon } from "./ShareIcon";
 export { PieChartIcon } from "./PieChartIcon";
 export { EyeIcon } from "./EyeIcon";
 export { CopyIcon } from "./CopyIcon";
+export { HomeIcon } from "./HomeIcon";
+export { UploadIcon } from "./UploadIcon";
+export { UserIcon } from "./UserIcon";
+

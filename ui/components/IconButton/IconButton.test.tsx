@@ -133,7 +133,7 @@ describe("IconButton.module.scss ghost variant", () => {
   const css = readFileSync(join(here, "IconButton.module.scss"), "utf8");
 
   it("keeps hover and rest chrome off the plate — color only on the glyph", () => {
-    expect(css).toContain(".ghost:not(:disabled):hover {");
+    expect(css).toContain(".ghost:not(:disabled):hover,");
     expect(css).toContain("background: transparent !important;");
     expect(css).toContain(
       "color: color-mix(in srgb, var(--muted) 90%, var(--foreground)) !important;",
@@ -141,5 +141,6 @@ describe("IconButton.module.scss ghost variant", () => {
     expect(css).not.toMatch(
       /\.ghost:not\(:disabled\):hover \{[^}]*background: color-mix/,
     );
+    expect(css).toContain('.ghost[aria-current="page"]');
   });
 });

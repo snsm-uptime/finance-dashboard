@@ -90,6 +90,21 @@ describe("receipt row viewer lens formatting", () => {
     expect(directionLabelFrom("owed", directionT)).toBe("you lent");
     expect(directionLabelFrom("zero", directionT)).toBeUndefined();
     expect(directionLabelFrom(null, directionT)).toBeUndefined();
+    expect(
+      directionLabelFrom("owe", directionT, { kind: "percentage", value: "30.00" }),
+    ).toBe("you borrowed %30");
+    expect(
+      directionLabelFrom("owed", directionT, { kind: "percentage", value: "10.00" }),
+    ).toBe("you lent %10");
+    expect(
+      directionLabelFrom("owe", directionT, { kind: "absolute", value: "400.00" }),
+    ).toBe("you borrowed");
+    expect(
+      directionLabelFrom("owe", directionT, { kind: null, value: "30.00" }),
+    ).toBe("you borrowed");
+    expect(
+      directionLabelFrom("owe", directionT, { kind: "percentage", value: null }),
+    ).toBe("you borrowed");
   });
 
   it("shows card label only for the payer; others get generic Card copy", () => {

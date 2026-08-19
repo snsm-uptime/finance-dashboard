@@ -57,7 +57,8 @@
   }
 }
 
-.ghost:not(:disabled):hover {
+.ghost:not(:disabled):hover,
+.ghost[aria-current="page"] {
   color: var(--foreground) !important;
   background: transparent !important;
 }

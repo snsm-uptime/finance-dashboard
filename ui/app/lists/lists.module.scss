@@ -1,5 +1,5 @@
 .main {
-  min-height: 100vh;
+  min-height: 100%;
   padding: 2.5rem 1.5rem;
   font-family: var(--font-ui), system-ui, sans-serif;
 }
@@ -545,8 +545,11 @@
 .softMain {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
-  min-height: 100dvh;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
   padding: 0;
   margin: 0;
   background: var(--background);
@@ -554,20 +557,87 @@
   box-shadow: none;
 }
 
+.softMain > :not(.softBody) {
+  flex-shrink: 0;
+}
+
 .softBody {
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding-bottom: var(--space-4);
+  padding-bottom: 0;
   min-height: 0;
+  overflow: hidden;
 }
 
 .softReceipts {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: var(--space-2);
   margin: var(--space-2) var(--page-gutter) 0;
   padding: 0;
   background: transparent;
   box-shadow: none;
+  overflow: hidden;
+}
+
+/* Title + no-origin filter stay put; only the rows below scroll. */
+.softReceiptsChrome {
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 1;
+  background: var(--background);
+  max-height: calc(100% - 6rem);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.softReceiptsList {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding-bottom: var(--space-4);
+  /* Overlay thumb is 6px; this sliver keeps it beside the kebab, not on it.
+     Row already has --space-1 (4px) padding, so the 24px 3-dot stays tappable. */
+  padding-inline-end: 6px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Thin overlay scrollbar aligned with the receipt-row kebab column. */
+.softReceiptsChrome,
+.softReceiptsList {
+  scrollbar-width: thin;
+  scrollbar-gutter: auto;
+  scrollbar-color: color-mix(in srgb, var(--foreground) 28%, transparent) transparent;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: color-mix(in srgb, var(--foreground) 22%, transparent);
+    border-radius: var(--rounded-full);
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in srgb, var(--foreground) 40%, transparent);
+  }
+
+  &::-webkit-scrollbar-corner {
+    background: transparent;
+  }
 }
 
 /* Soft-Ledger list detail: settle/receipts lead on phone; sidebar left from md. */
@@ -576,12 +646,20 @@
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
+  overflow: hidden;
 }
 
 .detailPrimary {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.detailPrimary > :not(.softReceipts) {
+  flex-shrink: 0;
 }
 
 .detailSidebar {
@@ -612,27 +690,8 @@
   .expenseTitle {
     display: flex;
   }
-}
 
-.mobileBack {
-  margin: var(--space-6) var(--page-gutter) 0;
-}
-
-@media (min-width: 768px) {
   /* Lock Soft-Ledger shell to the viewport — only the receipts list scrolls. */
-  .softMain {
-    height: 100vh;
-    height: 100dvh;
-    max-height: 100vh;
-    max-height: 100dvh;
-    overflow: hidden;
-  }
-
-  .softBody {
-    overflow: hidden;
-    padding-bottom: 0;
-  }
-
   .detailLayout {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
@@ -682,21 +741,8 @@
     overflow: hidden;
   }
 
-  .detailPrimary > :not(.softReceipts) {
-    flex-shrink: 0;
-  }
-
   .detailPrimary .softReceipts {
-    flex: 1 1 auto;
-    min-height: 0;
     margin-inline: var(--strip-inset);
-    overflow-x: hidden;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-  }
-
-  .mobileBack {
-    display: none;
   }
 }
 

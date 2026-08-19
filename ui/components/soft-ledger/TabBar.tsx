@@ -1,29 +1,35 @@
 import Link from "next/link";
 
-export type TabKey = "list" | "upload" | "account";
+import { HomeIcon, UploadIcon, UserIcon } from "@/app/icons";
+import iconButtonStyles from "@/components/IconButton/IconButton.module.scss";
+
+export type TabKey = "home" | "upload" | "account";
 
 type TabBarProps = {
-  listHref: string;
+  homeHref: string;
   uploadHref: string;
   accountHref: string;
-  listLabel: string;
+  homeLabel: string;
   uploadLabel: string;
   accountLabel: string;
-  active: TabKey;
+  active?: TabKey;
   /** Localized landmark label (required — do not hardcode English). */
   ariaLabel: string;
 };
 
-const baseTabClass =
-  "block text-center py-[var(--space-3)] px-[var(--space-1)] no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
-const tabClass = `${baseTabClass} text-muted`;
-const tabActiveClass = `${baseTabClass} text-accent`;
+/** Same compact ghost chrome as BalanceStrip's icon cluster (IconButton variant="ghost"). */
+const tabClass = [
+  "inline-flex flex-shrink-0 items-center justify-center size-11 m-0 p-1 border-0 rounded-[8px] bg-transparent text-muted no-underline cursor-pointer leading-none transition-all duration-150",
+  iconButtonStyles.button,
+  iconButtonStyles.ghost,
+].join(" ");
+const iconClass = "size-6";
 
 export function TabBar({
-  listHref,
+  homeHref,
   uploadHref,
   accountHref,
-  listLabel,
+  homeLabel,
   uploadLabel,
   accountLabel,
   active,
@@ -31,34 +37,32 @@ export function TabBar({
 }: TabBarProps) {
   return (
     <nav
-      className="grid grid-cols-3 mt-auto bg-surface border-t border-border"
-      style={{
-        fontFamily: "var(--type-tab-face)",
-        fontSize: "var(--type-tab-size)",
-        fontWeight: "var(--type-tab-weight)",
-      }}
+      className="flex justify-evenly items-center mt-auto shrink-0 bg-surface border-t border-border"
       aria-label={ariaLabel}
     >
       <Link
-        className={active === "list" ? tabActiveClass : tabClass}
-        href={listHref}
-        aria-current={active === "list" ? "page" : undefined}
+        className={tabClass}
+        href={homeHref}
+        aria-label={homeLabel}
+        aria-current={active === "home" ? "page" : undefined}
       >
-        {listLabel}
+        <HomeIcon className={iconClass} />
       </Link>
       <Link
-        className={active === "upload" ? tabActiveClass : tabClass}
+        className={tabClass}
         href={uploadHref}
+        aria-label={uploadLabel}
         aria-current={active === "upload" ? "page" : undefined}
       >
-        {uploadLabel}
+        <UploadIcon className={iconClass} />
       </Link>
       <Link
-        className={active === "account" ? tabActiveClass : tabClass}
+        className={tabClass}
         href={accountHref}
+        aria-label={accountLabel}
         aria-current={active === "account" ? "page" : undefined}
       >
-        {accountLabel}
+        <UserIcon className={iconClass} />
       </Link>
     </nav>
   );

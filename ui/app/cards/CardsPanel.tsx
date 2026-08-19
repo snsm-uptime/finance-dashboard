@@ -186,7 +186,7 @@ export function CardsPanel({ embedded = false }: Props) {
   }
 
   return (
-    <main className="min-h-screen py-[2.5rem] px-[1.5rem]" style={{ fontFamily: "var(--font-ui), Manrope, system-ui, sans-serif" }}>
+    <main className="py-[2.5rem] px-[1.5rem]" style={{ fontFamily: "var(--font-ui), Manrope, system-ui, sans-serif" }}>
       <div className="flex items-center justify-between gap-4 mb-2">
         <span />
         <Link className="text-accent font-semibold no-underline text-[0.9rem]" href="/account">

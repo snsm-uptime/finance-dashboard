@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Manrope, Petrona } from "next/font/google";
 
+import { AppShell } from "@/components/AppShell";
 import {
   PreferencesProvider,
   themeBootScript,
@@ -40,7 +41,9 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
       </head>
       <body>
-        <PreferencesProvider>{children}</PreferencesProvider>
+        <PreferencesProvider>
+          <AppShell>{children}</AppShell>
+        </PreferencesProvider>
       </body>
     </html>
   );

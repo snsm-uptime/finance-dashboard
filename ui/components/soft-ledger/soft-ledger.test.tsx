@@ -232,30 +232,39 @@ describe("Soft-Ledger primitives", () => {
     expect(direction?.className).toContain("text-owe");
   });
 
-  it("TabBar exposes nav + aria-current on active List tab", () => {
+  it("TabBar exposes icon links + aria-current on active Home tab", () => {
     act(() => {
       root.render(
         <TabBar
-          listHref="/lists/abc"
+          homeHref="/home"
           uploadHref="/upload"
           accountHref="/account"
-          listLabel="List"
+          homeLabel="Home"
           uploadLabel="Upload"
           accountLabel="Account"
           ariaLabel="Primary"
-          active="list"
+          active="home"
         />,
       );
     });
     const nav = host.querySelector("nav");
     expect(nav?.getAttribute("aria-label")).toBe("Primary");
+    expect(nav?.className).toContain("justify-evenly");
     const links = Array.from(host.querySelectorAll("a"));
     expect(links).toHaveLength(3);
-    expect(links[0]?.getAttribute("href")).toBe("/lists/abc");
+    expect(links[0]?.getAttribute("href")).toBe("/home");
+    expect(links[0]?.getAttribute("aria-label")).toBe("Home");
     expect(links[0]?.getAttribute("aria-current")).toBe("page");
+    expect(links[0]?.className).toEqual(links[1]?.className);
+    expect(links[0]?.className).not.toContain("text-accent");
     expect(links[1]?.getAttribute("href")).toBe("/upload");
+    expect(links[1]?.getAttribute("aria-label")).toBe("Upload");
     expect(links[1]?.getAttribute("aria-current")).toBeNull();
     expect(links[2]?.getAttribute("href")).toBe("/account");
+    expect(links[2]?.getAttribute("aria-label")).toBe("Account");
+    expect(links[0]?.querySelector("svg")).not.toBeNull();
+    expect(links[1]?.querySelector("svg")).not.toBeNull();
+    expect(links[2]?.querySelector("svg")).not.toBeNull();
   });
 
   it("PrimaryButton mounts and uses rounded-sm (not pill)", () => {
