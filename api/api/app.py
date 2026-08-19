@@ -13,6 +13,7 @@ from api.deps import require_user_alias
 from api.routes.auth import router as auth_router
 from api.routes.cards import router as cards_router
 from api.routes.health import router as health_router
+from api.routes.import_sessions import router as import_sessions_router
 from api.routes.invites import router as invites_router
 from api.routes.lists import router as lists_router
 from api.routes.splits import router as splits_router
@@ -44,4 +45,7 @@ def create_app() -> FastAPI:
     application.include_router(invites_router)
     # Cards are a personal resource, not a list-roster surface — no alias gate.
     application.include_router(cards_router)
+    # Upload is a global entry point (EXPERIENCE.md), not list-scoped — list/alias
+    # assignment happens in review (Stories 4.7/4.8), not here.
+    application.include_router(import_sessions_router)
     return application

@@ -13,6 +13,7 @@ dependencies = [
   "argon2-cffi==25.1.0",
   "aiosmtplib==5.1.2",
   "pdfplumber==0.11.10",
+  "python-multipart==0.0.20",
 ]
 
 [dependency-groups]

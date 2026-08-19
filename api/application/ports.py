@@ -150,3 +150,19 @@ class BccrClient(Protocol):
     def supported_currencies(self) -> list[str]:
         """Currencies this client can convert to CRC (v1: USD)."""
         ...
+
+
+class PdfStorage(Protocol):
+    """Operator PDF volume port (Story 4.6, AD-3) — path-reference-only.
+
+    Implementations own where/how bytes land on disk; callers only ever see
+    the opaque path reference this returns.
+    """
+
+    def save(self, *, user_id: UUID, filename: str, content: bytes) -> str:
+        """Persist content, returning an opaque path reference string."""
+        ...
+
+    def delete(self, path: str) -> None:
+        """Remove the stored file. Must not raise if the path is already gone."""
+        ...

@@ -58,6 +58,7 @@ class UserModel(Base):
     )
     memberships: Mapped[list[ListMembershipModel]] = relationship(back_populates="user")
     sessions: Mapped[list[SessionModel]] = relationship(back_populates="user")
+    import_sessions: Mapped[list[ImportSessionModel]] = relationship(back_populates="user")
     password_reset_tokens: Mapped[list[PasswordResetTokenModel]] = relationship(
         back_populates="user"
     )
@@ -364,3 +365,86 @@ class CardModel(Base):
     )
 
     owner: Mapped[UserModel] = relationship(back_populates="cards")
+
+
+class ImportSessionModel(Base):
+    """One staged upload (Story 4.6, AD-4). discarded_at is a soft-delete
+    timestamp, never a row delete — "discard drops only uncommitted state,
+    no ledger writes" (AC #4) stays auditable."""
+
+    __tablename__ = "import_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    discarded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    user: Mapped[UserModel] = relationship(back_populates="import_sessions")
+    statements: Mapped[list[ImportStatementModel]] = relationship(
+        back_populates="session", cascade="all, delete-orphan"
+    )
+
+
+class ImportStatementModel(Base):
+    """One detected statement within an Import Session (Story 4.6, AC #2/#3).
+
+    product_id is a String adapter id (e.g. "bac_credit") — a different
+    type than the speculative UUID ledger_entries.product_id from Story 3.2;
+    see this story's Completion Notes for the forward note to Story 4.9.
+    """
+
+    __tablename__ = "import_statements"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("import_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    product_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    pdf_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    session: Mapped[ImportSessionModel] = relationship(back_populates="statements")
+    candidate_rows: Mapped[list[ImportCandidateRowModel]] = relationship(
+        back_populates="statement", cascade="all, delete-orphan"
+    )
+
+
+class ImportCandidateRowModel(Base):
+    """One parsed CanonicalLine row for a staged statement (Story 4.6, AD-16).
+
+    product_id is not duplicated here — identical to the parent statement's
+    product_id, read from there when needed.
+    """
+
+    __tablename__ = "import_candidate_rows"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    statement_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("import_statements.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    posted_date: Mapped[date] = mapped_column(Date, nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    line_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    normalized_description: Mapped[str] = mapped_column(Text, nullable=False)
+    external_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    ref_quality: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    provenance: Mapped[str] = mapped_column(String(16), nullable=False, server_default="parser")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    statement: Mapped[ImportStatementModel] = relationship(back_populates="candidate_rows")
