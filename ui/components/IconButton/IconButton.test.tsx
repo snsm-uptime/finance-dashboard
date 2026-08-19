@@ -1,5 +1,9 @@
 /** @vitest-environment jsdom */
 
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -79,6 +83,18 @@ describe("IconButton", () => {
     expect(classList).toContain("flex-shrink-0");
   });
 
+  it("applies the ghost variant class for icon-only chrome", async () => {
+    await act(async () => {
+      root.render(<IconButton icon={<span />} label="Add expense" variant="ghost" />);
+    });
+    const button = container.querySelector("button") as HTMLButtonElement;
+    const classList = button.className.split(/\s+/);
+
+    expect(classList).toContain("border-0");
+    expect(classList).toContain("bg-transparent");
+    expect(button.getAttribute("aria-label")).toBe("Add expense");
+  });
+
   it("allows type to be overridden via rest props (e.g. type=submit)", async () => {
     await act(async () => {
       root.render(<IconButton icon={<span />} label="Save" type="submit" />);
@@ -109,5 +125,21 @@ describe("IconButton", () => {
       button.click();
     });
     expect(clicked).toBe(false);
+  });
+});
+
+describe("IconButton.module.scss ghost variant", () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const css = readFileSync(join(here, "IconButton.module.scss"), "utf8");
+
+  it("keeps hover and rest chrome off the plate — color only on the glyph", () => {
+    expect(css).toContain(".ghost:not(:disabled):hover {");
+    expect(css).toContain("background: transparent !important;");
+    expect(css).toContain(
+      "color: color-mix(in srgb, var(--muted) 90%, var(--foreground)) !important;",
+    );
+    expect(css).not.toMatch(
+      /\.ghost:not\(:disabled\):hover \{[^}]*background: color-mix/,
+    );
   });
 });

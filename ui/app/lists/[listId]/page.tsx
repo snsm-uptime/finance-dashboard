@@ -441,6 +441,68 @@ export default async function ListDetailPage({
                 who={stripProps.who}
                 amount={stripProps.amount}
                 polarity={stripProps.polarity}
+                action={
+                  <ListDetailMobileActions
+                    listId={listId}
+                    currentUserId={session.user_id}
+                    members={members}
+                    isOwner={isOwner}
+                    canAddExpense={!membersLoadError && members.length > 0}
+                    canInvite={isOwner}
+                    defaultSplit={defaultSplit}
+                    expenseMessages={{
+                      expenseTitle: t.expenseTitle,
+                      expenseAmount: t.expenseAmount,
+                      expenseDescription: t.expenseDescription,
+                      expensePayer: t.expensePayer,
+                      expenseSubmit: t.expenseSubmit,
+                      expenseSaving: t.expenseSaving,
+                      expenseAdjustSplit: t.expenseAdjustSplit,
+                      expenseModeWhole: t.expenseModeWhole,
+                      expenseModeAbsolute: t.expenseModeAbsolute,
+                      expenseModePercentage: t.expenseModePercentage,
+                      expenseAssignee: t.expenseAssignee,
+                      expenseOriginLabel: t.expenseOriginLabel,
+                      expenseOriginBlank: t.expenseOriginBlank,
+                      expenseOriginCash: t.expenseOriginCash,
+                      errorGeneric: t.errorGeneric,
+                      errorInvalidName: t.errorInvalidName,
+                      errorForbidden: t.errorForbidden,
+                      errorUnauthorized: t.errorUnauthorized,
+                    }}
+                    inviteMessages={{
+                      inviteTitle: t.inviteTitle,
+                      inviteLabel: t.inviteLabel,
+                      inviteSubmit: t.inviteSubmit,
+                      inviteSending: t.inviteSending,
+                      inviteSent: t.inviteSent,
+                      errorGeneric: t.errorGeneric,
+                      errorInvalidName: t.errorInvalidName,
+                      errorInvalidEmail: t.errorInvalidEmail,
+                      errorForbidden: t.errorInviteForbidden,
+                      errorUnauthorized: t.errorUnauthorized,
+                      errorAlreadyMember: t.errorAlreadyMember,
+                      errorSmtp: t.errorSmtp,
+                    }}
+                    splitMessages={{
+                      errorGeneric: t.errorGeneric,
+                      errorInvalidName: t.errorInvalidName,
+                      errorForbidden: t.errorForbidden,
+                      errorUnauthorized: t.errorUnauthorized,
+                      defaultSplitTitle: t.defaultSplitTitle,
+                      defaultSplitEven: t.defaultSplitEven,
+                      defaultSplitCustom: t.defaultSplitCustom,
+                      defaultSplitSum: t.defaultSplitSum,
+                      defaultSplitSave: t.defaultSplitSave,
+                      defaultSplitSaving: t.defaultSplitSaving,
+                      defaultSplitReadOnly: t.defaultSplitReadOnly,
+                      errorInvalidSplit: t.errorInvalidSplit,
+                    }}
+                    addExpenseAria={t.mobileAddExpenseAria}
+                    inviteAria={t.mobileInviteAria}
+                    closeLabel={t.mobileSheetClose}
+                  />
+                }
               />
               {/* Slot only (Story 3.6): no balanceStatus in the API yet; Epic 5.4 wires isIncomplete. */}
               <IncompleteDisclosure
@@ -594,66 +656,6 @@ export default async function ListDetailPage({
                 </Link>
               </p>
             </aside>
-            <ListDetailMobileActions
-              listId={listId}
-              currentUserId={session.user_id}
-              members={members}
-              isOwner={isOwner}
-              canAddExpense={!membersLoadError && members.length > 0}
-              canInvite={isOwner}
-              defaultSplit={defaultSplit}
-              expenseMessages={{
-                expenseTitle: t.expenseTitle,
-                expenseAmount: t.expenseAmount,
-                expenseDescription: t.expenseDescription,
-                expensePayer: t.expensePayer,
-                expenseSubmit: t.expenseSubmit,
-                expenseSaving: t.expenseSaving,
-                expenseAdjustSplit: t.expenseAdjustSplit,
-                expenseModeWhole: t.expenseModeWhole,
-                expenseModeAbsolute: t.expenseModeAbsolute,
-                expenseModePercentage: t.expenseModePercentage,
-                expenseAssignee: t.expenseAssignee,
-                expenseOriginLabel: t.expenseOriginLabel,
-                expenseOriginBlank: t.expenseOriginBlank,
-                expenseOriginCash: t.expenseOriginCash,
-                errorGeneric: t.errorGeneric,
-                errorInvalidName: t.errorInvalidName,
-                errorForbidden: t.errorForbidden,
-                errorUnauthorized: t.errorUnauthorized,
-              }}
-              inviteMessages={{
-                inviteTitle: t.inviteTitle,
-                inviteLabel: t.inviteLabel,
-                inviteSubmit: t.inviteSubmit,
-                inviteSending: t.inviteSending,
-                inviteSent: t.inviteSent,
-                errorGeneric: t.errorGeneric,
-                errorInvalidName: t.errorInvalidName,
-                errorInvalidEmail: t.errorInvalidEmail,
-                errorForbidden: t.errorInviteForbidden,
-                errorUnauthorized: t.errorUnauthorized,
-                errorAlreadyMember: t.errorAlreadyMember,
-                errorSmtp: t.errorSmtp,
-              }}
-              splitMessages={{
-                errorGeneric: t.errorGeneric,
-                errorInvalidName: t.errorInvalidName,
-                errorForbidden: t.errorForbidden,
-                errorUnauthorized: t.errorUnauthorized,
-                defaultSplitTitle: t.defaultSplitTitle,
-                defaultSplitEven: t.defaultSplitEven,
-                defaultSplitCustom: t.defaultSplitCustom,
-                defaultSplitSum: t.defaultSplitSum,
-                defaultSplitSave: t.defaultSplitSave,
-                defaultSplitSaving: t.defaultSplitSaving,
-                defaultSplitReadOnly: t.defaultSplitReadOnly,
-                errorInvalidSplit: t.errorInvalidSplit,
-              }}
-              addExpenseAria={t.mobileAddExpenseAria}
-              inviteAria={t.mobileInviteAria}
-              closeLabel={t.mobileSheetClose}
-            />
           </div>
         )}
       </div>

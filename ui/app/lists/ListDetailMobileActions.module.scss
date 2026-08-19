@@ -1,5 +1,6 @@
 .chrome {
-  display: contents;
+  display: flex;
+  align-items: center;
 }
 
 @media (min-width: 768px) {
@@ -8,15 +9,14 @@
   }
 }
 
-.fab {
-  position: fixed;
-  right: max(var(--page-gutter), env(safe-area-inset-right, 0px));
-  bottom: calc(3.25rem + env(safe-area-inset-bottom, 0px));
-  z-index: 30;
+.cluster {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
 }
 
-.fabIcon {
+.icon {
   display: block;
-  width: 1.15rem;
-  height: 1.15rem;
+  width: 1.2rem;
+  height: 1.2rem;
 }

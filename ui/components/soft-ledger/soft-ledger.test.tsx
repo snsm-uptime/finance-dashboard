@@ -107,6 +107,24 @@ describe("Soft-Ledger primitives", () => {
     expect(section?.getAttribute("aria-label")).toBe("Settled");
   });
 
+  it("renders an optional action in the strip's trailing column", () => {
+    act(() => {
+      root.render(
+        <BalanceStrip
+          who="You owe Partner"
+          amount="₡42,500"
+          polarity="owe"
+          action={<button type="button">Add expense</button>}
+        />,
+      );
+    });
+    const section = host.querySelector("section");
+    const action = host.querySelector("button");
+    expect(section).not.toBeNull();
+    expect(action?.textContent).toBe("Add expense");
+    expect(section?.contains(action)).toBe(true);
+  });
+
   it("renders Hint and SectionLabel and empty ReceiptRow", () => {
     act(() => {
       root.render(
