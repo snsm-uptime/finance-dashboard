@@ -112,6 +112,7 @@ describe("receipt row viewer lens formatting", () => {
       expenseOriginCash: "Cash",
       expenseOriginCard: "Card",
       expenseOriginUnknown: "Unknown",
+      expenseOriginNone: "No Origin",
     };
     expect(
       originChipFrom(
@@ -128,21 +129,22 @@ describe("receipt row viewer lens formatting", () => {
       ),
     ).toBe("Card");
     expect(originChipFrom(crcExpense({ origin_kind: "cash" }), "u1", chipT)).toBe("Cash");
-    expect(originChipFrom(crcExpense({ origin_kind: null }), "u1", chipT)).toBeUndefined();
+    expect(originChipFrom(crcExpense({ origin_kind: null }), "u1", chipT)).toBe("No Origin");
   });
 
-  it("labels another member's blank origin as Unknown; the viewer's own blank stays unchipped", () => {
+  it("labels another member's blank origin as Unknown; the viewer's own blank is No Origin", () => {
     const chipT = {
       expenseOriginCash: "Cash",
       expenseOriginCard: "Card",
       expenseOriginUnknown: "Unknown",
+      expenseOriginNone: "No Origin",
     };
     expect(
       originChipFrom(crcExpense({ origin_kind: null, payer_id: "u2" }), "u1", chipT),
     ).toBe("Unknown");
     expect(
       originChipFrom(crcExpense({ origin_kind: null, payer_id: "u1" }), "u1", chipT),
-    ).toBeUndefined();
+    ).toBe("No Origin");
   });
 
   it("resolves the payer alias from the member roster, falling back to a short id", () => {

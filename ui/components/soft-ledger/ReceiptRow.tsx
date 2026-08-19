@@ -1,16 +1,23 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
-import { Chip } from "@/components/Chip";
+import { Chip, type ChipTone } from "@/components/Chip";
 
 import { ReceiptRowMenu, type ReceiptRowMenuMessages } from "./ReceiptRowMenu";
 
 export type ReceiptRowProps = {
   title?: string;
   when?: string;
-  /** Payer alias without `@`; rendered in accent before the date. */
+  /** Payer alias without `@`; rendered as accent `@alias:` inside the origin chip. */
   payerAlias?: string;
   amount?: string;
   originChip?: string;
+  originChipTone?: ChipTone;
+  /** Disabled look for origin chips the viewer cannot assign. */
+  originDisabled?: boolean;
+  /** Clickable origin control; when set, replaces the display `originChip`. */
+  originAction?: ReactNode;
+  /** Panel below the row grid (e.g. origin `SlideDown`). */
+  originPanel?: ReactNode;
   /** "you borrowed" / "you lent" — sits above the viewer's net amount. */
   directionLabel?: string;
   netLabel?: string;
@@ -53,12 +60,47 @@ const typeStyle = {
   }
 } as const satisfies Record<string, CSSProperties>;
 
+export function OriginPayerAlias({ alias }: { alias: string }) {
+  return (
+    <span style={typeStyle.meta} className="truncate text-accent">
+      @{alias}:&nbsp;
+    </span>
+  );
+}
+
+function OriginMeta({
+  payerAlias,
+  originChip,
+  originChipTone,
+  originDisabled,
+  originAction,
+}: {
+  payerAlias?: string;
+  originChip?: string;
+  originChipTone: ChipTone;
+  originDisabled?: boolean;
+  originAction?: ReactNode;
+}) {
+  if (originAction) return originAction;
+  if (!originChip) return null;
+  return (
+    <Chip tone={originChipTone} disabled={originDisabled}>
+      {payerAlias ? <OriginPayerAlias alias={payerAlias} /> : null}
+      <span className={originDisabled ? "text-muted" : undefined}>{originChip}</span>
+    </Chip>
+  );
+}
+
 export function ReceiptRow({
   title,
   when,
   payerAlias,
   amount,
   originChip,
+  originChipTone = "muted",
+  originDisabled = false,
+  originAction,
+  originPanel,
   directionLabel,
   netLabel,
   netPolarity,
@@ -82,86 +124,89 @@ export function ReceiptRow({
   const showFx = Boolean(fxSummary && fxDetail);
 
   return (
-    <div
-      className={`grid items-center gap-x-[var(--space-4)] gap-y-[2px] ${rowChrome}`}
-      style={{
-        gridTemplateColumns: `${ICON_PX}px minmax(0, 1fr) auto auto`,
-        gridTemplateAreas: [
-          `"icon title direction menu"`,
-          `"icon meta  net       menu"`,
-          ...(showFx ? [`". fx fx ."`] : []),
-        ].join(" "),
-      }}
-    >
+    <div className={rowChrome}>
       <div
-        data-slot="type-icon"
-        className="box-border p-2 self-center"
-        style={{ gridArea: "icon", width: ICON_PX, height: ICON_PX }}
-        aria-hidden="true"
+        className="grid items-center gap-x-[var(--space-4)] gap-y-[2px]"
+        style={{
+          gridTemplateColumns: `${ICON_PX}px minmax(0, 1fr) auto auto`,
+          gridTemplateAreas: [
+            `"icon title direction menu"`,
+            `"icon meta  net       menu"`,
+            ...(showFx ? [`". fx fx ."`] : []),
+          ].join(" "),
+        }}
       >
-        <div className="h-full w-full rounded-[6px] border border-border" />
-      </div>
-
-      <div className="flex min-w-0 items-center gap-2" style={{ gridArea: "title" }}>
-        {title ? (
-          <span style={typeStyle.body} className="min-w-0 truncate text-foreground">
-            {title}
-          </span>
-        ) : null}
-        {amount ? (
-          <span style={typeStyle.amount} className="shrink-0 tabular-nums text-muted">
-            {amount}
-          </span>
-        ) : null}
-      </div>
-
-      {directionLabel ? (
-        <span
-          style={{ ...typeStyle.meta, gridArea: "direction" }}
-          className={`whitespace-nowrap text-right ${netClass}`}
+        <div
+          data-slot="type-icon"
+          className="box-border p-2 self-center"
+          style={{ gridArea: "icon", width: ICON_PX, height: ICON_PX }}
+          aria-hidden="true"
         >
-          {directionLabel}
-        </span>
-      ) : null}
-
-      {menu ? (
-        <div className="self-center" style={{ gridArea: "menu" }}>
-          <ReceiptRowMenu messages={menu} />
+          <div className="h-full w-full rounded-[6px] border border-border" />
         </div>
-      ) : null}
 
-      <div className="flex min-w-0 items-center gap-2" style={{ gridArea: "meta" }}>
-        {when ? (
-          <span style={typeStyle.meta} className="shrink-0 text-muted">
-            {when}
-          </span>
-        ) : null}
-        {originChip ? <Chip>
-          {payerAlias ? (
-            <span style={typeStyle.meta} className="truncate text-accent">
-              {payerAlias}:&nbsp;
+        <div className="flex min-w-0 items-center gap-2" style={{ gridArea: "title" }}>
+          {title ? (
+            <span style={typeStyle.body} className="min-w-0 truncate text-foreground">
+              {title}
             </span>
           ) : null}
-          {originChip}</Chip> : null}
+          {amount ? (
+            <span style={typeStyle.amount} className="shrink-0 tabular-nums text-muted">
+              {amount}
+            </span>
+          ) : null}
+        </div>
+
+        {directionLabel ? (
+          <span
+            style={{ ...typeStyle.meta, gridArea: "direction" }}
+            className={`whitespace-nowrap text-right ${netClass}`}
+          >
+            {directionLabel}
+          </span>
+        ) : null}
+
+        {menu ? (
+          <div className="self-center" style={{ gridArea: "menu" }}>
+            <ReceiptRowMenu messages={menu} />
+          </div>
+        ) : null}
+
+        <div className="flex min-w-0 items-center gap-2" style={{ gridArea: "meta" }}>
+          {when ? (
+            <span style={typeStyle.meta} className="shrink-0 text-muted">
+              {when}
+            </span>
+          ) : null}
+          <OriginMeta
+            payerAlias={payerAlias}
+            originChip={originChip}
+            originChipTone={originChipTone}
+            originDisabled={originDisabled}
+            originAction={originAction}
+          />
+        </div>
+
+        {netLabel ? (
+          <span
+            style={{ ...typeStyle.net, gridArea: "net" }}
+            className={`text-right tabular-nums ${netClass}`}
+          >
+            {netLabel}
+          </span>
+        ) : null}
+
+        {showFx ? (
+          <details className="text-muted" style={{ gridArea: "fx" }}>
+            <summary style={typeStyle.meta} className="cursor-pointer" aria-label={fxDetail}>
+              {fxSummary}
+            </summary>
+            <p style={typeStyle.meta}>{fxDetail}</p>
+          </details>
+        ) : null}
       </div>
-
-      {netLabel ? (
-        <span
-          style={{ ...typeStyle.net, gridArea: "net" }}
-          className={`text-right tabular-nums ${netClass}`}
-        >
-          {netLabel}
-        </span>
-      ) : null}
-
-      {showFx ? (
-        <details className="text-muted" style={{ gridArea: "fx" }}>
-          <summary style={typeStyle.meta} className="cursor-pointer" aria-label={fxDetail}>
-            {fxSummary}
-          </summary>
-          <p style={typeStyle.meta}>{fxDetail}</p>
-        </details>
-      ) : null}
+      {originPanel}
     </div>
   );
 }
