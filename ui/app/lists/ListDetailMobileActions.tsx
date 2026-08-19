@@ -15,7 +15,6 @@ import type { DefaultSplitMessages } from "./DefaultSplitPanel";
 import { DefaultSplitPanel } from "./DefaultSplitPanel";
 import type { DefaultSplitPayload, ListMember } from "./listsClient";
 import { Sheet } from "./Sheet";
-import { ButtonGroup } from "@/components/ButtonGroup";
 import { FormIconSubmit } from "@/components/FormIconSubmit";
 import { IconButton } from "@/components/IconButton";
 import styles from "./ListDetailMobileActions.module.scss";
@@ -39,8 +38,9 @@ type Props = {
 };
 
 /**
- * Mobile-only actions for list detail: vertical FAB + bottom sheets.
- * Hidden from md breakpoint up (sidebar owns the same forms there).
+ * Mobile-only list actions. Renders as a ghost cluster for BalanceStrip's
+ * right-edge slot (no FAB, so receipt-row menus stay tappable). Hidden from
+ * md up — sidebar owns the same forms there. Sheets portal to document.
  */
 export function ListDetailMobileActions({
   listId,
@@ -83,46 +83,41 @@ export function ListDetailMobileActions({
 
   return (
     <div className={styles.chrome}>
-      <ButtonGroup
-        orientation="vertical"
-        className={styles.fab}
-        aria-label={groupLabel}
-        buttons={[
-          canAddExpense ? (
-            <IconButton
-              key="expense"
-              ref={expenseButtonRef}
-              type="button"
-              label={addExpenseAria}
-              aria-expanded={sheet === "expense"}
-              onClick={() => setSheet("expense")}
-              icon={<PlusIcon className={styles.fabIcon} />}
-            />
-          ) : null,
-          canShowSplit ? (
-            <IconButton
-              key="split"
-              ref={splitButtonRef}
-              type="button"
-              label={splitMessages.defaultSplitTitle}
-              aria-expanded={sheet === "split"}
-              onClick={() => setSheet("split")}
-              icon={<PieChartIcon className={styles.fabIcon} />}
-            />
-          ) : null,
-          canInvite ? (
-            <IconButton
-              key="invite"
-              ref={inviteButtonRef}
-              type="button"
-              label={inviteAria}
-              aria-expanded={sheet === "invite"}
-              onClick={() => setSheet("invite")}
-              icon={<ShareIcon className={styles.fabIcon} />}
-            />
-          ) : null,
-        ]}
-      />
+      <div className={styles.cluster} role="group" aria-label={groupLabel}>
+        {canAddExpense ? (
+          <IconButton
+            ref={expenseButtonRef}
+            type="button"
+            variant="ghost"
+            label={addExpenseAria}
+            aria-expanded={sheet === "expense"}
+            onClick={() => setSheet("expense")}
+            icon={<PlusIcon className={styles.icon} />}
+          />
+        ) : null}
+        {canShowSplit ? (
+          <IconButton
+            ref={splitButtonRef}
+            type="button"
+            variant="ghost"
+            label={splitMessages.defaultSplitTitle}
+            aria-expanded={sheet === "split"}
+            onClick={() => setSheet("split")}
+            icon={<PieChartIcon className={styles.icon} />}
+          />
+        ) : null}
+        {canInvite ? (
+          <IconButton
+            ref={inviteButtonRef}
+            type="button"
+            variant="ghost"
+            label={inviteAria}
+            aria-expanded={sheet === "invite"}
+            onClick={() => setSheet("invite")}
+            icon={<ShareIcon className={styles.icon} />}
+          />
+        ) : null}
+      </div>
 
       {canAddExpense ? (
         <Sheet
