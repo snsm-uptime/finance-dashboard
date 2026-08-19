@@ -408,7 +408,6 @@ export default async function ListDetailPage({
                     expenses={expenses}
                     messages={{
                       noOriginFilterToggle: t.noOriginFilterToggle,
-                      noOriginFilterEmpty: t.noOriginFilterEmpty,
                       noOriginFilterAssign: t.noOriginFilterAssign,
                       noOriginFilterAssigning: t.noOriginFilterAssigning,
                       noOriginFilterSelectAll: t.noOriginFilterSelectAll,

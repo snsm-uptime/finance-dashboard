@@ -11,7 +11,6 @@ import { updateExpenseOrigin, type ExpenseItem, type ListsClientMessages } from 
 
 export type NoOriginFilterMessages = ListsClientMessages & {
   noOriginFilterToggle: string;
-  noOriginFilterEmpty: string;
   noOriginFilterAssign: string;
   noOriginFilterAssigning: string;
   noOriginFilterSelectAll: string;
@@ -26,6 +25,10 @@ type Props = {
   messages: NoOriginFilterMessages;
 };
 
+function ownBlankOriginExpenses(expenses: ExpenseItem[], currentUserId: string): ExpenseItem[] {
+  return expenses.filter((e) => e.origin_kind === null && e.payer_id === currentUserId);
+}
+
 function originFieldsFromValue(
   value: string,
 ): { origin_kind: "card" | "cash" | null; origin_card_id: string | null } {
@@ -34,7 +37,15 @@ function originFieldsFromValue(
   return { origin_kind: "card", origin_card_id: value };
 }
 
-export function NoOriginFilter({ listId, currentUserId, expenses, messages }: Props) {
+/** Hook-free: hide when the viewer has nothing to assign so fetchCards never runs idle. */
+export function NoOriginFilter(props: Props) {
+  if (ownBlankOriginExpenses(props.expenses, props.currentUserId).length === 0) {
+    return null;
+  }
+  return <NoOriginFilterPanel {...props} />;
+}
+
+function NoOriginFilterPanel({ listId, currentUserId, expenses, messages }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [cards, setCards] = useState<CardItem[]>([]);
@@ -61,9 +72,7 @@ export function NoOriginFilter({ listId, currentUserId, expenses, messages }: Pr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const noOrigin = expenses.filter(
-    (e) => e.origin_kind === null && e.payer_id === currentUserId,
-  );
+  const noOrigin = ownBlankOriginExpenses(expenses, currentUserId);
   const originOptions = [
     { value: "", label: messages.expenseOriginBlank },
     { value: "cash", label: messages.expenseOriginCash },
@@ -129,67 +138,58 @@ export function NoOriginFilter({ listId, currentUserId, expenses, messages }: Pr
       onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}
     >
       <summary className="cursor-pointer font-medium">
-        {messages.noOriginFilterToggle}
-        {noOrigin.length > 0 ? ` (${noOrigin.length})` : ""}
+        {messages.noOriginFilterToggle} ({noOrigin.length})
       </summary>
       <div className="mt-3 flex flex-col gap-3">
-        {noOrigin.length === 0 ? (
-          <p className="m-0 text-[0.9rem] text-muted">{messages.noOriginFilterEmpty}</p>
-        ) : (
-          <>
-            <div className="flex flex-col gap-2">
-              {noOrigin.map((expense) => (
-                <div key={expense.id} className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={selected[expense.id] === true}
-                    disabled={pending}
-                    onChange={(e) =>
-                      setSelected((prev) => ({ ...prev, [expense.id]: e.target.checked }))
-                    }
-                    aria-label={expense.description}
-                  />
-                  <span className="min-w-0 flex-1 truncate text-[0.9rem]">
-                    {expense.description}
-                  </span>
-                  <SoftLedgerSelect
-                    value={rowValues[expense.id] ?? ""}
-                    options={originOptions}
-                    disabled={pending}
-                    aria-label={messages.noOriginFilterAssign}
-                    onChange={(value) =>
-                      setRowValues((prev) => ({ ...prev, [expense.id]: value }))
-                    }
-                  />
-                  <FormIconSubmit
-                    type="button"
-                    variant="save"
-                    label={pending ? messages.noOriginFilterAssigning : messages.noOriginFilterAssign}
-                    disabled={pending || (rowValues[expense.id] ?? "") === ""}
-                    onClick={() => onAssignRow(expense.id, expense.description)}
-                  />
-                </div>
-              ))}
-            </div>
-            <div className="flex items-center gap-2">
-              <SoftLedgerSelect
-                value={batchValue}
-                options={batchOptions}
+        <div className="flex flex-col gap-2">
+          {noOrigin.map((expense) => (
+            <div key={expense.id} className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={selected[expense.id] === true}
                 disabled={pending}
-                aria-label={messages.noOriginFilterSelectAll}
-                onChange={setBatchValue}
+                onChange={(e) =>
+                  setSelected((prev) => ({ ...prev, [expense.id]: e.target.checked }))
+                }
+                aria-label={expense.description}
+              />
+              <span className="min-w-0 flex-1 truncate text-[0.9rem]">{expense.description}</span>
+              <SoftLedgerSelect
+                value={rowValues[expense.id] ?? ""}
+                options={originOptions}
+                disabled={pending}
+                aria-label={messages.noOriginFilterAssign}
+                onChange={(value) =>
+                  setRowValues((prev) => ({ ...prev, [expense.id]: value }))
+                }
               />
               <FormIconSubmit
                 type="button"
                 variant="save"
-                fill
-                label={pending ? messages.noOriginFilterAssigning : messages.noOriginFilterSelectAll}
-                disabled={pending || selectedIds.length === 0}
-                onClick={onAssignSelected}
+                label={pending ? messages.noOriginFilterAssigning : messages.noOriginFilterAssign}
+                disabled={pending || (rowValues[expense.id] ?? "") === ""}
+                onClick={() => onAssignRow(expense.id, expense.description)}
               />
             </div>
-          </>
-        )}
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <SoftLedgerSelect
+            value={batchValue}
+            options={batchOptions}
+            disabled={pending}
+            aria-label={messages.noOriginFilterSelectAll}
+            onChange={setBatchValue}
+          />
+          <FormIconSubmit
+            type="button"
+            variant="save"
+            fill
+            label={pending ? messages.noOriginFilterAssigning : messages.noOriginFilterSelectAll}
+            disabled={pending || selectedIds.length === 0}
+            onClick={onAssignSelected}
+          />
+        </div>
         {error ? (
           <p className="m-0 text-[0.9rem] text-owe" role="alert" aria-live="polite">
             {error}
