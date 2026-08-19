@@ -138,6 +138,11 @@ DATA_DIR="${HOME}/finance-helper-wt/${COMPOSE_NAME}"
 PUBLIC_APP_URL="http://localhost:${UI_HOST_PORT}"
 
 mkdir -p "$DATA_DIR"
+# api's Dockerfile runs as non-root appuser (uid 10001) with no chown-on-start
+# entrypoint (unlike the official postgres image, which fixes pgdata's
+# ownership itself) — pre-create pdfs/ and open it up so appuser can write.
+mkdir -p "$DATA_DIR/pdfs"
+chmod 777 "$DATA_DIR/pdfs"
 
 if [[ -f "$WT_ROOT/.env" ]]; then
   # Drop keys that must be unique per worktree (Compose uses last wins, but be explicit).

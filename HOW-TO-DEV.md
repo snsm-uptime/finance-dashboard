@@ -17,6 +17,11 @@ cd finance-dashboard
 cp .env.example .env
 # Optional: set FINANCE_HELPER_DATA to an absolute path outside the repo.
 mkdir -p "${FINANCE_HELPER_DATA:-$HOME/finance-helper}/pgdata"
+mkdir -p "${FINANCE_HELPER_DATA:-$HOME/finance-helper}/pdfs"
+# api's Dockerfile runs as non-root appuser (uid 10001) with no chown-on-start
+# entrypoint (unlike the official postgres image, which fixes pgdata's
+# ownership itself) — open pdfs/ up so appuser can write into it.
+chmod 777 "${FINANCE_HELPER_DATA:-$HOME/finance-helper}/pdfs"
 ```
 
 Start the hot-reload stack (`db` / `api` / `ui`):
