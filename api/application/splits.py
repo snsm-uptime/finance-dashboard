@@ -148,6 +148,30 @@ def _spec_from_stored(stored: StoredSplitOverride) -> SplitSpec:
     )
 
 
+def load_item_override_specs(
+    repo: SplitRepository,
+    *,
+    list_id: UUID,
+    subject_id: UUID,
+    receipt_id: UUID | None,
+) -> tuple[SplitSpec | None, SplitSpec | None]:
+    """Item → receipt override chain used by 2.6 allocations (no ACL)."""
+    item_override: SplitSpec | None = None
+    receipt_override: SplitSpec | None = None
+    stored_item = repo.get_split_override(list_id, SUBJECT_ITEM, subject_id)
+    if stored_item is not None:
+        item_override = _spec_from_stored(stored_item)
+    if receipt_id is not None:
+        stored_receipt = repo.get_split_override(list_id, SUBJECT_RECEIPT, receipt_id)
+        if stored_receipt is not None:
+            candidate = _spec_from_stored(stored_receipt)
+            # Absolute receipt totals cannot apply to child line amounts
+            # (decision A — fall through toward list_default for items).
+            if candidate.kind != KIND_ABSOLUTE_AMOUNTS:
+                receipt_override = candidate
+    return item_override, receipt_override
+
+
 def _view_from_stored(stored: StoredSplitOverride) -> SplitOverrideView:
     return SplitOverrideView(
         list_id=stored.list_id,
@@ -293,26 +317,16 @@ class ComputeShareAllocationsService:
 
         members = self._repo.list_member_ids(command.list_id)
         stored_default = self._repo.get_stored_default_split(command.list_id)
-        item_override: SplitSpec | None = None
-        receipt_override: SplitSpec | None = None
-
         if subject_kind == SUBJECT_ITEM:
-            stored_item = self._repo.get_split_override(
-                command.list_id, SUBJECT_ITEM, command.subject_id
+            item_override, receipt_override = load_item_override_specs(
+                self._repo,
+                list_id=command.list_id,
+                subject_id=command.subject_id,
+                receipt_id=subject.receipt_id,
             )
-            if stored_item is not None:
-                item_override = _spec_from_stored(stored_item)
-            if subject.receipt_id is not None:
-                stored_receipt = self._repo.get_split_override(
-                    command.list_id, SUBJECT_RECEIPT, subject.receipt_id
-                )
-                if stored_receipt is not None:
-                    candidate = _spec_from_stored(stored_receipt)
-                    # Absolute receipt totals cannot apply to child line amounts
-                    # (decision A — fall through toward list_default for items).
-                    if candidate.kind != KIND_ABSOLUTE_AMOUNTS:
-                        receipt_override = candidate
         else:
+            item_override = None
+            receipt_override = None
             stored_receipt = self._repo.get_split_override(
                 command.list_id, SUBJECT_RECEIPT, command.subject_id
             )
@@ -348,4 +362,5 @@ __all__ = [
     "KIND_ABSOLUTE_AMOUNTS",
     "KIND_PERCENTAGE",
     "KIND_WHOLE_ASSIGNEE",
+    "load_item_override_specs",
 ]

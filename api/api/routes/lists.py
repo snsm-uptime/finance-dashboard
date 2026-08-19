@@ -15,6 +15,7 @@ from adapters.persistence.repositories import (
 from application.expenses import (
     CreateManualExpenseCommand,
     CreateManualExpenseService,
+    ListedExpense,
     ListExpensesCommand,
     ListExpensesService,
     ListMembersCommand,
@@ -128,24 +129,45 @@ def _money_str(value: Decimal) -> str:
     return format(value, "f")
 
 
-def _expense_item(row) -> ExpenseItemResponse:
+def _expense_item(row: ListedExpense) -> ExpenseItemResponse:
+    entry = row.entry
+    lens = row.lens
+    share_kind = (
+        lens.share_kind
+        if lens is not None and lens.share_kind in ("percentage", "absolute")
+        else None
+    )
+    net_polarity = (
+        lens.net_polarity
+        if lens is not None and lens.net_polarity in ("owe", "owed", "zero")
+        else None
+    )
     return ExpenseItemResponse(
-        id=row.id,
-        list_id=row.list_id,
-        amount=_money_str(row.amount),
-        currency=row.currency,
-        description=row.normalized_description,
-        payer_id=row.payer_id,
-        provenance=row.provenance,
-        line_type=row.line_type,
-        posted_date=row.posted_date.isoformat(),
-        created_at=row.created_at,
-        amount_crc=_money_str(row.amount_crc),
-        fx_rate=_money_str(row.fx_rate),
-        fx_rate_date=row.fx_rate_date.isoformat() if row.fx_rate_date else None,
-        fx_fallback=row.fx_fallback,
-        origin_kind=row.origin_kind,
-        origin_card_id=row.origin_card_id,
+        id=entry.id,
+        list_id=entry.list_id,
+        amount=_money_str(entry.amount),
+        currency=entry.currency,
+        description=entry.normalized_description,
+        payer_id=entry.payer_id,
+        provenance=entry.provenance,
+        line_type=entry.line_type,
+        posted_date=entry.posted_date.isoformat(),
+        created_at=entry.created_at,
+        amount_crc=_money_str(entry.amount_crc),
+        fx_rate=_money_str(entry.fx_rate),
+        fx_rate_date=entry.fx_rate_date.isoformat() if entry.fx_rate_date else None,
+        fx_fallback=entry.fx_fallback,
+        origin_kind=entry.origin_kind if entry.origin_kind in ("card", "cash") else None,
+        origin_card_id=entry.origin_card_id,
+        viewer_share_kind=share_kind,
+        viewer_share_value=(
+            _money_str(lens.share_value) if share_kind is not None and lens is not None else None
+        ),
+        viewer_net_crc=(
+            _money_str(lens.net_crc) if net_polarity is not None and lens is not None else None
+        ),
+        viewer_net_polarity=net_polarity,
+        origin_card_label=row.origin_card_label,
     )
 
 
@@ -499,7 +521,7 @@ def update_list_expense_origin(
         entry_id,
         updated.origin_kind,
     )
-    return _expense_item(updated)
+    return _expense_item(ListedExpense(entry=updated))
 
 
 @router.get("/{list_id}/members", response_model=ListMembersResponse)

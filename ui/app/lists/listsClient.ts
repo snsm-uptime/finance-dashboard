@@ -409,6 +409,11 @@ export type ExpenseItem = {
   /** Origin (card / Cash / blank) — Story 4.2. */
   origin_kind: string | null;
   origin_card_id: string | null;
+  origin_card_label: string | null;
+  viewer_share_kind: "percentage" | "absolute" | null;
+  viewer_share_value: string | null;
+  viewer_net_crc: string | null;
+  viewer_net_polarity: "owe" | "owed" | "zero" | null;
 };
 
 export type CreateExpenseBody = {
@@ -474,6 +479,19 @@ function asExpense(data: unknown): ExpenseItem | null {
     fx_fallback: row.fx_fallback === true,
     origin_kind: typeof row.origin_kind === "string" ? row.origin_kind : null,
     origin_card_id: typeof row.origin_card_id === "string" ? row.origin_card_id : null,
+    origin_card_label: typeof row.origin_card_label === "string" ? row.origin_card_label : null,
+    viewer_share_kind:
+      row.viewer_share_kind === "percentage" || row.viewer_share_kind === "absolute"
+        ? row.viewer_share_kind
+        : null,
+    viewer_share_value: typeof row.viewer_share_value === "string" ? row.viewer_share_value : null,
+    viewer_net_crc: typeof row.viewer_net_crc === "string" ? row.viewer_net_crc : null,
+    viewer_net_polarity:
+      row.viewer_net_polarity === "owe" ||
+      row.viewer_net_polarity === "owed" ||
+      row.viewer_net_polarity === "zero"
+        ? row.viewer_net_polarity
+        : null,
   };
 }
 

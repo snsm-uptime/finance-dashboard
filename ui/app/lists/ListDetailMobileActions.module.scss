@@ -9,44 +9,10 @@
 }
 
 .fab {
-  --temporal-nav-radius: 8px;
-
   position: fixed;
   right: max(var(--page-gutter), env(safe-area-inset-right, 0px));
   bottom: calc(3.25rem + env(safe-area-inset-bottom, 0px));
   z-index: 30;
-  display: flex;
-  flex-direction: column;
-  width: 3.25rem;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--temporal-nav-radius);
-  background: var(--surface);
-  box-shadow: 0 6px 18px color-mix(in srgb, var(--foreground) 12%, transparent);
-  overflow: hidden;
-}
-
-/* Structural + hover/focus overrides on top of IconButton's own base chrome
-   (see ui/components/IconButton) — anything IconButton's Tailwind base
-   classes or its module also set needs !important to win deterministically
-   (mirrors FormIconSubmit.module.scss's established pattern for this). */
-.fabHalf {
-  padding: 0.7rem 0 !important;
-  color: var(--accent) !important;
-  line-height: 0 !important;
-}
-
-.fabHalf:not(:last-child) {
-  border-bottom: 1px solid var(--border);
-}
-
-.fabHalf:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--border) 35%, transparent) !important;
-}
-
-.fabHalf:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent) !important;
-  outline-offset: -2px !important;
 }
 
 .fabIcon {

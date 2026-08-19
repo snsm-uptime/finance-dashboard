@@ -97,6 +97,11 @@ function expense(overrides: Partial<ExpenseItem> = {}): ExpenseItem {
     fx_fallback: false,
     origin_kind: null,
     origin_card_id: null,
+    origin_card_label: null,
+    viewer_share_kind: null,
+    viewer_share_value: null,
+    viewer_net_crc: null,
+    viewer_net_polarity: null,
     ...overrides,
   };
 }

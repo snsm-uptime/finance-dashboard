@@ -110,6 +110,21 @@ function asExpenses(data: unknown): ExpenseItem[] {
       ...(e as ExpenseItem),
       fx_rate_date: typeof e.fx_rate_date === "string" ? e.fx_rate_date : null,
       fx_fallback: e.fx_fallback === true,
+      origin_kind: typeof e.origin_kind === "string" ? e.origin_kind : null,
+      origin_card_id: typeof e.origin_card_id === "string" ? e.origin_card_id : null,
+      origin_card_label: typeof e.origin_card_label === "string" ? e.origin_card_label : null,
+      viewer_share_kind:
+        e.viewer_share_kind === "percentage" || e.viewer_share_kind === "absolute"
+          ? e.viewer_share_kind
+          : null,
+      viewer_share_value: typeof e.viewer_share_value === "string" ? e.viewer_share_value : null,
+      viewer_net_crc: typeof e.viewer_net_crc === "string" ? e.viewer_net_crc : null,
+      viewer_net_polarity:
+        e.viewer_net_polarity === "owe" ||
+        e.viewer_net_polarity === "owed" ||
+        e.viewer_net_polarity === "zero"
+          ? e.viewer_net_polarity
+          : null,
     });
   }
   return out;
@@ -127,6 +142,42 @@ function formatCrcNumber(amount: string): string {
 /** Soft-Ledger plain CRC voice (UX-DR17) — e.g. ₡10.00 / ₡42,500. */
 function formatCrcAmount(amount: string): string {
   return `₡${formatCrcNumber(amount)}`;
+}
+
+export function formatShareLabel(
+  kind: ExpenseItem["viewer_share_kind"],
+  value: string | null,
+): string | undefined {
+  if (!kind || !value) return undefined;
+  if (kind === "percentage") {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return `${value}%`;
+    return `${parsed}%`;
+  }
+  return formatCrcAmount(value);
+}
+
+export function formatNetLabel(
+  crc: string | null,
+  polarity: ExpenseItem["viewer_net_polarity"],
+): { label: string; polarity: "owe" | "owed" } | undefined {
+  if (!crc || (polarity !== "owe" && polarity !== "owed")) return undefined;
+  const amount = formatCrcAmount(crc);
+  return {
+    label: polarity === "owe" ? `-${amount}` : `+${amount}`,
+    polarity,
+  };
+}
+
+export function originChipFrom(
+  e: ExpenseItem,
+  currentUserId: string,
+  t: { expenseOriginCash: string; expenseOriginCard: string },
+): string | undefined {
+  if (e.origin_kind === "cash") return t.expenseOriginCash;
+  if (e.origin_kind !== "card") return undefined;
+  if (e.payer_id === currentUserId && e.origin_card_label) return e.origin_card_label;
+  return t.expenseOriginCard;
 }
 
 type ExpenseFxMessages = {
@@ -429,12 +480,22 @@ export default async function ListDetailPage({
                 ) : (
                   expenses.map((e) => {
                     const rowProps = receiptRowFxPropsFrom(e, t);
+                    const net = formatNetLabel(e.viewer_net_crc, e.viewer_net_polarity);
                     return (
                       <ReceiptRow
                         key={e.id}
                         title={rowProps.title}
                         when={e.posted_date}
                         amount={rowProps.amount}
+                        originChip={originChipFrom(e, session.user_id, t)}
+                        shareLabel={formatShareLabel(e.viewer_share_kind, e.viewer_share_value)}
+                        netLabel={net?.label}
+                        netPolarity={net?.polarity}
+                        menu={{
+                          menuAria: t.receiptMenuAria,
+                          editLabel: t.receiptEdit,
+                          deleteLabel: t.receiptDelete,
+                        }}
                         fxSummary={rowProps.fxSummary}
                         fxDetail={rowProps.fxDetail}
                       />
