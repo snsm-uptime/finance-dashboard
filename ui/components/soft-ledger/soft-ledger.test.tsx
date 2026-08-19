@@ -142,7 +142,7 @@ describe("Soft-Ledger primitives", () => {
     );
   });
 
-  it("renders origin chip, accent share, owed net, and an Edit/Delete menu", () => {
+  it("renders title and total on the first row, origin with payer meta, and a lent label over net", () => {
     act(() => {
       root.render(
         <ReceiptRow
@@ -151,8 +151,8 @@ describe("Soft-Ledger primitives", () => {
           when="2026-08-19"
           amount="₡1,000"
           originChip="Cash"
-          shareLabel="10%"
-          netLabel="+₡900"
+          directionLabel="you lent"
+          netLabel="₡900"
           netPolarity="owed"
           menu={{ menuAria: "Expense options", editLabel: "Edit", deleteLabel: "Delete" }}
         />,
@@ -163,11 +163,29 @@ describe("Soft-Ledger primitives", () => {
     expect(host.textContent).toContain("@sebas");
     expect(host.textContent).toContain("2026-08-19");
     expect(host.textContent).toContain("Cash");
-    expect(host.textContent).toContain("10%");
-    expect(host.textContent).toContain("+₡900");
+    expect(host.textContent).toContain("you lent");
+    expect(host.textContent).toContain("₡1,000");
+    expect(host.textContent).toContain("₡900");
+    const titleEl = Array.from(host.querySelectorAll("span")).find(
+      (el) => el.textContent === "1000 colones",
+    );
+    const totalEl = Array.from(host.querySelectorAll("span")).find(
+      (el) => el.textContent === "₡1,000",
+    );
+    expect(titleEl?.parentElement).toBe(totalEl?.parentElement);
+    expect(totalEl?.previousElementSibling).toBe(titleEl ?? null);
+    const dateEl = Array.from(host.querySelectorAll("span")).find(
+      (el) => el.textContent === "2026-08-19",
+    );
+    const originEl = Array.from(host.querySelectorAll("span")).find((el) => el.textContent === "Cash");
+    expect(dateEl?.nextElementSibling).toBe(originEl ?? null);
     const handle = Array.from(host.querySelectorAll("span")).find((el) => el.textContent === "@sebas");
     expect(handle?.className).toContain("text-accent");
-    const net = Array.from(host.querySelectorAll("span")).find((el) => el.textContent === "+₡900");
+    const direction = Array.from(host.querySelectorAll("span")).find(
+      (el) => el.textContent === "you lent",
+    );
+    expect(direction?.className).toContain("text-owed");
+    const net = Array.from(host.querySelectorAll("span")).find((el) => el.textContent === "₡900");
     expect(net?.className).toContain("text-owed");
     const trigger = host.querySelector("button[aria-haspopup='menu']") as HTMLButtonElement;
     expect(trigger).not.toBeNull();
@@ -178,18 +196,18 @@ describe("Soft-Ledger primitives", () => {
     expect(host.textContent).toContain("Delete");
   });
 
-  it("hides share, net, and payer alias when those props are omitted", () => {
+  it("hides direction, net, and payer alias when those props are omitted", () => {
     act(() => {
       root.render(<ReceiptRow title="Coffee" when="2026-08-19" amount="₡10" />);
     });
     expect(host.textContent).toContain("Coffee");
     expect(host.textContent).toContain("₡10");
-    expect(host.textContent).not.toContain("%");
-    expect(host.textContent).not.toContain("+");
+    expect(host.textContent).not.toContain("you borrowed");
+    expect(host.textContent).not.toContain("you lent");
     expect(host.textContent).not.toContain("@");
   });
 
-  it("renders Unknown origin chip for another member's blank origin", () => {
+  it("renders Unknown origin on the meta row for another member's blank origin", () => {
     act(() => {
       root.render(
         <ReceiptRow
@@ -198,11 +216,20 @@ describe("Soft-Ledger primitives", () => {
           when="2026-08-19"
           amount="₡10,000"
           originChip="Unknown"
+          directionLabel="you borrowed"
+          netLabel="₡5,000"
+          netPolarity="owe"
         />,
       );
     });
+    expect(host.textContent).toContain("grill out");
     expect(host.textContent).toContain("Unknown");
     expect(host.textContent).toContain("@dotmail");
+    expect(host.textContent).toContain("you borrowed");
+    const direction = Array.from(host.querySelectorAll("span")).find(
+      (el) => el.textContent === "you borrowed",
+    );
+    expect(direction?.className).toContain("text-owe");
   });
 
   it("TabBar exposes nav + aria-current on active List tab", () => {

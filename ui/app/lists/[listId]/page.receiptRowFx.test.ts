@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { ExpenseItem } from "../listsClient";
-import { receiptRowFxPropsFrom, formatNetLabel, formatShareLabel, originChipFrom, payerAliasFrom } from "./page";
+import { receiptRowFxPropsFrom, formatNetLabel, formatShareLabel, directionLabelFrom, originChipFrom, payerAliasFrom } from "./page";
 
 const t = {
   expenseFxOriginalTemplate: "{currency} {original} → ₡{crc}",
@@ -78,13 +78,18 @@ describe("receiptRowFxPropsFrom", () => {
 });
 
 describe("receipt row viewer lens formatting", () => {
-  it("formats percentage share without trailing zeros and signed owed net", () => {
+  it("formats percentage share without trailing zeros and unsigned net with a borrowed/lent label", () => {
+    const directionT = { expenseYouBorrowed: "you borrowed", expenseYouLent: "you lent" };
     expect(formatShareLabel("percentage", "10.00")).toBe("10%");
     expect(formatShareLabel("absolute", "400.00")).toBe("₡400");
-    expect(formatNetLabel("900.00", "owed")).toEqual({ label: "+₡900", polarity: "owed" });
-    expect(formatNetLabel("400.00", "owe")).toEqual({ label: "-₡400", polarity: "owe" });
+    expect(formatNetLabel("900.00", "owed")).toEqual({ label: "₡900", polarity: "owed" });
+    expect(formatNetLabel("400.00", "owe")).toEqual({ label: "₡400", polarity: "owe" });
     expect(formatNetLabel("0", "zero")).toBeUndefined();
     expect(formatShareLabel(null, "10.00")).toBeUndefined();
+    expect(directionLabelFrom("owe", directionT)).toBe("you borrowed");
+    expect(directionLabelFrom("owed", directionT)).toBe("you lent");
+    expect(directionLabelFrom("zero", directionT)).toBeUndefined();
+    expect(directionLabelFrom(null, directionT)).toBeUndefined();
   });
 
   it("shows card label only for the payer; others get generic Card copy", () => {

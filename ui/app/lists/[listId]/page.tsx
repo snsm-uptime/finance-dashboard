@@ -168,11 +168,16 @@ export function formatNetLabel(
   polarity: ExpenseItem["viewer_net_polarity"],
 ): { label: string; polarity: "owe" | "owed" } | undefined {
   if (!crc || (polarity !== "owe" && polarity !== "owed")) return undefined;
-  const amount = formatCrcAmount(crc);
-  return {
-    label: polarity === "owe" ? `-${amount}` : `+${amount}`,
-    polarity,
-  };
+  return { label: formatCrcAmount(crc), polarity };
+}
+
+export function directionLabelFrom(
+  polarity: ExpenseItem["viewer_net_polarity"],
+  t: { expenseYouBorrowed: string; expenseYouLent: string },
+): string | undefined {
+  if (polarity === "owe") return t.expenseYouBorrowed;
+  if (polarity === "owed") return t.expenseYouLent;
+  return undefined;
 }
 
 export function originChipFrom(
@@ -567,7 +572,7 @@ export default async function ListDetailPage({
                         when={e.posted_date}
                         amount={rowProps.amount}
                         originChip={originChipFrom(e, session.user_id, t)}
-                        shareLabel={formatShareLabel(e.viewer_share_kind, e.viewer_share_value)}
+                        directionLabel={directionLabelFrom(e.viewer_net_polarity, t)}
                         netLabel={net?.label}
                         netPolarity={net?.polarity}
                         menu={{

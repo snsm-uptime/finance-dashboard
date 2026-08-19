@@ -11,7 +11,8 @@ export type ReceiptRowProps = {
   payerAlias?: string;
   amount?: string;
   originChip?: string;
-  shareLabel?: string;
+  /** "you borrowed" / "you lent" — sits above the viewer's net amount. */
+  directionLabel?: string;
   netLabel?: string;
   netPolarity?: "owe" | "owed";
   menu?: ReceiptRowMenuMessages;
@@ -44,6 +45,12 @@ const typeStyle = {
     fontSize: "var(--type-amount-inline-size)",
     fontWeight: "var(--type-amount-inline-weight)",
   },
+  net: {
+    fontFamily: "var(--type-amount-inline-face)",
+    fontSize: "var(--type-strip-amount-size)",
+    lineHeight: "var(--type-amount-inline-size)",
+    fontWeight: "var(--type-amount-inline-weight)"
+  }
 } as const satisfies Record<string, CSSProperties>;
 
 export function ReceiptRow({
@@ -52,7 +59,7 @@ export function ReceiptRow({
   payerAlias,
   amount,
   originChip,
-  shareLabel,
+  directionLabel,
   netLabel,
   netPolarity,
   menu,
@@ -80,8 +87,8 @@ export function ReceiptRow({
       style={{
         gridTemplateColumns: `${ICON_PX}px minmax(0, 1fr) auto auto`,
         gridTemplateAreas: [
-          `"icon title amount menu"`,
-          `"icon meta net menu"`,
+          `"icon title direction menu"`,
+          `"icon meta  net       menu"`,
           ...(showFx ? [`". fx fx ."`] : []),
         ].join(" "),
       }}
@@ -96,18 +103,24 @@ export function ReceiptRow({
       </div>
 
       <div className="flex min-w-0 items-center gap-2" style={{ gridArea: "title" }}>
-        <span style={typeStyle.body} className="truncate text-foreground">
-          {title}
-        </span>
-        {originChip ? <Chip>{originChip}</Chip> : null}
+        {title ? (
+          <span style={typeStyle.body} className="min-w-0 truncate text-foreground">
+            {title}
+          </span>
+        ) : null}
+        {amount ? (
+          <span style={typeStyle.amount} className="shrink-0 tabular-nums text-muted">
+            {amount}
+          </span>
+        ) : null}
       </div>
 
-      {amount ? (
+      {directionLabel ? (
         <span
-          style={{ ...typeStyle.amount, gridArea: "amount" }}
-          className="text-right tabular-nums text-muted"
+          style={{ ...typeStyle.meta, gridArea: "direction" }}
+          className={`whitespace-nowrap text-right ${netClass}`}
         >
-          {amount}
+          {directionLabel}
         </span>
       ) : null}
 
@@ -118,26 +131,23 @@ export function ReceiptRow({
       ) : null}
 
       <div className="flex min-w-0 items-center gap-2" style={{ gridArea: "meta" }}>
-        {payerAlias ? (
-          <span style={typeStyle.meta} className="text-accent">
-            @{payerAlias}
-          </span>
-        ) : null}
         {when ? (
-          <span style={typeStyle.meta} className="text-muted">
+          <span style={typeStyle.meta} className="shrink-0 text-muted">
             {when}
           </span>
         ) : null}
-        {shareLabel ? (
-          <span style={typeStyle.meta} className="ml-auto tabular-nums text-accent">
-            {shareLabel}
-          </span>
-        ) : null}
+        {originChip ? <Chip>
+          {payerAlias ? (
+            <span style={typeStyle.meta} className="truncate text-accent">
+              {payerAlias}:&nbsp;
+            </span>
+          ) : null}
+          {originChip}</Chip> : null}
       </div>
 
       {netLabel ? (
         <span
-          style={{ ...typeStyle.amount, gridArea: "net" }}
+          style={{ ...typeStyle.net, gridArea: "net" }}
           className={`text-right tabular-nums ${netClass}`}
         >
           {netLabel}
