@@ -2,16 +2,26 @@
 
 from __future__ import annotations
 
+import os
 import uuid
 from collections.abc import Iterator
 
+from adapters.bank import ADAPTERS
 from adapters.fx.bccr_client import UnavailableBccrClient
 from adapters.persistence.db import get_session_factory
 from adapters.persistence.password_hasher import Argon2PasswordHasher
 from adapters.persistence.repositories import SqlAlchemyAuthUserRepository
 from adapters.persistence.sessions import SqlAlchemySessionStore
+from adapters.storage.pdf_storage import FilesystemPdfStorage
+from application.bank_adapters import BankAdapter
 from application.fx_service import MaterializeFxService
-from application.ports import BccrClient, PasswordHasher, PreferencesRepository, SessionStore
+from application.ports import (
+    BccrClient,
+    PasswordHasher,
+    PdfStorage,
+    PreferencesRepository,
+    SessionStore,
+)
 from application.rate_limit import SlidingWindowRateLimiter, resolve_trusted_client_ip
 from domain.errors import AliasRequiredError
 from fastapi import Depends, HTTPException, Request, status
@@ -52,6 +62,14 @@ def get_bccr_client() -> BccrClient:
 
 def get_fx_service(bccr: BccrClient = Depends(get_bccr_client)) -> MaterializeFxService:
     return MaterializeFxService(bccr)
+
+
+def get_pdf_storage() -> PdfStorage:
+    return FilesystemPdfStorage(base_dir=os.environ["PDF_STORAGE_PATH"])
+
+
+def get_bank_adapters() -> list[BankAdapter]:
+    return ADAPTERS
 
 
 def get_auth_settings(request: Request) -> AuthSettings:

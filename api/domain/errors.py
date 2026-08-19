@@ -415,3 +415,23 @@ class AmbiguousBankAdapterError(DomainError):
 
     def __init__(self) -> None:
         super().__init__(self.MESSAGE)
+
+
+class UnsupportedFileTypeError(DomainError):
+    """Raised when an uploaded file's content is not a PDF (Story 4.6, AC #1)."""
+
+    MESSAGE = "Only PDF files are supported."
+    CODE = "unsupported_file_type"
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(detail or self.MESSAGE)
+
+
+class ImportSessionNotFoundError(DomainError):
+    """Raised when an import session id does not exist for the acting user."""
+
+    MESSAGE = "Import session not found."
+    CODE = "import_session_not_found"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)

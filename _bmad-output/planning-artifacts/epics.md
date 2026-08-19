@@ -1191,6 +1191,35 @@ So that I see the number I came to update (J1 climax).
 
 **And** same-price / quarantine flows are out of scope for this story (Epic 5); Epic 5 retains the PDF while quarantine needs it, then clears when resolved
 
+### Story 4.10: Multi-file upload — pending queue, per-item removal, duplicate detection
+
+As a user uploading statements,
+I want to select multiple PDFs at once, remove one from the batch before it's processed, and be warned if I pick a file I've already queued or staged,
+So that I can queue several statements in one pass instead of uploading them one at a time.
+
+**Acceptance Criteria:**
+
+**Given** the Upload page
+**When** I open the file picker
+**Then** I can select more than one PDF at once, and each selected file appears as its own pending entry before any upload request is sent for it
+
+**Given** a pending (not-yet-processed) entry in the queue
+**When** I remove it
+**Then** it is dropped from the queue with no API call ever made for that file
+
+**Given** a file I select
+**When** its content duplicates a file already pending in this queue, or an already-staged (undiscarded) Import Session's statement from this browser session
+**Then** the duplicate is rejected with a clear inline error and is not queued
+
+**Given** a queued batch with no duplicates
+**When** processing runs
+**Then** each file is uploaded and staged as its own Import Session — a single file's rejection does not block or discard the others in the batch, and each entry in the queue view shows its own outcome (staged / failed / rejected)
+
+**Given** v1's adopted ingest architecture (synchronous, in-process, no job queue — `architecture-finance-helper-2026-08-03/.memlog.md`)
+**When** this story processes a queued batch
+**Then** each file's detect/split/parse still runs synchronously in-process, one file at a time — this story only shapes the API/UI boundary (one upload call per file, independent per-file status) so that a later move to concurrent/background processing per file is additive
+**And** actual concurrent or background ("separate threads") processing is explicitly out of scope for this story and requires its own architecture decision (correct-course) before being adopted — it is not decided or implemented here
+
 ## Epic 5: Import resilience (then settle polish)
 
 Ordered: parse failure/quarantine/hand-fix → wire FR-43 on strip → reassign/rollback → same-price + aliases → then simplify (FR-41) + statement-cycle selector (FR-39).

@@ -200,6 +200,10 @@
 - `SectionCursor` doesn't distinguish `best_effort` from `must_parse` behavior (`api/domain/statement_layout.py:75-84`) — only `ignore` is special-cased in `classify_data_row()`; domain code untouched by this diff (Story 4.4).
 - `LINE_TYPE_CREDIT_NOTE` still has no section mapping in `BacCreditAdapter` (`api/adapters/bank/bac_credit/adapter.py:56-69`) — carried forward again from the 4.4 deferred-work entry above (which explicitly tracked it "for Story 4.5"); this story's section map has no credit-note section either, so still unreachable/unexercised.
 
+## Deferred from: code review of 4-6-upload-pdf-detect-split-import-session.md (2026-08-19)
+
+- No `GET`/list endpoint for Import Sessions (`ui/app/upload/UploadPanel.tsx`) — session state after upload lives only in React `useState`, so a page refresh loses the only handle on an already-created session, leaking its PDF + DB rows with no cleanup path. Pre-existing scope boundary already documented in the story's own Scope Note ("No bulk/individual review UI... Stories 4.7/4.8").
+- No enforced max upload size on either the API route (`api/api/routes/import_sessions.py:68`) or the UI BFF proxy (`ui/app/api/import/sessions/route.ts`) — both buffer the whole file into memory unbounded, and `docker-compose.yml` sets no request-size limit. Deferred: revisit if the app ever goes multi-tenant/public — low risk today given the self-hosted/personal-use trust model.
 - source_spec: `_bmad-output/implementation-artifacts/spec-hide-no-origin-filter-when-empty.md`
   summary: List-detail `asExpenses` does not coerce a missing `origin_kind` to null the way `listsClient.asExpense` does
   evidence: Review (Blind Hunter) — `page.tsx` spreads SSR rows without the string-or-null coercion used in `listsClient.asExpense`; `ownBlankOriginExpenses` uses `origin_kind === null`. Pre-existing parser mismatch; hide-when-idle also removes the old empty-state reminder if those rows were ever omitted from the actionable set.
