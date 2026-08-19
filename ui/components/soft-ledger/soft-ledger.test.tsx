@@ -177,9 +177,11 @@ describe("Soft-Ledger primitives", () => {
     const dateEl = Array.from(host.querySelectorAll("span")).find(
       (el) => el.textContent === "2026-08-19",
     );
-    const originEl = Array.from(host.querySelectorAll("span")).find((el) => el.textContent === "Cash");
-    expect(dateEl?.nextElementSibling).toBe(originEl ?? null);
-    const handle = Array.from(host.querySelectorAll("span")).find((el) => el.textContent === "@sebas");
+    const originEl = dateEl?.nextElementSibling as HTMLElement | null;
+    expect(originEl?.textContent).toContain("Cash");
+    expect(originEl?.textContent).toContain("@sebas");
+    const handle = originEl?.querySelector(".text-accent");
+    expect(handle?.textContent).toContain("@sebas");
     expect(handle?.className).toContain("text-accent");
     const direction = Array.from(host.querySelectorAll("span")).find(
       (el) => el.textContent === "you lent",
@@ -216,6 +218,7 @@ describe("Soft-Ledger primitives", () => {
           when="2026-08-19"
           amount="₡10,000"
           originChip="Unknown"
+          originDisabled
           directionLabel="you borrowed"
           netLabel="₡5,000"
           netPolarity="owe"
@@ -226,10 +229,84 @@ describe("Soft-Ledger primitives", () => {
     expect(host.textContent).toContain("Unknown");
     expect(host.textContent).toContain("@dotmail");
     expect(host.textContent).toContain("you borrowed");
+    expect(host.querySelector("button[aria-expanded]")).toBeNull();
+    const chip = Array.from(host.querySelectorAll("span")).find((el) =>
+      el.getAttribute("aria-disabled") === "true",
+    );
+    expect(chip?.className).toContain("opacity-55");
+    const originLabel = Array.from(chip?.querySelectorAll("span") ?? []).find(
+      (el) => el.textContent === "Unknown",
+    );
+    expect(originLabel?.className).toContain("text-muted");
+    const handle = chip?.querySelector(".text-accent");
+    expect(handle?.textContent).toContain("@dotmail");
     const direction = Array.from(host.querySelectorAll("span")).find(
       (el) => el.textContent === "you borrowed",
     );
     expect(direction?.className).toContain("text-owe");
+  });
+
+  it("renders a disabled non-payer Cash chip that is not a toggle", () => {
+    act(() => {
+      root.render(
+        <ReceiptRow
+          title="Coffee"
+          payerAlias="dotmail"
+          when="2026-08-19"
+          amount="₡10"
+          originChip="Cash"
+          originDisabled
+        />,
+      );
+    });
+    expect(host.querySelector("button[aria-expanded]")).toBeNull();
+    const chip = Array.from(host.querySelectorAll("span")).find(
+      (el) => el.getAttribute("aria-disabled") === "true",
+    );
+    expect(chip?.className).toContain("opacity-55");
+    expect(chip?.className).not.toContain("cursor-pointer");
+    const originLabel = Array.from(chip?.querySelectorAll("span") ?? []).find(
+      (el) => el.textContent === "Cash",
+    );
+    expect(originLabel?.className).toContain("text-muted");
+    expect(chip?.querySelector(".text-accent")?.textContent).toContain("@dotmail");
+  });
+
+  it("renders a warning No Origin chip and a below-row origin panel slot", () => {
+    act(() => {
+      root.render(
+        <ReceiptRow
+          title="Coffee"
+          when="2026-08-19"
+          amount="₡10"
+          originChip="No Origin"
+          originChipTone="warning"
+          originPanel={<div data-slot="origin-panel">panel</div>}
+        />,
+      );
+    });
+    const chip = Array.from(host.querySelectorAll("span")).find((el) =>
+      el.className.includes("text-owe"),
+    );
+    expect(chip?.textContent).toContain("No Origin");
+    expect(chip?.className).toContain("border-owe");
+    expect(host.querySelector('[data-slot="origin-panel"]')?.textContent).toBe("panel");
+  });
+
+  it("renders originAction instead of the display chip", () => {
+    act(() => {
+      root.render(
+        <ReceiptRow
+          title="Coffee"
+          when="2026-08-19"
+          amount="₡10"
+          originChip="Cash"
+          originAction={<button type="button">No Origin</button>}
+        />,
+      );
+    });
+    expect(host.querySelector("button")?.textContent).toBe("No Origin");
+    expect(host.textContent).not.toContain("Cash");
   });
 
   it("TabBar exposes icon links + aria-current on active Home tab", () => {

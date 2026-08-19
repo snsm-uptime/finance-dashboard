@@ -15,7 +15,7 @@ import type { Locale } from "@/lib/i18n/locale";
 import { fetchSession } from "@/lib/session";
 import { ListDetailMobileActions } from "../ListDetailMobileActions";
 import { ManualExpenseForm } from "../ManualExpenseForm";
-import { NoOriginFilter } from "../NoOriginFilter";
+import { OriginChipPicker } from "../OriginChipPicker";
 import { TemporalNavigation } from "../TemporalNavigation";
 import {
   balanceTone,
@@ -200,7 +200,12 @@ export function directionLabelFrom(
 export function originChipFrom(
   e: ExpenseItem,
   currentUserId: string,
-  t: { expenseOriginCash: string; expenseOriginCard: string; expenseOriginUnknown: string },
+  t: {
+    expenseOriginCash: string;
+    expenseOriginCard: string;
+    expenseOriginUnknown: string;
+    expenseOriginNone: string;
+  },
 ): string | undefined {
   if (e.origin_kind === "cash") return t.expenseOriginCash;
   if (e.origin_kind === "card") {
@@ -208,7 +213,7 @@ export function originChipFrom(
     return t.expenseOriginCard;
   }
   if (e.payer_id !== currentUserId) return t.expenseOriginUnknown;
-  return undefined;
+  return t.expenseOriginNone;
 }
 
 /** Roster alias for a receipt row; short id if the payer has not claimed one yet. */
@@ -552,25 +557,6 @@ export default async function ListDetailPage({
               <div className={styles.softReceipts}>
                 <div className={styles.softReceiptsChrome}>
                   <SectionLabel>{t.detailReceiptsTitle}</SectionLabel>
-                  {!expensesLoadError ? (
-                    <NoOriginFilter
-                      listId={listId}
-                      currentUserId={session.user_id}
-                      expenses={expenses}
-                      messages={{
-                        noOriginFilterToggle: t.noOriginFilterToggle,
-                        noOriginFilterAssign: t.noOriginFilterAssign,
-                        noOriginFilterAssigning: t.noOriginFilterAssigning,
-                        noOriginFilterSelectAll: t.noOriginFilterSelectAll,
-                        expenseOriginBlank: t.expenseOriginBlank,
-                        expenseOriginCash: t.expenseOriginCash,
-                        errorGeneric: t.errorGeneric,
-                        errorInvalidName: t.errorInvalidName,
-                        errorForbidden: t.errorForbidden,
-                        errorUnauthorized: t.errorUnauthorized,
-                      }}
-                    />
-                  ) : null}
                 </div>
                 <div className={styles.softReceiptsList}>
                   {expensesLoadError ? (
@@ -583,27 +569,60 @@ export default async function ListDetailPage({
                     expenses.map((e) => {
                       const rowProps = receiptRowFxPropsFrom(e, t);
                       const net = formatNetLabel(e.viewer_net_crc, e.viewer_net_polarity);
+                      const originChip = originChipFrom(e, session.user_id, t);
+                      const rowShared = {
+                        title: rowProps.title,
+                        payerAlias: payerAliasFrom(e.payer_id, members),
+                        when: e.posted_date,
+                        amount: rowProps.amount,
+                        directionLabel: directionLabelFrom(e.viewer_net_polarity, t, {
+                          kind: e.viewer_share_kind,
+                          value: e.viewer_share_value,
+                        }),
+                        netLabel: net?.label,
+                        netPolarity: net?.polarity,
+                        menu: {
+                          menuAria: t.receiptMenuAria,
+                          editLabel: t.receiptEdit,
+                          deleteLabel: t.receiptDelete,
+                        },
+                        fxSummary: rowProps.fxSummary,
+                        fxDetail: rowProps.fxDetail,
+                      };
+                      if (e.payer_id === session.user_id && originChip) {
+                        return (
+                          <OriginChipPicker
+                            key={e.id}
+                            listId={listId}
+                            entryId={e.id}
+                            originKind={
+                              e.origin_kind === "card" || e.origin_kind === "cash"
+                                ? e.origin_kind
+                                : null
+                            }
+                            originCardId={e.origin_card_id}
+                            originLabel={originChip}
+                            originTone={e.origin_kind == null ? "warning" : "muted"}
+                            messages={{
+                              expenseOriginNone: t.expenseOriginNone,
+                              expenseOriginCash: t.expenseOriginCash,
+                              expenseOriginLabel: t.expenseOriginLabel,
+                              errorGeneric: t.errorGeneric,
+                              errorInvalidName: t.errorInvalidName,
+                              errorForbidden: t.errorForbidden,
+                              errorUnauthorized: t.errorUnauthorized,
+                            }}
+                            {...rowShared}
+                          />
+                        );
+                      }
                       return (
                         <ReceiptRow
                           key={e.id}
-                          title={rowProps.title}
-                          payerAlias={payerAliasFrom(e.payer_id, members)}
-                          when={e.posted_date}
-                          amount={rowProps.amount}
-                          originChip={originChipFrom(e, session.user_id, t)}
-                          directionLabel={directionLabelFrom(e.viewer_net_polarity, t, {
-                            kind: e.viewer_share_kind,
-                            value: e.viewer_share_value,
-                          })}
-                          netLabel={net?.label}
-                          netPolarity={net?.polarity}
-                          menu={{
-                            menuAria: t.receiptMenuAria,
-                            editLabel: t.receiptEdit,
-                            deleteLabel: t.receiptDelete,
-                          }}
-                          fxSummary={rowProps.fxSummary}
-                          fxDetail={rowProps.fxDetail}
+                          originChip={originChip}
+                          originChipTone="muted"
+                          originDisabled
+                          {...rowShared}
                         />
                       );
                     })
