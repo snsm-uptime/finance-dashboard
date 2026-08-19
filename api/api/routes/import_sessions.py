@@ -12,8 +12,13 @@ import logging
 import uuid
 
 from adapters.persistence.import_sessions import SqlAlchemyImportSessionRepository
+from adapters.persistence.repositories import SqlAlchemyListRepository
 from application.bank_adapters import BankAdapter
+from application.fx_service import MaterializeFxService
 from application.import_session import (
+    AssignBulkImportCommand,
+    AssignBulkImportResult,
+    AssignBulkImportService,
     DiscardImportSessionCommand,
     DiscardImportSessionService,
     ImportSessionRecord,
@@ -23,8 +28,17 @@ from application.import_session import (
 from application.ports import PdfStorage
 from domain.errors import (
     AmbiguousBankAdapterError,
+    FxAuthenticationError,
+    FxCurrencyNotSupportedError,
+    FxFutureDateError,
+    FxRateNotAvailableError,
+    FxServiceUnavailableError,
+    ImportSessionAlreadyCommittedError,
+    ImportSessionDiscardedError,
     ImportSessionNotFoundError,
     InvalidCanonicalLineError,
+    NoCleanStatementsToCommitError,
+    NotListMemberError,
     UnknownBankAdapterError,
     UnsupportedFileTypeError,
 )
@@ -32,8 +46,20 @@ from fastapi import APIRouter, Depends, File, UploadFile, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
-from api.deps import get_bank_adapters, get_db, get_pdf_storage, require_authenticated_user
-from api.schemas.import_sessions import ImportSessionResponse, StagedStatementResponse
+from api.deps import (
+    get_bank_adapters,
+    get_db,
+    get_fx_service,
+    get_pdf_storage,
+    require_authenticated_user,
+)
+from api.schemas.import_sessions import (
+    BulkCommitBody,
+    BulkCommitResponse,
+    ImportBatchResponse,
+    ImportSessionResponse,
+    StagedStatementResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -124,3 +150,86 @@ def discard_import_session(
             content={"detail": str(exc), "code": "import_session_not_found"},
         )
     return _session_response(result)
+
+
+def _bulk_commit_response(result: AssignBulkImportResult) -> BulkCommitResponse:
+    return BulkCommitResponse(
+        session_id=result.session_id,
+        list_id=result.list_id,
+        batches=[
+            ImportBatchResponse(
+                id=b.id,
+                statement_id=b.statement_id,
+                list_id=b.list_id,
+                ledger_entry_count=len(b.ledger_entry_ids),
+            )
+            for b in result.batches
+        ],
+    )
+
+
+@router.post("/{session_id}/bulk-commit", response_model=BulkCommitResponse)
+def bulk_commit_import_session(
+    session_id: uuid.UUID,
+    body: BulkCommitBody,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+    fx_service: MaterializeFxService = Depends(get_fx_service),
+) -> BulkCommitResponse | JSONResponse:
+    session_repo = SqlAlchemyImportSessionRepository(db)
+    list_repo = SqlAlchemyListRepository(db)
+    service = AssignBulkImportService(session_repo, list_repo, fx_service)
+    try:
+        result = service.execute(
+            AssignBulkImportCommand(
+                actor_user_id=user_id, session_id=session_id, list_id=body.list_id
+            )
+        )
+    except ImportSessionNotFoundError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": str(exc), "code": "import_session_not_found"},
+        )
+    except NotListMemberError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={"detail": str(exc), "code": "not_list_member"},
+        )
+    except ImportSessionDiscardedError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"detail": str(exc), "code": "import_session_discarded"},
+        )
+    except ImportSessionAlreadyCommittedError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"detail": str(exc), "code": "import_session_already_committed"},
+        )
+    except NoCleanStatementsToCommitError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            content={"detail": str(exc), "code": "no_clean_statements_to_commit"},
+        )
+    except FxAuthenticationError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"detail": str(exc), "code": exc.CODE},
+        )
+    except FxServiceUnavailableError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"detail": str(exc), "code": exc.CODE},
+        )
+    except (FxFutureDateError, FxCurrencyNotSupportedError, FxRateNotAvailableError) as exc:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            content={"detail": str(exc), "code": exc.CODE},
+        )
+    logger.info(
+        "import_bulk_committed session_id=%s user_id=%s list_id=%s batch_count=%s",
+        session_id,
+        user_id,
+        body.list_id,
+        len(result.batches),
+    )
+    return _bulk_commit_response(result)

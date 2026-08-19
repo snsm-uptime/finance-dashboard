@@ -1,12 +1,23 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { discardSession, uploadStatement } from "./uploadClient";
+import { bulkCommitSession, discardSession, uploadStatement } from "./uploadClient";
 
 const messages = {
   errorUnsupportedFileType: "unsupported",
   errorUnknownStatement: "unknown",
   errorAmbiguousStatement: "ambiguous",
   errorUnreadableStatement: "unreadable",
+  errorGeneric: "generic",
+  errorUnauthorized: "unauthorized",
+};
+
+const bulkCommitMessages = {
+  errorForbidden: "forbidden",
+  errorSessionNotFound: "session-not-found",
+  errorSessionDiscarded: "discarded",
+  errorAlreadyCommitted: "already-committed",
+  errorNoCleanStatements: "no-clean-statements",
+  errorFxUnavailable: "fx-unavailable",
   errorGeneric: "generic",
   errorUnauthorized: "unauthorized",
 };
@@ -152,5 +163,89 @@ describe("uploadClient", () => {
 
     const result = await discardSession("s1", messages);
     expect(result).toEqual({ ok: false, error: "generic" });
+  });
+
+  it("bulkCommitSession returns the parsed result and posts list_id", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        session_id: "s1",
+        list_id: "l1",
+        batches: [{ id: "b1", statement_id: "st1", list_id: "l1", ledger_entry_count: 3 }],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await bulkCommitSession("s1", "l1", bulkCommitMessages);
+
+    expect(result).toEqual({
+      ok: true,
+      result: {
+        session_id: "s1",
+        list_id: "l1",
+        batches: [{ id: "b1", statement_id: "st1", list_id: "l1", ledger_entry_count: 3 }],
+      },
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/import/sessions/s1/bulk-commit",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ list_id: "l1" }) }),
+    );
+  });
+
+  it("bulkCommitSession maps 403 not_list_member to errorForbidden", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 403,
+        json: async () => ({ code: "not_list_member", detail: "no" }),
+      }),
+    );
+
+    const result = await bulkCommitSession("s1", "l1", bulkCommitMessages);
+    expect(result).toEqual({ ok: false, error: "forbidden" });
+  });
+
+  it("bulkCommitSession maps import_session_already_committed to errorAlreadyCommitted", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: async () => ({ code: "import_session_already_committed", detail: "no" }),
+      }),
+    );
+
+    const result = await bulkCommitSession("s1", "l1", bulkCommitMessages);
+    expect(result).toEqual({ ok: false, error: "already-committed" });
+  });
+
+  it("bulkCommitSession maps import_session_discarded to errorSessionDiscarded", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: async () => ({ code: "import_session_discarded", detail: "no" }),
+      }),
+    );
+
+    const result = await bulkCommitSession("s1", "l1", bulkCommitMessages);
+    expect(result).toEqual({ ok: false, error: "discarded" });
+  });
+
+  it("bulkCommitSession maps fx_service_unavailable to errorFxUnavailable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        json: async () => ({ code: "fx_service_unavailable", detail: "no" }),
+      }),
+    );
+
+    const result = await bulkCommitSession("s1", "l1", bulkCommitMessages);
+    expect(result).toEqual({ ok: false, error: "fx-unavailable" });
   });
 });

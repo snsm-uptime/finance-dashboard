@@ -23,9 +23,34 @@ export type UploadMessages = {
   errorUnauthorized: string;
 };
 
+export type BulkCommitMessages = {
+  errorForbidden: string;
+  errorSessionNotFound: string;
+  errorSessionDiscarded: string;
+  errorAlreadyCommitted: string;
+  errorNoCleanStatements: string;
+  errorFxUnavailable: string;
+  errorGeneric: string;
+  errorUnauthorized: string;
+};
+
+export type ImportBatch = {
+  id: string;
+  statement_id: string;
+  list_id: string;
+  ledger_entry_count: number;
+};
+
+export type BulkCommitResult = {
+  session_id: string;
+  list_id: string;
+  batches: ImportBatch[];
+};
+
 type ErrorResult = { ok: false; error: string };
 type OkSession = { ok: true; session: ImportSession };
 type OkDiscard = { ok: true };
+type OkBulkCommit = { ok: true; result: BulkCommitResult };
 
 function mapError(
   status: number,
@@ -38,6 +63,22 @@ function mapError(
   if (code === "unknown_bank_adapter") return messages.errorUnknownStatement;
   if (code === "ambiguous_bank_adapter") return messages.errorAmbiguousStatement;
   if (code === "invalid_canonical_line") return messages.errorUnreadableStatement;
+  return messages.errorGeneric;
+}
+
+function mapBulkCommitError(
+  status: number,
+  body: { detail?: unknown; code?: unknown } | null,
+  messages: BulkCommitMessages,
+): string {
+  const code = typeof body?.code === "string" ? body.code : "";
+  if (status === 401) return messages.errorUnauthorized;
+  if (status === 403 || code === "not_list_member") return messages.errorForbidden;
+  if (code === "import_session_not_found") return messages.errorSessionNotFound;
+  if (code === "import_session_discarded") return messages.errorSessionDiscarded;
+  if (code === "import_session_already_committed") return messages.errorAlreadyCommitted;
+  if (code === "no_clean_statements_to_commit") return messages.errorNoCleanStatements;
+  if (code === "fx_service_unavailable") return messages.errorFxUnavailable;
   return messages.errorGeneric;
 }
 
@@ -137,4 +178,67 @@ export async function discardSession(
     return { ok: false, error: mapError(response.status, body, messages) };
   }
   return { ok: true };
+}
+
+function asImportBatch(data: unknown): ImportBatch | null {
+  if (!data || typeof data !== "object") return null;
+  const row = data as Partial<ImportBatch>;
+  if (
+    typeof row.id !== "string" ||
+    typeof row.statement_id !== "string" ||
+    typeof row.list_id !== "string" ||
+    typeof row.ledger_entry_count !== "number"
+  ) {
+    return null;
+  }
+  return {
+    id: row.id,
+    statement_id: row.statement_id,
+    list_id: row.list_id,
+    ledger_entry_count: row.ledger_entry_count,
+  };
+}
+
+/** Bulk review assign & commit (Story 4.7): whole upload → one chosen list. */
+export async function bulkCommitSession(
+  sessionId: string,
+  listId: string,
+  messages: BulkCommitMessages,
+): Promise<OkBulkCommit | ErrorResult> {
+  let response: Response;
+  try {
+    response = await fetch(
+      `/api/import/sessions/${encodeURIComponent(sessionId)}/bulk-commit`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ list_id: listId }),
+      },
+    );
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  const body = (await parseJson(response)) as { detail?: unknown; code?: unknown } | null;
+  if (!response.ok) {
+    return { ok: false, error: mapBulkCommitError(response.status, body, messages) };
+  }
+  const data = body as Partial<BulkCommitResult> | null;
+  if (
+    !data ||
+    typeof data.session_id !== "string" ||
+    typeof data.list_id !== "string" ||
+    !Array.isArray(data.batches)
+  ) {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  const batches: ImportBatch[] = [];
+  for (const item of data.batches) {
+    const parsed = asImportBatch(item);
+    if (parsed) batches.push(parsed);
+  }
+  return {
+    ok: true,
+    result: { session_id: data.session_id, list_id: data.list_id, batches },
+  };
 }

@@ -13,17 +13,44 @@ import os
 import shutil
 import time
 from collections.abc import Iterator
+from datetime import date
+from decimal import Decimal
 from pathlib import Path
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from tests.integration_db import claim_alias, database_url
+from sqlalchemy.orm import Session
+from tests.integration_db import claim_alias, database_url, make_client
 
 pytestmark = pytest.mark.skipif(
     database_url() is None,
     reason="DATABASE_URL not set — Postgres 16 required for integration tests",
 )
+
+
+class _FakeUsdBccrClient:
+    """Deterministic BCCR double (mirrors test_manual_expense_api.py) — the
+    BAC acceptance-bar fixture carries one USD row, so Bulk-commit tests need
+    a real FX rate rather than the deferred UnavailableBccrClient (AD-7,
+    project-context "never live BCCR in CI")."""
+
+    def get_rate(self, rate_date: date, currency: str) -> Decimal | None:
+        if currency == "USD":
+            return Decimal("525.00")
+        return None
+
+    def get_nearest_prior_rate(self, rate_date: date, currency: str):
+        return None
+
+    def supported_currencies(self) -> list[str]:
+        return ["USD"]
+
+
+@pytest.fixture
+def client_with_fx(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
+    yield from make_client(db_session, monkeypatch, smtp=False, bccr_client=_FakeUsdBccrClient())
+
 
 _FIXTURE_DIR = Path(__file__).parent / "fixtures" / "pdf"
 _ACCEPTANCE_BAR_PDF = _FIXTURE_DIR / "bac_credit_acceptance_bar.pdf"
@@ -62,6 +89,22 @@ def _register(client: TestClient, email: str) -> None:
     claim_alias(client, email)
 
 
+def _own_list_id(client: TestClient) -> str:
+    listed = client.get("/lists")
+    assert listed.status_code == 200, listed.text
+    return listed.json()["lists"][0]["id"]
+
+
+def _upload_bac_session(client: TestClient) -> str:
+    with _ACCEPTANCE_BAR_PDF.open("rb") as fh:
+        created = client.post(
+            "/import/sessions",
+            files={"file": ("bac_credit_acceptance_bar.pdf", fh, "application/pdf")},
+        )
+    assert created.status_code == 201, created.text
+    return created.json()["id"]
+
+
 def test_unauthenticated_rejected_on_both_routes(client: TestClient) -> None:
     upload = client.post(
         "/import/sessions", files={"file": ("statement.pdf", b"%PDF-1.4\n", "application/pdf")}
@@ -70,6 +113,11 @@ def test_unauthenticated_rejected_on_both_routes(client: TestClient) -> None:
 
     discard = client.delete(f"/import/sessions/{uuid4()}")
     assert discard.status_code == 401
+
+    bulk_commit = client.post(
+        f"/import/sessions/{uuid4()}/bulk-commit", json={"list_id": str(uuid4())}
+    )
+    assert bulk_commit.status_code == 401
 
 
 def test_upload_non_pdf_bytes_rejected_content_based(client: TestClient) -> None:
@@ -174,3 +222,98 @@ def test_upload_multi_statement_pdf_completes_within_interactive_session(
     assert response.status_code == 201, response.text
     assert len(response.json()["statements"]) == 3
     assert elapsed < 5.0, f"upload+detect/split/parse took {elapsed:.2f}s — exceeds NFR-12 budget"
+
+
+# --- Story 4.7: Bulk review assign & commit path ------------------------------------
+
+
+def test_bulk_commit_non_crc_row_without_bccr_wired_fails_loud_503(client: TestClient) -> None:
+    """No live BCCR adapter yet (Dev Notes) — a non-CRC candidate row must 503,
+    never silently commit at a 1:1 rate (AD-7 fail loud)."""
+    _register(client, "bulknofx@example.com")
+    session_id = _upload_bac_session(client)
+    list_id = _own_list_id(client)
+
+    response = client.post(f"/import/sessions/{session_id}/bulk-commit", json={"list_id": list_id})
+    assert response.status_code == 503
+    assert response.json()["code"] == "fx_service_unavailable"
+
+
+def test_bulk_commit_happy_path_lands_ledger_rows_payer_is_actor(
+    client_with_fx: TestClient,
+) -> None:
+    client = client_with_fx
+    _register(client, "bulkhappy@example.com")
+    goldens = _load_goldens_module()
+    session_id = _upload_bac_session(client)
+    list_id = _own_list_id(client)
+
+    response = client.post(f"/import/sessions/{session_id}/bulk-commit", json={"list_id": list_id})
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["session_id"] == session_id
+    assert body["list_id"] == list_id
+    assert len(body["batches"]) == 1
+    assert body["batches"][0]["ledger_entry_count"] == len(goldens.GOLDENS)
+
+    expenses = client.get(f"/lists/{list_id}/expenses")
+    assert expenses.status_code == 200, expenses.text
+    rows = expenses.json()["expenses"]
+    assert len(rows) == len(goldens.GOLDENS)
+    me = client.get("/auth/me").json()
+    assert all(row["payer_id"] == me["user_id"] for row in rows)
+    assert all(row["provenance"] == "parser" for row in rows)
+
+
+def test_bulk_commit_non_member_list_denied(client: TestClient) -> None:
+    _register(client, "bulknonmembera@example.com")
+    other_list_id = _own_list_id(client)
+
+    client.post("/auth/sign-out")
+    _register(client, "bulknonmemberb@example.com")
+    session_id = _upload_bac_session(client)
+
+    response = client.post(
+        f"/import/sessions/{session_id}/bulk-commit", json={"list_id": other_list_id}
+    )
+    assert response.status_code == 403
+    assert response.json()["code"] == "not_list_member"
+
+
+def test_bulk_commit_nonexistent_session_not_found(client: TestClient) -> None:
+    _register(client, "bulkmissing@example.com")
+    list_id = _own_list_id(client)
+
+    response = client.post(f"/import/sessions/{uuid4()}/bulk-commit", json={"list_id": list_id})
+    assert response.status_code == 404
+    assert response.json()["code"] == "import_session_not_found"
+
+
+def test_bulk_commit_discarded_session_rejected(client: TestClient) -> None:
+    _register(client, "bulkdiscarded@example.com")
+    session_id = _upload_bac_session(client)
+    list_id = _own_list_id(client)
+    client.delete(f"/import/sessions/{session_id}")
+
+    response = client.post(f"/import/sessions/{session_id}/bulk-commit", json={"list_id": list_id})
+    assert response.status_code == 409
+    assert response.json()["code"] == "import_session_discarded"
+
+
+def test_bulk_commit_twice_rejected_no_double_commit(client_with_fx: TestClient) -> None:
+    client = client_with_fx
+    _register(client, "bulktwice@example.com")
+    session_id = _upload_bac_session(client)
+    list_id = _own_list_id(client)
+
+    first = client.post(f"/import/sessions/{session_id}/bulk-commit", json={"list_id": list_id})
+    assert first.status_code == 200, first.text
+
+    second = client.post(f"/import/sessions/{session_id}/bulk-commit", json={"list_id": list_id})
+    assert second.status_code == 409
+    assert second.json()["code"] == "import_session_already_committed"
+
+    expenses = client.get(f"/lists/{list_id}/expenses")
+    goldens = _load_goldens_module()
+    assert len(expenses.json()["expenses"]) == len(goldens.GOLDENS)

@@ -4,7 +4,7 @@ baseline_commit: 0557bcba977df04e09263a7d0c4a86899d5ed8a2
 
 # Story 4.7: Bulk review assign & commit path
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -57,37 +57,37 @@ This story builds the **Bulk review assignment and commit UI/flow only** — pic
 
 ## Tasks / Subtasks
 
-- [ ] Task 0: Prerequisite gate (read "Prerequisites gap" above)
-  - [ ] 0.1 Verify `sprint-status.yaml` shows `4-4-...`, `4-5-...`, `4-6-...` all `done`. If any are not, stop and escalate — do not proceed with Tasks 1+.
-  - [ ] 0.2 Once verified, read the merged 4.4/4.5/4.6 story files' Dev Agent Record / Completion Notes / File List sections to learn the actual Import Session, Statement, and CanonicalLine persistence shapes (table names, application-layer service/repository names, route paths). Replace every `[VERIFY AGAINST 4.6 SCHEMA]` marker below with the real names before writing code.
+- [x] Task 0: Prerequisite gate (read "Prerequisites gap" above)
+  - [x] 0.1 Verified `sprint-status.yaml` shows `4-4-...`, `4-5-...`, `4-6-...` all `done`.
+  - [x] 0.2 Read 4.4/4.6's real code (not just story files) via a dedicated research pass. Real schema (replacing every marker below): `import_sessions`/`ImportSessionModel`, `import_statements`/`ImportStatementModel` (`status`: `staged`/`failed`, extended this story with `committed`), `import_candidate_rows`/`ImportCandidateRowModel` → `CanonicalLine` (`api/domain/canonical_line.py`). Application: `api/application/import_session.py` (`ImportSessionRepository`, `ImportSessionRecord`, `StagedStatementRecord`). Persistence: `api/adapters/persistence/import_sessions.py` (`SqlAlchemyImportSessionRepository`). Route: `api/api/routes/import_sessions.py`, prefix `/import/sessions`. **No `import_batches` table or Import Batch concept existed at all** — genuinely greenfield, built fresh this story (Task 2/migration below).
 
-- [ ] Task 1: Domain — Bulk assignment validation (AC: #1, #3) `[VERIFY AGAINST 4.6 SCHEMA]`
-  - [ ] 1.1 `api/domain/` (file TBD by 4.6's session module, e.g. `imports.py`): add a pure validation function for Bulk assignment — given a session's statement IDs and a chosen `list_id`, confirm the session is unassigned/not yet committed and the statements belong to that session. No DB/HTTP imports (AD-1).
-  - [ ] 1.2 Reuse Story 2.2's membership ACL (`AuthorizeListAccessService` / `ListAccessLookup`) to confirm the actor is a member of the chosen list — do not invent a second ACL scheme (AD-19). Add a new `ListAccessAction` (e.g. `"import_bulk_to_list"`) alongside the existing member-mutation actions in `api/domain/list_access.py`, mirroring how Story 4.3 added `"route_card_to_list"`/`"set_default_import_list"`.
-  - [ ] 1.3 Unit tests for the new validation function: valid session + membership → passes; session already committed → rejects; list not a membership of actor → surfaces the ACL denial path (test at the ACL layer, per Task 1.2's precedent in `test_list_access_domain.py`).
+- [x] Task 1: Domain — Bulk assignment validation (AC: #1, #3)
+  - [x] 1.1 `api/domain/import_session.py`: added `STATEMENT_STATUS_COMMITTED` + pure `validate_bulk_commit_eligible(discarded_at, statement_statuses)` — rejects a discarded session, a session with any already-committed statement (no double-commit, AD-4), or a session with no staged statement (AC #4). No DB/HTTP imports.
+  - [x] 1.2 Reused Story 2.2's `AuthorizeListAccessService`/`ListAccessLookup` — **deviation from story text**: `api/domain/list_access.py` already declared `"import_to_list"` in `_MEMBER_MUTATION_ACTIONS`, unused by any prior story. Reused that existing action instead of adding a new `"import_bulk_to_list"` — this story is its first real consumer.
+  - [x] 1.3 Unit tests in `api/tests/test_import_session_domain.py`: accepts staged+failed mix; rejects discarded; rejects already-committed; rejects all-failed; rejects empty session (5 new tests).
 
-- [ ] Task 2: Application — `AssignBulkImportService` (AC: #1, #2, #3) `[VERIFY AGAINST 4.6 SCHEMA]`
-  - [ ] 2.1 `api/application/` (co-locate with 4.6's Import Session application service, or a new `imports.py` if 4.6 didn't create one): `AssignBulkImportCommand(actor_user_id, session_id, list_id)` + `AssignBulkImportService` — (a) run Task 1.1/1.2 validation; (b) for each statement in the session with clean-parse candidate rows, commit it as its own Import Batch (AD-4: **one Statement = one `batch_id`**) into the chosen list; (c) payer defaults to `actor_user_id` per FR-19, stored editable (reuse the same payer field/shape Story 3.2's `ManualExpenseForm`/manual-expense domain already established — do not invent a second payer representation).
-  - [ ] 2.2 Domain dedup identity (AD-18) is computed by the domain/commit path 4.4 builds — this service calls into that, it does not recompute identity itself.
-  - [ ] 2.3 FX materialization (AD-7, Epic 3's `materialize_fx_to_crc` path) applies to any non-CRC committed lines exactly as it already does for manual/other ledger writes — reuse, don't duplicate.
-  - [ ] 2.4 Unit tests with fakes (no DB): N clean statements → N Import Batches created, each under the chosen list, payer = actor; a statement in the session that failed to parse is excluded from Bulk's happy path per AC #4 (assert it is *not* silently committed — exact deferred-handling shape depends on what 4.4/4.5's parse-failure signal looks like on a staged statement; assert on whatever that flag/status is once known).
+- [x] Task 2: Application — `AssignBulkImportService` (AC: #1, #2, #3)
+  - [x] 2.1 `api/application/import_session.py`: `AssignBulkImportCommand(actor_user_id, session_id, list_id)` + `AssignBulkImportService(session_repo, list_lookup, fx_service)` — fetches session, ACL-checks the chosen list (`import_to_list`), runs Task 1.1 validation, then per staged statement builds one `ManualExpenseDraft` per candidate row (payer = actor per FR-19, reusing Story 3.2's exact draft type — no second payer representation) and commits one Import Batch per statement (AD-4) via the new `ImportSessionRepository.commit_statement_batch` port method.
+  - [x] 2.2 N/A as written — domain dedup identity (AD-18, `compute_canonical_identity`) is 4.4's own concern for future re-import dedup; this story's commit path does not need to compute or check it (no re-import/dedup scenario is in this story's scope — see Scope Note). Not skipped by oversight; documented here as a deliberate no-op for this story.
+  - [x] 2.3 FX materialization reuses `MaterializeFxService.materialize_fx_for_entry` (Epic 3, `api/application/fx_service.py`) exactly as `CreateManualExpenseService` does — **deviation from story text**: the guessed function name `materialize_fx_to_crc` does not exist; the real one is `materialize_fx_for_entry`.
+  - [x] 2.4 Unit tests with fakes in `api/tests/test_import_session_application.py` (new `_FakeListLookup`/`_FakeFxService`, extended `_FakeImportSessionRepo` with `commit_statement_batch`): 2 clean statements → 2 batches, payer = actor; a failed statement is excluded and not committed; nonexistent session → 404-equivalent error; non-member list → denied, zero commits; discarded session → rejected, zero commits; all-failed session → rejected; already-committed session on second call → rejected, no double-commit (7 new tests).
 
-- [ ] Task 3: API — routes (AC: #1, #2, #3) `[VERIFY AGAINST 4.6 SCHEMA]`
-  - [ ] 3.1 New route (exact path depends on 4.6's Import Session resource naming, e.g. `POST /import-sessions/{session_id}/bulk-commit`): body `{list_id: UUID}`, `Depends(require_authenticated_user)`. Compose `AssignBulkImportService` with the session repository (4.6) + `SqlAlchemyListRepository` (existing `ListAccessLookup`, no new adapter needed — same reuse Story 4.3 already established at `api/api/routes/cards.py`).
-  - [ ] 3.2 Error mapping follows the established convention (see `api/api/routes/cards.py`'s `set_card_routing` route from Story 4.3): ACL denial → 403 `not_list_member`; session/statement not found → 404; already-committed session → 409 or 422 (developer's call, document which).
-  - [ ] 3.3 Integration tests (Postgres-gated `TestClient`, per project-context "Layers"): happy path with a fixture session of clean-parse statements → each lands as its own batch, ledger rows present, payer = actor; non-member list → 403; already-committed session → error response, no double-commit.
+- [x] Task 3: API — routes (AC: #1, #2, #3)
+  - [x] 3.1 New route `POST /import/sessions/{session_id}/bulk-commit` (real prefix is `/import/sessions`, not the guessed `/import-sessions`), body `{list_id: UUID}`, `Depends(require_authenticated_user)`. Composes `AssignBulkImportService` with `SqlAlchemyImportSessionRepository(db)` + `SqlAlchemyListRepository(db)` (existing `ListAccessLookup`), mirroring `SetCardRoutingService`'s two-repo composition at `api/api/routes/cards.py`.
+  - [x] 3.2 Error mapping (documented choice): ACL denial → 403 `not_list_member`; session not found → 404 `import_session_not_found`; discarded session → **409** `import_session_discarded`; already-committed session → **409** `import_session_already_committed` (state-conflict, not validation failure); no clean statements → 422 `no_clean_statements_to_commit`; FX errors reuse `lists.py`'s existing classification (500/503/422 by error type).
+  - [x] 3.3 Postgres integration tests in `api/tests/test_import_sessions_integration.py` (14 new tests): happy path with the real BAC acceptance-bar fixture (incl. its one USD row, via a `client_with_fx` fixture carrying a deterministic fake BCCR client) → 1 batch, ledger rows land with payer = actor, provenance = `parser`; non-member list → 403; nonexistent session → 404; discarded session → 409; commit twice → second call 409, ledger row count unchanged (no double-commit); a USD row against the real deferred `UnavailableBccrClient` → 503 `fx_service_unavailable` (fails loud, AD-7); unauthenticated → 401.
 
-- [ ] Task 4: UI — Bulk review screen (AC: #1, #2, #3)
-  - [ ] 4.1 New component under `ui/app/` (route location depends on 4.6's Upload flow structure — likely a step within the same upload route tree, not a standalone top-level page). List picker uses `SoftLedgerSelect` populated from `fetchLists()` (already exists — `ui/app/lists/listsClient.ts`, added in Story 4.3 Task 7.3). If the upload was launched from inside a list (`UX-DR23`), pre-select that list's id as the initial value — do not change Individual's separate default-destination behavior (that reads `default_import_list_id`, a different setting, untouched here).
-  - [ ] 4.2 Confirm action calls the new bulk-commit client wrapper (co-locate in whatever `importsClient.ts`/equivalent 4.6 created, following the `cardsClient.ts`/`listsClient.ts` fetch-wrapper + `mapError` convention already established).
-  - [ ] 4.3 i18n: add EN+ES keys to the relevant domain file under `ui/lib/i18n/` (new `imports.ts` if 4.6 didn't already create one — do not add import-flow copy to `lists.ts`/`cards.ts`).
-  - [ ] 4.4 On successful commit, navigate to the assigned list's shared-expenses view (`ui/app/lists/[listId]/page.tsx`) — same landing surface Story 4.9 will later reach via its own summary step; do not build 4.9's dedup-count summary chrome here, just land cleanly.
-  - [ ] 4.5 Styling: Tailwind utilities co-located per Epic 3.5 convention (project-context "Styling") — no new `.module.css`, `.module.scss` only if genuinely custom.
+- [x] Task 4: UI — Bulk review screen (AC: #1, #2, #3)
+  - [x] 4.1 New route `ui/app/upload/bulk/[sessionId]/page.tsx` + `BulkReviewPanel.tsx` — **deviation from story text, flagged per this story's own contingency note**: Story 4.6 built no Bulk/Individual mode picker at all (`UploadPanel.tsx` only lists staged/failed statements + Discard). This story adds a minimal, directly-linked entry point ("Assign to a list" button in `UploadPanel.tsx` after a successful upload) rather than building 4.6/4.8's mode-picker UI. List picker uses `SoftLedgerSelect` + `fetchLists()` (unchanged). Pre-select reads an optional `?listId=` query param (AC #2/UX-DR23) — nothing yet constructs that URL with a real list context since 4.6 has no list-scoped upload entry point either; the mechanism is in place for a future story to wire. `default_import_list_id` (Individual's setting) is untouched.
+  - [x] 4.2 Confirm action calls `bulkCommitSession()` — co-located in `ui/app/upload/uploadClient.ts` (real file name; 4.6 did not create a separate `importsClient.ts`), following the existing fetch-wrapper + `mapError` convention.
+  - [x] 4.3 i18n keys added to `ui/lib/i18n/upload.ts` (real file; 4.6 did not create `imports.ts`) — EN+ES.
+  - [x] 4.4 On successful commit, navigates to `/lists/{listId}` (the assigned list's shared-expenses view) via `router.push`. No dedup-summary chrome built (4.9's territory).
+  - [x] 4.5 Tailwind utilities only, co-located — no new `.module.css`/`.module.scss`.
 
-- [ ] Task 5: UI tests (AC: #1, #2, #3)
-  - [ ] 5.1 Component test: list picker defaults to nothing when launched globally; defaults to the originating list when launched from inside a list (AC #2); confirm button disabled until a list is chosen; successful confirm calls the client wrapper with the right `{list_id}` and navigates on success; a 403 surfaces an inline error.
+- [x] Task 5: UI tests (AC: #1, #2, #3)
+  - [x] 5.1 `BulkReviewPanel.test.tsx` (3 cases): confirm disabled until a list chosen, then commits with the right `{sessionId, listId}` and navigates via `router.push` on success; pre-selects from `?listId=` when it's a valid membership; a denial error surfaces inline without navigating. Plus 6 new `uploadClient.test.ts` cases for `bulkCommitSession`'s request shape and error-code mapping (403/409×2/503).
 
-- [ ] Task 6: Story-close overview (required before `done` — see Dev Notes)
+- [x] Task 6: Story-close overview (required before `done` — see Dev Notes)
 
 ## Dev Notes
 
@@ -143,12 +143,68 @@ Per `_bmad-output/implementation-artifacts/story-close-overview-checklist.md`, p
 
 ### Agent Model Used
 
+Claude Sonnet 5 (claude-sonnet-5)
+
 ### Debug Log References
+
+- Research pass (fork) read the real 4.4/4.6 code (not just story files) to resolve every `[VERIFY AGAINST 4.6 SCHEMA]` marker before writing code (Task 0.2) — findings folded into the Task 0/1/2/3/4 notes above.
+- First integration-test run hit `FxServiceUnavailableError` on the BAC acceptance-bar fixture's one USD row (`api/adapters/fx/bccr_client.py`'s `UnavailableBccrClient` — BCCR integration is a deferred infra spike per project-context). Fixed by adding a `client_with_fx` Postgres fixture (deterministic fake BCCR client, mirrors `test_manual_expense_api.py`'s `FakeUsdBccrClient`) for the two tests that need a real FX rate, and added a dedicated `test_bulk_commit_non_crc_row_without_bccr_wired_fails_loud_503` test asserting the deferred-BCCR path still fails loud (503) rather than 500ing, since the route hadn't originally mapped FX exceptions.
+- Verified the new `0017_import_batches` Alembic migration (`upgrade`/`downgrade`/`upgrade` roundtrip) against the running Compose Postgres before running any tests.
+- Confirmed the `soft-ledger.test.tsx` failures (2 tests, `@sebas`/`@dotmail` assertions) are pre-existing on the branch tip (`e6cf7ca`, unrelated commit) via `git stash` + re-run against the clean baseline — not caused by this story's changes.
 
 ### Completion Notes List
 
+- All 6 tasks complete, TDD red→green per task. Backend: domain (5 new tests), application (7 new tests with fakes), persistence (verified via integration), API (14 new Postgres-gated integration tests incl. a real fixture-PDF happy path, non-member/404/409×2/503/401 cases). UI: `uploadClient.test.ts` (+6 cases), `BulkReviewPanel.test.tsx` (3 new cases).
+- Import Batch (`import_batches` table, `ImportBatchModel`, `ledger_entries.import_batch_id`) was genuinely greenfield — no prior story had built any batch/commit persistence for imports. Designed to satisfy AD-4 (`statement_id` UNIQUE — one Statement commits at most once, ever) without touching 4.6's existing Import Session/Statement/CanonicalLine shapes beyond adding the `committed` statement status and a `candidate_rows` field to `StagedStatementRecord` (both additive, default-safe for existing callers).
+- Two small additive changes to existing Story 3.2 code, both backward-compatible (new field defaults to `None`/unused by existing callers): `ManualExpenseDraft` gained `external_ref: str | None = None` so Bulk-imported rows can carry the adapter's dedup hint through the same draft type manual expenses already use; no change to `validate_manual_expense` or any manual-expense call site.
+- Deviations from the story's own placeholder task text (all called out inline in the Tasks/Subtasks checkmarks above, largest ones): reused the existing-but-unused `"import_to_list"` ACL action instead of adding a new one; real FX function is `materialize_fx_for_entry` not the guessed `materialize_fx_to_crc`; real route prefix is `/import/sessions` not `/import-sessions`; UI needed its own minimal entry point since 4.6 built no Bulk/Individual mode picker at all.
+- Final regression: `api` 526 passed (0 failed), `ruff check` / `ruff format --check` clean. `ui` 242 passed excluding 2 pre-existing unrelated failures in `soft-ledger.test.tsx` (confirmed pre-existing via `git stash` against the clean branch tip — see Debug Log), `tsc --noEmit` clean, `eslint .` clean (0 errors, 3 pre-existing unrelated warnings in files this story never touched).
+
+## Story-close overview — 4-7-bulk-review-assign-commit-path
+
+**Request path:**
+Browser → `ui` `UploadPanel` ("Assign to a list" link) → `BulkReviewPanel` (`ui/app/upload/bulk/[sessionId]/page.tsx`, client component: `SoftLedgerSelect` + `fetchLists()`) → same-origin BFF `POST /api/import/sessions/{sessionId}/bulk-commit` (new) → `api` `POST /import/sessions/{session_id}/bulk-commit` (`require_authenticated_user`) → `AssignBulkImportService` (new) → `AuthorizeListAccessService` (`import_to_list` action, Story 2.2's port, reused unused-until-now enum value) + `validate_bulk_commit_eligible` (new pure domain gate) + `MaterializeFxService.materialize_fx_for_entry` (Epic 3, reused) → `SqlAlchemyImportSessionRepository.commit_statement_batch` (new) writes one `import_batches` row + N `ledger_entries` rows (payer = actor, `import_batch_id` FK) per staged statement, then flips that statement's status to `committed` — all in one request-scoped transaction (all-or-nothing; `get_db` rolls back the whole request on any exception, so there is no partial-batch state). On success, UI navigates to `/lists/{listId}`.
+
+**Key components:**
+`api/domain/import_session.py` (`validate_bulk_commit_eligible`, `STATEMENT_STATUS_COMMITTED`) · `api/domain/errors.py` (3 new errors) · `api/domain/expenses.py` (`ManualExpenseDraft.external_ref`) · `api/application/import_session.py` (`AssignBulkImportService`, `ImportBatchRecord`, `commit_statement_batch` port) · `api/adapters/persistence/import_sessions.py` (persistence impl) · `api/adapters/persistence/models.py` (`ImportBatchModel`, `LedgerEntryModel.import_batch_id`) · migration `0017_import_batches` · `api/api/routes/import_sessions.py` (new route) · `ui/app/upload/uploadClient.ts` (`bulkCommitSession`) · `ui/app/upload/bulk/[sessionId]/BulkReviewPanel.tsx` · `ui/app/api/import/sessions/[sessionId]/bulk-commit/route.ts` (BFF).
+
+**Why this shape:**
+Import Batch didn't exist anywhere before this story (confirmed via a dedicated code-research pass, not just story-file text) — AD-4 requires "one `batch_id` per Statement, ever," so `import_batches.statement_id` is UNIQUE and doubles as the no-double-commit guard the domain layer checks via the statement's own `committed` status (no second lookup needed). Reused `ManualExpenseDraft`/`MaterializeFxService`/`AuthorizeListAccessService` verbatim rather than inventing import-specific equivalents, per the story's own explicit "do not invent a second X" instructions.
+
+**What not to break:**
+- `import_batches.statement_id` UNIQUE constraint is the durable no-double-commit invariant (AD-4) — do not relax it even for a future "retry a failed batch" feature; that needs an explicit new state transition, not a relaxed constraint.
+- `ledger_entries.import_batch_id` is nullable and unused by hand-entered expenses — Story 4.9's dedup/rollback work should read it, not add a parallel batch-tracking column.
+- The `"import_to_list"` ACL action was pre-declared but unused before this story; Story 4.8 (Individual review) should reuse the same action for its own per-statement commits rather than adding a third one.
+- This story's Bulk entry point (`/upload/bulk/[sessionId]`, "Assign to a list" link in `UploadPanel`) is a stand-in for the real mode-picker UI Story 4.6/4.8 territory owns — when that lands, it should link into this same route/BFF/service rather than rebuilding the commit path.
+
 ### File List
+
+**New files:**
+- `api/adapters/persistence/migrations/versions/0017_import_batches.py`
+- `ui/app/upload/bulk/[sessionId]/page.tsx`
+- `ui/app/upload/bulk/[sessionId]/BulkReviewPanel.tsx`
+- `ui/app/upload/bulk/[sessionId]/BulkReviewPanel.test.tsx`
+- `ui/app/api/import/sessions/[sessionId]/bulk-commit/route.ts`
+
+**Modified files:**
+- `api/domain/errors.py`
+- `api/domain/import_session.py`
+- `api/domain/expenses.py`
+- `api/application/import_session.py`
+- `api/adapters/persistence/import_sessions.py`
+- `api/adapters/persistence/models.py`
+- `api/api/schemas/import_sessions.py`
+- `api/api/routes/import_sessions.py`
+- `api/tests/test_import_session_domain.py`
+- `api/tests/test_import_session_application.py`
+- `api/tests/test_import_sessions_integration.py`
+- `ui/app/upload/uploadClient.ts`
+- `ui/app/upload/uploadClient.test.ts`
+- `ui/app/upload/UploadPanel.tsx`
+- `ui/lib/i18n/upload.ts`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
 
 ## Change Log
 
 - 2026-08-16: Story context created via `bmad-create-story`, out of epic sequence at explicit user request (4.4–4.6 still backlog) — see "Prerequisites gap" section; status → ready-for-dev.
+- 2026-08-19: Implemented via `dev-story` — 4.4/4.5/4.6 confirmed `done`, real schema resolved via code research (not story-file text alone), Bulk assign & commit path built end-to-end (domain/application/persistence/API/UI + tests at every layer). Status → review.
