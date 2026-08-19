@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { ExpenseItem } from "../listsClient";
-import { receiptRowFxPropsFrom, formatNetLabel, formatShareLabel, originChipFrom } from "./page";
+import { receiptRowFxPropsFrom, formatNetLabel, formatShareLabel, originChipFrom, payerAliasFrom } from "./page";
 
 const t = {
   expenseFxOriginalTemplate: "{currency} {original} → ₡{crc}",
@@ -88,7 +88,11 @@ describe("receipt row viewer lens formatting", () => {
   });
 
   it("shows card label only for the payer; others get generic Card copy", () => {
-    const chipT = { expenseOriginCash: "Cash", expenseOriginCard: "Card" };
+    const chipT = {
+      expenseOriginCash: "Cash",
+      expenseOriginCard: "Card",
+      expenseOriginUnknown: "Unknown",
+    };
     expect(
       originChipFrom(
         crcExpense({ origin_kind: "card", origin_card_label: "Kitchen card", payer_id: "u1" }),
@@ -105,5 +109,29 @@ describe("receipt row viewer lens formatting", () => {
     ).toBe("Card");
     expect(originChipFrom(crcExpense({ origin_kind: "cash" }), "u1", chipT)).toBe("Cash");
     expect(originChipFrom(crcExpense({ origin_kind: null }), "u1", chipT)).toBeUndefined();
+  });
+
+  it("labels another member's blank origin as Unknown; the viewer's own blank stays unchipped", () => {
+    const chipT = {
+      expenseOriginCash: "Cash",
+      expenseOriginCard: "Card",
+      expenseOriginUnknown: "Unknown",
+    };
+    expect(
+      originChipFrom(crcExpense({ origin_kind: null, payer_id: "u2" }), "u1", chipT),
+    ).toBe("Unknown");
+    expect(
+      originChipFrom(crcExpense({ origin_kind: null, payer_id: "u1" }), "u1", chipT),
+    ).toBeUndefined();
+  });
+
+  it("resolves the payer alias from the member roster, falling back to a short id", () => {
+    const members = [
+      { user_id: "u1", alias: "sebas" },
+      { user_id: "u2", alias: null },
+    ];
+    expect(payerAliasFrom("u1", members)).toBe("sebas");
+    expect(payerAliasFrom("u2", members)).toBe("u2…");
+    expect(payerAliasFrom("0123456789abcdef", members)).toBe("01234567…");
   });
 });

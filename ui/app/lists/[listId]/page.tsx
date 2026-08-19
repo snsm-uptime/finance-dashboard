@@ -19,7 +19,13 @@ import { ListDetailMobileActions } from "../ListDetailMobileActions";
 import { ManualExpenseForm } from "../ManualExpenseForm";
 import { NoOriginFilter } from "../NoOriginFilter";
 import { TemporalNavigation } from "../TemporalNavigation";
-import { balanceTone, type DefaultSplitPayload, type ExpenseItem, type ListMember } from "../listsClient";
+import {
+  balanceTone,
+  memberLabel,
+  type DefaultSplitPayload,
+  type ExpenseItem,
+  type ListMember,
+} from "../listsClient";
 import styles from "../lists.module.scss";
 
 export const dynamic = "force-dynamic";
@@ -172,12 +178,22 @@ export function formatNetLabel(
 export function originChipFrom(
   e: ExpenseItem,
   currentUserId: string,
-  t: { expenseOriginCash: string; expenseOriginCard: string },
+  t: { expenseOriginCash: string; expenseOriginCard: string; expenseOriginUnknown: string },
 ): string | undefined {
   if (e.origin_kind === "cash") return t.expenseOriginCash;
-  if (e.origin_kind !== "card") return undefined;
-  if (e.payer_id === currentUserId && e.origin_card_label) return e.origin_card_label;
-  return t.expenseOriginCard;
+  if (e.origin_kind === "card") {
+    if (e.payer_id === currentUserId && e.origin_card_label) return e.origin_card_label;
+    return t.expenseOriginCard;
+  }
+  if (e.payer_id !== currentUserId) return t.expenseOriginUnknown;
+  return undefined;
+}
+
+/** Roster alias for a receipt row; short id if the payer has not claimed one yet. */
+export function payerAliasFrom(payerId: string, members: ListMember[]): string {
+  const member = members.find((m) => m.user_id === payerId);
+  if (member) return memberLabel(member);
+  return `${payerId.slice(0, 8)}…`;
 }
 
 type ExpenseFxMessages = {
@@ -547,6 +563,7 @@ export default async function ListDetailPage({
                       <ReceiptRow
                         key={e.id}
                         title={rowProps.title}
+                        payerAlias={payerAliasFrom(e.payer_id, members)}
                         when={e.posted_date}
                         amount={rowProps.amount}
                         originChip={originChipFrom(e, session.user_id, t)}

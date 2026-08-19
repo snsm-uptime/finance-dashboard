@@ -7,6 +7,8 @@ import { ReceiptRowMenu, type ReceiptRowMenuMessages } from "./ReceiptRowMenu";
 export type ReceiptRowProps = {
   title?: string;
   when?: string;
+  /** Payer alias without `@`; rendered in accent before the date. */
+  payerAlias?: string;
   amount?: string;
   originChip?: string;
   shareLabel?: string;
@@ -47,6 +49,7 @@ const typeStyle = {
 export function ReceiptRow({
   title,
   when,
+  payerAlias,
   amount,
   originChip,
   shareLabel,
@@ -115,6 +118,11 @@ export function ReceiptRow({
       ) : null}
 
       <div className="flex min-w-0 items-center gap-2" style={{ gridArea: "meta" }}>
+        {payerAlias ? (
+          <span style={typeStyle.meta} className="text-accent">
+            @{payerAlias}
+          </span>
+        ) : null}
         {when ? (
           <span style={typeStyle.meta} className="text-muted">
             {when}

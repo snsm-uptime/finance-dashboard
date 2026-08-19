@@ -147,6 +147,7 @@ describe("Soft-Ledger primitives", () => {
       root.render(
         <ReceiptRow
           title="1000 colones"
+          payerAlias="sebas"
           when="2026-08-19"
           amount="₡1,000"
           originChip="Cash"
@@ -159,9 +160,13 @@ describe("Soft-Ledger primitives", () => {
     });
     expect(host.querySelector('[data-slot="type-icon"]')).not.toBeNull();
     expect(host.textContent).toContain("1000 colones");
+    expect(host.textContent).toContain("@sebas");
+    expect(host.textContent).toContain("2026-08-19");
     expect(host.textContent).toContain("Cash");
     expect(host.textContent).toContain("10%");
     expect(host.textContent).toContain("+₡900");
+    const handle = Array.from(host.querySelectorAll("span")).find((el) => el.textContent === "@sebas");
+    expect(handle?.className).toContain("text-accent");
     const net = Array.from(host.querySelectorAll("span")).find((el) => el.textContent === "+₡900");
     expect(net?.className).toContain("text-owed");
     const trigger = host.querySelector("button[aria-haspopup='menu']") as HTMLButtonElement;
@@ -173,7 +178,7 @@ describe("Soft-Ledger primitives", () => {
     expect(host.textContent).toContain("Delete");
   });
 
-  it("hides share and net when those props are omitted", () => {
+  it("hides share, net, and payer alias when those props are omitted", () => {
     act(() => {
       root.render(<ReceiptRow title="Coffee" when="2026-08-19" amount="₡10" />);
     });
@@ -181,6 +186,23 @@ describe("Soft-Ledger primitives", () => {
     expect(host.textContent).toContain("₡10");
     expect(host.textContent).not.toContain("%");
     expect(host.textContent).not.toContain("+");
+    expect(host.textContent).not.toContain("@");
+  });
+
+  it("renders Unknown origin chip for another member's blank origin", () => {
+    act(() => {
+      root.render(
+        <ReceiptRow
+          title="grill out"
+          payerAlias="dotmail"
+          when="2026-08-19"
+          amount="₡10,000"
+          originChip="Unknown"
+        />,
+      );
+    });
+    expect(host.textContent).toContain("Unknown");
+    expect(host.textContent).toContain("@dotmail");
   });
 
   it("TabBar exposes nav + aria-current on active List tab", () => {
