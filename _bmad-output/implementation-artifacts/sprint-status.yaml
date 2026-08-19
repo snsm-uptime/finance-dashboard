@@ -108,6 +108,7 @@ development_status:
   4-7-bulk-review-assign-commit-path: ready-for-dev
   4-8-individual-review-swipe-desktop-buttons: backlog
   4-9-commit-batch-dedup-summary-land-on-settle-strip: backlog
+  4-10-multi-file-upload-pending-queue-dedup: backlog
   epic-4-retrospective: optional
 
   epic-5: backlog
