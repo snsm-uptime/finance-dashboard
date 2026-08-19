@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { ExpenseItem } from "../listsClient";
-import { receiptRowFxPropsFrom } from "./page";
+import { receiptRowFxPropsFrom, formatNetLabel, formatShareLabel, originChipFrom } from "./page";
 
 const t = {
   expenseFxOriginalTemplate: "{currency} {original} → ₡{crc}",
@@ -28,6 +28,11 @@ function crcExpense(overrides: Partial<ExpenseItem> = {}): ExpenseItem {
     fx_fallback: false,
     origin_kind: null,
     origin_card_id: null,
+    origin_card_label: null,
+    viewer_share_kind: null,
+    viewer_share_value: null,
+    viewer_net_crc: null,
+    viewer_net_polarity: null,
     ...overrides,
   };
 }
@@ -69,5 +74,36 @@ describe("receiptRowFxPropsFrom", () => {
     expect(result.title).toBe(
       "Dinner (USD 100.00 → ₡52,500 (rate from 2026-08-04, nearest prior))",
     );
+  });
+});
+
+describe("receipt row viewer lens formatting", () => {
+  it("formats percentage share without trailing zeros and signed owed net", () => {
+    expect(formatShareLabel("percentage", "10.00")).toBe("10%");
+    expect(formatShareLabel("absolute", "400.00")).toBe("₡400");
+    expect(formatNetLabel("900.00", "owed")).toEqual({ label: "+₡900", polarity: "owed" });
+    expect(formatNetLabel("400.00", "owe")).toEqual({ label: "-₡400", polarity: "owe" });
+    expect(formatNetLabel("0", "zero")).toBeUndefined();
+    expect(formatShareLabel(null, "10.00")).toBeUndefined();
+  });
+
+  it("shows card label only for the payer; others get generic Card copy", () => {
+    const chipT = { expenseOriginCash: "Cash", expenseOriginCard: "Card" };
+    expect(
+      originChipFrom(
+        crcExpense({ origin_kind: "card", origin_card_label: "Kitchen card", payer_id: "u1" }),
+        "u1",
+        chipT,
+      ),
+    ).toBe("Kitchen card");
+    expect(
+      originChipFrom(
+        crcExpense({ origin_kind: "card", origin_card_label: "Kitchen card", payer_id: "u1" }),
+        "u2",
+        chipT,
+      ),
+    ).toBe("Card");
+    expect(originChipFrom(crcExpense({ origin_kind: "cash" }), "u1", chipT)).toBe("Cash");
+    expect(originChipFrom(crcExpense({ origin_kind: null }), "u1", chipT)).toBeUndefined();
   });
 });

@@ -10,13 +10,16 @@ from typing import Protocol
 from uuid import UUID, uuid4
 
 from domain.errors import (
+    InvalidDefaultSplitError,
     InvalidManualExpenseError,
+    InvalidSplitOverrideError,
     ListNotFoundError,
     NotEntryPayerError,
     SubjectNotFoundError,
 )
+from domain.expense_lens import ViewerExpenseLens, build_viewer_expense_lens
 from domain.expenses import ManualExpenseDraft, validate_manual_expense, validate_origin_update
-from domain.splits import SUBJECT_ITEM
+from domain.splits import SUBJECT_ITEM, compute_share_allocations, resolve_override_source
 
 from application.cards import CardRecord
 from application.fx_service import MaterializedFx, MaterializeFxService
@@ -24,11 +27,13 @@ from application.list_access import (
     AuthorizeListAccessCommand,
     AuthorizeListAccessService,
 )
-from application.lists import ListRecord
+from application.lists import ListRecord, StoredDefaultSplit
 from application.splits import (
     SetSplitOverrideCommand,
     SetSplitOverrideService,
     SplitRepository,
+    StoredSplitOverride,
+    load_item_override_specs,
 )
 
 
@@ -95,6 +100,12 @@ class ExpenseRepository(Protocol):
 
     def get_card_for_owner(self, user_id: UUID, card_id: UUID) -> CardRecord | None: ...
 
+    def get_split_override(
+        self, list_id: UUID, subject_kind: str, subject_id: UUID
+    ) -> StoredSplitOverride | None: ...
+
+    def get_stored_default_split(self, list_id: UUID) -> StoredDefaultSplit | None: ...
+
     def get_ledger_entry_payer(self, *, list_id: UUID, entry_id: UUID) -> UUID | None: ...
 
     def update_ledger_entry_origin(
@@ -135,6 +146,15 @@ class UpdateExpenseOriginCommand:
 
 
 @dataclass(frozen=True, slots=True)
+class ListedExpense:
+    """Ledger row plus optional viewer lens for the Soft-Ledger receipt list."""
+
+    entry: LedgerEntryRecord
+    lens: ViewerExpenseLens | None = None
+    origin_card_label: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class ListExpensesCommand:
     actor_user_id: UUID
     list_id: UUID
@@ -143,7 +163,7 @@ class ListExpensesCommand:
 @dataclass(frozen=True, slots=True)
 class ListExpensesResult:
     list_id: UUID
-    expenses: tuple[LedgerEntryRecord, ...]
+    expenses: tuple[ListedExpense, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -295,9 +315,88 @@ class ListExpensesService:
                 action="read_expenses",
             )
         )
-        self._repo.get_list_with_grant(grant, command.list_id)
+        lst = self._repo.get_list_with_grant(grant, command.list_id)
         rows = self._repo.list_ledger_entries(command.list_id)
-        return ListExpensesResult(list_id=command.list_id, expenses=tuple(rows))
+        members = self._repo.list_member_ids(command.list_id)
+        stored_default = self._repo.get_stored_default_split(command.list_id)
+        default_mode = stored_default.mode if stored_default is not None else "even"
+        default_shares = stored_default.shares if stored_default is not None else None
+        listed: list[ListedExpense] = []
+        for row in rows:
+            listed.append(
+                self._with_viewer_lens(
+                    row,
+                    actor_user_id=command.actor_user_id,
+                    members=members,
+                    creator_user_id=lst.owner_id,
+                    default_mode=default_mode,
+                    default_shares=default_shares,
+                )
+            )
+        return ListExpensesResult(list_id=command.list_id, expenses=tuple(listed))
+
+    def _with_viewer_lens(
+        self,
+        row: LedgerEntryRecord,
+        *,
+        actor_user_id: UUID,
+        members: list[UUID],
+        creator_user_id: UUID,
+        default_mode: str,
+        default_shares: dict[UUID, Decimal] | None,
+    ) -> ListedExpense:
+        origin_card_label = self._origin_card_label(row, actor_user_id)
+        try:
+            item_override, receipt_override = load_item_override_specs(
+                self._repo,  # type: ignore[arg-type]
+                list_id=row.list_id,
+                subject_id=row.id,
+                receipt_id=row.receipt_id,
+            )
+            allocation = compute_share_allocations(
+                row.amount_crc,
+                "CRC",
+                item_override=item_override,
+                receipt_override=receipt_override,
+                list_default_mode=default_mode,
+                list_default_shares=default_shares,
+                member_ids=members,
+                creator_user_id=creator_user_id,
+            )
+            _, winning = resolve_override_source(
+                item_override=item_override,
+                receipt_override=receipt_override,
+            )
+            lens = build_viewer_expense_lens(
+                viewer_id=actor_user_id,
+                payer_id=row.payer_id,
+                amount_crc=row.amount_crc,
+                allocations=allocation.allocations,
+                override=winning,
+                list_default_mode=default_mode,
+                list_default_shares=default_shares,
+                member_ids=members,
+            )
+        except (
+            InvalidSplitOverrideError,
+            InvalidDefaultSplitError,
+            SubjectNotFoundError,
+            ListNotFoundError,
+            KeyError,
+            ValueError,
+        ):
+            lens = None
+        return ListedExpense(entry=row, lens=lens, origin_card_label=origin_card_label)
+
+    def _origin_card_label(self, row: LedgerEntryRecord, actor_user_id: UUID) -> str | None:
+        if row.origin_kind != "card" or row.origin_card_id is None:
+            return None
+        if row.payer_id != actor_user_id:
+            return None
+        card = self._repo.get_card_for_owner(actor_user_id, row.origin_card_id)
+        if card is None:
+            return None
+        return card.label
 
 
 class ListMembersService:
@@ -328,6 +427,7 @@ __all__ = [
     "ListExpensesCommand",
     "ListExpensesResult",
     "ListExpensesService",
+    "ListedExpense",
     "ListMemberView",
     "ListMembersCommand",
     "ListMembersResult",

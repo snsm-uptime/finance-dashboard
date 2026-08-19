@@ -35,6 +35,15 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+vi.mock("@/components/IconButton/IconButton.module.scss", () => ({
+  default: new Proxy(
+    {},
+    {
+      get: (_target, key) => (typeof key === "string" ? key : "mod"),
+    },
+  ),
+}));
+
 describe("Soft-Ledger primitives", () => {
   let host: HTMLDivElement;
   let root: Root;
@@ -113,6 +122,46 @@ describe("Soft-Ledger primitives", () => {
     expect(host.querySelector("[role='status']")?.textContent).toBe(
       "No receipts yet.",
     );
+  });
+
+  it("renders origin chip, accent share, owed net, and an Edit/Delete menu", () => {
+    act(() => {
+      root.render(
+        <ReceiptRow
+          title="1000 colones"
+          when="2026-08-19"
+          amount="₡1,000"
+          originChip="Cash"
+          shareLabel="10%"
+          netLabel="+₡900"
+          netPolarity="owed"
+          menu={{ menuAria: "Expense options", editLabel: "Edit", deleteLabel: "Delete" }}
+        />,
+      );
+    });
+    expect(host.textContent).toContain("1000 colones");
+    expect(host.textContent).toContain("Cash");
+    expect(host.textContent).toContain("10%");
+    expect(host.textContent).toContain("+₡900");
+    const net = Array.from(host.querySelectorAll("span")).find((el) => el.textContent === "+₡900");
+    expect(net?.className).toContain("text-owed");
+    const trigger = host.querySelector("button[aria-haspopup='menu']") as HTMLButtonElement;
+    expect(trigger).not.toBeNull();
+    act(() => {
+      trigger.click();
+    });
+    expect(host.textContent).toContain("Edit");
+    expect(host.textContent).toContain("Delete");
+  });
+
+  it("hides share and net when those props are omitted", () => {
+    act(() => {
+      root.render(<ReceiptRow title="Coffee" when="2026-08-19" amount="₡10" />);
+    });
+    expect(host.textContent).toContain("Coffee");
+    expect(host.textContent).toContain("₡10");
+    expect(host.textContent).not.toContain("%");
+    expect(host.textContent).not.toContain("+");
   });
 
   it("TabBar exposes nav + aria-current on active List tab", () => {

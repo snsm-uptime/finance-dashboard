@@ -617,3 +617,263 @@ def test_list_members_roster_labels_with_alias(client: TestClient, db_session: S
     assert aliases == {"owner_members", "member_roster"}
     # Email is an identity surface — it must never appear on the roster.
     assert all("email" not in m for m in members)
+
+
+def _add_member(db_session: Session, list_id: str, user_id: str) -> None:
+    from uuid import UUID
+
+    from adapters.persistence.models import ListMembershipModel
+
+    db_session.add(
+        ListMembershipModel(
+            id=uuid4(),
+            list_id=UUID(list_id),
+            user_id=UUID(user_id),
+            role="member",
+        )
+    )
+    db_session.flush()
+
+
+def test_list_expenses_viewer_lens_percentage_payer_and_member(
+    client: TestClient, db_session: Session
+) -> None:
+    owner_id = _register(client, "owner-lens-pct@example.com")
+    created = client.post("/lists", json={"name": "Lens pct"})
+    list_id = created.json()["id"]
+    friend_id = _register(client, "friend-lens-pct@example.com")
+    _add_member(db_session, list_id, friend_id)
+
+    client.post("/auth/sign-out")
+    client.post(
+        "/auth/sign-in",
+        json={"email": "owner-lens-pct@example.com", "password": "password1"},
+    )
+    expense = client.post(
+        f"/lists/{list_id}/expenses",
+        json={
+            "amount": "1000.00",
+            "currency": "CRC",
+            "description": "Dinner",
+            "payer_id": owner_id,
+            "split_override": {
+                "kind": "percentage",
+                "percentages": {owner_id: "10.00", friend_id: "90.00"},
+            },
+        },
+    )
+    assert expense.status_code == 201, expense.text
+
+    as_payer = client.get(f"/lists/{list_id}/expenses")
+    assert as_payer.status_code == 200, as_payer.text
+    row = as_payer.json()["expenses"][0]
+    assert row["viewer_share_kind"] == "percentage"
+    assert Decimal(row["viewer_share_value"]) == Decimal("10.00")
+    assert Decimal(row["viewer_net_crc"]) == Decimal("900.00")
+    assert row["viewer_net_polarity"] == "owed"
+
+    client.post("/auth/sign-out")
+    client.post(
+        "/auth/sign-in",
+        json={"email": "friend-lens-pct@example.com", "password": "password1"},
+    )
+    as_friend = client.get(f"/lists/{list_id}/expenses")
+    assert as_friend.status_code == 200, as_friend.text
+    friend_row = as_friend.json()["expenses"][0]
+    assert Decimal(friend_row["viewer_share_value"]) == Decimal("90.00")
+    assert Decimal(friend_row["viewer_net_crc"]) == Decimal("900.00")
+    assert friend_row["viewer_net_polarity"] == "owe"
+
+
+def test_list_expenses_viewer_lens_absolute_non_payer(
+    client: TestClient, db_session: Session
+) -> None:
+    owner_id = _register(client, "owner-lens-abs@example.com")
+    created = client.post("/lists", json={"name": "Lens abs"})
+    list_id = created.json()["id"]
+    friend_id = _register(client, "friend-lens-abs@example.com")
+    _add_member(db_session, list_id, friend_id)
+
+    client.post("/auth/sign-out")
+    client.post(
+        "/auth/sign-in",
+        json={"email": "friend-lens-abs@example.com", "password": "password1"},
+    )
+    expense = client.post(
+        f"/lists/{list_id}/expenses",
+        json={
+            "amount": "1000.00",
+            "currency": "CRC",
+            "description": "Lunch",
+            "payer_id": friend_id,
+            "split_override": {
+                "kind": "absolute_amounts",
+                "amounts": {owner_id: "400.00", friend_id: "600.00"},
+            },
+        },
+    )
+    assert expense.status_code == 201, expense.text
+
+    client.post("/auth/sign-out")
+    client.post(
+        "/auth/sign-in",
+        json={"email": "owner-lens-abs@example.com", "password": "password1"},
+    )
+    listing = client.get(f"/lists/{list_id}/expenses")
+    assert listing.status_code == 200, listing.text
+    row = listing.json()["expenses"][0]
+    assert row["viewer_share_kind"] == "absolute"
+    assert Decimal(row["viewer_share_value"]) == Decimal("400.00")
+    assert Decimal(row["viewer_net_crc"]) == Decimal("400.00")
+    assert row["viewer_net_polarity"] == "owe"
+
+
+def test_list_expenses_even_default_two_members(client: TestClient, db_session: Session) -> None:
+    owner_id = _register(client, "owner-lens-even@example.com")
+    created = client.post("/lists", json={"name": "Lens even"})
+    list_id = created.json()["id"]
+    friend_id = _register(client, "friend-lens-even@example.com")
+    _add_member(db_session, list_id, friend_id)
+
+    client.post("/auth/sign-out")
+    client.post(
+        "/auth/sign-in",
+        json={"email": "owner-lens-even@example.com", "password": "password1"},
+    )
+    expense = client.post(
+        f"/lists/{list_id}/expenses",
+        json={
+            "amount": "1000.00",
+            "currency": "CRC",
+            "description": "Even split",
+            "payer_id": owner_id,
+        },
+    )
+    assert expense.status_code == 201, expense.text
+    row = client.get(f"/lists/{list_id}/expenses").json()["expenses"][0]
+    assert Decimal(row["viewer_share_value"]) == Decimal("50.00")
+    assert Decimal(row["viewer_net_crc"]) == Decimal("500.00")
+    assert row["viewer_net_polarity"] == "owed"
+
+    client.post("/auth/sign-out")
+    client.post(
+        "/auth/sign-in",
+        json={"email": "friend-lens-even@example.com", "password": "password1"},
+    )
+    friend_row = client.get(f"/lists/{list_id}/expenses").json()["expenses"][0]
+    assert Decimal(friend_row["viewer_share_value"]) == Decimal("50.00")
+    assert friend_row["viewer_net_polarity"] == "owe"
+
+
+def test_list_expenses_origin_chip_card_privacy_and_cash(
+    client: TestClient, db_session: Session
+) -> None:
+    owner_id = _register(client, "owner-lens-chip@example.com")
+    card_id = _register_card(client, label="Kitchen card")
+    created = client.post("/lists", json={"name": "Lens chip"})
+    list_id = created.json()["id"]
+    friend_id = _register(client, "friend-lens-chip@example.com")
+    _add_member(db_session, list_id, friend_id)
+
+    client.post("/auth/sign-out")
+    client.post(
+        "/auth/sign-in",
+        json={"email": "owner-lens-chip@example.com", "password": "password1"},
+    )
+    card_expense = client.post(
+        f"/lists/{list_id}/expenses",
+        json={
+            "amount": "10.00",
+            "currency": "CRC",
+            "description": "Card item",
+            "payer_id": owner_id,
+            "origin_kind": "card",
+            "origin_card_id": card_id,
+        },
+    )
+    assert card_expense.status_code == 201, card_expense.text
+    cash_expense = client.post(
+        f"/lists/{list_id}/expenses",
+        json={
+            "amount": "10.00",
+            "currency": "CRC",
+            "description": "Cash item",
+            "payer_id": owner_id,
+            "origin_kind": "cash",
+        },
+    )
+    assert cash_expense.status_code == 201, cash_expense.text
+
+    as_payer = {
+        row["description"]: row
+        for row in client.get(f"/lists/{list_id}/expenses").json()["expenses"]
+    }
+    assert as_payer["Card item"]["origin_card_label"] == "Kitchen card"
+    assert as_payer["Cash item"]["origin_kind"] == "cash"
+    assert as_payer["Cash item"]["origin_card_label"] is None
+
+    client.post("/auth/sign-out")
+    client.post(
+        "/auth/sign-in",
+        json={"email": "friend-lens-chip@example.com", "password": "password1"},
+    )
+    as_friend = {
+        row["description"]: row
+        for row in client.get(f"/lists/{list_id}/expenses").json()["expenses"]
+    }
+    assert as_friend["Card item"]["origin_kind"] == "card"
+    assert as_friend["Card item"]["origin_card_label"] is None
+
+
+def test_list_expenses_omits_lens_when_allocation_fails(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from domain.errors import InvalidSplitOverrideError
+
+    owner_id = _register(client, "owner-lens-fail@example.com")
+    created = client.post("/lists", json={"name": "Lens fail"})
+    list_id = created.json()["id"]
+    expense = client.post(
+        f"/lists/{list_id}/expenses",
+        json={
+            "amount": "10.00",
+            "currency": "CRC",
+            "description": "Broken split",
+            "payer_id": owner_id,
+        },
+    )
+    assert expense.status_code == 201, expense.text
+
+    def _boom(*_args, **_kwargs):
+        raise InvalidSplitOverrideError("forced")
+
+    monkeypatch.setattr("application.expenses.compute_share_allocations", _boom)
+    listing = client.get(f"/lists/{list_id}/expenses")
+    assert listing.status_code == 200, listing.text
+    row = listing.json()["expenses"][0]
+    assert row["description"] == "Broken split"
+    assert Decimal(row["amount_crc"]) == Decimal("10.00")
+    assert row["viewer_share_kind"] is None
+    assert row["viewer_share_value"] is None
+    assert row["viewer_net_crc"] is None
+    assert row["viewer_net_polarity"] is None
+
+
+def test_list_expenses_single_member_hides_zero_net(client: TestClient) -> None:
+    owner_id = _register(client, "owner-lens-zero@example.com")
+    created = client.post("/lists", json={"name": "Lens zero"})
+    list_id = created.json()["id"]
+    expense = client.post(
+        f"/lists/{list_id}/expenses",
+        json={
+            "amount": "1000.00",
+            "currency": "CRC",
+            "description": "Solo",
+            "payer_id": owner_id,
+        },
+    )
+    assert expense.status_code == 201, expense.text
+    row = client.get(f"/lists/{list_id}/expenses").json()["expenses"][0]
+    assert Decimal(row["viewer_share_value"]) == Decimal("100.00")
+    assert row["viewer_net_polarity"] == "zero"
+    assert Decimal(row["viewer_net_crc"]) == Decimal("0")

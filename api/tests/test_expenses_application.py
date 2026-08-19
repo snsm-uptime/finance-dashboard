@@ -9,6 +9,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 import pytest
@@ -17,6 +18,8 @@ from application.expenses import (
     CreateManualExpenseCommand,
     CreateManualExpenseService,
     LedgerEntryRecord,
+    ListExpensesCommand,
+    ListExpensesService,
     ListMemberView,
     UpdateExpenseOriginCommand,
     UpdateExpenseOriginService,
@@ -81,6 +84,12 @@ class _FakeExpenseRepo:
         for card in self.cards:
             if card.id == card_id and card.user_id == user_id:
                 return card
+        return None
+
+    def get_split_override(self, list_id: UUID, subject_kind: str, subject_id: UUID):
+        return None
+
+    def get_stored_default_split(self, list_id: UUID):
         return None
 
     def create_ledger_entry(self, *, entry_id: UUID, list_id: UUID, draft, fx) -> LedgerEntryRecord:
@@ -388,3 +397,84 @@ def test_update_origin_by_non_payer_member_with_unowned_card_still_rejects_as_no
                 origin_card_id=uuid4(),
             )
         )
+
+
+def test_list_expenses_solo_payer_has_100_percent_and_zero_net() -> None:
+    from domain.expense_lens import POLARITY_ZERO, SHARE_PERCENTAGE
+
+    actor = uuid4()
+    repo = _FakeExpenseRepo(list_id=uuid4(), member_ids=[actor])
+    created = CreateManualExpenseService(repo, MaterializeFxService(_FakeBccrClient())).execute(
+        _command(repo, actor)
+    )
+    listed = ListExpensesService(repo).execute(
+        ListExpensesCommand(actor_user_id=actor, list_id=repo.list_id)
+    )
+    assert len(listed.expenses) == 1
+    row = listed.expenses[0]
+    assert row.entry.id == created.id
+    assert row.lens is not None
+    assert row.lens.share_kind == SHARE_PERCENTAGE
+    assert row.lens.share_value == Decimal("100.00")
+    assert row.lens.net_polarity == POLARITY_ZERO
+    assert row.origin_card_label is None
+
+
+def test_list_expenses_card_label_only_for_payer() -> None:
+    actor = uuid4()
+    friend = uuid4()
+    repo = _FakeExpenseRepo(list_id=uuid4(), member_ids=[actor, friend])
+    card = CardRecord(
+        id=uuid4(), user_id=actor, label="Kitchen card", iban="CR05", created_at=datetime.now(UTC)
+    )
+    repo.cards = [card]
+    CreateManualExpenseService(repo, MaterializeFxService(_FakeBccrClient())).execute(
+        _command(repo, actor, origin_kind="card", origin_card_id=card.id)
+    )
+    as_payer = ListExpensesService(repo).execute(
+        ListExpensesCommand(actor_user_id=actor, list_id=repo.list_id)
+    )
+    as_friend = ListExpensesService(repo).execute(
+        ListExpensesCommand(actor_user_id=friend, list_id=repo.list_id)
+    )
+    assert as_payer.expenses[0].origin_card_label == "Kitchen card"
+    assert as_friend.expenses[0].origin_card_label is None
+    assert as_friend.expenses[0].entry.origin_kind == "card"
+
+
+def test_list_expenses_omits_lens_on_key_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    actor = uuid4()
+    repo = _FakeExpenseRepo(list_id=uuid4(), member_ids=[actor])
+    CreateManualExpenseService(repo, MaterializeFxService(_FakeBccrClient())).execute(
+        _command(repo, actor)
+    )
+
+    def _boom(*_args, **_kwargs):
+        raise KeyError("share")
+
+    monkeypatch.setattr("application.expenses.build_viewer_expense_lens", _boom)
+    listed = ListExpensesService(repo).execute(
+        ListExpensesCommand(actor_user_id=actor, list_id=repo.list_id)
+    )
+    assert len(listed.expenses) == 1
+    assert listed.expenses[0].lens is None
+    assert listed.expenses[0].entry.normalized_description == "Coffee"
+
+
+def test_list_expenses_omits_lens_on_value_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    actor = uuid4()
+    repo = _FakeExpenseRepo(list_id=uuid4(), member_ids=[actor])
+    CreateManualExpenseService(repo, MaterializeFxService(_FakeBccrClient())).execute(
+        _command(repo, actor)
+    )
+
+    def _boom(*_args, **_kwargs):
+        raise ValueError("invalid uuid")
+
+    monkeypatch.setattr("application.expenses.compute_share_allocations", _boom)
+    listed = ListExpensesService(repo).execute(
+        ListExpensesCommand(actor_user_id=actor, list_id=repo.list_id)
+    )
+    assert len(listed.expenses) == 1
+    assert listed.expenses[0].lens is None
+    assert listed.expenses[0].entry.normalized_description == "Coffee"
