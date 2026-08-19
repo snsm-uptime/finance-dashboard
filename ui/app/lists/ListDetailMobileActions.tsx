@@ -15,6 +15,7 @@ import type { DefaultSplitMessages } from "./DefaultSplitPanel";
 import { DefaultSplitPanel } from "./DefaultSplitPanel";
 import type { DefaultSplitPayload, ListMember } from "./listsClient";
 import { Sheet } from "./Sheet";
+import { ButtonGroup } from "@/components/ButtonGroup";
 import { FormIconSubmit } from "@/components/FormIconSubmit";
 import { IconButton } from "@/components/IconButton";
 import styles from "./ListDetailMobileActions.module.scss";
@@ -82,41 +83,46 @@ export function ListDetailMobileActions({
 
   return (
     <div className={styles.chrome}>
-      <div className={styles.fab} role="group" aria-label={groupLabel}>
-        {canAddExpense ? (
-          <IconButton
-            ref={expenseButtonRef}
-            type="button"
-            className={styles.fabHalf}
-            label={addExpenseAria}
-            aria-expanded={sheet === "expense"}
-            onClick={() => setSheet("expense")}
-            icon={<PlusIcon className={styles.fabIcon} />}
-          />
-        ) : null}
-        {canShowSplit ? (
-          <IconButton
-            ref={splitButtonRef}
-            type="button"
-            className={styles.fabHalf}
-            label={splitMessages.defaultSplitTitle}
-            aria-expanded={sheet === "split"}
-            onClick={() => setSheet("split")}
-            icon={<PieChartIcon className={styles.fabIcon} />}
-          />
-        ) : null}
-        {canInvite ? (
-          <IconButton
-            ref={inviteButtonRef}
-            type="button"
-            className={styles.fabHalf}
-            label={inviteAria}
-            aria-expanded={sheet === "invite"}
-            onClick={() => setSheet("invite")}
-            icon={<ShareIcon className={styles.fabIcon} />}
-          />
-        ) : null}
-      </div>
+      <ButtonGroup
+        orientation="vertical"
+        className={styles.fab}
+        aria-label={groupLabel}
+        buttons={[
+          canAddExpense ? (
+            <IconButton
+              key="expense"
+              ref={expenseButtonRef}
+              type="button"
+              label={addExpenseAria}
+              aria-expanded={sheet === "expense"}
+              onClick={() => setSheet("expense")}
+              icon={<PlusIcon className={styles.fabIcon} />}
+            />
+          ) : null,
+          canShowSplit ? (
+            <IconButton
+              key="split"
+              ref={splitButtonRef}
+              type="button"
+              label={splitMessages.defaultSplitTitle}
+              aria-expanded={sheet === "split"}
+              onClick={() => setSheet("split")}
+              icon={<PieChartIcon className={styles.fabIcon} />}
+            />
+          ) : null,
+          canInvite ? (
+            <IconButton
+              key="invite"
+              ref={inviteButtonRef}
+              type="button"
+              label={inviteAria}
+              aria-expanded={sheet === "invite"}
+              onClick={() => setSheet("invite")}
+              icon={<ShareIcon className={styles.fabIcon} />}
+            />
+          ) : null,
+        ]}
+      />
 
       {canAddExpense ? (
         <Sheet
