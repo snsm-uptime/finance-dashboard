@@ -98,8 +98,10 @@ def test_section_titles_match_real_lettered_headers() -> None:
     assert by_title["Otras líneas de financiamiento"].policy == SECTION_POLICY_MUST_PARSE
     assert by_title["Saldo Anterior"].line_type is None
     assert by_title["Saldo Anterior"].policy == SECTION_POLICY_IGNORE
-    assert "F) Cargos por gestión evidenciable de cobro" not in by_title
-    assert "G) Otras notas de crédito" not in by_title
+    assert by_title["F) Cargos por gestión evidenciable de cobro"].line_type is None
+    assert by_title["F) Cargos por gestión evidenciable de cobro"].policy == SECTION_POLICY_IGNORE
+    assert by_title["G) Otras notas de crédito"].line_type is None
+    assert by_title["G) Otras notas de crédito"].policy == SECTION_POLICY_IGNORE
 
 
 def test_adapter_declares_currency_variant_amount_column_role() -> None:
@@ -278,6 +280,27 @@ def test_parse_lettered_unmapped_section_raises(
     )
     with pytest.raises(InvalidCanonicalLineError):
         adapter.parse(pdf_bytes)
+
+
+def test_parse_empty_g_section_ignores_following_date_amount_footnotes(
+    adapter: BacCreditAdapter,
+) -> None:
+    pdf_bytes = _one_page_statement_pdf(
+        [
+            "ESTADO DE CUENTA BAC CREDITO",
+            "B) Detalle de compras del periodo",
+            "100001 05-ENE-26 SUPERMERCADO XYZ SAN JOSE CRC 10,500.00",
+            "F) Cargos por gestión evidenciable de cobro",
+            "No se registran transacciones en el periodo.",
+            "G) Otras notas de crédito",
+            "No se registran transacciones en el periodo.",
+            "Condiciones vigentes desde 15-ABR-26 tasa de referencia 1,234.56",
+        ]
+    )
+    rows = adapter.parse(pdf_bytes)
+    assert len(rows) == 1
+    assert rows[0].line_type == "purchase"
+    assert "SUPERMERCADO XYZ" in rows[0].normalized_description
 
 
 def test_parse_preamble_amount_rows_before_lettered_section_are_skipped(

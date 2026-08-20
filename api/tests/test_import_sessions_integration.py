@@ -20,7 +20,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from adapters.persistence.import_sessions import SqlAlchemyImportSessionRepository
-from adapters.persistence.models import LedgerEntryModel
+from adapters.persistence.models import ImportStatementModel, LedgerEntryModel
 from domain.errors import ImportSessionAlreadyCommittedError
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -74,6 +74,18 @@ def _load_goldens_module():
 
 def _pdf_storage_base() -> Path:
     return Path(os.environ.get("PDF_STORAGE_PATH", "/data/pdfs"))
+
+
+def _assert_source_pdf_released(db_session: Session, *, session_id: str, user_id: str) -> None:
+    user_dir = _pdf_storage_base() / user_id
+    leftover = list(user_dir.glob("*.pdf")) if user_dir.exists() else []
+    assert leftover == []
+    db_session.expire_all()
+    statement_rows = db_session.scalars(
+        select(ImportStatementModel).where(ImportStatementModel.session_id == UUID(session_id))
+    ).all()
+    assert statement_rows
+    assert all(row.pdf_path is None for row in statement_rows)
 
 
 @pytest.fixture(autouse=True)
@@ -292,6 +304,8 @@ def test_bulk_commit_happy_path_lands_ledger_rows_payer_is_actor(
     assert len(ledger_rows) == len(goldens.GOLDENS)
     assert all(str(row.import_batch_id) == batch_id for row in ledger_rows)
 
+    _assert_source_pdf_released(db_session, session_id=session_id, user_id=me["user_id"])
+
 
 def test_bulk_commit_duplicate_batch_insert_raises_already_committed_not_integrity_error(
     client_with_fx: TestClient,
@@ -451,6 +465,7 @@ def test_individual_commit_happy_path_lands_ledger_row_payer_is_actor(
 
     session_after = client.get(f"/import/sessions/{session_id}").json()
     assert session_after["statements"][0]["status"] == "committed"
+    _assert_source_pdf_released(db_session, session_id=session_id, user_id=me["user_id"])
 
 
 def test_individual_commit_twice_on_same_statement_rejected(client_with_fx: TestClient) -> None:
@@ -474,7 +489,9 @@ def test_individual_commit_twice_on_same_statement_rejected(client_with_fx: Test
     assert second.json()["code"] == "import_statement_not_available"
 
 
-def test_individual_skip_then_get_shows_skipped_status(client: TestClient) -> None:
+def test_individual_skip_then_get_shows_skipped_status(
+    client: TestClient, db_session: Session
+) -> None:
     _register(client, "individualskip@example.com")
     session_id = _upload_bac_session(client)
     statement_id = client.get(f"/import/sessions/{session_id}").json()["statements"][0]["id"]
@@ -485,6 +502,9 @@ def test_individual_skip_then_get_shows_skipped_status(client: TestClient) -> No
 
     refetched = client.get(f"/import/sessions/{session_id}")
     assert refetched.json()["statements"][0]["status"] == "skipped"
+    _assert_source_pdf_released(
+        db_session, session_id=session_id, user_id=client.get("/auth/me").json()["user_id"]
+    )
 
 
 def test_individual_skip_then_commit_same_statement_rejected(client_with_fx: TestClient) -> None:

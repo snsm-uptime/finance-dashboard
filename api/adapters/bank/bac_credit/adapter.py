@@ -61,7 +61,11 @@ _DATE_FORMAT = "%d-%b-%y"
 # text (2026-08-19, structural facts only). "Saldo Anterior" and "Otras líneas
 # de financiamiento" were not on the inspected pages — left as currently
 # declared; a wrong MUST_PARSE/IGNORE title fails loud (NFR-8), not silent.
-# F) and G) are undeclared on purpose (no evidence of row shape yet).
+# F) and G) are declared IGNORE: real statements print those headers (often
+# with "No se registran transacciones") and then legal/summary lines that
+# contain a date + amount token. Leaving them undeclared marked the whole
+# statement failed. We still do not parse F/G row shapes (no evidence yet);
+# IGNORE skips both empty-section boilerplate and those footnotes.
 _SECTIONS = [
     SectionSpec("A) Detalle de pago del periodo", LINE_TYPE_PAYMENT, SECTION_POLICY_MUST_PARSE),
     SectionSpec("B) Detalle de compras del periodo", LINE_TYPE_PURCHASE, SECTION_POLICY_MUST_PARSE),
@@ -72,6 +76,8 @@ _SECTIONS = [
         LINE_TYPE_VOLUNTARY_SERVICE,
         SECTION_POLICY_BEST_EFFORT,
     ),
+    SectionSpec("F) Cargos por gestión evidenciable de cobro", None, SECTION_POLICY_IGNORE),
+    SectionSpec("G) Otras notas de crédito", None, SECTION_POLICY_IGNORE),
     # Unverified against real text this story (opening-balance page not inspected).
     SectionSpec(
         "Otras líneas de financiamiento", LINE_TYPE_INSTALLMENT_SCHEDULE, SECTION_POLICY_MUST_PARSE

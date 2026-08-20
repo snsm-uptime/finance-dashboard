@@ -25,6 +25,7 @@ from domain.expenses import ManualExpenseDraft
 from domain.import_session import (
     STATEMENT_STATUS_FAILED,
     STATEMENT_STATUS_STAGED,
+    session_needs_source_pdf,
     validate_bulk_candidate_row,
     validate_bulk_commit_eligible,
     validate_individual_accept_eligible,
@@ -112,7 +113,7 @@ class StagedStatementRecord:
     product_id: str
     status: str
     candidate_row_count: int
-    pdf_path: str
+    pdf_path: str | None
     candidate_rows: list[CanonicalLine] = field(default_factory=list)
 
 
@@ -177,6 +178,10 @@ class ImportSessionRepository(Protocol):
         writes. Raises ImportSessionNotFoundError if the session/user pair
         doesn't match, ImportStatementNotFoundError if the statement isn't
         in that session."""
+        ...
+
+    def clear_statement_pdf_paths(self, session_id: UUID, user_id: UUID) -> None:
+        """Null out path references after the source PDF has been deleted (AD-3)."""
         ...
 
 
@@ -246,7 +251,9 @@ class DiscardImportSessionService:
 
         updated = self._session_repo.discard_session(command.session_id, command.actor_user_id)
 
-        distinct_paths = {statement.pdf_path for statement in updated.statements}
+        distinct_paths = {
+            statement.pdf_path for statement in updated.statements if statement.pdf_path
+        }
         for path in distinct_paths:
             try:
                 self._pdf_storage.delete(path)
@@ -254,6 +261,29 @@ class DiscardImportSessionService:
                 logger.warning("import_session_discard_cleanup_failed pdf_path=%s", path)
 
         return updated
+
+
+def _release_source_pdf_if_idle(
+    *,
+    session: ImportSessionRecord,
+    session_repo: ImportSessionRepository,
+    pdf_storage: PdfStorage,
+) -> None:
+    """Delete the source PDF and clear path refs after a clean commit (AD-3)."""
+    if session_needs_source_pdf([statement.status for statement in session.statements]):
+        return
+    paths = {statement.pdf_path for statement in session.statements if statement.pdf_path}
+    for path in paths:
+        try:
+            pdf_storage.delete(path)
+        except OSError:
+            logger.warning(
+                "import_session_commit_cleanup_failed session_id=%s pdf_path=%s",
+                session.id,
+                path,
+            )
+    if paths:
+        session_repo.clear_statement_pdf_paths(session.id, session.user_id)
 
 
 @dataclass(frozen=True, slots=True)
@@ -285,10 +315,12 @@ class AssignBulkImportService:
         session_repo: ImportSessionRepository,
         list_lookup: ListAccessLookup,
         fx_service: MaterializeFxService,
+        pdf_storage: PdfStorage,
     ) -> None:
         self._session_repo = session_repo
         self._list_lookup = list_lookup
         self._fx_service = fx_service
+        self._pdf_storage = pdf_storage
 
     def execute(self, command: AssignBulkImportCommand) -> AssignBulkImportResult:
         # AC #1 assumes Bulk only ever sees review-routed cards, but no card
@@ -352,6 +384,14 @@ class AssignBulkImportService:
             )
             batches.append(batch)
 
+        updated = self._session_repo.get_session(command.session_id, command.actor_user_id)
+        if updated is not None:
+            _release_source_pdf_if_idle(
+                session=updated,
+                session_repo=self._session_repo,
+                pdf_storage=self._pdf_storage,
+            )
+
         return AssignBulkImportResult(
             session_id=command.session_id, list_id=command.list_id, batches=batches
         )
@@ -385,10 +425,12 @@ class AssignIndividualImportService:
         session_repo: ImportSessionRepository,
         list_lookup: ListAccessLookup,
         fx_service: MaterializeFxService,
+        pdf_storage: PdfStorage,
     ) -> None:
         self._session_repo = session_repo
         self._list_lookup = list_lookup
         self._fx_service = fx_service
+        self._pdf_storage = pdf_storage
 
     def execute(self, command: AssignIndividualImportCommand) -> ImportBatchRecord:
         # Same missing-card/routing_mode gap as AssignBulkImportService.execute
@@ -436,7 +478,7 @@ class AssignIndividualImportService:
             )
             rows.append((draft, fx))
 
-        return self._session_repo.commit_statement_batch(
+        batch = self._session_repo.commit_statement_batch(
             batch_id=uuid4(),
             session_id=command.session_id,
             statement_id=statement.id,
@@ -444,6 +486,14 @@ class AssignIndividualImportService:
             actor_user_id=command.actor_user_id,
             rows=rows,
         )
+        updated = self._session_repo.get_session(command.session_id, command.actor_user_id)
+        if updated is not None:
+            _release_source_pdf_if_idle(
+                session=updated,
+                session_repo=self._session_repo,
+                pdf_storage=self._pdf_storage,
+            )
+        return batch
 
 
 @dataclass(frozen=True, slots=True)
@@ -457,8 +507,9 @@ class SkipStatementService:
     """Individual review skip (Story 4.8, AC #5, FR-18): no ledger rows —
     only flips the targeted statement's own status."""
 
-    def __init__(self, session_repo: ImportSessionRepository) -> None:
+    def __init__(self, session_repo: ImportSessionRepository, pdf_storage: PdfStorage) -> None:
         self._session_repo = session_repo
+        self._pdf_storage = pdf_storage
 
     def execute(self, command: SkipStatementCommand) -> ImportSessionRecord:
         session = self._session_repo.get_session(command.session_id, command.actor_user_id)
@@ -471,8 +522,14 @@ class SkipStatementService:
             discarded_at=session.discarded_at, statement_status=statement.status
         )
 
-        return self._session_repo.skip_statement(
+        updated = self._session_repo.skip_statement(
             session_id=command.session_id,
             statement_id=command.statement_id,
             user_id=command.actor_user_id,
         )
+        _release_source_pdf_if_idle(
+            session=updated,
+            session_repo=self._session_repo,
+            pdf_storage=self._pdf_storage,
+        )
+        return updated

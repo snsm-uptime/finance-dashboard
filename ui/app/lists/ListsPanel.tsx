@@ -100,18 +100,19 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
   }, [editingId]);
 
   useEffect(() => {
-    if (!openMenuId) return;
+    if (!openMenuId && !deleteConfirmId) return;
 
     function onPointerDown(event: PointerEvent) {
       if (menuRef.current && event.target instanceof Node && menuRef.current.contains(event.target)) {
         return;
       }
       setOpenMenuId(null);
+      setDeleteConfirmId(null);
     }
 
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [openMenuId]);
+  }, [openMenuId, deleteConfirmId]);
 
   async function onCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -387,7 +388,14 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
                         </span>
                       </button>
                       {isOwner ? (
-                        <div className={styles.menuContainer} ref={menuRef}>
+                        <div
+                          className={styles.menuContainer}
+                          ref={
+                            openMenuId === list.id || deleteConfirmId === list.id
+                              ? menuRef
+                              : undefined
+                          }
+                        >
                           <IconButton
                             type="button"
                             variant="muted"
