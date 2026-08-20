@@ -246,7 +246,7 @@ export function OriginChipPicker({
 
   const originPanel = (
     <SlideDown open={open} id={panelId} labelledBy={chipId}>
-      <div className="mt-1 box-border flex flex-wrap items-center gap-2 rounded-[8px] border border-accent p-2">
+      <div className="mt-1 flex flex-wrap items-center gap-2 rounded-[8px] p-2">
         {options.map((option) => (
           <button
             key={option.value || "none"}
