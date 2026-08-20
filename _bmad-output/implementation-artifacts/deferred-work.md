@@ -217,3 +217,8 @@
 - FX materialization in Bulk commit is sequential per candidate row with no batching and no NFR timing test for the commit path (Story 4.6 added one for upload) — inherited from the existing Story 3.5 manual-expense pattern, not a new regression.
 - Application-tier unit tests (`api/tests/test_import_session_application.py`) use a no-op 1:1 `_FakeFxService` for every currency, so non-CRC FX flow through `commit_statement_batch` is only exercised at the Postgres-integration tier.
 - `_own_list_id` integration-test helper (`api/tests/test_import_sessions_integration.py`) blindly takes `lists[0]` with no assertion that exactly one list exists — brittle if default-list registration behavior ever changes.
+
+## Deferred from: code review of 4-8-individual-review-swipe-desktop-buttons.md (2026-08-19)
+
+- `discarded_at: object | None` typing on `validate_individual_accept_eligible`/`validate_individual_skip_eligible` loses type-checker protection — inherited from Bulk's identical `validate_bulk_commit_eligible` signature (Story 4.7), not a new regression.
+- Zero-candidate-row staged statement can be committed via Individual accept with 0 ledger entries — extends the identical Bulk-path gap already accepted as "benign, untested" in the 4.7 deferred-work entry above; Individual has no equivalent check either.

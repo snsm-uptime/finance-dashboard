@@ -19,9 +19,13 @@ from application.import_session import (
     AssignBulkImportCommand,
     AssignBulkImportResult,
     AssignBulkImportService,
+    AssignIndividualImportCommand,
+    AssignIndividualImportService,
     DiscardImportSessionCommand,
     DiscardImportSessionService,
     ImportSessionRecord,
+    SkipStatementCommand,
+    SkipStatementService,
     UploadStatementPdfCommand,
     UploadStatementPdfService,
 )
@@ -36,6 +40,8 @@ from domain.errors import (
     ImportSessionAlreadyCommittedError,
     ImportSessionDiscardedError,
     ImportSessionNotFoundError,
+    ImportStatementNotAvailableError,
+    ImportStatementNotFoundError,
     InvalidCanonicalLineError,
     NoCleanStatementsToCommitError,
     NotListMemberError,
@@ -58,6 +64,7 @@ from api.schemas.import_sessions import (
     BulkCommitResponse,
     ImportBatchResponse,
     ImportSessionResponse,
+    IndividualCommitBody,
     StagedStatementResponse,
 )
 
@@ -128,6 +135,22 @@ async def upload_statement_pdf(
         user_id,
         len(result.statements),
     )
+    return _session_response(result)
+
+
+@router.get("/{session_id}", response_model=ImportSessionResponse)
+def get_import_session(
+    session_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> ImportSessionResponse | JSONResponse:
+    session_repo = SqlAlchemyImportSessionRepository(db)
+    result = session_repo.get_session(session_id, user_id)
+    if result is None:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": "Import session not found.", "code": "import_session_not_found"},
+        )
     return _session_response(result)
 
 
@@ -238,3 +261,136 @@ def bulk_commit_import_session(
         len(result.batches),
     )
     return _bulk_commit_response(result)
+
+
+@router.post("/{session_id}/statements/{statement_id}/commit", response_model=ImportSessionResponse)
+def commit_individual_statement(
+    session_id: uuid.UUID,
+    statement_id: uuid.UUID,
+    body: IndividualCommitBody,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+    fx_service: MaterializeFxService = Depends(get_fx_service),
+) -> ImportSessionResponse | JSONResponse:
+    """Individual review accept (Story 4.8, AC #1/#2/#3): commits exactly
+    one statement to one list — serves both the "chosen list" and
+    "configurable default list" outcomes identically, the caller decides
+    which list_id to send. Returns the updated session (not just the batch)
+    so the caller never has to make a second round-trip to learn what to
+    review next (Story 4.8 review finding)."""
+    session_repo = SqlAlchemyImportSessionRepository(db)
+    list_repo = SqlAlchemyListRepository(db)
+    service = AssignIndividualImportService(session_repo, list_repo, fx_service)
+    try:
+        service.execute(
+            AssignIndividualImportCommand(
+                actor_user_id=user_id,
+                session_id=session_id,
+                statement_id=statement_id,
+                list_id=body.list_id,
+            )
+        )
+    except ImportSessionNotFoundError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": str(exc), "code": "import_session_not_found"},
+        )
+    except ImportStatementNotFoundError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": str(exc), "code": "import_statement_not_found"},
+        )
+    except NotListMemberError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={"detail": str(exc), "code": "not_list_member"},
+        )
+    except ImportSessionDiscardedError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"detail": str(exc), "code": "import_session_discarded"},
+        )
+    except ImportStatementNotAvailableError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"detail": str(exc), "code": "import_statement_not_available"},
+        )
+    except InvalidCanonicalLineError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            content={"detail": str(exc), "code": "invalid_canonical_line"},
+        )
+    except FxAuthenticationError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"detail": str(exc), "code": exc.CODE},
+        )
+    except FxServiceUnavailableError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"detail": str(exc), "code": exc.CODE},
+        )
+    except (FxFutureDateError, FxCurrencyNotSupportedError, FxRateNotAvailableError) as exc:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            content={"detail": str(exc), "code": exc.CODE},
+        )
+    logger.info(
+        "import_statement_committed session_id=%s statement_id=%s user_id=%s list_id=%s",
+        session_id,
+        statement_id,
+        user_id,
+        body.list_id,
+    )
+    updated_session = session_repo.get_session(session_id, user_id)
+    if updated_session is None:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": "Import session not found.", "code": "import_session_not_found"},
+        )
+    return _session_response(updated_session)
+
+
+@router.post("/{session_id}/statements/{statement_id}/skip", response_model=ImportSessionResponse)
+def skip_individual_statement(
+    session_id: uuid.UUID,
+    statement_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> ImportSessionResponse | JSONResponse:
+    """Individual review skip (Story 4.8, AC #5, FR-18): no ledger writes."""
+    session_repo = SqlAlchemyImportSessionRepository(db)
+    service = SkipStatementService(session_repo)
+    try:
+        result = service.execute(
+            SkipStatementCommand(
+                actor_user_id=user_id, session_id=session_id, statement_id=statement_id
+            )
+        )
+    except ImportSessionNotFoundError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": str(exc), "code": "import_session_not_found"},
+        )
+    except ImportStatementNotFoundError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": str(exc), "code": "import_statement_not_found"},
+        )
+    except ImportSessionDiscardedError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"detail": str(exc), "code": "import_session_discarded"},
+        )
+    except ImportStatementNotAvailableError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"detail": str(exc), "code": "import_statement_not_available"},
+        )
+    logger.info(
+        "import_statement_skipped session_id=%s statement_id=%s user_id=%s",
+        session_id,
+        statement_id,
+        user_id,
+    )
+    return _session_response(result)

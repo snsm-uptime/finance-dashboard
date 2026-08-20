@@ -10,6 +10,7 @@ import pytest
 from domain.errors import (
     ImportSessionAlreadyCommittedError,
     ImportSessionDiscardedError,
+    ImportStatementNotAvailableError,
     InvalidCanonicalLineError,
     NoCleanStatementsToCommitError,
     UnsupportedFileTypeError,
@@ -17,6 +18,8 @@ from domain.errors import (
 from domain.import_session import (
     validate_bulk_candidate_row,
     validate_bulk_commit_eligible,
+    validate_individual_accept_eligible,
+    validate_individual_skip_eligible,
     validate_pdf_upload,
 )
 
@@ -120,3 +123,57 @@ def test_validate_bulk_candidate_row_rejects_empty_description() -> None:
 def test_validate_bulk_candidate_row_rejects_description_over_max_length() -> None:
     with pytest.raises(InvalidCanonicalLineError):
         validate_bulk_candidate_row(amount=Decimal("10.00"), normalized_description="x" * 501)
+
+
+# --- Story 4.8 Task 1.2/1.3: validate_individual_accept_eligible / _skip_eligible ---
+
+
+def test_validate_individual_accept_eligible_accepts_staged() -> None:
+    validate_individual_accept_eligible(discarded_at=None, statement_status="staged")
+
+
+def test_validate_individual_accept_eligible_rejects_failed() -> None:
+    """AC #6: no comparison UI yet — a failed statement cannot be accepted."""
+    with pytest.raises(ImportStatementNotAvailableError):
+        validate_individual_accept_eligible(discarded_at=None, statement_status="failed")
+
+
+def test_validate_individual_accept_eligible_rejects_committed() -> None:
+    with pytest.raises(ImportStatementNotAvailableError):
+        validate_individual_accept_eligible(discarded_at=None, statement_status="committed")
+
+
+def test_validate_individual_accept_eligible_rejects_skipped() -> None:
+    with pytest.raises(ImportStatementNotAvailableError):
+        validate_individual_accept_eligible(discarded_at=None, statement_status="skipped")
+
+
+def test_validate_individual_accept_eligible_rejects_discarded_session() -> None:
+    with pytest.raises(ImportSessionDiscardedError):
+        validate_individual_accept_eligible(
+            discarded_at=datetime.now(UTC), statement_status="staged"
+        )
+
+
+def test_validate_individual_skip_eligible_accepts_staged() -> None:
+    validate_individual_skip_eligible(discarded_at=None, statement_status="staged")
+
+
+def test_validate_individual_skip_eligible_accepts_failed() -> None:
+    """A failed statement can be skipped — how review moves past it pre-Epic-5."""
+    validate_individual_skip_eligible(discarded_at=None, statement_status="failed")
+
+
+def test_validate_individual_skip_eligible_rejects_committed() -> None:
+    with pytest.raises(ImportStatementNotAvailableError):
+        validate_individual_skip_eligible(discarded_at=None, statement_status="committed")
+
+
+def test_validate_individual_skip_eligible_rejects_already_skipped() -> None:
+    with pytest.raises(ImportStatementNotAvailableError):
+        validate_individual_skip_eligible(discarded_at=None, statement_status="skipped")
+
+
+def test_validate_individual_skip_eligible_rejects_discarded_session() -> None:
+    with pytest.raises(ImportSessionDiscardedError):
+        validate_individual_skip_eligible(discarded_at=datetime.now(UTC), statement_status="staged")

@@ -16,13 +16,19 @@ from typing import Protocol
 from uuid import UUID, uuid4
 
 from domain.canonical_line import CanonicalLine
-from domain.errors import ImportSessionNotFoundError, InvalidCanonicalLineError
+from domain.errors import (
+    ImportSessionNotFoundError,
+    ImportStatementNotFoundError,
+    InvalidCanonicalLineError,
+)
 from domain.expenses import ManualExpenseDraft
 from domain.import_session import (
     STATEMENT_STATUS_FAILED,
     STATEMENT_STATUS_STAGED,
     validate_bulk_candidate_row,
     validate_bulk_commit_eligible,
+    validate_individual_accept_eligible,
+    validate_individual_skip_eligible,
     validate_pdf_upload,
 )
 
@@ -162,6 +168,15 @@ class ImportSessionRepository(Protocol):
         row, one ledger entry per row, and flips the statement to
         committed. `rows` order does not matter — no ledger row depends on
         another within the same batch."""
+        ...
+
+    def skip_statement(
+        self, *, session_id: UUID, statement_id: UUID, user_id: UUID
+    ) -> ImportSessionRecord:
+        """Flip one statement to skipped (Story 4.8, FR-18) — no ledger
+        writes. Raises ImportSessionNotFoundError if the session/user pair
+        doesn't match, ImportStatementNotFoundError if the statement isn't
+        in that session."""
         ...
 
 
@@ -339,4 +354,125 @@ class AssignBulkImportService:
 
         return AssignBulkImportResult(
             session_id=command.session_id, list_id=command.list_id, batches=batches
+        )
+
+
+def _find_statement(session: ImportSessionRecord, statement_id: UUID) -> StagedStatementRecord:
+    for statement in session.statements:
+        if statement.id == statement_id:
+            return statement
+    raise ImportStatementNotFoundError()
+
+
+@dataclass(frozen=True, slots=True)
+class AssignIndividualImportCommand:
+    actor_user_id: UUID
+    session_id: UUID
+    statement_id: UUID
+    list_id: UUID
+
+
+class AssignIndividualImportService:
+    """Individual review accept (Story 4.8, AC #1/#2/#3): commits exactly
+    one statement to one list — the same `commit_statement_batch` port
+    Story 4.7's Bulk service already calls in a loop, called here once.
+    Serves both the "chosen list" and "configurable default list" outcomes
+    identically — the caller decides which `list_id` to send.
+    """
+
+    def __init__(
+        self,
+        session_repo: ImportSessionRepository,
+        list_lookup: ListAccessLookup,
+        fx_service: MaterializeFxService,
+    ) -> None:
+        self._session_repo = session_repo
+        self._list_lookup = list_lookup
+        self._fx_service = fx_service
+
+    def execute(self, command: AssignIndividualImportCommand) -> ImportBatchRecord:
+        # Same missing-card/routing_mode gap as AssignBulkImportService.execute
+        # (Story 4.7 review finding) — no card/routing_mode linkage exists on
+        # a statement yet, so there is nothing to check here today. See that
+        # service's identical comment and
+        # test_staged_statement_record_has_no_unchecked_card_routing_field.
+        session = self._session_repo.get_session(command.session_id, command.actor_user_id)
+        if session is None:
+            raise ImportSessionNotFoundError()
+
+        statement = _find_statement(session, command.statement_id)
+
+        AuthorizeListAccessService(self._list_lookup).execute(
+            AuthorizeListAccessCommand(
+                acting_user_id=command.actor_user_id,
+                list_id=command.list_id,
+                action="import_to_list",
+            )
+        )
+
+        validate_individual_accept_eligible(
+            discarded_at=session.discarded_at, statement_status=statement.status
+        )
+
+        rows: list[tuple[ManualExpenseDraft, MaterializedFx]] = []
+        for candidate in statement.candidate_rows:
+            validate_bulk_candidate_row(
+                amount=candidate.amount, normalized_description=candidate.normalized_description
+            )
+            draft = ManualExpenseDraft(
+                amount=candidate.amount,
+                currency=candidate.currency,
+                normalized_description=candidate.normalized_description,
+                payer_id=command.actor_user_id,
+                provenance=candidate.provenance,
+                line_type=candidate.line_type,
+                posted_date=candidate.posted_date,
+                external_ref=candidate.external_ref,
+            )
+            fx = self._fx_service.materialize_fx_for_entry(
+                amount=draft.amount,
+                currency=draft.currency,
+                posted_date=date.fromisoformat(draft.posted_date),
+            )
+            rows.append((draft, fx))
+
+        return self._session_repo.commit_statement_batch(
+            batch_id=uuid4(),
+            session_id=command.session_id,
+            statement_id=statement.id,
+            list_id=command.list_id,
+            actor_user_id=command.actor_user_id,
+            rows=rows,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class SkipStatementCommand:
+    actor_user_id: UUID
+    session_id: UUID
+    statement_id: UUID
+
+
+class SkipStatementService:
+    """Individual review skip (Story 4.8, AC #5, FR-18): no ledger rows —
+    only flips the targeted statement's own status."""
+
+    def __init__(self, session_repo: ImportSessionRepository) -> None:
+        self._session_repo = session_repo
+
+    def execute(self, command: SkipStatementCommand) -> ImportSessionRecord:
+        session = self._session_repo.get_session(command.session_id, command.actor_user_id)
+        if session is None:
+            raise ImportSessionNotFoundError()
+
+        statement = _find_statement(session, command.statement_id)
+
+        validate_individual_skip_eligible(
+            discarded_at=session.discarded_at, statement_status=statement.status
+        )
+
+        return self._session_repo.skip_statement(
+            session_id=command.session_id,
+            statement_id=command.statement_id,
+            user_id=command.actor_user_id,
         )

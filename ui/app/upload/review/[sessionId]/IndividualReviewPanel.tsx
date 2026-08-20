@@ -1,0 +1,363 @@
+"use client";
+
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useDrag } from "@use-gesture/react";
+
+import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
+import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
+import { usePreferences } from "@/components/PreferencesProvider";
+import { useFormSubmission } from "@/hooks";
+import { fetchLists, type ListItem } from "@/app/lists/listsClient";
+import { uploadCopy } from "@/lib/i18n/upload";
+import {
+  commitIndividualStatement,
+  discardSession,
+  fetchImportSession,
+  skipStatement,
+  type ImportSession,
+  type IndividualReviewMessages,
+  type StagedStatement,
+  type UploadMessages,
+} from "../../uploadClient";
+
+type IndividualReviewPanelProps = {
+  sessionId: string;
+};
+
+type Action = { kind: "acceptChosen" } | { kind: "acceptDefault" } | { kind: "skip" };
+
+const SWIPE_DISTANCE_THRESHOLD = 80;
+
+function nextReviewable(session: ImportSession | null): StagedStatement | null {
+  if (!session || session.discarded_at) return null;
+  return (
+    session.statements.find((s) => s.status === "staged" || s.status === "failed") ?? null
+  );
+}
+
+/**
+ * Individual review — phone swipe / desktop buttons (Story 4.8, AC #1-#6).
+ * Server (GET session) is the source of truth for which statement is next —
+ * client state is never trusted across a reload.
+ */
+export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps) {
+  const { locale } = usePreferences();
+  const t = uploadCopy(locale);
+  const router = useRouter();
+  const selectId = useId();
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  const [session, setSession] = useState<ImportSession | null>(null);
+  const [sessionError, setSessionError] = useState<string | null>(null);
+  const [lists, setLists] = useState<ListItem[] | null>(null);
+  const [listsError, setListsError] = useState<string | null>(null);
+  const [defaultListId, setDefaultListId] = useState<string>("");
+  const [pickedListId, setPickedListId] = useState<string>("");
+  const [lastAcceptedListId, setLastAcceptedListId] = useState<string | null>(null);
+  const [isCoarsePointer] = useState(
+    () => typeof window !== "undefined" && !!window.matchMedia?.("(pointer: coarse)").matches,
+  );
+
+  const messages: IndividualReviewMessages = {
+    errorForbidden: t.individualReviewErrorForbidden,
+    errorSessionNotFound: t.individualReviewErrorSessionNotFound,
+    errorStatementNotFound: t.individualReviewErrorStatementNotFound,
+    errorSessionDiscarded: t.individualReviewErrorSessionDiscarded,
+    errorStatementNotAvailable: t.individualReviewErrorStatementNotAvailable,
+    errorFxUnavailable: t.individualReviewErrorFxUnavailable,
+    errorGeneric: t.errorGeneric,
+    errorUnauthorized: t.errorUnauthorized,
+  };
+
+  const dismissMessages: UploadMessages = {
+    errorUnsupportedFileType: t.errorUnsupportedFileType,
+    errorUnknownStatement: t.errorUnknownStatement,
+    errorAmbiguousStatement: t.errorAmbiguousStatement,
+    errorUnreadableStatement: t.errorUnreadableStatement,
+    errorGeneric: t.errorGeneric,
+    errorUnauthorized: t.errorUnauthorized,
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      const result = await fetchImportSession(sessionId, messages);
+      if (cancelled) return;
+      if (!result.ok) {
+        setSessionError(result.error);
+        return;
+      }
+      setSessionError(null);
+      setSession(result.session);
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      const result = await fetchLists({
+        errorGeneric: t.errorGeneric,
+        errorInvalidName: t.errorGeneric,
+        errorForbidden: t.individualReviewErrorForbidden,
+        errorUnauthorized: t.errorUnauthorized,
+      });
+      if (cancelled) return;
+      if (!result.ok) {
+        setListsError(result.error);
+        return;
+      }
+      setLists(result.lists);
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locale]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/auth/me", { headers: { Accept: "application/json" }, credentials: "same-origin" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { default_import_list_id?: string | null } | null) => {
+        if (cancelled || !data) return;
+        setDefaultListId(data.default_import_list_id ?? "");
+      })
+      .catch(() => {
+        /* default list is a convenience — a failed read just disables that action */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const current = nextReviewable(session);
+
+  const action = useFormSubmission(async (act: Action) => {
+    if (!current) return { ok: false, error: t.errorGeneric };
+
+    if (act.kind === "skip") {
+      const result = await skipStatement(sessionId, current.id, messages);
+      if (result.ok) {
+        setSession(result.session);
+        setPickedListId("");
+      }
+      return result;
+    }
+
+    const listId = act.kind === "acceptChosen" ? pickedListId : defaultListId;
+    if (!listId) return { ok: false, error: t.errorGeneric };
+    const result = await commitIndividualStatement(sessionId, current.id, listId, messages);
+    if (result.ok) {
+      setLastAcceptedListId(listId);
+      setPickedListId("");
+      setSession(result.session);
+    }
+    return result;
+  });
+
+  const dismiss = useFormSubmission(async () => {
+    const result = await discardSession(sessionId, dismissMessages);
+    if (result.ok) {
+      router.push("/upload");
+    }
+    return result;
+  });
+
+  useEffect(() => {
+    if (session && !current) {
+      router.push(lastAcceptedListId ? `/lists/${encodeURIComponent(lastAcceptedListId)}` : "/lists");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, current, lastAcceptedListId]);
+
+  const listOptions = useMemo(
+    () => (lists ?? []).map((l) => ({ value: l.id, label: l.name })),
+    [lists],
+  );
+  const defaultListName = (lists ?? []).find((l) => l.id === defaultListId)?.name ?? "";
+  const chosenListName = (lists ?? []).find((l) => l.id === pickedListId)?.name ?? "";
+
+  const canAcceptChosen = !!current && current.status === "staged" && !!pickedListId;
+  const canAcceptDefault = !!current && current.status === "staged" && !!defaultListId;
+  const canSkip = !!current && (current.status === "staged" || current.status === "failed");
+
+  useDrag(
+    ({ last, movement: [mx, my], velocity: [vx, vy], direction: [dx, dy] }) => {
+      if (!last || !isCoarsePointer || action.pending || dismiss.pending) return;
+      const absX = Math.abs(mx);
+      const absY = Math.abs(my);
+      if (absX < SWIPE_DISTANCE_THRESHOLD && absY < SWIPE_DISTANCE_THRESHOLD) return;
+
+      if (absY > absX && dy > 0 && vy > 0) {
+        if (canSkip) action.submit({ kind: "skip" });
+        return;
+      }
+      if (dx > 0 && vx > 0) {
+        if (canAcceptChosen) action.submit({ kind: "acceptChosen" });
+        return;
+      }
+      if (dx < 0 && vx > 0) {
+        if (canAcceptDefault) action.submit({ kind: "acceptDefault" });
+      }
+    },
+    // touch-none + passive: false: the card must recognize its own vertical
+    // (down → skip) and horizontal (left/right → accept) gestures, so native
+    // browser touch-action handling is fully disabled here rather than left
+    // to compete with useDrag on any axis (Story 4.8 review finding).
+    { target: cardRef, eventOptions: { passive: false } },
+  );
+
+  const progressIndex = session ? session.statements.findIndex((s) => s.id === current?.id) : -1;
+  const progressLabel =
+    session && current
+      ? t.individualReviewProgress
+          .replace("{current}", String(progressIndex + 1))
+          .replace("{total}", String(session.statements.length))
+      : "";
+
+  return (
+    <main
+      className="min-h-screen py-[2.5rem] px-[1.5rem]"
+      style={{ fontFamily: "var(--font-ui), Manrope, system-ui, sans-serif" }}
+    >
+      <div className="flex items-center justify-between max-w-[28rem] mb-[1.75rem]">
+        <h1 className="m-0 text-[1.75rem] font-[550] text-foreground">
+          {t.individualReviewTitle}
+        </h1>
+        {progressLabel ? (
+          <span className="text-muted text-[0.85rem]">{progressLabel}</span>
+        ) : null}
+      </div>
+
+      <div className="flex flex-col gap-4 max-w-[28rem]">
+        {sessionError ? (
+          <p className="text-owe text-[0.9rem] m-0" role="alert">
+            {sessionError}
+          </p>
+        ) : null}
+        {listsError ? (
+          <p className="text-owe text-[0.9rem] m-0" role="alert">
+            {listsError}
+          </p>
+        ) : null}
+
+        {current ? (
+          <>
+            <div className="flex flex-col gap-2">
+              <label htmlFor={selectId} className="text-[0.9rem] font-[550] text-foreground">
+                {t.individualReviewChooseList}
+              </label>
+              {lists === null && !listsError ? (
+                <p className="text-muted text-[0.85rem] m-0">
+                  {t.individualReviewLoadingLists}
+                </p>
+              ) : null}
+              {!defaultListId ? (
+                <p className="text-muted text-[0.8rem] m-0">{t.individualReviewNoDefaultList}</p>
+              ) : null}
+              {lists !== null && lists.length === 0 ? (
+                <p className="text-muted text-[0.85rem] m-0">{t.individualReviewNoLists}</p>
+              ) : null}
+              {lists !== null && lists.length > 0 ? (
+                <SoftLedgerSelect
+                  id={selectId}
+                  value={pickedListId}
+                  options={[
+                    { value: "", label: t.individualReviewChooseList },
+                    ...listOptions,
+                  ]}
+                  onChange={setPickedListId}
+                />
+              ) : null}
+            </div>
+
+            <div
+              ref={cardRef}
+              className="py-[1rem] px-[1.1rem] rounded-[10px] border border-border bg-surface touch-none"
+            >
+              <p className="m-0 font-[550] text-foreground text-[1.05rem]">
+                {current.product_id}
+              </p>
+              {current.status === "failed" ? (
+                <p className="text-owe text-[0.85rem] mt-2 mb-0">
+                  {t.individualReviewFailedStatement}
+                </p>
+              ) : (
+                <p className="text-muted text-[0.85rem] mt-2 mb-0">
+                  {current.candidate_row_count}
+                </p>
+              )}
+            </div>
+
+            <div aria-live="polite">
+              {action.error ? (
+                <p className="text-owe text-[0.9rem] m-0" role="alert">
+                  {action.error}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <PrimaryButton
+                disabled={!canAcceptChosen || action.pending || dismiss.pending}
+                onClick={() => action.submit({ kind: "acceptChosen" })}
+              >
+                {action.pending
+                  ? t.individualReviewCommitting
+                  : t.individualReviewAcceptChosen.replace(
+                      "{list}",
+                      chosenListName || t.individualReviewChooseList,
+                    )}
+              </PrimaryButton>
+              <button
+                type="button"
+                disabled={!canAcceptDefault || action.pending || dismiss.pending}
+                onClick={() => action.submit({ kind: "acceptDefault" })}
+                className="m-0 px-3 py-[9px] rounded-sm border border-border bg-surface text-foreground cursor-pointer font-[550] text-[0.95rem] disabled:opacity-55 disabled:cursor-not-allowed"
+              >
+                {action.pending
+                  ? t.individualReviewCommitting
+                  : defaultListName
+                    ? t.individualReviewAcceptDefault.replace("{list}", defaultListName)
+                    : t.individualReviewNoDefaultListShort}
+              </button>
+              <button
+                type="button"
+                disabled={!canSkip || action.pending || dismiss.pending}
+                onClick={() => action.submit({ kind: "skip" })}
+                className="m-0 px-3 py-[9px] rounded-sm border-none bg-transparent text-foreground cursor-pointer font-[550] text-[0.95rem] disabled:opacity-55 disabled:cursor-not-allowed"
+              >
+                {action.pending ? t.individualReviewSkipping : t.individualReviewSkip}
+              </button>
+            </div>
+          </>
+        ) : !session ? (
+          <p className="text-muted text-[0.85rem] m-0">{t.individualReviewLoadingSession}</p>
+        ) : null}
+
+        <div className="mt-2">
+          <button
+            type="button"
+            disabled={dismiss.pending || action.pending}
+            onClick={() => dismiss.submit(undefined)}
+            className="m-0 px-3 py-[9px] rounded-sm border border-border bg-transparent text-foreground cursor-pointer font-[550] text-[0.95rem] disabled:opacity-55 disabled:cursor-not-allowed"
+          >
+            {t.individualReviewDismissFile}
+          </button>
+          {dismiss.error ? (
+            <p className="text-owe text-[0.9rem] mt-2 mb-0" role="alert">
+              {dismiss.error}
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </main>
+  );
+}

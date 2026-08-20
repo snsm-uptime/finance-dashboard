@@ -1,9 +1,11 @@
 /** Client helpers for statement upload / discard via same-origin BFF (Story 4.6). */
 
+export type StatementStatus = "staged" | "failed" | "committed" | "skipped";
+
 export type StagedStatement = {
   id: string;
   product_id: string;
-  status: "staged" | "failed";
+  status: StatementStatus;
   candidate_row_count: number;
 };
 
@@ -29,6 +31,17 @@ export type BulkCommitMessages = {
   errorSessionDiscarded: string;
   errorAlreadyCommitted: string;
   errorNoCleanStatements: string;
+  errorFxUnavailable: string;
+  errorGeneric: string;
+  errorUnauthorized: string;
+};
+
+export type IndividualReviewMessages = {
+  errorForbidden: string;
+  errorSessionNotFound: string;
+  errorStatementNotFound: string;
+  errorSessionDiscarded: string;
+  errorStatementNotAvailable: string;
   errorFxUnavailable: string;
   errorGeneric: string;
   errorUnauthorized: string;
@@ -82,6 +95,22 @@ function mapBulkCommitError(
   return messages.errorGeneric;
 }
 
+function mapIndividualReviewError(
+  status: number,
+  body: { detail?: unknown; code?: unknown } | null,
+  messages: IndividualReviewMessages,
+): string {
+  const code = typeof body?.code === "string" ? body.code : "";
+  if (status === 401) return messages.errorUnauthorized;
+  if (status === 403 || code === "not_list_member") return messages.errorForbidden;
+  if (code === "import_session_not_found") return messages.errorSessionNotFound;
+  if (code === "import_statement_not_found") return messages.errorStatementNotFound;
+  if (code === "import_session_discarded") return messages.errorSessionDiscarded;
+  if (code === "import_statement_not_available") return messages.errorStatementNotAvailable;
+  if (code === "fx_service_unavailable") return messages.errorFxUnavailable;
+  return messages.errorGeneric;
+}
+
 async function parseJson(response: Response): Promise<unknown | null> {
   try {
     return await response.json();
@@ -90,13 +119,21 @@ async function parseJson(response: Response): Promise<unknown | null> {
   }
 }
 
+const STATEMENT_STATUSES: readonly StatementStatus[] = [
+  "staged",
+  "failed",
+  "committed",
+  "skipped",
+];
+
 function asStagedStatement(data: unknown): StagedStatement | null {
   if (!data || typeof data !== "object") return null;
   const row = data as Partial<StagedStatement>;
   if (
     typeof row.id !== "string" ||
     typeof row.product_id !== "string" ||
-    (row.status !== "staged" && row.status !== "failed") ||
+    !row.status ||
+    !STATEMENT_STATUSES.includes(row.status) ||
     typeof row.candidate_row_count !== "number"
   ) {
     return null;
@@ -241,4 +278,93 @@ export async function bulkCommitSession(
     ok: true,
     result: { session_id: data.session_id, list_id: data.list_id, batches },
   };
+}
+
+/** Individual review: (re)fetch the live session state (Story 4.8). */
+export async function fetchImportSession(
+  sessionId: string,
+  messages: IndividualReviewMessages,
+): Promise<OkSession | ErrorResult> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/import/sessions/${encodeURIComponent(sessionId)}`, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  const body = (await parseJson(response)) as { detail?: unknown; code?: unknown } | null;
+  if (!response.ok) {
+    return { ok: false, error: mapIndividualReviewError(response.status, body, messages) };
+  }
+  const session = asImportSession(body);
+  if (!session) return { ok: false, error: messages.errorGeneric };
+  return { ok: true, session };
+}
+
+/**
+ * Individual review accept (Story 4.8): commits one statement to one list.
+ * Serves both the "chosen list" and "configurable default list" outcomes —
+ * pass whichever list_id applies. Returns the updated session (mirroring
+ * `skipStatement`) so the caller never needs a second round-trip to learn
+ * what to review next (Story 4.8 review finding).
+ */
+export async function commitIndividualStatement(
+  sessionId: string,
+  statementId: string,
+  listId: string,
+  messages: IndividualReviewMessages,
+): Promise<OkSession | ErrorResult> {
+  let response: Response;
+  try {
+    response = await fetch(
+      `/api/import/sessions/${encodeURIComponent(sessionId)}/statements/${encodeURIComponent(statementId)}/commit`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ list_id: listId }),
+      },
+    );
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  const body = (await parseJson(response)) as { detail?: unknown; code?: unknown } | null;
+  if (!response.ok) {
+    return { ok: false, error: mapIndividualReviewError(response.status, body, messages) };
+  }
+  const session = asImportSession(body);
+  if (!session) return { ok: false, error: messages.errorGeneric };
+  return { ok: true, session };
+}
+
+/** Individual review skip (Story 4.8, AC #5): no ledger rows. */
+export async function skipStatement(
+  sessionId: string,
+  statementId: string,
+  messages: IndividualReviewMessages,
+): Promise<OkSession | ErrorResult> {
+  let response: Response;
+  try {
+    response = await fetch(
+      `/api/import/sessions/${encodeURIComponent(sessionId)}/statements/${encodeURIComponent(statementId)}/skip`,
+      {
+        method: "POST",
+        headers: { Accept: "application/json" },
+        credentials: "same-origin",
+      },
+    );
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  const body = (await parseJson(response)) as { detail?: unknown; code?: unknown } | null;
+  if (!response.ok) {
+    return { ok: false, error: mapIndividualReviewError(response.status, body, messages) };
+  }
+  const session = asImportSession(body);
+  if (!session) return { ok: false, error: messages.errorGeneric };
+  return { ok: true, session };
 }

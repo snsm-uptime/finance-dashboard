@@ -467,3 +467,26 @@ class NoCleanStatementsToCommitError(DomainError):
 
     def __init__(self) -> None:
         super().__init__(self.MESSAGE)
+
+
+class ImportStatementNotAvailableError(DomainError):
+    """Raised when an Individual-review accept/skip targets a statement that
+    is not in a reviewable state for that action (already committed, already
+    skipped, or — for accept only — still parse-failed) (Story 4.8)."""
+
+    MESSAGE = "This statement is not available for that action."
+    CODE = "import_statement_not_available"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
+class ImportStatementNotFoundError(DomainError):
+    """Raised when a statement_id does not belong to the fetched Import
+    Session (Story 4.8)."""
+
+    MESSAGE = "Statement not found."
+    CODE = "import_statement_not_found"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)

@@ -17,11 +17,18 @@ from domain.canonical_line import CanonicalLine
 from domain.errors import (
     ImportSessionAlreadyCommittedError,
     ImportSessionNotFoundError,
+    ImportStatementNotAvailableError,
+    ImportStatementNotFoundError,
     InvalidCanonicalLineError,
 )
 from domain.expenses import ManualExpenseDraft
-from domain.import_session import STATEMENT_STATUS_COMMITTED, STATEMENT_STATUS_STAGED
-from sqlalchemy import select
+from domain.import_session import (
+    STATEMENT_STATUS_COMMITTED,
+    STATEMENT_STATUS_FAILED,
+    STATEMENT_STATUS_SKIPPED,
+    STATEMENT_STATUS_STAGED,
+)
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
@@ -233,3 +240,45 @@ class SqlAlchemyImportSessionRepository:
             created_at=batch_row.created_at,
             ledger_entry_ids=entry_ids,
         )
+
+    def skip_statement(
+        self, *, session_id: UUID, statement_id: UUID, user_id: UUID
+    ) -> ImportSessionRecord:
+        row = self._session.scalar(
+            select(ImportSessionModel)
+            .options(
+                selectinload(ImportSessionModel.statements).selectinload(
+                    ImportStatementModel.candidate_rows
+                )
+            )
+            .where(ImportSessionModel.id == session_id, ImportSessionModel.user_id == user_id)
+            .limit(1)
+        )
+        if row is None:
+            raise ImportSessionNotFoundError()
+
+        statement_row = next((s for s in row.statements if s.id == statement_id), None)
+        if statement_row is None:
+            raise ImportStatementNotFoundError()
+
+        # Guarded write, not an unconditional set: a concurrent commit could
+        # land between the caller's eligibility check (against the snapshot
+        # above) and this write. The WHERE clause re-checks status against
+        # the database's current row at write time — if a concurrent commit
+        # already flipped it, this affects zero rows instead of silently
+        # clobbering a committed statement's status to "skipped" (Story 4.8
+        # review finding).
+        result = self._session.execute(
+            update(ImportStatementModel)
+            .where(
+                ImportStatementModel.id == statement_id,
+                ImportStatementModel.status.in_((STATEMENT_STATUS_STAGED, STATEMENT_STATUS_FAILED)),
+            )
+            .values(status=STATEMENT_STATUS_SKIPPED)
+        )
+        if result.rowcount == 0:
+            raise ImportStatementNotAvailableError()
+
+        self._session.flush()
+        self._session.refresh(statement_row)
+        return _session_record(row)

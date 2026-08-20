@@ -16,8 +16,37 @@ function forwardCookie(request: NextRequest): Headers {
 }
 
 /**
- * Same-origin BFF: /api/import/sessions/{sessionId} → api /import/sessions/{sessionId} (Story 4.6).
+ * Same-origin BFF: /api/import/sessions/{sessionId} → api /import/sessions/{sessionId} (Story 4.6, Story 4.8 GET).
  */
+export async function GET(request: NextRequest, context: RouteContext) {
+  const { sessionId } = await context.params;
+
+  let upstream: Response;
+  try {
+    upstream = await fetch(
+      `${getApiInternalUrl()}/import/sessions/${encodeURIComponent(sessionId)}`,
+      {
+        method: "GET",
+        headers: forwardCookie(request),
+        cache: "no-store",
+      },
+    );
+  } catch {
+    return NextResponse.json(
+      { detail: "Upstream unavailable.", code: "bad_gateway" },
+      { status: 502 },
+    );
+  }
+
+  const text = await upstream.text();
+  return new NextResponse(text, {
+    status: upstream.status,
+    headers: {
+      "Content-Type": upstream.headers.get("Content-Type") || "application/json",
+    },
+  });
+}
+
 export async function DELETE(request: NextRequest, context: RouteContext) {
   const { sessionId } = await context.params;
 

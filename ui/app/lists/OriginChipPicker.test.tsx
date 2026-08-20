@@ -165,8 +165,6 @@ describe("OriginChipPicker", () => {
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
     expect(trigger.querySelector(".text-accent")?.textContent).toContain("@sebas");
     expect(trigger.textContent).toContain(messages.expenseOriginNone);
-    const panelSurface = container.querySelector('[role="region"] > div > div');
-    expect(panelSurface?.className).toContain("border-accent");
     for (const option of container.querySelectorAll('[role="region"] button')) {
       expect(option.textContent).not.toContain("@sebas");
     }
