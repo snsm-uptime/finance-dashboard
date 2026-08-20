@@ -1,6 +1,10 @@
+---
+baseline_commit: 3a7066026faec831380b9d8101e5533c558cd91b
+---
+
 # Story 4.11: BAC credit real-statement compatibility fix
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -21,42 +25,42 @@ so that real BAC credit uploads parse successfully instead of silently yielding 
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Build `api/domain/statement_row_extraction.py`** (AC: #2, #3)
-  - [ ] Write domain tests first (red → green, mirrors `test_statement_layout_domain.py`'s style — plain string/primitive inputs, no PDF fixture)
-  - [ ] `is_data_row(line, *, requires_date=True)` — promote the date-token + amount-token regex classifier from `api/scripts/statement_recon.py`'s `_has_date_token`/`_amount_tokens`. Add the `requires_date` parameter (new this story, not in `statement_recon.py`): when `False`, an amount-shaped token alone is sufficient — needed because BAC credit's real "C) Detalle de intereses" section prints rows with **no date token at all** (description + two amounts only), discovered by inspecting real extracted text this session (2026-08-19; not previously known — the earlier `mapping.yaml` recon output only samples header lines and row counts, not full row shape). See Dev Notes.
-  - [ ] Extend the amount-token regex to accept an optional **trailing** minus (`"3,706.90-"`, not `"-3,706.90"`) — the real notation this same interest section uses for negative amounts. Confirm the corresponding fix in `parse_amount_field` (`api/adapters/bank/_shared.py:16-19`) below.
-  - [ ] Row-token extraction: given a recognized data-row line, return the date substring (or `None` when `requires_date=False`), the amount-shaped substring(s) found (1 or 2), and the remaining text as description — regex-only, no word x-position needed (this story stays entirely in AD-28's `CURRENCY_VARIANT` path; x-position resolution is `SIGN_VARIANT`-only and out of scope per AC #6).
-  - [ ] Declare `AmountColumnRole` (`CURRENCY_VARIANT` / `SIGN_VARIANT`) per AD-28's shared contract shape. This story only exercises `CURRENCY_VARIANT`; `SIGN_VARIANT` stays declared but unused — no adapter needs it yet.
-  - [ ] Pure domain module: no `pdfplumber` import (AD-1). All inputs are plain strings/primitives the adapter already extracted.
+- [x] **Task 1: Build `api/domain/statement_row_extraction.py`** (AC: #2, #3)
+  - [x] Write domain tests first (red → green, mirrors `test_statement_layout_domain.py`'s style — plain string/primitive inputs, no PDF fixture)
+  - [x] `is_data_row(line, *, requires_date=True)` — promote the date-token + amount-token regex classifier from `api/scripts/statement_recon.py`'s `_has_date_token`/`_amount_tokens`. Add the `requires_date` parameter (new this story, not in `statement_recon.py`): when `False`, an amount-shaped token alone is sufficient — needed because BAC credit's real "C) Detalle de intereses" section prints rows with **no date token at all** (description + two amounts only), discovered by inspecting real extracted text this session (2026-08-19; not previously known — the earlier `mapping.yaml` recon output only samples header lines and row counts, not full row shape). See Dev Notes.
+  - [x] Extend the amount-token regex to accept an optional **trailing** minus (`"3,706.90-"`, not `"-3,706.90"`) — the real notation this same interest section uses for negative amounts. Confirm the corresponding fix in `parse_amount_field` (`api/adapters/bank/_shared.py:16-19`) below.
+  - [x] Row-token extraction: given a recognized data-row line, return the date substring (or `None` when `requires_date=False`), the amount-shaped substring(s) found (1 or 2), and the remaining text as description — regex-only, no word x-position needed (this story stays entirely in AD-28's `CURRENCY_VARIANT` path; x-position resolution is `SIGN_VARIANT`-only and out of scope per AC #6).
+  - [x] Declare `AmountColumnRole` (`CURRENCY_VARIANT` / `SIGN_VARIANT`) per AD-28's shared contract shape. This story only exercises `CURRENCY_VARIANT`; `SIGN_VARIANT` stays declared but unused — no adapter needs it yet.
+  - [x] Pure domain module: no `pdfplumber` import (AD-1). All inputs are plain strings/primitives the adapter already extracted.
 
-- [ ] **Task 2: Fix `parse_amount_field`'s trailing-minus gap** (AC: #2)
-  - [ ] `api/adapters/bank/_shared.py:17-21` — `Decimal(value.replace(",", ""))` raises `InvalidOperation` on `"3,706.90-"` today (fails loud, not silently wrong — but still a gap this story must close, not just note). Strip a trailing `"-"` and negate, matching the interest section's real notation.
+- [x] **Task 2: Fix `parse_amount_field`'s trailing-minus gap** (AC: #2)
+  - [x] `api/adapters/bank/_shared.py:17-21` — `Decimal(value.replace(",", ""))` raises `InvalidOperation` on `"3,706.90-"` today (fails loud, not silently wrong — but still a gap this story must close, not just note). Strip a trailing `"-"` and negate, matching the interest section's real notation.
 
-- [ ] **Task 3: Correct `BacCreditAdapter._SECTIONS`** (AC: #1)
-  - [ ] Real titles confirmed against real extracted text this session (2026-08-19, structural facts only — no PII, never committed):
+- [x] **Task 3: Correct `BacCreditAdapter._SECTIONS`** (AC: #1)
+  - [x] Real titles confirmed against real extracted text this session (2026-08-19, structural facts only — no PII, never committed):
     - `"A) Detalle de pago del periodo"` → `LINE_TYPE_PAYMENT`, `SECTION_POLICY_MUST_PARSE` (replaces `"Detalle de pago"`)
     - `"B) Detalle de compras del periodo"` → `LINE_TYPE_PURCHASE`, `SECTION_POLICY_MUST_PARSE` (replaces `"Detalle de compras"`)
     - `"C) Detalle de intereses"` → `LINE_TYPE_INTEREST`, `SECTION_POLICY_MUST_PARSE`, **no date column** — its rows use `requires_date=False` from Task 1 (replaces `"Detalle de intereses"`, same text minus the letter prefix, but now also needs the no-date row-shape flag)
     - `"D) Detalle de otros cargos"` → `LINE_TYPE_FEE`, `SECTION_POLICY_MUST_PARSE` (replaces `"Otros cargos"`)
     - `"E) Detalle de productos y servicios de elección voluntaria"` → `LINE_TYPE_VOLUNTARY_SERVICE`, `SECTION_POLICY_BEST_EFFORT` (current title is `"Productos y servicios de elección voluntaria"` — this adds both the letter prefix **and** the missing `"Detalle de "`, not just the prefix)
-  - [ ] **Open item, not blocking:** `"Saldo Anterior"` (`SECTION_POLICY_IGNORE`) and `"Otras líneas de financiamiento"` (`LINE_TYPE_INSTALLMENT_SCHEDULE`, `SECTION_POLICY_MUST_PARSE`) were **not** confirmed against real text this session — only the pages containing sections A–G were inspected, not the statement's opening balance-summary page. If a real statement is available locally (operator's gitignored `bank_data/`), verify these two titles the same way before assuming they're correct; if not available, leave them as currently declared and flag as unverified — a wrong title on a `MUST_PARSE`/`IGNORE` section fails loud (`unmapped`, raises) rather than silently dropping data, so this is a safe, non-blocking gap (NFR-8), not a defect to invent a fix for without evidence.
-  - [ ] **Explicitly out of scope, do not implement:** the real statement also shows `"F) Cargos por gestión evidenciable de cobro"` and `"G) Otras notas de crédito"` sections, not declared in `_SECTIONS` at all today. Both showed zero transactions in the one real statement checked this session, so there's no evidence yet of their real row shape or correct `line_type`/policy. Leaving them undeclared is safe — a future month with real data there fails loud rather than silently dropping (NFR-8) — a future story should add them once real evidence exists, per this project's Rule-of-Three convention for extending adapters (see `docs/bank-statement-parsing-playbook.md`).
+  - [x] **Open item, not blocking:** `"Saldo Anterior"` (`SECTION_POLICY_IGNORE`) and `"Otras líneas de financiamiento"` (`LINE_TYPE_INSTALLMENT_SCHEDULE`, `SECTION_POLICY_MUST_PARSE`) were **not** confirmed against real text this session — only the pages containing sections A–G were inspected, not the statement's opening balance-summary page. If a real statement is available locally (operator's gitignored `bank_data/`), verify these two titles the same way before assuming they're correct; if not available, leave them as currently declared and flag as unverified — a wrong title on a `MUST_PARSE`/`IGNORE` section fails loud (`unmapped`, raises) rather than silently dropping data, so this is a safe, non-blocking gap (NFR-8), not a defect to invent a fix for without evidence.
+  - [x] **Explicitly out of scope, do not implement:** the real statement also shows `"F) Cargos por gestión evidenciable de cobro"` and `"G) Otras notas de crédito"` sections, not declared in `_SECTIONS` at all today. Both showed zero transactions in the one real statement checked this session, so there's no evidence yet of their real row shape or correct `line_type`/policy. Leaving them undeclared is safe — a future month with real data there fails loud rather than silently dropping (NFR-8) — a future story should add them once real evidence exists, per this project's Rule-of-Three convention for extending adapters (see `docs/bank-statement-parsing-playbook.md`).
 
-- [ ] **Task 4: Wire `BacCreditAdapter.parse()` onto the new row classifier** (AC: #2, #3, #4)
-  - [ ] Replace the `"|" not in line` check (`adapter.py:154`) with `domain.statement_row_extraction.is_data_row(...)`, passing `requires_date=False` only for the interest section's rows (Task 1/3).
-  - [ ] For a no-date interest row, assign `posted_date` directly from the statement's own reference date — **build this now, it does not exist yet.** Grep confirms zero call sites anywhere in `api/` pass `reference_date` to `parse_statement_date` today; no adapter reads a PDF's `/CreationDate`. Extract it via `pdfplumber`'s `doc.metadata["CreationDate"]` (raw PDF date string, `"D:YYYYMMDD..."` — parse that format directly), then set `posted_date = reference_date.isoformat()` for interest rows **directly** — do **not** route these through `parse_statement_date`: that function requires both a `%d` and `%b` token to be present (statement_dates.py:66-67, raises otherwise) and its `reference_date` parameter only fills in a missing *year* on an otherwise-present date, which is a different operation from "no date printed at all." **This is this story's resolution, confirmed by the user 2026-08-19** — not a general AD-28 change; scoped to this adapter's interest section only.
-  - [ ] Real purchase/payment/fee rows print a literal currency-code token directly before the amount (e.g. `"CRC 12,850.00"`) — use this as the direct `(currency, amount)` signal where present. The interest section's rows instead print two blank-separated amounts with no currency tag (e.g. `"3,577.10 0.00"`) — for those, fall back to the existing `normalize_dual_column_amount` prefer-nonzero/prefer-CRC rule, unchanged (FR-33). Both shapes are the `CURRENCY_VARIANT` case per AD-28 — this is adapter-level extraction detail, not a new architecture concept.
-  - [ ] Declare `AmountColumnRole.CURRENCY_VARIANT` for `BacCreditAdapter`/`bac_credit`.
-  - [ ] Preserve existing fail-loud behavior: a data row under an unmapped section must still raise `InvalidCanonicalLineError`, exactly as today.
+- [x] **Task 4: Wire `BacCreditAdapter.parse()` onto the new row classifier** (AC: #2, #3, #4)
+  - [x] Replace the `"|" not in line` check (`adapter.py:154`) with `domain.statement_row_extraction.is_data_row(...)`, passing `requires_date=False` only for the interest section's rows (Task 1/3).
+  - [x] For a no-date interest row, assign `posted_date` directly from the statement's own reference date — **build this now, it does not exist yet.** Grep confirms zero call sites anywhere in `api/` pass `reference_date` to `parse_statement_date` today; no adapter reads a PDF's `/CreationDate`. Extract it via `pdfplumber`'s `doc.metadata["CreationDate"]` (raw PDF date string, `"D:YYYYMMDD..."` — parse that format directly), then set `posted_date = reference_date.isoformat()` for interest rows **directly** — do **not** route these through `parse_statement_date`: that function requires both a `%d` and `%b` token to be present (statement_dates.py:66-67, raises otherwise) and its `reference_date` parameter only fills in a missing *year* on an otherwise-present date, which is a different operation from "no date printed at all." **This is this story's resolution, confirmed by the user 2026-08-19** — not a general AD-28 change; scoped to this adapter's interest section only.
+  - [x] Real purchase/payment/fee rows print a literal currency-code token directly before the amount (e.g. `"CRC 12,850.00"`) — use this as the direct `(currency, amount)` signal where present. The interest section's rows instead print two blank-separated amounts with no currency tag (e.g. `"3,577.10 0.00"`) — for those, fall back to the existing `normalize_dual_column_amount` prefer-nonzero/prefer-CRC rule, unchanged (FR-33). Both shapes are the `CURRENCY_VARIANT` case per AD-28 — this is adapter-level extraction detail, not a new architecture concept.
+  - [x] Declare `AmountColumnRole.CURRENCY_VARIANT` for `BacCreditAdapter`/`bac_credit`.
+  - [x] Preserve existing fail-loud behavior: a data row under an unmapped section must still raise `InvalidCanonicalLineError`, exactly as today.
 
-- [ ] **Task 5: Regenerate synthetic fixture + goldens** (AC: #5)
-  - [ ] Update `api/scripts/generate_bac_fixture.py` to emit real (non-pipe) row shapes per section — reference/date/description/place/currency/amount for purchase-like sections; description + two blank-separated amounts (no date) for the interest section — and the corrected real titles from Task 3.
-  - [ ] Regenerate `api/tests/fixtures/pdf/bac_credit_synthetic.pdf`; update `bac_credit_synthetic_goldens.py` to match.
-  - [ ] Run `test_bac_credit_fixture_acceptance.py` and `test_bac_adapter.py` against the new fixture — zero manual edits required on must-parse lines (FR-35).
+- [x] **Task 5: Regenerate synthetic fixture + goldens** (AC: #5)
+  - [x] Update `api/scripts/generate_bac_fixture.py` to emit real (non-pipe) row shapes per section — reference/date/description/place/currency/amount for purchase-like sections; description + two blank-separated amounts (no date) for the interest section — and the corrected real titles from Task 3.
+  - [x] Regenerate `api/tests/fixtures/pdf/bac_credit_synthetic.pdf`; update `bac_credit_synthetic_goldens.py` to match.
+  - [x] Run `test_bac_credit_fixture_acceptance.py` and `test_bac_adapter.py` against the new fixture — zero manual edits required on must-parse lines (FR-35).
 
-- [ ] **Task 6: Full regression pass** (AC: all)
-  - [ ] Run the full `api` pytest suite (existing BAC/statement-layout tests + new `statement_row_extraction` tests). Confirm no change to commit/dedup/list logic — this story stays inside `adapters/bank/bac_credit/` and the one new `domain/` module (AD-1 boundary untouched).
-  - [ ] If the operator has a real BAC credit PDF locally (`bank_data/`, gitignored, never committed), a manual smoke-test upload is encouraged but is **not** a merge gate — CI only gates on the synthetic fixture (project-context.md: "operator real PDFs never in repo/CI, never block merge").
+- [x] **Task 6: Full regression pass** (AC: all)
+  - [x] Run the full `api` pytest suite (existing BAC/statement-layout tests + new `statement_row_extraction` tests). Confirm no change to commit/dedup/list logic — this story stays inside `adapters/bank/bac_credit/` and the one new `domain/` module (AD-1 boundary untouched).
+  - [x] If the operator has a real BAC credit PDF locally (`bank_data/`, gitignored, never committed), a manual smoke-test upload is encouraged but is **not** a merge gate — CI only gates on the synthetic fixture (project-context.md: "operator real PDFs never in repo/CI, never block merge").
 
 ## Dev Notes
 
@@ -97,8 +101,38 @@ so that real BAC credit uploads parse successfully instead of silently yielding 
 
 ### Agent Model Used
 
+Cursor Grok 4.6
+
 ### Debug Log References
+
+- Real BAC credit PDFs in gitignored `bank_data/` have empty pdfplumber metadata (no `/CreationDate`). `split()` via pypdfium2 also writes a fresh CreationDate onto each chunk. Interest `posted_date` therefore prefers the printed `Fecha de emisión:` line, then falls back to `/CreationDate`.
+- Local smoke (counts only, not a merge gate): one January statement parsed 56 rows (payment/purchase/interest/voluntary_service). Other months fail loud on undeclared `G) Otras notas de crédito` once a date+amount-shaped line appears after that header — matching this story's explicit F/G out-of-scope / NFR-8 choice, not a silent zero-row regression.
 
 ### Completion Notes List
 
+- Task 1: Added `api/domain/statement_row_extraction.py` (`is_data_row`, `extract_row_tokens`, `AmountColumnRole`) with red→green domain tests. Amount regex accepts trailing minus; `requires_date=False` covers interest rows; amount pattern is overridable (AD-28).
+- Task 2: `parse_amount_field` strips a trailing `-` and negates (`"3,706.90-"` → `Decimal("-3706.90")`).
+- Task 3: `_SECTIONS` now uses real lettered titles A–E. `"Saldo Anterior"` and `"Otras líneas de financiamiento"` left as declared and still unverified (not present on the inspected January statement). F/G not declared.
+- Task 4: `parse()` uses `is_data_row` instead of `"|"`. Currency-tag `(CRC|USD)` when present; otherwise `normalize_dual_column_amount`. Interest rows take `posted_date` from statement reference date (printed issuance, else CreationDate) without calling `parse_statement_date`. Column-header / preamble lines are skipped so they do not unmap A–E. Lettered unknown sections still raise. `amount_column_role = CURRENCY_VARIANT`.
+- Task 5: Synthetic + acceptance-bar fixtures/goldens regenerated to lettered titles and non-pipe row shapes, including `Fecha de emisión:31-ENE-26` so interest dates stay stable after `split()`.
+- Task 6: Full api suite `441 passed, 155 skipped`. Ruff check/format clean. No persistence/UI/commit-path changes.
+
 ### File List
+
+- api/domain/statement_row_extraction.py
+- api/tests/test_statement_row_extraction_domain.py
+- api/adapters/bank/_shared.py
+- api/tests/test_bank_shared.py
+- api/adapters/bank/bac_credit/adapter.py
+- api/tests/test_bac_adapter.py
+- api/scripts/generate_bac_fixture.py
+- api/tests/fixtures/pdf/bac_credit_synthetic.pdf
+- api/tests/fixtures/pdf/bac_credit_synthetic_goldens.py
+- api/tests/fixtures/pdf/bac_credit_acceptance_bar.pdf
+- api/tests/fixtures/pdf/bac_credit_acceptance_bar_goldens.py
+- _bmad-output/implementation-artifacts/4-11-bac-credit-real-statement-compatibility-fix.md
+- _bmad-output/implementation-artifacts/sprint-status.yaml
+
+## Change Log
+
+- 2026-08-20: BAC credit adapter parses real (non-pipe) statement text via shared AD-28 row classifier; lettered section titles; trailing-minus amounts; fixture/goldens regenerated.

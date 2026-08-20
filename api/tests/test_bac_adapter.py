@@ -8,13 +8,34 @@ from __future__ import annotations
 
 import importlib.util
 import io
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
 
 import pdfplumber
 import pytest
-from adapters.bank.bac_credit.adapter import BacCreditAdapter
+from adapters.bank.bac_credit.adapter import (
+    _SECTIONS,
+    BacCreditAdapter,
+    parse_pdf_creation_date,
+    parse_printed_issuance_date,
+    statement_reference_date,
+)
+from domain.canonical_line import (
+    SECTION_POLICY_BEST_EFFORT,
+    SECTION_POLICY_IGNORE,
+    SECTION_POLICY_MUST_PARSE,
+)
 from domain.errors import InvalidCanonicalLineError
+from domain.line_types import (
+    LINE_TYPE_FEE,
+    LINE_TYPE_INSTALLMENT_SCHEDULE,
+    LINE_TYPE_INTEREST,
+    LINE_TYPE_PAYMENT,
+    LINE_TYPE_PURCHASE,
+    LINE_TYPE_VOLUNTARY_SERVICE,
+)
+from domain.statement_row_extraction import AmountColumnRole
 from fpdf import FPDF
 
 _FIXTURE_DIR = Path(__file__).parent / "fixtures" / "pdf"
@@ -51,6 +72,38 @@ def _assert_matches_golden(line, golden: dict[str, object]) -> None:
     assert line.product_id == golden["product_id"]
     assert line.line_type == golden["line_type"]
     assert line.normalized_description == golden["normalized_description"]
+
+
+def test_section_titles_match_real_lettered_headers() -> None:
+    by_title = {spec.title: spec for spec in _SECTIONS}
+    assert by_title["A) Detalle de pago del periodo"].line_type == LINE_TYPE_PAYMENT
+    assert by_title["A) Detalle de pago del periodo"].policy == SECTION_POLICY_MUST_PARSE
+    assert by_title["B) Detalle de compras del periodo"].line_type == LINE_TYPE_PURCHASE
+    assert by_title["B) Detalle de compras del periodo"].policy == SECTION_POLICY_MUST_PARSE
+    assert by_title["C) Detalle de intereses"].line_type == LINE_TYPE_INTEREST
+    assert by_title["C) Detalle de intereses"].policy == SECTION_POLICY_MUST_PARSE
+    assert by_title["D) Detalle de otros cargos"].line_type == LINE_TYPE_FEE
+    assert by_title["D) Detalle de otros cargos"].policy == SECTION_POLICY_MUST_PARSE
+    assert (
+        by_title["E) Detalle de productos y servicios de elección voluntaria"].line_type
+        == LINE_TYPE_VOLUNTARY_SERVICE
+    )
+    assert (
+        by_title["E) Detalle de productos y servicios de elección voluntaria"].policy
+        == SECTION_POLICY_BEST_EFFORT
+    )
+    # Unverified against real text this story (opening-balance page not inspected).
+    # Wrong title on MUST_PARSE/IGNORE fails loud rather than silently dropping.
+    assert by_title["Otras líneas de financiamiento"].line_type == LINE_TYPE_INSTALLMENT_SCHEDULE
+    assert by_title["Otras líneas de financiamiento"].policy == SECTION_POLICY_MUST_PARSE
+    assert by_title["Saldo Anterior"].line_type is None
+    assert by_title["Saldo Anterior"].policy == SECTION_POLICY_IGNORE
+    assert "F) Cargos por gestión evidenciable de cobro" not in by_title
+    assert "G) Otras notas de crédito" not in by_title
+
+
+def test_adapter_declares_currency_variant_amount_column_role() -> None:
+    assert BacCreditAdapter.amount_column_role is AmountColumnRole.CURRENCY_VARIANT
 
 
 def test_detect_returns_true_on_filename_containing_bac(adapter: BacCreditAdapter) -> None:
@@ -103,7 +156,7 @@ def test_parse_dual_column_both_nonzero_prefers_crc(
 ) -> None:
     chunks = adapter.split(fixture_bytes)
     rows = adapter.parse(chunks[0])
-    farmacia = next(r for r in rows if r.normalized_description == "FARMACIA CENTRAL")
+    farmacia = next(r for r in rows if "FARMACIA CENTRAL" in r.normalized_description)
     assert farmacia.currency == "CRC"
     assert farmacia.amount == Decimal("8250.00")
 
@@ -113,7 +166,7 @@ def test_parse_dual_column_usd_only_picks_usd(
 ) -> None:
     chunks = adapter.split(fixture_bytes)
     rows = adapter.parse(chunks[0])
-    amazon = next(r for r in rows if r.normalized_description == "AMAZON US")
+    amazon = next(r for r in rows if "AMAZON US" in r.normalized_description)
     assert amazon.currency == "USD"
     assert amazon.amount == Decimal("45.00")
 
@@ -143,8 +196,12 @@ def test_split_records_which_boundary_method_fired(
     assert adapter.last_split_boundary_method == "repeating_marker_guess"
 
 
+_TEST_CREATION_DATE = datetime(2026, 1, 31, 12, 0, 0, tzinfo=UTC)
+
+
 def _one_page_statement_pdf(lines: list[str]) -> bytes:
     pdf = FPDF()
+    pdf.set_creation_date(_TEST_CREATION_DATE)
     pdf.add_page()
     pdf.set_font("Courier", size=9)
     for line in lines:
@@ -158,26 +215,102 @@ def test_parse_malformed_date_raises_invalid_canonical_line_error_not_raw_except
     pdf_bytes = _one_page_statement_pdf(
         [
             "ESTADO DE CUENTA BAC CREDITO",
-            "Detalle de compras",
-            "05-XXX-26|BAD MONTH ABBREV|10,500.00|-",
+            "B) Detalle de compras del periodo",
+            "05-XXX-26 TIENDA SAN JOSE CRC 10,500.00",
         ]
     )
     with pytest.raises(InvalidCanonicalLineError):
         adapter.parse(pdf_bytes)
 
 
-def test_parse_malformed_row_field_count_raises_invalid_canonical_line_error(
+def test_parse_real_shaped_purchase_after_column_headers(adapter: BacCreditAdapter) -> None:
+    pdf_bytes = _one_page_statement_pdf(
+        [
+            "ESTADO DE CUENTA BAC CREDITO",
+            "B) Detalle de compras del periodo",
+            "N. Referencia Fecha de pago Concepto/Descripción Lugar Moneda Monto en Monto en",
+            "colones dólares",
+            "100001 05-ENE-26 SUPERMERCADO XYZ SAN JOSE CRC 10,500.00",
+        ]
+    )
+    rows = adapter.parse(pdf_bytes)
+    assert len(rows) == 1
+    assert rows[0].posted_date == "2026-01-05"
+    assert rows[0].amount == Decimal("10500.00")
+    assert rows[0].currency == "CRC"
+    assert rows[0].line_type == "purchase"
+    assert rows[0].normalized_description == "100001 SUPERMERCADO XYZ SAN JOSE"
+
+
+def test_parse_interest_row_uses_creation_date_and_dual_column(
     adapter: BacCreditAdapter,
 ) -> None:
     pdf_bytes = _one_page_statement_pdf(
         [
             "ESTADO DE CUENTA BAC CREDITO",
-            "Detalle de compras",
-            "05-ENE-26|MISSING A FIELD|10,500.00",
+            "C) Detalle de intereses",
+            "Concepto/Descripción Monto en Monto en",
+            "colones dólares",
+            "INTERESES CORRIENTES 1,200.00 3.00",
+            "AJUSTE TASA 3,706.90- 0.00",
+        ]
+    )
+    rows = adapter.parse(pdf_bytes)
+    assert len(rows) == 2
+    assert rows[0].posted_date == "2026-01-31"
+    assert rows[0].amount == Decimal("1200.00")
+    assert rows[0].currency == "CRC"
+    assert rows[0].line_type == "interest"
+    assert rows[0].normalized_description == "INTERESES CORRIENTES"
+    assert rows[1].amount == Decimal("-3706.90")
+    assert rows[1].normalized_description == "AJUSTE TASA"
+
+
+def test_parse_lettered_unmapped_section_raises(
+    adapter: BacCreditAdapter,
+) -> None:
+    pdf_bytes = _one_page_statement_pdf(
+        [
+            "ESTADO DE CUENTA BAC CREDITO",
+            "Z) Sección Desconocida",
+            "16-ENE-26 CARGO MISTERIOSO SAN JOSE CRC 1,000.00",
         ]
     )
     with pytest.raises(InvalidCanonicalLineError):
         adapter.parse(pdf_bytes)
+
+
+def test_parse_preamble_amount_rows_before_lettered_section_are_skipped(
+    adapter: BacCreditAdapter,
+) -> None:
+    pdf_bytes = _one_page_statement_pdf(
+        [
+            "ESTADO DE CUENTA BAC CREDITO",
+            "Detalle de pago",
+            "2-FEB-26 PAGO MINIMO 10,000.00 0.00 5,000.00 0.00",
+            "B) Detalle de compras del periodo",
+            "100001 05-ENE-26 SUPERMERCADO XYZ SAN JOSE CRC 10,500.00",
+        ]
+    )
+    rows = adapter.parse(pdf_bytes)
+    assert len(rows) == 1
+    assert "SUPERMERCADO XYZ" in rows[0].normalized_description
+
+
+def test_parse_pdf_creation_date_reads_d_prefix() -> None:
+    assert parse_pdf_creation_date("D:20260131120000Z") == date(2026, 1, 31)
+
+
+def test_parse_printed_issuance_date_from_header_lines() -> None:
+    assert parse_printed_issuance_date(["Fecha de emisión:18-ENE-26"]) == date(2026, 1, 18)
+    assert parse_printed_issuance_date(["unrelated"]) is None
+
+
+def test_statement_reference_date_prefers_printed_issuance_over_creation_date() -> None:
+    assert statement_reference_date(
+        {"CreationDate": "D:20260131120000Z"}, ["Fecha de emisión:18-ENE-26"]
+    ) == date(2026, 1, 18)
+    assert statement_reference_date({"CreationDate": "D:20260131120000Z"}, []) == date(2026, 1, 31)
 
 
 def test_parse_unreadable_pdf_bytes_raises_invalid_canonical_line_error(
