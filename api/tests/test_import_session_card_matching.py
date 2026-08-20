@@ -43,15 +43,11 @@ def user_card(user_id):
 
 def test_match_statement_card_known_iban_returns_card(user_id, user_card):
     """AC #2: Known IBAN matches registered card."""
-    repo = MockCardRepository(
-        {(str(user_id), user_card.iban): user_card}
-    )
+    repo = MockCardRepository({(str(user_id), user_card.iban): user_card})
     card_match_service = MatchCardByIbanService(repo)
     service = MatchStatementCardService(card_match_service)
 
-    result = service.execute(
-        MatchStatementCardCommand(actor_user_id=user_id, iban=user_card.iban)
-    )
+    result = service.execute(MatchStatementCardCommand(actor_user_id=user_id, iban=user_card.iban))
 
     assert result.matched_card is not None
     assert result.matched_card.id == user_card.id
@@ -65,9 +61,7 @@ def test_match_statement_card_unknown_iban_returns_none(user_id):
     service = MatchStatementCardService(card_match_service)
 
     result = service.execute(
-        MatchStatementCardCommand(
-            actor_user_id=user_id, iban="CR99999999999999999999"
-        )
+        MatchStatementCardCommand(actor_user_id=user_id, iban="CR99999999999999999999")
     )
 
     assert result.matched_card is None
@@ -79,9 +73,7 @@ def test_match_statement_card_empty_iban_returns_none(user_id):
     card_match_service = MatchCardByIbanService(repo)
     service = MatchStatementCardService(card_match_service)
 
-    result = service.execute(
-        MatchStatementCardCommand(actor_user_id=user_id, iban="")
-    )
+    result = service.execute(MatchStatementCardCommand(actor_user_id=user_id, iban=""))
 
     assert result.matched_card is None
 
@@ -96,8 +88,8 @@ def test_match_result_is_dataclass():
         created_at=datetime.now(timezone.utc),
     )
     result = MatchStatementCardResult(matched_card=card)
-    
+
     assert result.matched_card is card
-    
+
     result_none = MatchStatementCardResult(matched_card=None)
     assert result_none.matched_card is None

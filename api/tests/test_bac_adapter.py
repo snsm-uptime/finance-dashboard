@@ -380,11 +380,13 @@ def test_parse_is_deterministic_across_repeated_calls(
     assert first_pass == second_pass
 
 
-def test_extract_iban_from_statement_with_crc_field(adapter: BacCreditAdapter, fixture_bytes: bytes) -> None:
+def test_extract_iban_from_statement_with_crc_field(
+    adapter: BacCreditAdapter, fixture_bytes: bytes
+) -> None:
     """Story 4.8.1 AC #1: Extract "Cuenta IBAN colones" field from statement."""
     chunks = adapter.split(fixture_bytes)
     assert len(chunks) > 0
-    
+
     iban = adapter.extract_iban(chunks[0])
     # The synthetic fixture should have an IBAN or None; both are valid
     assert iban is None or isinstance(iban, str)
@@ -398,7 +400,7 @@ def test_extract_iban_whitespace_only_treated_as_absent(adapter: BacCreditAdapte
     synthetic_pdf.set_font("Helvetica", "", 12)
     synthetic_pdf.multi_cell(0, 10, "ESTADO DE CUENTA BAC CREDITO\nCuenta IBAN colones:   \n")
     pdf_bytes = bytes(synthetic_pdf.output())
-    
+
     iban = adapter.extract_iban(pdf_bytes)
     assert iban is None or iban == ""
 

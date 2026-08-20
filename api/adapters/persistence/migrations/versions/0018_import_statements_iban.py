@@ -38,7 +38,9 @@ def upgrade() -> None:
 def downgrade() -> None:
     # Guard: do not downgrade if there are IBAN values to preserve
     connection = op.get_bind()
-    result = connection.execute(text("SELECT COUNT(*) FROM import_statements WHERE iban IS NOT NULL"))
+    result = connection.execute(
+        text("SELECT COUNT(*) FROM import_statements WHERE iban IS NOT NULL")
+    )
     count = result.scalar()
     if count and count > 0:
         raise RuntimeError(
