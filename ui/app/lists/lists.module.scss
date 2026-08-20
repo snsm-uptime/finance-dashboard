@@ -429,78 +429,6 @@
   line-height: 0 !important;
 }
 
-.menu {
-  position: absolute;
-  top: calc(100% + 0.35rem);
-  right: 0;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 8px 20px color-mix(in srgb, var(--foreground) 12%, transparent);
-  min-width: 11rem;
-  overflow: hidden;
-  animation: slideDown 0.15s ease-out;
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .menu {
-    animation: none;
-  }
-}
-
-.menuItem {
-  display: block;
-  width: 100%;
-  padding: 0.65rem 1rem;
-  margin: 0;
-  border: none;
-  background: transparent;
-  color: var(--foreground);
-  text-align: left;
-  font-family: var(--font-ui), system-ui, sans-serif;
-  font-size: 0.95rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.1s ease;
-}
-
-.menuItem:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-}
-
-.menuItem:focus-visible {
-  outline: none;
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-}
-
-.menuItem:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.menuItemDanger:not(:disabled) {
-  color: color-mix(in srgb, var(--owe) 85%, transparent);
-}
-
-.menuItemDanger:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--owe) 12%, transparent);
-}
-
-.menuItemDanger:focus-visible:not(:disabled) {
-  background: color-mix(in srgb, var(--owe) 18%, transparent);
-}
-
 .balance {
   display: inline-flex;
   align-items: baseline;
@@ -811,17 +739,9 @@
   font-variant-numeric: tabular-nums;
 }
 
-.confirmPopover {
-  position: absolute;
-  top: calc(100% + 0.35rem);
-  right: 0;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 8px 20px color-mix(in srgb, var(--foreground) 12%, transparent);
+.confirmPanel {
+  --icon-button-popup-min-width: 16rem;
   padding: 1rem;
-  min-width: 16rem;
-  animation: slideDown 0.15s ease-out;
 }
 
 .confirmText {
