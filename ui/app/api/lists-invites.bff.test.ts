@@ -158,6 +158,10 @@ describe("lists / invites BFF smoke (coverage floor)", () => {
       new NextRequest("http://localhost/api/invites/preview?token=abc"),
     );
     expect(previewRes.status).toBe(200);
+    const missingToken = await preview.GET(
+      new NextRequest("http://localhost/api/invites/preview"),
+    );
+    expect(missingToken.status).toBe(200);
 
     const accept = await import("@/app/api/invites/accept/route");
     const acceptRes = await accept.POST(
@@ -171,5 +175,80 @@ describe("lists / invites BFF smoke (coverage floor)", () => {
       }) as never,
     );
     expect(acceptRes.status).toBe(200);
+  });
+
+  it("DELETE /api/lists/[listId] forwards 204 and error bodies", async () => {
+    const { DELETE } = await import("@/app/api/lists/[listId]/route");
+    const ctx = { params: Promise.resolve({ listId: "l1" }) };
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const gone = await DELETE(
+      new Request("http://localhost/api/lists/l1", {
+        method: "DELETE",
+        headers: { cookie: "fh_session=tok" },
+      }) as never,
+      ctx,
+    );
+    expect(gone.status).toBe(204);
+
+    fetchMock.mockResolvedValueOnce(
+      new Response("still there", {
+        status: 409,
+        headers: { "Content-Type": "text/plain" },
+      }),
+    );
+    const conflict = await DELETE(
+      new Request("http://localhost/api/lists/l1", { method: "DELETE" }) as never,
+      ctx,
+    );
+    expect(conflict.status).toBe(409);
+    expect(await conflict.text()).toBe("still there");
+
+    fetchMock.mockResolvedValueOnce(new Response("", { status: 400 }));
+    const empty = await DELETE(
+      new Request("http://localhost/api/lists/l1", { method: "DELETE" }) as never,
+      ctx,
+    );
+    expect(empty.status).toBe(400);
+  });
+
+  it("returns 400/502 on list mutation failures", async () => {
+    const list = await import("@/app/api/lists/[listId]/route");
+    const ctx = { params: Promise.resolve({ listId: "l1" }) };
+    const badJson = await list.PATCH(
+      new Request("http://localhost/api/lists/l1", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: "{not-json",
+      }) as never,
+      ctx,
+    );
+    expect(badJson.status).toBe(400);
+
+    const unnamed = await list.PATCH(
+      new Request("http://localhost/api/lists/l1", {
+        method: "PATCH",
+        headers: {
+          cookie: "fh_session=tok",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: 1 }),
+      }) as never,
+      ctx,
+    );
+    expect(unnamed.status).toBe(200);
+
+    fetchMock.mockRejectedValueOnce(new Error("connection refused"));
+    const failedGet = await list.GET(
+      new Request("http://localhost/api/lists/l1") as never,
+      ctx,
+    );
+    expect(failedGet.status).toBe(502);
+
+    fetchMock.mockRejectedValueOnce(new Error("connection refused"));
+    const failedDelete = await list.DELETE(
+      new Request("http://localhost/api/lists/l1", { method: "DELETE" }) as never,
+      ctx,
+    );
+    expect(failedDelete.status).toBe(502);
   });
 });
