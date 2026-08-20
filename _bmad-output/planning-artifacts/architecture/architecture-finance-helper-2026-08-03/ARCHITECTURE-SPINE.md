@@ -88,11 +88,20 @@ flowchart LR
 ### AD-4 — Import Session and Batch [ADOPTED]
 
 - **Binds:** FR upload/review/commit/discard/rollback
-- **Prevents:** Ad-hoc staging; unclear atomic rollback; partial-commit vs batch fights
+- **Prevents:** Ad-hoc staging; unclear atomic rollback; committed rows reaching settle math without a journal entry; the same candidate row committing twice
 - **Rule:**
-  - **Import Session** = staging aggregate for one upload (statements + candidate rows). Review mutates the session. Discard drops only **uncommitted** session state.
-  - **Import Batch** = journaled commit unit. v1 batch boundary = **one Statement’s accept/commit** (stable `batch_id` per statement). Multi-statement uploads may produce multiple batches under one session.
-  - Rollback (FR-30) targets a `batch_id` atomically. Nothing reaches settle math until its batch commits.
+  - **Import Session** = staging aggregate for one upload (statements + candidate rows). Review mutates the session. Discard drops only **uncommitted** session state — already-committed rows keep their ledger entries.
+  - **Import Batch** = journaled commit unit. Batch boundary = **one commit action** (stable `batch_id` per action). Under bulk review a commit action covers a whole statement; under row-level individual review (FR-17, FR-18) it covers a single candidate row, so one statement may produce many batches. Multi-statement uploads likewise produce multiple batches under one session.
+  - **Partial commit is a normal state, not a fault.** A statement's rows may resolve independently, to different lists, across separate transactions. A statement is complete only once every non-excluded row has left `pending`.
+  - A candidate row may produce **at most one** ledger entry, enforced in the database by `ledger_entries.import_candidate_row_id UNIQUE`. That constraint is the backstop against double-commit; the guarded conditional `UPDATE ... WHERE status = 'pending'` is the fast path and clean-error path in front of it. **Both layers are required** — the application check alone does not survive concurrent requests, since two can pass validation before either persists.
+  - Rollback (FR-30) targets a `batch_id` atomically. Because a batch is one commit action, rollback granularity under individual review is **per-row**; Epic 5 Story 5.6 inherits this. Nothing reaches settle math until its batch commits.
+
+> **Amended 2026-08-20** — Sprint Change Proposal 2026-08-20 (row-level individual review).
+> Originally the v1 batch boundary was **one Statement's accept/commit** (stable `batch_id` per
+> statement), encoded in schema as `uq_import_batches_statement_id`, and *"partial-commit vs batch
+> fights"* was listed under Prevents. Row-level review makes partial commit the normal case, so
+> that constraint is dropped and its uniqueness job moves to row grain rather than disappearing.
+> Superseded wording retained here for history.
 
 ### AD-5 — Money representation [ADOPTED]
 
@@ -124,8 +133,14 @@ flowchart LR
 ### AD-9 — Individual review gestures [ADOPTED]
 
 - **Binds:** FR-17–18; EXPERIENCE J1 (supersedes soft PRD swipe OPEN)
-- **Prevents:** Desktop-only button apps that skip phone swipe; swipe theatre on desktop; divergent L/R/D mappings across stories
-- **Rule:** Phone Individual review **must** implement true swipe commits; desktop **must** use buttons as primary. Vectors: **right → chosen list** (after list picker), **left → configurable default list**, **down → skip**. Same three outcomes on desktop as labeled buttons. List picker precedes high-intent accept. Accessible non-gesture equivalents required (WCAG 2.2 AA product floor).
+- **Prevents:** Desktop-only button apps that skip phone swipe; swipe theatre on desktop; divergent mappings across stories; destructive actions reachable by accidental drag
+- **Rule:** Phone Individual review **must** implement true swipe commits; desktop **must** use buttons as primary. The reviewed unit is **one parsed transaction**, not one statement. Vectors: **right → chosen list** (after list picker), **left → configurable default list**, **up → delete**. **Undo is a button on every platform, including phone — never a gesture**, so an accidental drag cannot fire it and touch-scroll does not contend with a fourth swipe axis. Same four outcomes on desktop as labeled buttons. List picker precedes high-intent accept. Accessible non-gesture equivalents required (WCAG 2.2 AA product floor) — the edge buttons are the primary affordance, present on all platforms.
+
+> **Amended 2026-08-20** — Sprint Change Proposal 2026-08-20 (row-level individual review).
+> Originally: three vectors — right → chosen list, left → configurable default, **down → skip** —
+> applied to a whole statement. The reviewed unit is now the transaction; `up → delete` replaces
+> skip; undo takes the down slot but is deliberately **button-only** rather than a swipe.
+> Superseded wording retained here for history.
 
 ### AD-10 — Conflict match window and resolution [ADOPTED]
 

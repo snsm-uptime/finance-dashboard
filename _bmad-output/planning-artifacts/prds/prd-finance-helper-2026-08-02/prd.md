@@ -471,18 +471,35 @@ Before commit under review routing, the user chooses bulk or individual review.
 **Consequences (testable):**
 
 - **Bulk:** the whole upload is assigned to one list chosen from lists the user belongs to.
-- **Individual:** statements are reviewed one at a time.
-- Phone Individual review uses true swipes: right → chosen list (after picker), left → configurable default, down → skip; desktop uses labeled buttons for the same outcomes.
+- **Individual:** parsed transactions are reviewed one at a time, across the whole session — not grouped by statement.
+- Individual review presents one transaction on a centered card over a dimmed backdrop.
+- Phone Individual review uses true swipes: right → chosen list (after picker), left → configurable default, up → delete. Undo is a button on all platforms, never a gesture.
+- Desktop uses labeled buttons for the same four outcomes.
+
+> **Amended 2026-08-20** — Sprint Change Proposal 2026-08-20 (row-level individual review).
+> Previously: *"Individual: statements are reviewed one at a time"*, with swipes mapped
+> right → chosen list, left → default, **down → skip**. Statement-level routing made individual
+> review functionally identical to bulk review. The unit is now the transaction, `down` is
+> reassigned from skip to undo, and delete (`up`) replaces skip.
 
 #### FR-18: Individual review outcomes
 
-In individual review, each statement can be: accepted into a chosen list; accepted into the configurable default destination (FR-12); or skipped (never stored). The user can also dismiss an entire file.
+In individual review, each parsed transaction can be: assigned to a chosen list; assigned to the configurable default destination (FR-12); or deleted (never stored). The user can undo the most recent assign or delete, and can discard the remaining session.
 
 **Consequences (testable):**
 
-- Skip means no ledger rows for that statement.
-- Dismissing the file abandons remaining uncommitted statements from that upload.
-- Accept commits only after parse success (or after an explicit accept-with-quarantine under failure handling).
+- Delete means no ledger row for that transaction.
+- Undo is single-level: it reverses the most recent assign or delete and returns that transaction to the queue at its original position. Undo survives a reload.
+- A transaction with a zero amount is excluded before review and never appears; the user is told how many were excluded when the session completes.
+- Discarding a partially reviewed session abandons only the remaining unreviewed transactions. Already-assigned transactions keep their ledger rows.
+- Assignment commits only after parse success (or after an explicit accept-with-quarantine under failure handling).
+- Statements that failed to parse are reported when the session completes, so the user knows what to enter by hand.
+
+> **Amended 2026-08-20** — Sprint Change Proposal 2026-08-20 (row-level individual review).
+> Previously written entirely in statement units, with Skip as the negative outcome and
+> "dismiss an entire file" abandoning remaining uncommitted statements. The unit is now the
+> transaction, Delete replaces Skip, Undo is added as a first-class outcome, and discard is
+> pinned as non-destructive to already-committed rows.
 
 #### FR-19: Explicit payer (default: current user)
 
@@ -850,7 +867,7 @@ PostgreSQL schema evolution is supported via migrations as the data model change
 - Register cards keyed by IBAN (user-chosen label); matching IBAN reuses that card and its label as the import identifier
 - Anonymized or synthetic fixtures committed to the repository, since real statements live outside it
 - Account-menu UI language EN/ES (remembered; browser default on first visit) and appearance theme Light / Dark / System (remembered; defaults to System) — not a Settings product
-- Phone Individual review swipe mapping: right → chosen list, left → default list, down → skip (desktop buttons mirror)
+- Phone Individual review swipe mapping, per parsed transaction: right → chosen list, left → default list, up → delete; undo is a button on every platform (desktop buttons mirror all four) *(amended 2026-08-20)*
 
 ### Out for v1
 
