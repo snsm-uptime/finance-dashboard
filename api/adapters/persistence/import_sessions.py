@@ -272,9 +272,7 @@ class SqlAlchemyImportSessionRepository:
             update(ImportStatementModel)
             .where(
                 ImportStatementModel.id == statement_id,
-                ImportStatementModel.status.in_(
-                    (STATEMENT_STATUS_STAGED, STATEMENT_STATUS_FAILED)
-                ),
+                ImportStatementModel.status.in_((STATEMENT_STATUS_STAGED, STATEMENT_STATUS_FAILED)),
             )
             .values(status=STATEMENT_STATUS_SKIPPED)
         )

@@ -545,9 +545,7 @@ def test_individual_commit_statement_from_foreign_session_not_found(client: Test
     assert commit_response.status_code == 404
     assert commit_response.json()["code"] == "import_statement_not_found"
 
-    skip_response = client.post(
-        f"/import/sessions/{session_b}/statements/{statement_from_a}/skip"
-    )
+    skip_response = client.post(f"/import/sessions/{session_b}/statements/{statement_from_a}/skip")
     assert skip_response.status_code == 404
     assert skip_response.json()["code"] == "import_statement_not_found"
 
