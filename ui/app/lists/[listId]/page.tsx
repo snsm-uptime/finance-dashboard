@@ -7,7 +7,6 @@ import { Hint } from "@/components/soft-ledger/Hint";
 import { IncompleteDisclosure } from "@/components/soft-ledger/IncompleteDisclosure";
 import { ReceiptRow } from "@/components/soft-ledger/ReceiptRow";
 import { SectionLabel } from "@/components/soft-ledger/SectionLabel";
-import { TopNav } from "@/components/soft-ledger/TopNav";
 import { requireAlias } from "@/lib/alias";
 import { getApiInternalUrl } from "@/lib/api";
 import { listsMessages } from "@/lib/i18n/lists";
@@ -125,8 +124,8 @@ function asExpenses(data: unknown): ExpenseItem[] {
       viewer_net_crc: typeof e.viewer_net_crc === "string" ? e.viewer_net_crc : null,
       viewer_net_polarity:
         e.viewer_net_polarity === "owe" ||
-        e.viewer_net_polarity === "owed" ||
-        e.viewer_net_polarity === "zero"
+          e.viewer_net_polarity === "owed" ||
+          e.viewer_net_polarity === "zero"
           ? e.viewer_net_polarity
           : null,
     });
@@ -456,7 +455,6 @@ export default async function ListDetailPage({
 
   return (
     <main className={styles.softMain}>
-      <TopNav brand={t.brand} listTitle={navTitle} />
       <div className={styles.softBody}>
         {notFound ? (
           <>
@@ -709,11 +707,6 @@ export default async function ListDetailPage({
                   {t.errorDefaultSplitLoad}
                 </p>
               ) : null}
-              <p className={styles.copy}>
-                <Link className={styles.link} href="/home">
-                  {t.backToLists}
-                </Link>
-              </p>
             </aside>
           </div>
         )}

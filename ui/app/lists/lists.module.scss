@@ -188,8 +188,16 @@
 .iconButton {
   width: 28px;
   height: 28px;
+  min-width: 28px;
   padding: 0 !important;
   border-radius: 4px !important;
+  overflow: hidden;
+}
+
+.iconButton svg {
+  display: block;
+  width: 20px;
+  height: 20px;
 }
 
 .iconButton:hover:not(:disabled) {
@@ -608,6 +616,13 @@
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+/* Last receipt has no divider. Chrome lives in .softReceiptsChrome (sibling).
+   OriginChipPicker wraps ReceiptRow, so also drop the border on the inner row. */
+.softReceiptsList > :last-child,
+.softReceiptsList > :last-child > * {
+  border-bottom: none;
 }
 
 /* Thin overlay scrollbar aligned with the receipt-row kebab column. */
