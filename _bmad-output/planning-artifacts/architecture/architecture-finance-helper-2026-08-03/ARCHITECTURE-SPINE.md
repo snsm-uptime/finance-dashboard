@@ -7,7 +7,7 @@ paradigm: 'hexagonal / ports-and-adapters'
 scope: 'finance-helper v1 thin vertical slice (upload → parse → store → shared-expenses) and bank-adapter extension surface'
 status: final
 created: '2026-08-03'
-updated: '2026-08-14'
+updated: '2026-08-19'
 binds:
   - auth
   - lists
@@ -260,6 +260,17 @@ flowchart LR
 - **Prevents:** a repeating page marker (bank name/letterhead printed on every page) being mistaken for a statement boundary; each adapter reimplementing its own boundary-detection fallback chain
 - **Rule:** Statement boundaries are detected via one shared priority chain (`domain/statement_layout.py`), strongest evidence first: (1) a printed page counter (e.g. "Página X de Y") resetting to 1 — real evidence of a new statement starting, not just a repeating running header; (2) a repeating per-statement marker line, used only when no page counter is found anywhere in the document (weaker signal — cannot distinguish a per-statement marker from a running page title on a single long statement); (3) no evidence found → assume one statement. `split()` implementations MUST call the shared detector rather than hand-rolling their own boundary heuristic; which method fired is retained (not silently discarded) for adapter test/debug visibility.
 
+### AD-28 — Real-text row recognition + amount-column role [ADOPTED]
+
+- **Binds:** bank adapters' `parse()` step (extends AD-16, AD-25)
+- **Prevents:** delimiter-dependent row detection (e.g. a literal `"|"`) that only matches synthetic fixtures and silently yields zero rows against real extracted text; ad-hoc per-adapter amount-column semantics; conflating a "which currency" choice with a "which sign/line_type" choice
+- **Rule:**
+  - **Data-row recognition:** a line is a data row iff it contains a date-shaped token *and* at least one amount-shaped token — a regex pattern match, never a delimiter check. Promoted from `api/scripts/statement_recon.py`'s proven `_has_date_token`/`_amount_tokens` logic into `domain/statement_row_extraction.py` — validated against two real BAC statements (credit and debit products); no description text in either collided with either token shape. Adapters MUST use this shared classifier, not a private line-format assumption (e.g. BAC credit's current `"|" in line` check, a synthetic-fixture artifact that never matches real `pdfplumber`-extracted text). The default amount-token shape (`#,###.##`, matching both validated products) is a **declared, overridable pattern** — mirroring AD-26's `date_format`, not a silently hardcoded universal regex: a product whose statements use a different amount shape (decimal-comma, parenthesized negatives, a currency glyph) MUST declare its own token pattern via the adapter, never patch the shared classifier in place or silently accept the resulting zero-rows failure.
+  - **Amount-column role:** each adapter declares, once per product (mirrors AD-26's `date_format` precedent — product-level, not per-`SectionSpec`, since the real evidence shows this doesn't vary section-to-section within a product), an `AmountColumnRole`: `CURRENCY_VARIANT` (today's behavior, unchanged — resolved via `normalize_dual_column_amount`, prefer nonzero, prefer CRC if both nonzero) or `SIGN_VARIANT` (new — a lone amount token's physical column determines sign/`line_type`, e.g. BAC debit's `DÉBITOS`/`CRÉDITOS`, confirmed via a real statement to carry no textual DB/CR marker of any kind). A `SIGN_VARIANT` product also declares named x-position ranges, one per possible outcome, 1:1 with declared outcomes, non-overlapping. Given an extracted amount token's x-position, domain resolves role by comparing the token's own midpoint `(x0+x1)/2` to each declared range's midpoint and picking the range with the smallest absolute distance — one fixed metric, not an implementer's choice, chosen to tolerate the asymmetric page-to-page range drift observed directly in real data (the BAC credit mapping reported different ranges for the same declared section on page 2 vs. page 3) without favoring either bound.
+  - Adapters extract word-position data via `pdfplumber` (adapter's job, AD-1) and hand domain plain `(text, x0, x1)` tuples — domain classifies/resolves on primitives only, never imports `pdfplumber`.
+  - Declaring `SIGN_VARIANT` MUST raise from the adapter's own construction (`__init__` or an equivalent module-load-time check — never a separate `validate()` step a caller might not invoke) whenever its range declarations are missing, not 1:1 with its declared outcomes, or overlapping — fail loud on any malformed declaration, not only the zero-ranges case, so a broken range set can never reach `parse()` and silently resolve to the nearest (wrong) role.
+  - `AmountColumnRole` and AD-25's `column_header` describe the same physical statement columns from two angles (geometry vs. printed text) but are deliberately independent declarations, not a combined struct — product-level role is evidenced by both real products seen so far (BAC credit, BAC debit), each internally consistent across its own sections. A bank whose statement genuinely mixes `SIGN_VARIANT` and `CURRENCY_VARIANT` behavior across sections of one product is unhandled by this AD; per docs/bank-statement-parsing-agent-setup.md, resolving a specific bank's real column structure is the per-bank brainstorm loop's job (grounded in that bank's actual `mapping.yaml`), not something to pre-decide here for a shape no real statement has shown yet.
+
 ## Consistency Conventions
 
 | Concern | Convention |
@@ -372,7 +383,7 @@ erDiagram
 | Lists, membership, splits, ACL | `domain` + persistence | AD-19, AD-5, AD-6 — see [membership-acl-enforcement-sketch.md](./membership-acl-enforcement-sketch.md) |
 | Cards / IBAN registration | `domain` + persistence; `ui` interrupt | AD-20, AD-12 |
 | Type / fonts | `ui` `@theme` + `@utility type-*`; Soft-Ledger primitives | AD-24, AD-12, AD-23 |
-| Detect / split / parse / normalize | `adapters/bank/*` | Paradigm, AD-2, AD-11, AD-16, AD-25, AD-26, AD-27 |
+| Detect / split / parse / normalize | `adapters/bank/*` | Paradigm, AD-2, AD-11, AD-16, AD-25, AD-26, AD-27, AD-28 |
 | Import Session review | `application` + `ui` | AD-4, AD-9, AD-12 |
 | Commit / dedup / batch rollback | `domain` + persistence | AD-4, AD-16, AD-18 |
 | Quarantine + incomplete disclosure | `domain` + settle views | AD-17 |
@@ -404,3 +415,6 @@ erDiagram
 | `font-sans` / `font-serif` aliases for the same faces | Would create two names; product names only (AD-24) |
 | `next/font` weight/subset/display pins | Single root loader; edit that file only (AD-24) — no second AD |
 | Class-attribute / JSX prop order | House style — `project-context.md` / linter, never an AD |
+| `BacCreditAdapter` applying AD-28 (fixing its wrong `_SECTIONS` title strings against real lettered headers, and its `parse()`'s pipe-delimiter row check) | AD-28 mints the contract; wiring an existing adapter onto it is implementation, scoped as a follow-up story, not a second decision |
+| A real BAC debit adapter (first concrete `SIGN_VARIANT` implementation) | Contract exists (AD-28); no BAC debit adapter has been built yet — out of this update's scope |
+| Per-section `AmountColumnRole` variance within one product | No real statement has shown this yet (AD-28); resolve for a specific bank via the per-bank brainstorm loop (docs/bank-statement-parsing-agent-setup.md) if one ever does, not pre-decided here |
