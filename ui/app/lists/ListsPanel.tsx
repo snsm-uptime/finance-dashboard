@@ -12,6 +12,10 @@ import {
 import { useRouter } from "next/navigation";
 
 import { IconButton } from "@/components/IconButton";
+import {
+  IconButtonPopup,
+  IconButtonPopupItem,
+} from "@/components/IconButtonPopup";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { listsMessages } from "@/lib/i18n/lists";
 import { DotsIcon, PlusIcon } from "@/app/icons";
@@ -53,7 +57,6 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
   const [invitingListId, setInvitingListId] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const renamingIdRef = useRef<string | null>(null);
-  const menuRef = useRef<HTMLDivElement | null>(null);
 
   const messages = useMemo(
     () => ({
@@ -98,21 +101,6 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [editingId]);
-
-  useEffect(() => {
-    if (!openMenuId && !deleteConfirmId) return;
-
-    function onPointerDown(event: PointerEvent) {
-      if (menuRef.current && event.target instanceof Node && menuRef.current.contains(event.target)) {
-        return;
-      }
-      setOpenMenuId(null);
-      setDeleteConfirmId(null);
-    }
-
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [openMenuId, deleteConfirmId]);
 
   async function onCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -388,61 +376,39 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
                         </span>
                       </button>
                       {isOwner ? (
-                        <div
+                        <IconButtonPopup
                           className={styles.menuContainer}
-                          ref={
-                            openMenuId === list.id || deleteConfirmId === list.id
-                              ? menuRef
-                              : undefined
+                          panelClassName={
+                            deleteConfirmId === list.id ? styles.confirmPanel : undefined
+                          }
+                          panelRole={deleteConfirmId === list.id ? "alertdialog" : "menu"}
+                          open={openMenuId === list.id || deleteConfirmId === list.id}
+                          onOpenChange={(next) => {
+                            if (next) {
+                              setOpenMenuId(list.id);
+                              setDeleteConfirmId(null);
+                            } else {
+                              setOpenMenuId((current) =>
+                                current === list.id ? null : current,
+                              );
+                              setDeleteConfirmId((current) =>
+                                current === list.id ? null : current,
+                              );
+                            }
+                          }}
+                          button={
+                            <IconButton
+                              type="button"
+                              variant="muted"
+                              className={styles.renameIcon}
+                              label={t.menuAria}
+                              disabled={anyOpening || renamingId !== null}
+                              icon={<DotsIcon />}
+                            />
                           }
                         >
-                          <IconButton
-                            type="button"
-                            variant="muted"
-                            className={styles.renameIcon}
-                            label={t.menuAria}
-                            onClick={() => setOpenMenuId(openMenuId === list.id ? null : list.id)}
-                            disabled={anyOpening || renamingId !== null}
-                            aria-expanded={openMenuId === list.id}
-                            aria-haspopup="menu"
-                            icon={<DotsIcon />}
-                          />
-                          {openMenuId === list.id && deleteConfirmId !== list.id && (
-                            <div className={styles.menu} role="menu">
-                              <button
-                                type="button"
-                                className={styles.menuItem}
-                                onClick={() => startInvite(list.id)}
-                                disabled={anyOpening}
-                                role="menuitem"
-                              >
-                                {t.mobileInviteAria}
-                              </button>
-                              <button
-                                type="button"
-                                className={styles.menuItem}
-                                onClick={() => {
-                                  startRename(list);
-                                  setOpenMenuId(null);
-                                }}
-                                disabled={anyOpening || renamingId !== null}
-                                role="menuitem"
-                              >
-                                {t.renameLabel}
-                              </button>
-                              <button
-                                type="button"
-                                className={`${styles.menuItem} ${styles.menuItemDanger}`}
-                                onClick={() => showDeleteConfirm(list.id)}
-                                disabled={anyOpening || deletingId !== null}
-                                role="menuitem"
-                              >
-                                {t.deleteAria}
-                              </button>
-                            </div>
-                          )}
-                          {deleteConfirmId === list.id && (
-                            <div className={styles.confirmPopover} role="alertdialog">
+                          {deleteConfirmId === list.id ? (
+                            <>
                               <p className={styles.confirmText}>{t.deleteConfirm}</p>
                               <div className={styles.confirmActions}>
                                 <button
@@ -459,12 +425,37 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
                                   onClick={() => void confirmDelete(list)}
                                   disabled={deletingId !== null}
                                 >
-                                  {deletingId === list.id ? t.deletingAction : t.deleteAction}
+                                  {deletingId === list.id
+                                    ? t.deletingAction
+                                    : t.deleteAction}
                                 </button>
                               </div>
-                            </div>
+                            </>
+                          ) : (
+                            <>
+                              <IconButtonPopupItem
+                                onClick={() => startInvite(list.id)}
+                                disabled={anyOpening}
+                              >
+                                {t.mobileInviteAria}
+                              </IconButtonPopupItem>
+                              <IconButtonPopupItem
+                                onClick={() => startRename(list)}
+                                disabled={anyOpening || renamingId !== null}
+                              >
+                                {t.renameLabel}
+                              </IconButtonPopupItem>
+                              <IconButtonPopupItem
+                                danger
+                                stayOpen
+                                onClick={() => showDeleteConfirm(list.id)}
+                                disabled={anyOpening || deletingId !== null}
+                              >
+                                {t.deleteAria}
+                              </IconButtonPopupItem>
+                            </>
                           )}
-                        </div>
+                        </IconButtonPopup>
                       ) : null}
                     </>
                   )}

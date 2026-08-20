@@ -1,0 +1,76 @@
+.anchored {
+  position: relative;
+}
+
+.panel {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  z-index: 2;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--foreground) 12%, transparent);
+  min-width: var(--icon-button-popup-min-width, 11rem);
+  overflow: hidden;
+  animation: slideDown 0.15s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel {
+    animation: none;
+  }
+}
+
+.item {
+  display: block;
+  width: 100%;
+  padding: 0.65rem 1rem;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: var(--foreground);
+  text-align: left;
+  font-family: var(--font-ui), system-ui, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+}
+
+.item:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.item:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.item:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.itemDanger:not(:disabled) {
+  color: color-mix(in srgb, var(--owe) 85%, transparent);
+}
+
+.itemDanger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--owe) 12%, transparent);
+}
+
+.itemDanger:focus-visible:not(:disabled) {
+  background: color-mix(in srgb, var(--owe) 18%, transparent);
+}
