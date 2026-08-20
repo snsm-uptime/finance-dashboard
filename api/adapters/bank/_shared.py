@@ -18,7 +18,12 @@ def parse_amount_field(raw: str) -> Decimal:
     value = raw.strip()
     if value in ("", "-"):
         return Decimal("0")
-    return Decimal(value.replace(",", ""))
+    # BAC credit interest prints negatives as a trailing minus ("3,706.90-").
+    trailing_negative = value.endswith("-")
+    if trailing_negative:
+        value = value[:-1]
+    amount = Decimal(value.replace(",", ""))
+    return -amount if trailing_negative else amount
 
 
 def sniff_content_marker(
