@@ -16,6 +16,7 @@ from domain.errors import (
     UnsupportedFileTypeError,
 )
 from domain.import_session import (
+    session_needs_source_pdf,
     validate_bulk_candidate_row,
     validate_bulk_commit_eligible,
     validate_individual_accept_eligible,
@@ -177,3 +178,17 @@ def test_validate_individual_skip_eligible_rejects_already_skipped() -> None:
 def test_validate_individual_skip_eligible_rejects_discarded_session() -> None:
     with pytest.raises(ImportSessionDiscardedError):
         validate_individual_skip_eligible(discarded_at=datetime.now(UTC), statement_status="staged")
+
+
+def test_session_needs_source_pdf_while_staged_or_failed() -> None:
+    assert session_needs_source_pdf(["staged"]) is True
+    assert session_needs_source_pdf(["failed"]) is True
+    assert session_needs_source_pdf(["committed", "failed"]) is True
+    assert session_needs_source_pdf(["committed", "staged"]) is True
+
+
+def test_session_needs_source_pdf_false_when_all_committed_or_skipped() -> None:
+    assert session_needs_source_pdf(["committed"]) is False
+    assert session_needs_source_pdf(["skipped"]) is False
+    assert session_needs_source_pdf(["committed", "skipped"]) is False
+    assert session_needs_source_pdf([]) is False

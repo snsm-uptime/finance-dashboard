@@ -115,3 +115,16 @@ def validate_bulk_candidate_row(*, amount: Decimal, normalized_description: str)
         raise InvalidCanonicalLineError(
             f"Statement row description exceeds {DESCRIPTION_MAX_LENGTH} characters."
         )
+
+
+_PDF_RETAIN_STATUSES = frozenset({STATEMENT_STATUS_STAGED, STATEMENT_STATUS_FAILED})
+
+
+def session_needs_source_pdf(statement_statuses: Sequence[str]) -> bool:
+    """True while review/comparison still needs the uploaded PDF (AD-3).
+
+    Retain for staged (still reviewing) or failed (Epic 5 comparison).
+    Committed and skipped statements are done — the ledger (or skip) is
+    the source of truth, so the file can go.
+    """
+    return any(status in _PDF_RETAIN_STATUSES for status in statement_statuses)

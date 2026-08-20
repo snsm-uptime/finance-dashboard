@@ -282,3 +282,16 @@ class SqlAlchemyImportSessionRepository:
         self._session.flush()
         self._session.refresh(statement_row)
         return _session_record(row)
+
+    def clear_statement_pdf_paths(self, session_id: UUID, user_id: UUID) -> None:
+        row = self._session.scalar(
+            select(ImportSessionModel)
+            .options(selectinload(ImportSessionModel.statements))
+            .where(ImportSessionModel.id == session_id, ImportSessionModel.user_id == user_id)
+            .limit(1)
+        )
+        if row is None:
+            return
+        for statement in row.statements:
+            statement.pdf_path = None
+        self._session.flush()

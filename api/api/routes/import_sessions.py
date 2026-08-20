@@ -198,10 +198,11 @@ def bulk_commit_import_session(
     user_id: uuid.UUID = Depends(require_authenticated_user),
     db: Session = Depends(get_db),
     fx_service: MaterializeFxService = Depends(get_fx_service),
+    pdf_storage: PdfStorage = Depends(get_pdf_storage),
 ) -> BulkCommitResponse | JSONResponse:
     session_repo = SqlAlchemyImportSessionRepository(db)
     list_repo = SqlAlchemyListRepository(db)
-    service = AssignBulkImportService(session_repo, list_repo, fx_service)
+    service = AssignBulkImportService(session_repo, list_repo, fx_service, pdf_storage)
     try:
         result = service.execute(
             AssignBulkImportCommand(
@@ -271,6 +272,7 @@ def commit_individual_statement(
     user_id: uuid.UUID = Depends(require_authenticated_user),
     db: Session = Depends(get_db),
     fx_service: MaterializeFxService = Depends(get_fx_service),
+    pdf_storage: PdfStorage = Depends(get_pdf_storage),
 ) -> ImportSessionResponse | JSONResponse:
     """Individual review accept (Story 4.8, AC #1/#2/#3): commits exactly
     one statement to one list — serves both the "chosen list" and
@@ -280,7 +282,7 @@ def commit_individual_statement(
     review next (Story 4.8 review finding)."""
     session_repo = SqlAlchemyImportSessionRepository(db)
     list_repo = SqlAlchemyListRepository(db)
-    service = AssignIndividualImportService(session_repo, list_repo, fx_service)
+    service = AssignIndividualImportService(session_repo, list_repo, fx_service, pdf_storage)
     try:
         service.execute(
             AssignIndividualImportCommand(
@@ -357,10 +359,11 @@ def skip_individual_statement(
     statement_id: uuid.UUID,
     user_id: uuid.UUID = Depends(require_authenticated_user),
     db: Session = Depends(get_db),
+    pdf_storage: PdfStorage = Depends(get_pdf_storage),
 ) -> ImportSessionResponse | JSONResponse:
     """Individual review skip (Story 4.8, AC #5, FR-18): no ledger writes."""
     session_repo = SqlAlchemyImportSessionRepository(db)
-    service = SkipStatementService(session_repo)
+    service = SkipStatementService(session_repo, pdf_storage)
     try:
         result = service.execute(
             SkipStatementCommand(
