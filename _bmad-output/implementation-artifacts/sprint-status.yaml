@@ -110,6 +110,7 @@ development_status:
   4-8-individual-review-swipe-desktop-buttons: done
   4-9-commit-batch-dedup-summary-land-on-settle-strip: backlog
   4-10-multi-file-upload-pending-queue-dedup: backlog
+  4-11-bac-credit-real-statement-compatibility-fix: ready-for-dev
   epic-4-retrospective: optional
 
   epic-5: backlog

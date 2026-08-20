@@ -1220,6 +1220,38 @@ So that I can queue several statements in one pass instead of uploading them one
 **Then** each file's detect/split/parse still runs synchronously in-process, one file at a time — this story only shapes the API/UI boundary (one upload call per file, independent per-file status) so that a later move to concurrent/background processing per file is additive
 **And** actual concurrent or background ("separate threads") processing is explicitly out of scope for this story and requires its own architecture decision (correct-course) before being adopted — it is not decided or implemented here
 
+### Story 4.11: BAC credit real-statement compatibility fix
+
+As a developer maintaining the BAC credit adapter,
+I want BacCreditAdapter to recognize real BAC statement sections and data rows instead of the synthetic-fixture-only pipe format,
+So that real BAC credit uploads parse successfully instead of silently yielding zero rows.
+
+**Acceptance Criteria:**
+
+**Given** BacCreditAdapter's declared `_SECTIONS`
+**When** compared against a real BAC credit statement's printed section titles
+**Then** the title strings match real lettered headers (e.g. "A) Detalle de pago del periodo", "B) Detalle de compras del periodo") rather than invented text — SectionCursor's mechanism is unchanged (AD-25)
+
+**Given** a shared `domain/statement_row_extraction.py` module
+**When** a statement line contains a date-shaped token and at least one amount-shaped token
+**Then** it is classified as a data row without requiring a delimiter — promoted from statement_recon.py's proven `_has_date_token`/`_amount_tokens` logic (AD-28)
+
+**Given** BacCreditAdapter's colones/dólares dual-amount columns
+**When** AmountColumnRole is declared for this product
+**Then** it declares CURRENCY_VARIANT and behavior is unchanged from today's `normalize_dual_column_amount` (FR-33, AD-28)
+
+**Given** the updated adapter
+**When** a real (non-fixture) BAC credit statement's text shape is parsed
+**Then** must-parse sections yield CanonicalLine rows instead of candidate_row_count == 0, and unmapped/malformed rows still fail loudly rather than silently dropping (FR-14, NFR-8)
+
+**Given** CI's synthetic fixture gate
+**When** the BAC credit fixture is regenerated
+**Then** it uses real section titles and real (non-pipe) row text shape — matching real pdfplumber extraction — with goldens updated and zero manual edits required for must-parse lines (FR-35, AD-11)
+
+**Given** this story's scope
+**When** a future bank/product needs SIGN_VARIANT (e.g. a BAC debit adapter)
+**Then** that remains out of scope — this story implements only the CURRENCY_VARIANT path (see ARCHITECTURE-SPINE.md Deferred table)
+
 ## Epic 5: Import resilience (then settle polish)
 
 Ordered: parse failure/quarantine/hand-fix → wire FR-43 on strip → reassign/rollback → same-price + aliases → then simplify (FR-41) + statement-cycle selector (FR-39).
