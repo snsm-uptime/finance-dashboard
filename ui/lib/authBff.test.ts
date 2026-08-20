@@ -75,11 +75,7 @@ describe("authBff", () => {
   });
 
   it("defaults Content-Type when upstream omits it", () => {
-    const headers = forwardUpstreamHeaders({
-      headers: {
-        get: () => null,
-      },
-    } as Response);
+    const headers = forwardUpstreamHeaders(new Response(null, { status: 200 }));
     expect(headers.get("Content-Type")).toBe("application/json");
     expect(headers.get("Retry-After")).toBeNull();
     expect(headers.get("set-cookie")).toBeNull();
@@ -91,7 +87,7 @@ describe("authBff", () => {
     });
     headers.getSetCookie = () => [];
     const forwarded = forwardUpstreamHeaders(
-      { headers } as Response,
+      { headers } as unknown as Response,
       { forwardSetCookie: true },
     );
     expect(forwarded.get("set-cookie")).toContain("fh_session=legacy");
@@ -103,7 +99,7 @@ describe("authBff", () => {
         headers: {
           get: (name: string) => (name === "Content-Type" ? "text/plain" : null),
         },
-      } as Response,
+      } as unknown as Response,
       { forwardSetCookie: true },
     );
     expect(forwarded.get("Content-Type")).toBe("text/plain");
