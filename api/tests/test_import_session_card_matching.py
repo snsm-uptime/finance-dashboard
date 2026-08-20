@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -11,7 +12,6 @@ from application.import_session import (
     MatchStatementCardResult,
     MatchStatementCardService,
 )
-from datetime import datetime, timezone
 
 
 class MockCardRepository:
@@ -37,7 +37,7 @@ def user_card(user_id):
         user_id=user_id,
         label="My Visa",
         iban="CR03010202412935924228",
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
 
 
@@ -85,7 +85,7 @@ def test_match_result_is_dataclass():
         user_id=uuid4(),
         label="Test",
         iban="CR123",
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
     result = MatchStatementCardResult(matched_card=card)
 

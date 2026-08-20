@@ -522,7 +522,8 @@ def identify_card_for_statement(
             )
             if recheck_result.matched_card is not None:
                 logger.info(
-                    "card_concurrent_registration_resolved session_id=%s statement_id=%s card_id=%s",
+                    "card_concurrent_registration_resolved "
+                    "session_id=%s statement_id=%s card_id=%s",
                     session_id,
                     statement_id,
                     recheck_result.matched_card.id,

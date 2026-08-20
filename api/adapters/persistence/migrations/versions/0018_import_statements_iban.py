@@ -19,7 +19,6 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy import text
-from sqlalchemy.dialects import postgresql
 
 revision: str = "0018_import_statements_iban"
 down_revision: str | None = "0017_import_batches"

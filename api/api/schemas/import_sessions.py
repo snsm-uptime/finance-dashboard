@@ -1,11 +1,14 @@
-"""Pydantic DTOs for Import Session upload / discard (Story 4.6) and card identification (Story 4.8.1)."""
+"""Pydantic DTOs for Import Session upload / discard (Story 4.6).
+
+Also card identification endpoint (Story 4.8.1).
+"""
 
 from __future__ import annotations
 
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class StagedStatementResponse(BaseModel):
