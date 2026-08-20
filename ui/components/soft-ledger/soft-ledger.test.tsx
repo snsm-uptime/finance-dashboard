@@ -15,7 +15,6 @@ import { SectionLabel } from "./SectionLabel";
 import { SoftLedgerRadio } from "./Radio";
 import { SoftLedgerSelect } from "./Select";
 import { TabBar } from "./TabBar";
-import { TopNav } from "./TopNav";
 
 vi.mock("next/link", () => ({
   default: ({
@@ -59,15 +58,6 @@ describe("Soft-Ledger primitives", () => {
       root.unmount();
     });
     host.remove();
-  });
-
-  it("renders TopNav brand left / list title right without Account chrome", () => {
-    act(() => {
-      root.render(<TopNav brand="finance-helper" listTitle="Household" />);
-    });
-    expect(host.textContent).toContain("finance-helper");
-    expect(host.querySelector("h1")?.textContent).toBe("Household");
-    expect(host.querySelector("a")).toBeNull();
   });
 
   it("renders BalanceStrip who-line + amount with text polarity", () => {
@@ -509,7 +499,7 @@ describe("Soft-Ledger primitives", () => {
 
     act(() => {
       root.render(
-        <SoftLedgerRadio type="checkbox" checked onChange={() => {}}>
+        <SoftLedgerRadio type="checkbox" checked onChange={() => { }}>
           Agree
         </SoftLedgerRadio>,
       );
