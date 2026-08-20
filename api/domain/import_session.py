@@ -11,6 +11,7 @@ from decimal import Decimal
 from domain.errors import (
     ImportSessionAlreadyCommittedError,
     ImportSessionDiscardedError,
+    ImportStatementNotAvailableError,
     InvalidCanonicalLineError,
     NoCleanStatementsToCommitError,
     UnsupportedFileTypeError,
@@ -22,8 +23,14 @@ PDF_MAGIC_HEADER = b"%PDF-"
 STATEMENT_STATUS_STAGED = "staged"
 STATEMENT_STATUS_FAILED = "failed"
 STATEMENT_STATUS_COMMITTED = "committed"
+STATEMENT_STATUS_SKIPPED = "skipped"
 STATEMENT_STATUSES = frozenset(
-    {STATEMENT_STATUS_STAGED, STATEMENT_STATUS_FAILED, STATEMENT_STATUS_COMMITTED}
+    {
+        STATEMENT_STATUS_STAGED,
+        STATEMENT_STATUS_FAILED,
+        STATEMENT_STATUS_COMMITTED,
+        STATEMENT_STATUS_SKIPPED,
+    }
 )
 
 
@@ -53,6 +60,34 @@ def validate_bulk_commit_eligible(
         raise ImportSessionAlreadyCommittedError()
     if not any(status == STATEMENT_STATUS_STAGED for status in statement_statuses):
         raise NoCleanStatementsToCommitError()
+
+
+def validate_individual_accept_eligible(
+    *, discarded_at: object | None, statement_status: str
+) -> None:
+    """Per-statement accept gate (Story 4.8, AC #6). Unlike Bulk's
+    session-wide `validate_bulk_commit_eligible`, Individual review commits
+    one statement at a time — possibly to different lists — so eligibility
+    is checked per statement, not per session. Only a `staged` (clean-parse)
+    statement is acceptable: `failed` has no comparison UI yet (Epic 5),
+    `committed`/`skipped` are already resolved.
+    """
+    if discarded_at is not None:
+        raise ImportSessionDiscardedError()
+    if statement_status != STATEMENT_STATUS_STAGED:
+        raise ImportStatementNotAvailableError()
+
+
+def validate_individual_skip_eligible(
+    *, discarded_at: object | None, statement_status: str
+) -> None:
+    """Per-statement skip gate (Story 4.8, FR-18). A `failed` statement CAN
+    be skipped — that's how review moves past it until Epic 5's comparison
+    UI exists. `committed`/already-`skipped` cannot be skipped again."""
+    if discarded_at is not None:
+        raise ImportSessionDiscardedError()
+    if statement_status not in (STATEMENT_STATUS_STAGED, STATEMENT_STATUS_FAILED):
+        raise ImportStatementNotAvailableError()
 
 
 def validate_bulk_candidate_row(*, amount: Decimal, normalized_description: str) -> None:

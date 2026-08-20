@@ -17,11 +17,15 @@ from application.fx_service import MaterializedFx
 from application.import_session import (
     AssignBulkImportCommand,
     AssignBulkImportService,
+    AssignIndividualImportCommand,
+    AssignIndividualImportService,
     DetectedStatement,
     DiscardImportSessionCommand,
     DiscardImportSessionService,
     ImportBatchRecord,
     ImportSessionRecord,
+    SkipStatementCommand,
+    SkipStatementService,
     StagedStatementRecord,
     UploadStatementPdfCommand,
     UploadStatementPdfService,
@@ -33,6 +37,8 @@ from domain.errors import (
     ImportSessionAlreadyCommittedError,
     ImportSessionDiscardedError,
     ImportSessionNotFoundError,
+    ImportStatementNotAvailableError,
+    ImportStatementNotFoundError,
     InvalidCanonicalLineError,
     NoCleanStatementsToCommitError,
     NotListMemberError,
@@ -42,6 +48,7 @@ from domain.errors import (
 from domain.import_session import (
     STATEMENT_STATUS_COMMITTED,
     STATEMENT_STATUS_FAILED,
+    STATEMENT_STATUS_SKIPPED,
     STATEMENT_STATUS_STAGED,
 )
 
@@ -275,6 +282,36 @@ class _FakeImportSessionRepo:
             created_at=datetime.now(UTC),
             ledger_entry_ids=ledger_entry_ids,
         )
+
+    def skip_statement(
+        self, *, session_id: UUID, statement_id: UUID, user_id: UUID
+    ) -> ImportSessionRecord:
+        record = self.sessions[session_id]
+        if record.user_id != user_id:
+            raise ImportSessionNotFoundError()
+        if not any(s.id == statement_id for s in record.statements):
+            raise ImportStatementNotFoundError()
+        updated_statements = [
+            StagedStatementRecord(
+                id=s.id,
+                session_id=s.session_id,
+                product_id=s.product_id,
+                status=STATEMENT_STATUS_SKIPPED if s.id == statement_id else s.status,
+                candidate_row_count=s.candidate_row_count,
+                pdf_path=s.pdf_path,
+                candidate_rows=s.candidate_rows,
+            )
+            for s in record.statements
+        ]
+        updated = ImportSessionRecord(
+            id=record.id,
+            user_id=record.user_id,
+            created_at=record.created_at,
+            discarded_at=record.discarded_at,
+            statements=updated_statements,
+        )
+        self.sessions[session_id] = updated
+        return updated
 
 
 @dataclass
@@ -635,6 +672,251 @@ def test_bulk_assign_rejects_candidate_row_with_invalid_amount_no_commit() -> No
             AssignBulkImportCommand(actor_user_id=actor, session_id=session_id, list_id=list_id)
         )
     assert len(repo.commit_calls) == 0
+
+
+# --- Story 4.8 Task 2.5: AssignIndividualImportService / SkipStatementService -----
+
+
+def test_individual_accept_commits_only_targeted_statement() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    lookup = _FakeListLookup()
+    actor = uuid4()
+    list_id = uuid4()
+    lookup.add_member(list_id, owner_id=actor, user_id=actor)
+    session_id = _multi_statement_session(
+        repo, storage, user_id=actor, parse_results=[[_row("r1")], [_row("r2")]]
+    )
+    session = repo.get_session(session_id, actor)
+    target = session.statements[0]
+
+    result = AssignIndividualImportService(repo, lookup, _FakeFxService()).execute(
+        AssignIndividualImportCommand(
+            actor_user_id=actor, session_id=session_id, statement_id=target.id, list_id=list_id
+        )
+    )
+
+    assert result.statement_id == target.id
+    assert result.list_id == list_id
+    assert len(repo.commit_calls) == 1
+    updated = repo.get_session(session_id, actor)
+    statuses = {s.id: s.status for s in updated.statements}
+    assert statuses[target.id] == STATEMENT_STATUS_COMMITTED
+    other = next(s for s in session.statements if s.id != target.id)
+    assert statuses[other.id] == STATEMENT_STATUS_STAGED
+
+
+def test_individual_accept_on_failed_statement_rejected() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    lookup = _FakeListLookup()
+    actor = uuid4()
+    list_id = uuid4()
+    lookup.add_member(list_id, owner_id=actor, user_id=actor)
+    session_id = _multi_statement_session(
+        repo, storage, user_id=actor, parse_results=[InvalidCanonicalLineError("bad")]
+    )
+    session = repo.get_session(session_id, actor)
+    target = session.statements[0]
+
+    with pytest.raises(ImportStatementNotAvailableError):
+        AssignIndividualImportService(repo, lookup, _FakeFxService()).execute(
+            AssignIndividualImportCommand(
+                actor_user_id=actor, session_id=session_id, statement_id=target.id, list_id=list_id
+            )
+        )
+    assert repo.commit_calls == []
+
+
+def test_individual_accept_already_committed_statement_rejected_no_double_commit() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    lookup = _FakeListLookup()
+    actor = uuid4()
+    list_id = uuid4()
+    lookup.add_member(list_id, owner_id=actor, user_id=actor)
+    session_id = _multi_statement_session(repo, storage, user_id=actor, parse_results=[[_row()]])
+    session = repo.get_session(session_id, actor)
+    target = session.statements[0]
+    service = AssignIndividualImportService(repo, lookup, _FakeFxService())
+    command = AssignIndividualImportCommand(
+        actor_user_id=actor, session_id=session_id, statement_id=target.id, list_id=list_id
+    )
+    service.execute(command)
+    assert len(repo.commit_calls) == 1
+
+    with pytest.raises(ImportStatementNotAvailableError):
+        service.execute(command)
+    assert len(repo.commit_calls) == 1
+
+
+def test_individual_accept_discarded_session_rejected() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    lookup = _FakeListLookup()
+    actor = uuid4()
+    list_id = uuid4()
+    lookup.add_member(list_id, owner_id=actor, user_id=actor)
+    session_id = _multi_statement_session(repo, storage, user_id=actor, parse_results=[[_row()]])
+    session = repo.get_session(session_id, actor)
+    target = session.statements[0]
+    DiscardImportSessionService(repo, storage).execute(
+        DiscardImportSessionCommand(actor_user_id=actor, session_id=session_id)
+    )
+
+    with pytest.raises(ImportSessionDiscardedError):
+        AssignIndividualImportService(repo, lookup, _FakeFxService()).execute(
+            AssignIndividualImportCommand(
+                actor_user_id=actor, session_id=session_id, statement_id=target.id, list_id=list_id
+            )
+        )
+    assert repo.commit_calls == []
+
+
+def test_individual_accept_unknown_statement_id_not_found() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    lookup = _FakeListLookup()
+    actor = uuid4()
+    list_id = uuid4()
+    lookup.add_member(list_id, owner_id=actor, user_id=actor)
+    session_id = _multi_statement_session(repo, storage, user_id=actor, parse_results=[[_row()]])
+
+    with pytest.raises(ImportStatementNotFoundError):
+        AssignIndividualImportService(repo, lookup, _FakeFxService()).execute(
+            AssignIndividualImportCommand(
+                actor_user_id=actor, session_id=session_id, statement_id=uuid4(), list_id=list_id
+            )
+        )
+    assert repo.commit_calls == []
+
+
+def test_individual_accept_non_member_list_denied_no_commit() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    lookup = _FakeListLookup()
+    actor = uuid4()
+    stranger_list_owner = uuid4()
+    list_id = uuid4()
+    lookup.add_member(list_id, owner_id=stranger_list_owner, user_id=stranger_list_owner)
+    session_id = _multi_statement_session(repo, storage, user_id=actor, parse_results=[[_row()]])
+    session = repo.get_session(session_id, actor)
+    target = session.statements[0]
+
+    with pytest.raises(NotListMemberError):
+        AssignIndividualImportService(repo, lookup, _FakeFxService()).execute(
+            AssignIndividualImportCommand(
+                actor_user_id=actor, session_id=session_id, statement_id=target.id, list_id=list_id
+            )
+        )
+    assert repo.commit_calls == []
+
+
+def test_individual_accept_rejects_statement_with_one_invalid_row_no_partial_commit() -> None:
+    """Individual shares validate_bulk_candidate_row with Bulk (Story 4.7's
+    equivalent guard: test_bulk_assign_rejects_candidate_row_with_invalid_amount_no_commit)
+    but had no test of its own confirming the same all-or-nothing behavior
+    when a targeted statement mixes valid and invalid rows (Story 4.8 review
+    finding)."""
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    lookup = _FakeListLookup()
+    actor = uuid4()
+    list_id = uuid4()
+    lookup.add_member(list_id, owner_id=actor, user_id=actor)
+    bad_row = CanonicalLine(
+        posted_date="2026-01-01",
+        amount=Decimal("10.005"),
+        currency="CRC",
+        product_id="fake_product",
+        line_type="purchase",
+        normalized_description="fractional cents",
+    )
+    session_id = _multi_statement_session(
+        repo, storage, user_id=actor, parse_results=[[_row("good"), bad_row]]
+    )
+    session = repo.get_session(session_id, actor)
+    target = session.statements[0]
+
+    with pytest.raises(InvalidCanonicalLineError):
+        AssignIndividualImportService(repo, lookup, _FakeFxService()).execute(
+            AssignIndividualImportCommand(
+                actor_user_id=actor, session_id=session_id, statement_id=target.id, list_id=list_id
+            )
+        )
+    assert repo.commit_calls == []
+
+
+def test_skip_staged_statement_flips_status_no_ledger_call() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    actor = uuid4()
+    session_id = _multi_statement_session(repo, storage, user_id=actor, parse_results=[[_row()]])
+    session = repo.get_session(session_id, actor)
+    target = session.statements[0]
+
+    result = SkipStatementService(repo).execute(
+        SkipStatementCommand(actor_user_id=actor, session_id=session_id, statement_id=target.id)
+    )
+
+    assert result.statements[0].status == STATEMENT_STATUS_SKIPPED
+    assert repo.commit_calls == []
+
+
+def test_skip_failed_statement_allowed() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    actor = uuid4()
+    session_id = _multi_statement_session(
+        repo, storage, user_id=actor, parse_results=[InvalidCanonicalLineError("bad")]
+    )
+    session = repo.get_session(session_id, actor)
+    target = session.statements[0]
+
+    result = SkipStatementService(repo).execute(
+        SkipStatementCommand(actor_user_id=actor, session_id=session_id, statement_id=target.id)
+    )
+
+    assert result.statements[0].status == STATEMENT_STATUS_SKIPPED
+
+
+def test_skip_already_committed_statement_rejected() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    lookup = _FakeListLookup()
+    actor = uuid4()
+    list_id = uuid4()
+    lookup.add_member(list_id, owner_id=actor, user_id=actor)
+    session_id = _multi_statement_session(repo, storage, user_id=actor, parse_results=[[_row()]])
+    session = repo.get_session(session_id, actor)
+    target = session.statements[0]
+    AssignIndividualImportService(repo, lookup, _FakeFxService()).execute(
+        AssignIndividualImportCommand(
+            actor_user_id=actor, session_id=session_id, statement_id=target.id, list_id=list_id
+        )
+    )
+
+    with pytest.raises(ImportStatementNotAvailableError):
+        SkipStatementService(repo).execute(
+            SkipStatementCommand(actor_user_id=actor, session_id=session_id, statement_id=target.id)
+        )
+
+
+def test_skip_already_skipped_statement_rejected() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    actor = uuid4()
+    session_id = _multi_statement_session(repo, storage, user_id=actor, parse_results=[[_row()]])
+    session = repo.get_session(session_id, actor)
+    target = session.statements[0]
+    service = SkipStatementService(repo)
+    command = SkipStatementCommand(
+        actor_user_id=actor, session_id=session_id, statement_id=target.id
+    )
+    service.execute(command)
+
+    with pytest.raises(ImportStatementNotAvailableError):
+        service.execute(command)
 
 
 def test_staged_statement_record_has_no_unchecked_card_routing_field() -> None:
