@@ -2,7 +2,7 @@
 title: 'Story 4.8.1: BAC IBAN extraction & card identification at review start'
 type: 'feature'
 created: '2026-08-20'
-status: 'in-progress'
+status: 'in-review'
 review_loop_iteration: 0
 baseline_commit: '5024387'
 context: []
@@ -64,23 +64,23 @@ context: []
 
 **Execution:**
 
-- [ ] `api/adapters/bank/bac_credit/adapter.py` -- Extract IBAN from statement header using the regex/parsing logic; attach as metadata payload or return value from parse/split. Rationale: Statement-level identifier must be captured before row-level parsing; BAC adapter is the authoritative source of IBAN field location.
+- [x] `api/adapters/bank/bac_credit/adapter.py` -- Extract IBAN from statement header using the regex/parsing logic; attach as metadata payload or return value from parse/split. Rationale: Statement-level identifier must be captured before row-level parsing; BAC adapter is the authoritative source of IBAN field location.
 
-- [ ] `api/domain/import_session.py` -- Add `iban: str | None` field to `DetectedStatement` dataclass (or create a parallel metadata structure) to carry IBAN through the pipeline. Rationale: Callers need access to statement IBAN before commit; domain layer documents the contract.
+- [x] `api/domain/import_session.py` -- Add `iban: str | None` field to `DetectedStatement` dataclass (or create a parallel metadata structure) to carry IBAN through the pipeline. Rationale: Callers need access to statement IBAN before commit; domain layer documents the contract.
 
-- [ ] `api/adapters/persistence/models.py` -- Add `iban: String(64), nullable` column to `ImportStatementModel`. Rationale: Durable record of which IBAN each uploaded statement came from; enables re-review or audit without re-parsing the PDF.
+- [x] `api/adapters/persistence/models.py` -- Add `iban: String(64), nullable` column to `ImportStatementModel`. Rationale: Durable record of which IBAN each uploaded statement came from; enables re-review or audit without re-parsing the PDF.
 
-- [ ] `api/adapters/persistence/migrations/versions/0017_*.py` -- Create Alembic migration adding `iban` column to `import_statements` table. Rationale: Schema must evolve before code reads/writes the column; downgrade-safe.
+- [x] `api/adapters/persistence/migrations/versions/0018_import_statements_iban.py` -- Create Alembic migration adding `iban` column to `import_statements` table. Rationale: Schema must evolve before code reads/writes the column; downgrade-safe.
 
-- [ ] `api/adapters/persistence/import_sessions.py` -- Persist `iban` on `create_session` when building statement records; fetch it on `get_session`. Rationale: Application layer expects the IBAN to be available during review.
+- [x] `api/adapters/persistence/import_sessions.py` -- Persist `iban` on `create_session` when building statement records; fetch it on `get_session`. Rationale: Application layer expects the IBAN to be available during review.
 
-- [ ] `api/application/import_session.py` -- Add `MatchStatementCardService(card_repo, match_card_service, register_card_service, list_repo)` encapsulating the card-identification logic. Given a statement IBAN, either return an existing card or a prompt-state indicating "unknown card, needs registration". Rationale: Centralizes the decision logic (match vs. register) and integrates Story 4.1's services.
+- [x] `api/application/import_session.py` -- Add `MatchStatementCardService` encapsulating the card-identification logic. Given a statement IBAN, either return an existing card or a prompt-state indicating "unknown card, needs registration". Rationale: Centralizes the decision logic (match vs. register) and integrates Story 4.1's services.
 
-- [ ] `api/api/routes/import_sessions.py` -- Add new route `POST /import/sessions/{session_id}/statements/{statement_id}/identify-card` accepting `{ "label"?: str }` (optional — if present, register a new card; if absent, return the matched card or status=unknown). Rationale: Review UI needs an endpoint to confirm card identity before individual accept.
+- [x] `api/api/routes/import_sessions.py` -- Add new route `POST /import/sessions/{session_id}/statements/{statement_id}/identify-card` accepting `{ "label"?: str }` (optional — if present, register a new card; if absent, return the matched card or status=unknown). Rationale: Review UI needs an endpoint to confirm card identity before individual accept.
 
-- [ ] Unit & integration tests -- Test IBAN extraction on real BAC PDF (Task 1); test statement persistence with IBAN (Task 3/4); test card matching on existing card hit, unknown IBAN with registration, missing IBAN (Task 6); test that existing pre-IBAN import sessions remain unblocked (backward compat).
+- [x] Unit & integration tests -- Test IBAN extraction on real BAC PDF (Task 1); test statement persistence with IBAN (Task 3/4); test card matching on existing card hit, unknown IBAN with registration, missing IBAN (Task 6); test that existing pre-IBAN import sessions remain unblocked (backward compat).
 
-- [ ] Review UI integration (UI) -- Integrate card identification step into the individual review flow before individual accept button is enabled. Reuse `RegisterCardForm` component from Story 4.1. Rationale: User cannot accept a statement without confirming its card origin.
+- [ ] Review UI integration (UI) -- Integrate card identification step into the individual review flow before individual accept button is enabled. Reuse `RegisterCardForm` component from Story 4.1. Rationale: User cannot accept a statement without confirming its card origin. (Deferred to separate UI story)
 
 **Acceptance Criteria:**
 

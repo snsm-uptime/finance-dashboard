@@ -16,10 +16,12 @@ from typing import Protocol
 from uuid import UUID, uuid4
 
 from domain.canonical_line import CanonicalLine
+from domain.cards import normalize_iban
 from domain.errors import (
     ImportSessionNotFoundError,
     ImportStatementNotFoundError,
     InvalidCanonicalLineError,
+    InvalidCardIbanError,
 )
 from domain.expenses import ManualExpenseDraft
 from domain.import_session import (
@@ -34,6 +36,7 @@ from domain.import_session import (
 )
 
 from application.bank_adapters import BankAdapter, detect_bank_adapter
+from application.cards import CardRecord, MatchCardByIbanCommand, MatchCardByIbanService
 from application.fx_service import MaterializedFx, MaterializeFxService
 from application.list_access import (
     AuthorizeListAccessCommand,
@@ -52,11 +55,15 @@ class DetectedStatement:
     Reuses CanonicalLine directly as the row shape — AD-16 defines
     CANDIDATE_ROW as CanonicalLine + session review fields only, and this
     story adds no review fields yet (that's Stories 4.7/4.8).
+
+    iban is extracted from the statement header during parse (Story 4.8.1);
+    normalized but not validated for checksum (FR-37, AD-20).
     """
 
     product_id: str
     status: str
     candidate_rows: list[CanonicalLine]
+    iban: str | None = None
 
 
 def run_import_pipeline(
@@ -69,6 +76,8 @@ def run_import_pipeline(
     place a failure is deliberately swallowed: it becomes a "failed"
     DetectedStatement with no rows so sibling statements in the same upload
     are not discarded (AC #3).
+
+    IBAN extraction (Story 4.8.1) happens per-chunk after split, before parse.
     """
     adapter = detect_bank_adapter(
         adapters, override=None, filename=filename, content_sample=pdf_bytes
@@ -77,6 +86,19 @@ def run_import_pipeline(
 
     detected: list[DetectedStatement] = []
     for chunk in chunks:
+        # Extract IBAN first (Story 4.8.1); normalize if present
+        iban_raw = None
+        iban_normalized = None
+        if hasattr(adapter, "extract_iban"):
+            iban_raw = adapter.extract_iban(chunk)
+            if iban_raw:
+                try:
+                    iban_normalized = normalize_iban(iban_raw)
+                except InvalidCardIbanError as e:
+                    # IBAN normalization fails → treat as absent (AC #5, graceful degrade)
+                    logger.warning("iban_normalization_failed iban_raw=%r error=%s", iban_raw, e)
+                    iban_normalized = None
+
         try:
             rows = adapter.parse(chunk)
         except InvalidCanonicalLineError:
@@ -85,6 +107,7 @@ def run_import_pipeline(
                     product_id=adapter.product_id,
                     status=STATEMENT_STATUS_FAILED,
                     candidate_rows=[],
+                    iban=iban_normalized,
                 )
             )
             continue
@@ -93,6 +116,7 @@ def run_import_pipeline(
                 product_id=adapter.product_id,
                 status=STATEMENT_STATUS_STAGED,
                 candidate_rows=rows,
+                iban=iban_normalized,
             )
         )
     return detected
@@ -106,7 +130,10 @@ class StagedStatementRecord:
 
     `candidate_rows` (Story 4.7) is likewise not part of the upload/discard
     response DTOs — it exists so AssignBulkImportService can build ledger
-    drafts from the same fetched record without a second round-trip."""
+    drafts from the same fetched record without a second round-trip.
+
+    `iban` (Story 4.8.1) is statement-level metadata extracted from the PDF
+    header, used for card identification at review-start."""
 
     id: UUID
     session_id: UUID
@@ -114,6 +141,7 @@ class StagedStatementRecord:
     status: str
     candidate_row_count: int
     pdf_path: str | None
+    iban: str | None = None
     candidate_rows: list[CanonicalLine] = field(default_factory=list)
 
 
@@ -533,3 +561,51 @@ class SkipStatementService:
             pdf_storage=self._pdf_storage,
         )
         return updated
+
+
+@dataclass(frozen=True, slots=True)
+class MatchStatementCardCommand:
+    """Card identification for a statement with known IBAN (Story 4.8.1, AC #2/#3).
+
+    actor_user_id is required to scope card lookup to the user's own registered cards.
+    """
+
+    actor_user_id: UUID
+    iban: str
+
+
+@dataclass(frozen=True, slots=True)
+class MatchStatementCardResult:
+    """Result of card matching: either a matched card or None (unknown IBAN).
+
+    matched_card: CardRecord if IBAN matches a registered card; None if unknown.
+    """
+
+    matched_card: CardRecord | None
+
+
+class MatchStatementCardService:
+    """Match a statement IBAN to a registered card, or return unknown (Story 4.8.1).
+
+    AC #2: Known IBAN → returns matched card silently (no prompt).
+    AC #3: Unknown IBAN → returns None; caller must prompt card registration.
+    AC #5: Missing IBAN → returns None; review proceeds without card.
+
+    Reuses Story 4.1's MatchCardByIbanService for the core lookup.
+    """
+
+    def __init__(self, card_match_service: MatchCardByIbanService) -> None:
+        self._card_match_service = card_match_service
+
+    def execute(self, command: MatchStatementCardCommand) -> MatchStatementCardResult:
+        """Match IBAN to existing card; return None if unknown or missing.
+
+        IBAN will be normalized by MatchCardByIbanService before matching.
+        """
+        if not command.iban:
+            return MatchStatementCardResult(matched_card=None)
+
+        matched = self._card_match_service.execute(
+            MatchCardByIbanCommand(actor_user_id=command.actor_user_id, iban=command.iban)
+        )
+        return MatchStatementCardResult(matched_card=matched)
