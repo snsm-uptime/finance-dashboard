@@ -2,7 +2,7 @@
 title: 'Story 4.8.1: BAC IBAN extraction & card identification at review start'
 type: 'feature'
 created: '2026-08-20'
-status: 'in-review'
+status: 'done'
 review_loop_iteration: 0
 baseline_commit: '5024387'
 context: []
