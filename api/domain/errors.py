@@ -435,3 +435,35 @@ class ImportSessionNotFoundError(DomainError):
 
     def __init__(self) -> None:
         super().__init__(self.MESSAGE)
+
+
+class ImportSessionDiscardedError(DomainError):
+    """Raised when a Bulk commit targets a session that has been discarded (Story 4.7)."""
+
+    MESSAGE = "This import session has been discarded."
+    CODE = "import_session_discarded"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
+class ImportSessionAlreadyCommittedError(DomainError):
+    """Raised when a Bulk commit targets a session with at least one already-committed
+    statement — no double-commit (Story 4.7, AD-4)."""
+
+    MESSAGE = "This import session has already been committed."
+    CODE = "import_session_already_committed"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
+class NoCleanStatementsToCommitError(DomainError):
+    """Raised when a session has no staged (clean-parse) statements to commit
+    (Story 4.7, AC #4 — failed statements are excluded, not silently committed)."""
+
+    MESSAGE = "No clean statements are available to commit."
+    CODE = "no_clean_statements_to_commit"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)

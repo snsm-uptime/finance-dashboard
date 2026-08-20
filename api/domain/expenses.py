@@ -39,6 +39,9 @@ class ManualExpenseDraft:
     posted_date: str
     origin_kind: str | None = None
     origin_card_id: UUID | None = None
+    # Adapter-emitted dedup hint (Story 4.7 Bulk import reuse) — hand entries
+    # never set this; None for every existing caller.
+    external_ref: str | None = None
 
 
 def _validate_origin(

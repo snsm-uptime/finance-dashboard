@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, useId, useState } from "react";
+import Link from "next/link";
 
 import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 import { usePreferences } from "@/components/PreferencesProvider";
@@ -125,13 +126,16 @@ export function UploadPanel() {
               ))}
             </ul>
 
-            <div className="mt-4">
-              <PrimaryButton
-                disabled={discard.pending}
-                onClick={() => discard.submit(session.id)}
-              >
+            <div className="mt-4 flex gap-3">
+              <PrimaryButton disabled={discard.pending} onClick={() => discard.submit(session.id)}>
                 {discard.pending ? t.discarding : t.discard}
               </PrimaryButton>
+              <Link
+                href={`/upload/bulk/${encodeURIComponent(session.id)}`}
+                className="inline-flex items-center px-3 py-[9px] rounded-sm border border-border text-foreground no-underline font-[550] text-[0.95rem]"
+              >
+                {t.assignToList}
+              </Link>
             </div>
           </section>
         ) : null}

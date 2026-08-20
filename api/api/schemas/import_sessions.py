@@ -20,3 +20,20 @@ class ImportSessionResponse(BaseModel):
     created_at: datetime
     discarded_at: datetime | None = None
     statements: list[StagedStatementResponse] = Field(default_factory=list)
+
+
+class BulkCommitBody(BaseModel):
+    list_id: UUID
+
+
+class ImportBatchResponse(BaseModel):
+    id: UUID
+    statement_id: UUID
+    list_id: UUID
+    ledger_entry_count: int
+
+
+class BulkCommitResponse(BaseModel):
+    session_id: UUID
+    list_id: UUID
+    batches: list[ImportBatchResponse] = Field(default_factory=list)

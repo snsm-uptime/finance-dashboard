@@ -13,10 +13,14 @@ from decimal import Decimal
 from uuid import UUID, uuid4
 
 import pytest
+from application.fx_service import MaterializedFx
 from application.import_session import (
+    AssignBulkImportCommand,
+    AssignBulkImportService,
     DetectedStatement,
     DiscardImportSessionCommand,
     DiscardImportSessionService,
+    ImportBatchRecord,
     ImportSessionRecord,
     StagedStatementRecord,
     UploadStatementPdfCommand,
@@ -26,12 +30,20 @@ from application.import_session import (
 from domain.canonical_line import CanonicalLine
 from domain.errors import (
     AmbiguousBankAdapterError,
+    ImportSessionAlreadyCommittedError,
+    ImportSessionDiscardedError,
     ImportSessionNotFoundError,
     InvalidCanonicalLineError,
+    NoCleanStatementsToCommitError,
+    NotListMemberError,
     UnknownBankAdapterError,
     UnsupportedFileTypeError,
 )
-from domain.import_session import STATEMENT_STATUS_FAILED, STATEMENT_STATUS_STAGED
+from domain.import_session import (
+    STATEMENT_STATUS_COMMITTED,
+    STATEMENT_STATUS_FAILED,
+    STATEMENT_STATUS_STAGED,
+)
 
 PDF_BYTES = b"%PDF-1.4\nfake statement bytes"
 
@@ -155,6 +167,7 @@ class _FakePdfStorage:
 class _FakeImportSessionRepo:
     sessions: dict[UUID, ImportSessionRecord] = field(default_factory=dict)
     create_calls: list[dict] = field(default_factory=list)
+    commit_calls: list[dict] = field(default_factory=list)
 
     def create_session(
         self,
@@ -180,6 +193,7 @@ class _FakeImportSessionRepo:
                 status=s.status,
                 candidate_row_count=len(s.candidate_rows),
                 pdf_path=pdf_paths[index],
+                candidate_rows=s.candidate_rows,
             )
             for index, s in enumerate(statements)
         ]
@@ -210,6 +224,101 @@ class _FakeImportSessionRepo:
         )
         self.sessions[session_id] = updated
         return updated
+
+    def commit_statement_batch(
+        self,
+        *,
+        batch_id: UUID,
+        session_id: UUID,
+        statement_id: UUID,
+        list_id: UUID,
+        actor_user_id: UUID,
+        rows: list,
+    ) -> ImportBatchRecord:
+        self.commit_calls.append(
+            {
+                "batch_id": batch_id,
+                "session_id": session_id,
+                "statement_id": statement_id,
+                "list_id": list_id,
+                "actor_user_id": actor_user_id,
+                "rows": rows,
+            }
+        )
+        record = self.sessions[session_id]
+        updated_statements = [
+            StagedStatementRecord(
+                id=s.id,
+                session_id=s.session_id,
+                product_id=s.product_id,
+                status=STATEMENT_STATUS_COMMITTED if s.id == statement_id else s.status,
+                candidate_row_count=s.candidate_row_count,
+                pdf_path=s.pdf_path,
+                candidate_rows=s.candidate_rows,
+            )
+            for s in record.statements
+        ]
+        self.sessions[session_id] = ImportSessionRecord(
+            id=record.id,
+            user_id=record.user_id,
+            created_at=record.created_at,
+            discarded_at=record.discarded_at,
+            statements=updated_statements,
+        )
+        ledger_entry_ids = [uuid4() for _ in rows]
+        return ImportBatchRecord(
+            id=batch_id,
+            session_id=session_id,
+            statement_id=statement_id,
+            list_id=list_id,
+            actor_user_id=actor_user_id,
+            created_at=datetime.now(UTC),
+            ledger_entry_ids=ledger_entry_ids,
+        )
+
+
+@dataclass
+class _FakeListPeek:
+    id: UUID
+    owner_id: UUID
+
+
+@dataclass
+class _FakeMembershipPeek:
+    user_id: UUID
+    role: str = "member"
+
+
+@dataclass
+class _FakeListLookup:
+    """Minimal ListAccessLookup double — mirrors test_cards_application.py's fake."""
+
+    lists: dict[UUID, _FakeListPeek] = field(default_factory=dict)
+    memberships: dict[UUID, list[_FakeMembershipPeek]] = field(default_factory=dict)
+
+    def add_member(self, list_id: UUID, owner_id: UUID, user_id: UUID) -> None:
+        self.lists.setdefault(list_id, _FakeListPeek(id=list_id, owner_id=owner_id))
+        self.memberships.setdefault(list_id, []).append(_FakeMembershipPeek(user_id=user_id))
+
+    def get_list(self, list_id: UUID) -> _FakeListPeek | None:
+        return self.lists.get(list_id)
+
+    def get_membership(self, list_id: UUID, user_id: UUID) -> _FakeMembershipPeek | None:
+        for m in self.memberships.get(list_id, []):
+            if m.user_id == user_id:
+                return m
+        return None
+
+
+class _FakeFxService:
+    """No-op FX — CRC-through-1:1 matches real MaterializeFxService for CRC rows."""
+
+    def materialize_fx_for_entry(
+        self, *, amount: Decimal, currency: str, posted_date
+    ) -> MaterializedFx:
+        return MaterializedFx(
+            amount_crc=amount, fx_rate=Decimal("1"), fx_rate_date=posted_date, fx_fallback=False
+        )
 
 
 def test_upload_non_pdf_rejected_before_storage() -> None:
@@ -338,3 +447,215 @@ def test_discard_already_discarded_session_does_not_raise() -> None:
     result = service.execute(command)
 
     assert result.discarded_at is not None
+
+
+# --- Story 4.7 Task 2.4: AssignBulkImportService -----------------------------------
+
+
+def _multi_statement_session(
+    repo: _FakeImportSessionRepo,
+    storage: _FakePdfStorage,
+    *,
+    user_id: UUID,
+    parse_results: list[list[CanonicalLine] | Exception],
+) -> UUID:
+    adapter = FakeAdapter(
+        split_chunks=[f"c{i}".encode() for i in range(len(parse_results))],
+        parse_results=parse_results,
+    )
+    service = UploadStatementPdfService(storage, [adapter], repo)
+    session = service.execute(
+        UploadStatementPdfCommand(
+            actor_user_id=user_id, filename="statement.pdf", content=PDF_BYTES
+        )
+    )
+    return session.id
+
+
+def test_bulk_assign_two_clean_statements_creates_two_batches_payer_is_actor() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    lookup = _FakeListLookup()
+    actor = uuid4()
+    list_id = uuid4()
+    lookup.add_member(list_id, owner_id=actor, user_id=actor)
+    session_id = _multi_statement_session(
+        repo, storage, user_id=actor, parse_results=[[_row("r1")], [_row("r2")]]
+    )
+
+    result = AssignBulkImportService(repo, lookup, _FakeFxService()).execute(
+        AssignBulkImportCommand(actor_user_id=actor, session_id=session_id, list_id=list_id)
+    )
+
+    assert len(result.batches) == 2
+    assert all(b.list_id == list_id for b in result.batches)
+    assert len(repo.commit_calls) == 2
+    for call in repo.commit_calls:
+        assert call["actor_user_id"] == actor
+        draft, fx = call["rows"][0]
+        assert draft.payer_id == actor
+        assert draft.provenance == "parser"
+    updated = repo.get_session(session_id, actor)
+    assert all(s.status == STATEMENT_STATUS_COMMITTED for s in updated.statements)
+
+
+def test_bulk_assign_excludes_failed_statement_from_commit() -> None:
+    """AC #4: a failed-parse statement is deferred to Epic 5, not silently committed."""
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    lookup = _FakeListLookup()
+    actor = uuid4()
+    list_id = uuid4()
+    lookup.add_member(list_id, owner_id=actor, user_id=actor)
+    session_id = _multi_statement_session(
+        repo,
+        storage,
+        user_id=actor,
+        parse_results=[[_row("r1")], InvalidCanonicalLineError("bad")],
+    )
+
+    result = AssignBulkImportService(repo, lookup, _FakeFxService()).execute(
+        AssignBulkImportCommand(actor_user_id=actor, session_id=session_id, list_id=list_id)
+    )
+
+    assert len(result.batches) == 1
+    updated = repo.get_session(session_id, actor)
+    statuses = {s.status for s in updated.statements}
+    assert statuses == {STATEMENT_STATUS_COMMITTED, STATEMENT_STATUS_FAILED}
+
+
+def test_bulk_assign_nonexistent_session_not_found() -> None:
+    repo = _FakeImportSessionRepo()
+    lookup = _FakeListLookup()
+    actor = uuid4()
+    list_id = uuid4()
+    lookup.add_member(list_id, owner_id=actor, user_id=actor)
+
+    with pytest.raises(ImportSessionNotFoundError):
+        AssignBulkImportService(repo, lookup, _FakeFxService()).execute(
+            AssignBulkImportCommand(actor_user_id=actor, session_id=uuid4(), list_id=list_id)
+        )
+
+
+def test_bulk_assign_non_member_list_denied_no_commit() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    lookup = _FakeListLookup()
+    actor = uuid4()
+    stranger_list_owner = uuid4()
+    list_id = uuid4()
+    lookup.add_member(list_id, owner_id=stranger_list_owner, user_id=stranger_list_owner)
+    session_id = _multi_statement_session(repo, storage, user_id=actor, parse_results=[[_row()]])
+
+    with pytest.raises(NotListMemberError):
+        AssignBulkImportService(repo, lookup, _FakeFxService()).execute(
+            AssignBulkImportCommand(actor_user_id=actor, session_id=session_id, list_id=list_id)
+        )
+    assert repo.commit_calls == []
+
+
+def test_bulk_assign_discarded_session_rejected() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    lookup = _FakeListLookup()
+    actor = uuid4()
+    list_id = uuid4()
+    lookup.add_member(list_id, owner_id=actor, user_id=actor)
+    session_id = _multi_statement_session(repo, storage, user_id=actor, parse_results=[[_row()]])
+    DiscardImportSessionService(repo, storage).execute(
+        DiscardImportSessionCommand(actor_user_id=actor, session_id=session_id)
+    )
+
+    with pytest.raises(ImportSessionDiscardedError):
+        AssignBulkImportService(repo, lookup, _FakeFxService()).execute(
+            AssignBulkImportCommand(actor_user_id=actor, session_id=session_id, list_id=list_id)
+        )
+    assert repo.commit_calls == []
+
+
+def test_bulk_assign_all_failed_statements_rejected() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    lookup = _FakeListLookup()
+    actor = uuid4()
+    list_id = uuid4()
+    lookup.add_member(list_id, owner_id=actor, user_id=actor)
+    session_id = _multi_statement_session(
+        repo, storage, user_id=actor, parse_results=[InvalidCanonicalLineError("bad")]
+    )
+
+    with pytest.raises(NoCleanStatementsToCommitError):
+        AssignBulkImportService(repo, lookup, _FakeFxService()).execute(
+            AssignBulkImportCommand(actor_user_id=actor, session_id=session_id, list_id=list_id)
+        )
+    assert repo.commit_calls == []
+
+
+def test_bulk_assign_already_committed_session_rejected_no_double_commit() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    lookup = _FakeListLookup()
+    actor = uuid4()
+    list_id = uuid4()
+    lookup.add_member(list_id, owner_id=actor, user_id=actor)
+    session_id = _multi_statement_session(repo, storage, user_id=actor, parse_results=[[_row()]])
+    service = AssignBulkImportService(repo, lookup, _FakeFxService())
+    command = AssignBulkImportCommand(actor_user_id=actor, session_id=session_id, list_id=list_id)
+    service.execute(command)
+    assert len(repo.commit_calls) == 1
+
+    with pytest.raises(ImportSessionAlreadyCommittedError):
+        service.execute(command)
+    assert len(repo.commit_calls) == 1
+
+
+def test_bulk_assign_rejects_candidate_row_with_invalid_amount_no_commit() -> None:
+    """Story 4.7 review finding: a malformed row (more than 2 decimal places
+    here) must fail loud via validate_bulk_candidate_row, not silently land
+    in ledger_entries — mirrors validate_manual_expense's invariants for
+    hand expenses on the same table."""
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    lookup = _FakeListLookup()
+    actor = uuid4()
+    list_id = uuid4()
+    lookup.add_member(list_id, owner_id=actor, user_id=actor)
+    bad_row = CanonicalLine(
+        posted_date="2026-01-01",
+        amount=Decimal("10.005"),
+        currency="CRC",
+        product_id="fake_product",
+        line_type="purchase",
+        normalized_description="fractional cents",
+    )
+    session_id = _multi_statement_session(repo, storage, user_id=actor, parse_results=[[bad_row]])
+
+    with pytest.raises(InvalidCanonicalLineError):
+        AssignBulkImportService(repo, lookup, _FakeFxService()).execute(
+            AssignBulkImportCommand(actor_user_id=actor, session_id=session_id, list_id=list_id)
+        )
+    assert len(repo.commit_calls) == 0
+
+
+def test_staged_statement_record_has_no_unchecked_card_routing_field() -> None:
+    """Canary (Story 4.7 code review): AC #1 assumes Bulk only ever sees
+    review-routed cards, but no card/routing_mode linkage exists on a
+    statement today (that's Stories 4.4/4.6's territory) — so
+    AssignBulkImportService.execute has no gate to enforce it and none is
+    needed yet.
+
+    If a future story adds `card_id` / `routing_mode` to
+    `StagedStatementRecord` or `DetectedStatement` without also adding an
+    explicit routing_mode check in AssignBulkImportService.execute, this
+    test fails loud instead of the gap silently persisting.
+    """
+    from dataclasses import fields
+
+    staged_names = {f.name for f in fields(StagedStatementRecord)}
+    detected_names = {f.name for f in fields(DetectedStatement)}
+    leaked = (staged_names | detected_names) & {"card_id", "routing_mode"}
+    assert not leaked, (
+        f"{leaked} landed on a statement record without a routing_mode gate in "
+        "AssignBulkImportService.execute (Story 4.7 review finding) — add the "
+        "AC #1 review-routing check before removing this canary."
+    )

@@ -295,6 +295,14 @@ class LedgerEntryModel(Base):
     fx_rate: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False, server_default="1")
     fx_rate_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     fx_fallback: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    # Import Batch this row was committed under (Story 4.7, AD-4). Null for
+    # hand-entered expenses — only import-sourced rows carry a batch.
+    import_batch_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("import_batches.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -448,3 +456,37 @@ class ImportCandidateRowModel(Base):
     )
 
     statement: Mapped[ImportStatementModel] = relationship(back_populates="candidate_rows")
+
+
+class ImportBatchModel(Base):
+    """One committed Import Batch (Story 4.7, AD-4) — one Statement's accept.
+
+    `statement_id` is unique: a statement can be committed at most once, ever
+    (no double-commit). Ledger rows created under this batch reference it via
+    `ledger_entries.import_batch_id`.
+    """
+
+    __tablename__ = "import_batches"
+    __table_args__ = (UniqueConstraint("statement_id", name="uq_import_batches_statement_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("import_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    statement_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("import_statements.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    list_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("lists.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    actor_user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

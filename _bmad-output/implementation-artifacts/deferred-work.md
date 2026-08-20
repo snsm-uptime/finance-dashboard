@@ -207,3 +207,13 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-hide-no-origin-filter-when-empty.md`
   summary: List-detail `asExpenses` does not coerce a missing `origin_kind` to null the way `listsClient.asExpense` does
   evidence: Review (Blind Hunter) — `page.tsx` spreads SSR rows without the string-or-null coercion used in `listsClient.asExpense`; `ownBlankOriginExpenses` uses `origin_kind === null`. Pre-existing parser mismatch; hide-when-idle also removes the old empty-state reminder if those rows were ever omitted from the actionable set.
+
+## Deferred from: code review of 4-7-bulk-review-assign-commit-path (2026-08-19)
+
+- AC #2's `?listId=` pre-select mechanism is unreachable dead code — no shipped entry point ever constructs the query param; self-documented in the story's own Task 4.1 as awaiting a future list-scoped upload entry point.
+- AC #3's "payer remains editable" has no backing edit endpoint anywhere in the app — matches Story 3.2 hand-expense payer semantics exactly (no payer-edit route exists for any expense today, hand or imported), so it's a pre-existing system-wide gap, not a regression unique to this story.
+- A staged statement with zero candidate rows produces a valid but empty Import Batch — `validate_bulk_commit_eligible` only checks that some statement is staged, not that each has rows. Benign, untested.
+- `_session_record` (`api/adapters/persistence/import_sessions.py`) eagerly builds full `CanonicalLine` objects for every candidate row on every call site (`create_session`/`get_session`/`discard_session`), though only `AssignBulkImportService` needs that data.
+- FX materialization in Bulk commit is sequential per candidate row with no batching and no NFR timing test for the commit path (Story 4.6 added one for upload) — inherited from the existing Story 3.5 manual-expense pattern, not a new regression.
+- Application-tier unit tests (`api/tests/test_import_session_application.py`) use a no-op 1:1 `_FakeFxService` for every currency, so non-CRC FX flow through `commit_statement_batch` is only exercised at the Postgres-integration tier.
+- `_own_list_id` integration-test helper (`api/tests/test_import_sessions_integration.py`) blindly takes `lists[0]` with no assertion that exactly one list exists — brittle if default-list registration behavior ever changes.
