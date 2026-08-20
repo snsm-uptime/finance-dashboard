@@ -136,6 +136,12 @@ export function UploadPanel() {
               >
                 {t.assignToList}
               </Link>
+              <Link
+                href={`/upload/review/${encodeURIComponent(session.id)}`}
+                className="inline-flex items-center px-3 py-[9px] rounded-sm border border-border text-foreground no-underline font-[550] text-[0.95rem]"
+              >
+                {t.reviewIndividually}
+              </Link>
             </div>
           </section>
         ) : null}

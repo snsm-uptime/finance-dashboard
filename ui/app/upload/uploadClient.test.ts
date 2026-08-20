@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { bulkCommitSession, discardSession, uploadStatement } from "./uploadClient";
+import {
+  bulkCommitSession,
+  commitIndividualStatement,
+  discardSession,
+  fetchImportSession,
+  skipStatement,
+  uploadStatement,
+} from "./uploadClient";
 
 const messages = {
   errorUnsupportedFileType: "unsupported",
@@ -17,6 +24,17 @@ const bulkCommitMessages = {
   errorSessionDiscarded: "discarded",
   errorAlreadyCommitted: "already-committed",
   errorNoCleanStatements: "no-clean-statements",
+  errorFxUnavailable: "fx-unavailable",
+  errorGeneric: "generic",
+  errorUnauthorized: "unauthorized",
+};
+
+const individualReviewMessages = {
+  errorForbidden: "forbidden",
+  errorSessionNotFound: "session-not-found",
+  errorStatementNotFound: "statement-not-found",
+  errorSessionDiscarded: "discarded",
+  errorStatementNotAvailable: "statement-not-available",
   errorFxUnavailable: "fx-unavailable",
   errorGeneric: "generic",
   errorUnauthorized: "unauthorized",
@@ -247,5 +265,199 @@ describe("uploadClient", () => {
 
     const result = await bulkCommitSession("s1", "l1", bulkCommitMessages);
     expect(result).toEqual({ ok: false, error: "fx-unavailable" });
+  });
+
+  // --- Story 4.8: fetchImportSession / commitIndividualStatement / skipStatement ---
+
+  it("fetchImportSession returns the parsed session including committed/skipped statuses", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        id: "s1",
+        created_at: "2026-08-19T00:00:00Z",
+        discarded_at: null,
+        statements: [
+          { id: "st1", product_id: "bac_credit", status: "committed", candidate_row_count: 3 },
+          { id: "st2", product_id: "bac_credit", status: "skipped", candidate_row_count: 1 },
+        ],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await fetchImportSession("s1", individualReviewMessages);
+
+    expect(result).toEqual({
+      ok: true,
+      session: {
+        id: "s1",
+        created_at: "2026-08-19T00:00:00Z",
+        discarded_at: null,
+        statements: [
+          { id: "st1", product_id: "bac_credit", status: "committed", candidate_row_count: 3 },
+          { id: "st2", product_id: "bac_credit", status: "skipped", candidate_row_count: 1 },
+        ],
+      },
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/import/sessions/s1",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("fetchImportSession maps import_session_not_found to errorSessionNotFound", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        json: async () => ({ code: "import_session_not_found", detail: "no" }),
+      }),
+    );
+
+    const result = await fetchImportSession("s1", individualReviewMessages);
+    expect(result).toEqual({ ok: false, error: "session-not-found" });
+  });
+
+  it("commitIndividualStatement posts list_id and returns the updated session", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        id: "s1",
+        created_at: "2026-08-19T00:00:00Z",
+        discarded_at: null,
+        statements: [
+          { id: "st1", product_id: "bac_credit", status: "committed", candidate_row_count: 3 },
+        ],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await commitIndividualStatement("s1", "st1", "l1", individualReviewMessages);
+
+    expect(result).toEqual({
+      ok: true,
+      session: {
+        id: "s1",
+        created_at: "2026-08-19T00:00:00Z",
+        discarded_at: null,
+        statements: [
+          { id: "st1", product_id: "bac_credit", status: "committed", candidate_row_count: 3 },
+        ],
+      },
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/import/sessions/s1/statements/st1/commit",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ list_id: "l1" }) }),
+    );
+  });
+
+  it("commitIndividualStatement maps 403 not_list_member to errorForbidden", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 403,
+        json: async () => ({ code: "not_list_member", detail: "no" }),
+      }),
+    );
+
+    const result = await commitIndividualStatement("s1", "st1", "l1", individualReviewMessages);
+    expect(result).toEqual({ ok: false, error: "forbidden" });
+  });
+
+  it("commitIndividualStatement maps import_statement_not_found to errorStatementNotFound", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        json: async () => ({ code: "import_statement_not_found", detail: "no" }),
+      }),
+    );
+
+    const result = await commitIndividualStatement("s1", "st1", "l1", individualReviewMessages);
+    expect(result).toEqual({ ok: false, error: "statement-not-found" });
+  });
+
+  it("commitIndividualStatement maps import_statement_not_available to errorStatementNotAvailable (409)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: async () => ({ code: "import_statement_not_available", detail: "no" }),
+      }),
+    );
+
+    const result = await commitIndividualStatement("s1", "st1", "l1", individualReviewMessages);
+    expect(result).toEqual({ ok: false, error: "statement-not-available" });
+  });
+
+  it("commitIndividualStatement maps import_session_discarded to errorSessionDiscarded (409)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: async () => ({ code: "import_session_discarded", detail: "no" }),
+      }),
+    );
+
+    const result = await commitIndividualStatement("s1", "st1", "l1", individualReviewMessages);
+    expect(result).toEqual({ ok: false, error: "discarded" });
+  });
+
+  it("commitIndividualStatement maps fx_service_unavailable to errorFxUnavailable (503)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        json: async () => ({ code: "fx_service_unavailable", detail: "no" }),
+      }),
+    );
+
+    const result = await commitIndividualStatement("s1", "st1", "l1", individualReviewMessages);
+    expect(result).toEqual({ ok: false, error: "fx-unavailable" });
+  });
+
+  it("skipStatement posts to the statement skip route and returns the updated session", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        id: "s1",
+        created_at: "2026-08-19T00:00:00Z",
+        discarded_at: null,
+        statements: [
+          { id: "st1", product_id: "bac_credit", status: "skipped", candidate_row_count: 2 },
+        ],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await skipStatement("s1", "st1", individualReviewMessages);
+
+    expect(result.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/import/sessions/s1/statements/st1/skip",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("skipStatement maps import_statement_not_available to errorStatementNotAvailable (409)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: async () => ({ code: "import_statement_not_available", detail: "no" }),
+      }),
+    );
+
+    const result = await skipStatement("s1", "st1", individualReviewMessages);
+    expect(result).toEqual({ ok: false, error: "statement-not-available" });
   });
 });
