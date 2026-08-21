@@ -37,7 +37,7 @@ export function TabBar({
 }: TabBarProps) {
   return (
     <nav
-      className="flex justify-evenly items-center mt-auto shrink-0 bg-surface border-t border-border"
+      className="flex justify-evenly items-center mt-auto shrink-0 bg-surface border-t border-border pb-[env(safe-area-inset-bottom)]"
       aria-label={ariaLabel}
     >
       <Link

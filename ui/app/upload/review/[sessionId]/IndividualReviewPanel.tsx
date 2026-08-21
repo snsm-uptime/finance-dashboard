@@ -250,7 +250,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
 
   return (
     <main
-      className="min-h-screen py-[2.5rem] px-[1.5rem]"
+      className="min-h-full py-[2.5rem] px-[1.5rem]"
       style={{ fontFamily: "var(--font-ui), Manrope, system-ui, sans-serif" }}
     >
       <div className="flex items-center justify-between max-w-[28rem] mb-[1.75rem]">

@@ -114,9 +114,10 @@ Pins: match majors; re-verify patches **only when creating lockfiles** (Story 1.
 #### Import pipeline — commit semantics
 
 - **Import Session** = staging for one upload (review mutates; discard drops uncommitted only)
-- **Import Batch** = journaled commit; **`batch_id` = one Statement accept** (AD-4)
-- **Skip** = no ledger for that statement · **Dismiss file** = abandon remaining uncommitted in the session
+- **Import Batch** = one **commit action** (bulk: one statement; individual: one candidate row). Partial commit is normal; `ledger_entries.import_candidate_row_id UNIQUE` is the double-commit backstop (amended AD-4)
+- **Delete** (up, Individual UI in 4.13) = no ledger for that row · **Dismiss file** = abandon remaining uncommitted in the session
 - **Rollback** = undo a committed `batch_id` (not “delete some rows”)
+- Individual review unit = transaction; up → delete; undo is button-only (AD-9) — **UI lands in 4.13**
 - Flow: detect → split → parse → normalize → Session → review → Batch
 - Quarantine: on Session pre-commit; after accept-with-quarantine → **durable on Statement** (incomplete) (AD-17)
 - Unknown IBAN: **block review** until label + IBAN registered (AD-20)
@@ -262,12 +263,12 @@ Pins: match majors; re-verify patches **only when creating lockfiles** (Story 1.
 #### Always
 
 - Hex ports: adapters emit CanonicalLine; **domain** owns dedup identity at commit
-- `batch_id` = one Statement; Session ≠ Batch; rollback = batch undo
+- `batch_id` = one **commit action** (bulk: one statement; individual: one candidate row); Session ≠ Batch; rollback = batch undo
 - Quarantine durable on Statement after accept-with-quarantine; disclose incomplete **under** strip
 - Unknown IBAN blocks until registration; card routing on registered card
 - Clean commit + no quarantine → delete PDF + clear path
 - BCCR FX materialized at commit (`fx_fallback` when nearest-prior); remainder → list creator
-- Phone swipe R/L/D + list picker first; desktop buttons; a11y non-gesture path
+- Individual review unit = transaction; phone swipe R/L/U (up → delete) + list picker first; undo is button-only; desktop buttons; a11y non-gesture path (AD-9 — UI in 4.13)
 - Warm Balance / Soft-Ledger from spines — kits unstyled only
 - Synthetic CI goldens gate release; operator real PDFs never block merge
 

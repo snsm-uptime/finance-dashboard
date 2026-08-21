@@ -20,8 +20,34 @@ from uuid import UUID, uuid4
 
 import pytest
 from adapters.persistence.import_sessions import SqlAlchemyImportSessionRepository
-from adapters.persistence.models import ImportStatementModel, LedgerEntryModel
-from domain.errors import ImportSessionAlreadyCommittedError
+from adapters.persistence.models import (
+    ImportBatchModel,
+    ImportCandidateRowModel,
+    ImportStatementModel,
+    LedgerEntryModel,
+)
+from adapters.persistence.repositories import SqlAlchemyListRepository
+from adapters.storage.pdf_storage import FilesystemPdfStorage
+from application.fx_service import MaterializedFx, MaterializeFxService
+from application.import_session import (
+    AssignCandidateRowCommand,
+    AssignCandidateRowService,
+    CommitRow,
+    DeleteCandidateRowCommand,
+    DeleteCandidateRowService,
+    DetectedStatement,
+)
+from domain.canonical_line import CanonicalLine
+from domain.errors import ImportRowNotAvailableError
+from domain.expenses import ManualExpenseDraft
+from domain.import_session import (
+    ROW_STATUS_COMMITTED,
+    ROW_STATUS_DELETED,
+    ROW_STATUS_EXCLUDED_ZERO_AMOUNT,
+    ROW_STATUS_PENDING,
+    STATEMENT_STATUS_COMMITTED,
+    STATEMENT_STATUS_STAGED,
+)
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -137,15 +163,6 @@ def test_unauthenticated_rejected_on_both_routes(client: TestClient) -> None:
         f"/import/sessions/{uuid4()}/bulk-commit", json={"list_id": str(uuid4())}
     )
     assert bulk_commit.status_code == 401
-
-    individual_commit = client.post(
-        f"/import/sessions/{uuid4()}/statements/{uuid4()}/commit",
-        json={"list_id": str(uuid4())},
-    )
-    assert individual_commit.status_code == 401
-
-    skip = client.post(f"/import/sessions/{uuid4()}/statements/{uuid4()}/skip")
-    assert skip.status_code == 401
 
 
 def test_upload_non_pdf_bytes_rejected_content_based(client: TestClient) -> None:
@@ -303,21 +320,19 @@ def test_bulk_commit_happy_path_lands_ledger_rows_payer_is_actor(
     ).all()
     assert len(ledger_rows) == len(goldens.GOLDENS)
     assert all(str(row.import_batch_id) == batch_id for row in ledger_rows)
+    assert all(row.import_candidate_row_id is not None for row in ledger_rows)
+    assert len({row.import_candidate_row_id for row in ledger_rows}) == len(ledger_rows)
 
     _assert_source_pdf_released(db_session, session_id=session_id, user_id=me["user_id"])
 
 
-def test_bulk_commit_duplicate_batch_insert_raises_already_committed_not_integrity_error(
+def test_bulk_commit_duplicate_row_insert_raises_not_available_not_integrity_error(
     client_with_fx: TestClient,
     db_session: Session,
 ) -> None:
-    """Story 4.7 review finding: two concurrent bulk-commit requests for the
-    same statement can both pass validate_bulk_commit_eligible before either
-    persists — uq_import_batches_statement_id is the real backstop.
-    Simulate the race by calling the repository directly a second time for
-    an already-committed statement and assert it surfaces the same clean
-    domain error the sequential double-commit path already returns, not a
-    bare IntegrityError."""
+    """Story 4.10 AC #6: after a successful commit, a second
+    commit_statement_batch for the same candidate_row_id raises
+    ImportRowNotAvailableError, not a bare IntegrityError."""
     client = client_with_fx
     _register(client, "bulkrace@example.com")
     session_id = _upload_bac_session(client)
@@ -328,15 +343,42 @@ def test_bulk_commit_duplicate_batch_insert_raises_already_committed_not_integri
     assert first.status_code == 200, first.text
     statement_id = first.json()["batches"][0]["statement_id"]
 
+    already = db_session.scalars(
+        select(ImportCandidateRowModel).where(
+            ImportCandidateRowModel.statement_id == UUID(statement_id)
+        )
+    ).first()
+    assert already is not None
+
     repo = SqlAlchemyImportSessionRepository(db_session)
-    with pytest.raises(ImportSessionAlreadyCommittedError):
+    with pytest.raises(ImportRowNotAvailableError):
         repo.commit_statement_batch(
             batch_id=uuid4(),
             session_id=UUID(session_id),
             statement_id=UUID(statement_id),
             list_id=UUID(list_id),
             actor_user_id=UUID(actor_id),
-            rows=[],
+            rows=[
+                CommitRow(
+                    candidate_row_id=already.id,
+                    draft=ManualExpenseDraft(
+                        amount=Decimal(str(already.amount)),
+                        currency=already.currency,
+                        normalized_description=already.normalized_description,
+                        payer_id=UUID(actor_id),
+                        provenance=already.provenance,
+                        line_type=already.line_type,
+                        posted_date=already.posted_date.isoformat(),
+                        external_ref=already.external_ref,
+                    ),
+                    fx=MaterializedFx(
+                        amount_crc=Decimal(str(already.amount)),
+                        fx_rate=Decimal("1"),
+                        fx_rate_date=already.posted_date,
+                        fx_fallback=False,
+                    ),
+                )
+            ],
         )
 
 
@@ -385,8 +427,8 @@ def test_bulk_commit_twice_rejected_no_double_commit(client_with_fx: TestClient)
     assert first.status_code == 200, first.text
 
     second = client.post(f"/import/sessions/{session_id}/bulk-commit", json={"list_id": list_id})
-    assert second.status_code == 409
-    assert second.json()["code"] == "import_session_already_committed"
+    assert second.status_code == 422
+    assert second.json()["code"] == "no_clean_statements_to_commit"
 
     expenses = client.get(f"/lists/{list_id}/expenses")
     goldens = _load_goldens_module()
@@ -427,206 +469,198 @@ def test_get_foreign_session_not_found(client: TestClient) -> None:
     assert response.json()["code"] == "import_session_not_found"
 
 
-def test_individual_commit_happy_path_lands_ledger_row_payer_is_actor(
-    client_with_fx: TestClient,
-    db_session: Session,
-) -> None:
-    client = client_with_fx
-    _register(client, "individualhappy@example.com")
-    goldens = _load_goldens_module()
-    session_id = _upload_bac_session(client)
-    list_id = _own_list_id(client)
-    statement_id = client.get(f"/import/sessions/{session_id}").json()["statements"][0]["id"]
-
-    response = client.post(
-        f"/import/sessions/{session_id}/statements/{statement_id}/commit",
-        json={"list_id": list_id},
-    )
-
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert body["id"] == session_id
-    committed_statement = next(s for s in body["statements"] if s["id"] == statement_id)
-    assert committed_statement["status"] == "committed"
-
-    expenses = client.get(f"/lists/{list_id}/expenses")
-    rows = expenses.json()["expenses"]
-    assert len(rows) == len(goldens.GOLDENS)
-    me = client.get("/auth/me").json()
-    assert all(row["payer_id"] == me["user_id"] for row in rows)
-    assert all(row["provenance"] == "parser" for row in rows)
-
-    ledger_rows = db_session.scalars(
-        select(LedgerEntryModel).where(LedgerEntryModel.list_id == UUID(list_id))
-    ).all()
-    assert len(ledger_rows) == len(goldens.GOLDENS)
-    batch_ids = {row.import_batch_id for row in ledger_rows}
-    assert len(batch_ids) == 1
-
-    session_after = client.get(f"/import/sessions/{session_id}").json()
-    assert session_after["statements"][0]["status"] == "committed"
-    _assert_source_pdf_released(db_session, session_id=session_id, user_id=me["user_id"])
+def _services(db_session: Session):
+    repo = SqlAlchemyImportSessionRepository(db_session)
+    lookup = SqlAlchemyListRepository(db_session)
+    fx = MaterializeFxService(_FakeUsdBccrClient())
+    storage = FilesystemPdfStorage(base_dir=os.environ["PDF_STORAGE_PATH"])
+    return repo, lookup, fx, storage
 
 
-def test_individual_commit_twice_on_same_statement_rejected(client_with_fx: TestClient) -> None:
-    client = client_with_fx
-    _register(client, "individualtwice@example.com")
-    session_id = _upload_bac_session(client)
-    list_id = _own_list_id(client)
-    statement_id = client.get(f"/import/sessions/{session_id}").json()["statements"][0]["id"]
-
-    first = client.post(
-        f"/import/sessions/{session_id}/statements/{statement_id}/commit",
-        json={"list_id": list_id},
-    )
-    assert first.status_code == 200, first.text
-
-    second = client.post(
-        f"/import/sessions/{session_id}/statements/{statement_id}/commit",
-        json={"list_id": list_id},
-    )
-    assert second.status_code == 409
-    assert second.json()["code"] == "import_statement_not_available"
-
-
-def test_individual_skip_then_get_shows_skipped_status(
+def test_create_session_persists_zero_amount_as_excluded_and_keeps_count(
     client: TestClient, db_session: Session
 ) -> None:
-    _register(client, "individualskip@example.com")
-    session_id = _upload_bac_session(client)
-    statement_id = client.get(f"/import/sessions/{session_id}").json()["statements"][0]["id"]
-
-    response = client.post(f"/import/sessions/{session_id}/statements/{statement_id}/skip")
-    assert response.status_code == 200, response.text
-    assert response.json()["statements"][0]["status"] == "skipped"
-
-    refetched = client.get(f"/import/sessions/{session_id}")
-    assert refetched.json()["statements"][0]["status"] == "skipped"
-    _assert_source_pdf_released(
-        db_session, session_id=session_id, user_id=client.get("/auth/me").json()["user_id"]
+    _register(client, "zerorow@example.com")
+    user_id = UUID(client.get("/auth/me").json()["user_id"])
+    repo = SqlAlchemyImportSessionRepository(db_session)
+    zero = CanonicalLine(
+        posted_date="2026-01-01",
+        amount=Decimal("0.00"),
+        currency="CRC",
+        product_id="fake_product",
+        line_type="purchase",
+        normalized_description="zero",
     )
-
-
-def test_individual_skip_then_commit_same_statement_rejected(client_with_fx: TestClient) -> None:
-    client = client_with_fx
-    _register(client, "individualskipthencommit@example.com")
-    session_id = _upload_bac_session(client)
-    list_id = _own_list_id(client)
-    statement_id = client.get(f"/import/sessions/{session_id}").json()["statements"][0]["id"]
-
-    skip = client.post(f"/import/sessions/{session_id}/statements/{statement_id}/skip")
-    assert skip.status_code == 200, skip.text
-
-    commit = client.post(
-        f"/import/sessions/{session_id}/statements/{statement_id}/commit",
-        json={"list_id": list_id},
+    keep = CanonicalLine(
+        posted_date="2026-01-01",
+        amount=Decimal("10.00"),
+        currency="CRC",
+        product_id="fake_product",
+        line_type="purchase",
+        normalized_description="keep",
     )
-    assert commit.status_code == 409
-    assert commit.json()["code"] == "import_statement_not_available"
-
-
-def test_individual_commit_nonexistent_session_not_found(client: TestClient) -> None:
-    _register(client, "individualmissingsession@example.com")
-    list_id = _own_list_id(client)
-
-    response = client.post(
-        f"/import/sessions/{uuid4()}/statements/{uuid4()}/commit", json={"list_id": list_id}
+    record = repo.create_session(
+        session_id=uuid4(),
+        user_id=user_id,
+        statements=[
+            DetectedStatement(
+                product_id="fake_product",
+                status=STATEMENT_STATUS_STAGED,
+                candidate_rows=[zero, keep],
+            )
+        ],
+        pdf_paths={0: "/data/pdfs/zero-test.pdf"},
     )
-    assert response.status_code == 404
-    assert response.json()["code"] == "import_session_not_found"
+    rows = record.statements[0].candidate_rows
+    assert len(rows) == 2
+    assert rows[0].sequence == 0
+    assert rows[0].status == ROW_STATUS_EXCLUDED_ZERO_AMOUNT
+    assert rows[1].sequence == 1
+    assert rows[1].status == ROW_STATUS_PENDING
+    assert record.statements[0].status == STATEMENT_STATUS_STAGED
+    assert record.statements[0].candidate_row_count == 2
 
 
-def test_individual_commit_unknown_statement_not_found(client: TestClient) -> None:
-    _register(client, "individualmissingstatement@example.com")
-    session_id = _upload_bac_session(client)
-    list_id = _own_list_id(client)
-
-    response = client.post(
-        f"/import/sessions/{session_id}/statements/{uuid4()}/commit", json={"list_id": list_id}
-    )
-    assert response.status_code == 404
-    assert response.json()["code"] == "import_statement_not_found"
-
-
-def test_individual_commit_statement_from_foreign_session_not_found(client: TestClient) -> None:
-    """A real statement_id from a different session must not be reachable
-    through another session's URL — existing "not found" tests only used a
-    random, genuinely nonexistent UUID (Story 4.8 review finding)."""
-    _register(client, "individualcrosssession@example.com")
-    list_id = _own_list_id(client)
-    session_a = _upload_bac_session(client)
-    session_b = _upload_bac_session(client)
-    statement_from_a = client.get(f"/import/sessions/{session_a}").json()["statements"][0]["id"]
-
-    commit_response = client.post(
-        f"/import/sessions/{session_b}/statements/{statement_from_a}/commit",
-        json={"list_id": list_id},
-    )
-    assert commit_response.status_code == 404
-    assert commit_response.json()["code"] == "import_statement_not_found"
-
-    skip_response = client.post(f"/import/sessions/{session_b}/statements/{statement_from_a}/skip")
-    assert skip_response.status_code == 404
-    assert skip_response.json()["code"] == "import_statement_not_found"
-
-
-def test_individual_commit_non_member_list_denied(client: TestClient) -> None:
-    _register(client, "individualnonmembera@example.com")
-    other_list_id = _own_list_id(client)
-
-    client.post("/auth/sign-out")
-    _register(client, "individualnonmemberb@example.com")
-    session_id = _upload_bac_session(client)
-    statement_id = client.get(f"/import/sessions/{session_id}").json()["statements"][0]["id"]
-
-    response = client.post(
-        f"/import/sessions/{session_id}/statements/{statement_id}/commit",
-        json={"list_id": other_list_id},
-    )
-    assert response.status_code == 403
-    assert response.json()["code"] == "not_list_member"
-
-
-def test_individual_commit_discarded_session_rejected(client: TestClient) -> None:
-    _register(client, "individualdiscarded@example.com")
-    session_id = _upload_bac_session(client)
-    list_id = _own_list_id(client)
-    statement_id = client.get(f"/import/sessions/{session_id}").json()["statements"][0]["id"]
-    client.delete(f"/import/sessions/{session_id}")
-
-    response = client.post(
-        f"/import/sessions/{session_id}/statements/{statement_id}/commit",
-        json={"list_id": list_id},
-    )
-    assert response.status_code == 409
-    assert response.json()["code"] == "import_session_discarded"
-
-
-def test_dismiss_after_partial_individual_commit_leaves_committed_ledger_untouched(
-    client_with_fx: TestClient,
-    db_session: Session,
+def test_create_session_all_zero_statement_committed_without_batch(
+    client: TestClient, db_session: Session
 ) -> None:
-    """AC #5: dismiss abandons remaining uncommitted statements — an
-    already-committed statement's ledger rows must survive the dismiss
-    (existing DiscardImportSessionService behavior, unchanged by this
-    story)."""
-    client = client_with_fx
-    _register(client, "individualdismiss@example.com")
-    session_id = _upload_bac_session(client)
-    list_id = _own_list_id(client)
-    statement_id = client.get(f"/import/sessions/{session_id}").json()["statements"][0]["id"]
-
-    committed = client.post(
-        f"/import/sessions/{session_id}/statements/{statement_id}/commit",
-        json={"list_id": list_id},
+    _register(client, "allzero@example.com")
+    user_id = UUID(client.get("/auth/me").json()["user_id"])
+    repo = SqlAlchemyImportSessionRepository(db_session)
+    zero = CanonicalLine(
+        posted_date="2026-01-01",
+        amount=Decimal("0.00"),
+        currency="CRC",
+        product_id="fake_product",
+        line_type="purchase",
+        normalized_description="zero",
     )
-    assert committed.status_code == 200, committed.text
+    record = repo.create_session(
+        session_id=uuid4(),
+        user_id=user_id,
+        statements=[
+            DetectedStatement(
+                product_id="fake_product",
+                status=STATEMENT_STATUS_STAGED,
+                candidate_rows=[zero],
+            )
+        ],
+        pdf_paths={0: "/data/pdfs/all-zero.pdf"},
+    )
+    assert record.statements[0].status == STATEMENT_STATUS_COMMITTED
+    assert record.statements[0].candidate_rows[0].status == ROW_STATUS_EXCLUDED_ZERO_AMOUNT
+
+    batches = db_session.scalars(
+        select(ImportBatchModel).where(ImportBatchModel.session_id == record.id)
+    ).all()
+    assert batches == []
+
+
+def test_assign_candidate_row_one_batch_siblings_pending_pdf_retained(
+    client_with_fx: TestClient, db_session: Session
+) -> None:
+    client = client_with_fx
+    _register(client, "rowassign@example.com")
+    session_id = UUID(_upload_bac_session(client))
+    list_id = UUID(_own_list_id(client))
+    actor_id = UUID(client.get("/auth/me").json()["user_id"])
+    repo, lookup, fx, storage = _services(db_session)
+
+    statement = db_session.scalars(
+        select(ImportStatementModel).where(ImportStatementModel.session_id == session_id)
+    ).one()
+    candidates = list(
+        db_session.scalars(
+            select(ImportCandidateRowModel)
+            .where(ImportCandidateRowModel.statement_id == statement.id)
+            .order_by(ImportCandidateRowModel.sequence)
+        )
+    )
+    assert len(candidates) >= 2
+    first, second = candidates[0], candidates[1]
+
+    result = AssignCandidateRowService(repo, lookup, fx, storage).execute(
+        AssignCandidateRowCommand(
+            actor_user_id=actor_id, session_id=session_id, row_id=first.id, list_id=list_id
+        )
+    )
+    assert len(result.ledger_entry_ids) == 1
+    db_session.expire_all()
+    refreshed = db_session.get(ImportCandidateRowModel, first.id)
+    sibling = db_session.get(ImportCandidateRowModel, second.id)
+    statement = db_session.get(ImportStatementModel, statement.id)
+    assert refreshed is not None and refreshed.status == ROW_STATUS_COMMITTED
+    assert sibling is not None and sibling.status == ROW_STATUS_PENDING
+    assert statement is not None and statement.status == STATEMENT_STATUS_STAGED
+    assert statement.pdf_path is not None
+
+
+def test_delete_all_pending_rows_commits_statement(client: TestClient, db_session: Session) -> None:
+    _register(client, "rowdelete@example.com")
+    session_id = UUID(_upload_bac_session(client))
+    actor_id = UUID(client.get("/auth/me").json()["user_id"])
+    repo, _, _, storage = _services(db_session)
+    statement = db_session.scalars(
+        select(ImportStatementModel).where(ImportStatementModel.session_id == session_id)
+    ).one()
+    candidates = list(
+        db_session.scalars(
+            select(ImportCandidateRowModel).where(
+                ImportCandidateRowModel.statement_id == statement.id
+            )
+        )
+    )
+    service = DeleteCandidateRowService(repo, storage)
+    for candidate in candidates:
+        service.execute(
+            DeleteCandidateRowCommand(
+                actor_user_id=actor_id, session_id=session_id, row_id=candidate.id
+            )
+        )
+    db_session.expire_all()
+    statement = db_session.get(ImportStatementModel, statement.id)
+    assert statement is not None
+    assert statement.status == STATEMENT_STATUS_COMMITTED
+    statuses = list(
+        db_session.scalars(
+            select(ImportCandidateRowModel.status).where(
+                ImportCandidateRowModel.statement_id == statement.id
+            )
+        )
+    )
+    assert set(statuses) == {ROW_STATUS_DELETED}
+
+
+def test_dismiss_after_partial_row_commit_leaves_committed_ledger_untouched(
+    client_with_fx: TestClient, db_session: Session
+) -> None:
+    client = client_with_fx
+    _register(client, "rowdismiss@example.com")
+    session_id = UUID(_upload_bac_session(client))
+    list_id = UUID(_own_list_id(client))
+    actor_id = UUID(client.get("/auth/me").json()["user_id"])
+    repo, lookup, fx, storage = _services(db_session)
+    statement = db_session.scalars(
+        select(ImportStatementModel).where(ImportStatementModel.session_id == session_id)
+    ).one()
+    first = db_session.scalars(
+        select(ImportCandidateRowModel)
+        .where(ImportCandidateRowModel.statement_id == statement.id)
+        .order_by(ImportCandidateRowModel.sequence)
+    ).first()
+    assert first is not None
+    AssignCandidateRowService(repo, lookup, fx, storage).execute(
+        AssignCandidateRowCommand(
+            actor_user_id=actor_id, session_id=session_id, row_id=first.id, list_id=list_id
+        )
+    )
 
     dismissed = client.delete(f"/import/sessions/{session_id}")
     assert dismissed.status_code == 200, dismissed.text
     assert dismissed.json()["discarded_at"] is not None
 
     ledger_rows = db_session.scalars(
-        select(LedgerEntryModel).where(LedgerEntryModel.list_id == UUID(list_id))
+        select(LedgerEntryModel).where(LedgerEntryModel.list_id == list_id)
     ).all()
-    assert len(ledger_rows) > 0
+    assert len(ledger_rows) == 1
+    assert ledger_rows[0].import_candidate_row_id == first.id

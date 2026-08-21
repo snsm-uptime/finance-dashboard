@@ -490,3 +490,25 @@ class ImportStatementNotFoundError(DomainError):
 
     def __init__(self) -> None:
         super().__init__(self.MESSAGE)
+
+
+class ImportRowNotAvailableError(DomainError):
+    """Raised when a commit/delete targets a candidate row that is not
+    pending (already committed, deleted, or excluded) (Story 4.10)."""
+
+    MESSAGE = "This row is not available for that action."
+    CODE = "import_row_not_available"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
+class ImportRowNotFoundError(DomainError):
+    """Raised when a row_id does not belong to the fetched Import Session
+    (Story 4.10; HTTP mapping lands in 4.11)."""
+
+    MESSAGE = "Row not found."
+    CODE = "import_row_not_found"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)

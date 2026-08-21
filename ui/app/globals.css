@@ -165,12 +165,13 @@ html.dark {
 
 html,
 body {
-  height: 100dvh;
-  max-height: 100dvh;
+  height: 100%;
   max-width: 100%;
   margin: 0;
   padding: 0;
   overflow: hidden;
+  /* AppShell is fixed to the viewport; nothing outside it may scroll. */
+  overscroll-behavior: none;
 }
 
 body {

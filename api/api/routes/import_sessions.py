@@ -21,15 +21,11 @@ from application.import_session import (
     AssignBulkImportCommand,
     AssignBulkImportResult,
     AssignBulkImportService,
-    AssignIndividualImportCommand,
-    AssignIndividualImportService,
     DiscardImportSessionCommand,
     DiscardImportSessionService,
     ImportSessionRecord,
     MatchStatementCardCommand,
     MatchStatementCardService,
-    SkipStatementCommand,
-    SkipStatementService,
     UploadStatementPdfCommand,
     UploadStatementPdfService,
     _find_statement,
@@ -43,10 +39,9 @@ from domain.errors import (
     FxFutureDateError,
     FxRateNotAvailableError,
     FxServiceUnavailableError,
-    ImportSessionAlreadyCommittedError,
+    ImportRowNotAvailableError,
     ImportSessionDiscardedError,
     ImportSessionNotFoundError,
-    ImportStatementNotAvailableError,
     ImportStatementNotFoundError,
     InvalidCanonicalLineError,
     InvalidCardIbanError,
@@ -74,7 +69,6 @@ from api.schemas.import_sessions import (
     IdentifyCardBody,
     ImportBatchResponse,
     ImportSessionResponse,
-    IndividualCommitBody,
     StagedStatementResponse,
 )
 
@@ -238,10 +232,10 @@ def bulk_commit_import_session(
             status_code=status.HTTP_409_CONFLICT,
             content={"detail": str(exc), "code": "import_session_discarded"},
         )
-    except ImportSessionAlreadyCommittedError as exc:
+    except ImportRowNotAvailableError as exc:
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
-            content={"detail": str(exc), "code": "import_session_already_committed"},
+            content={"detail": str(exc), "code": "import_row_not_available"},
         )
     except NoCleanStatementsToCommitError as exc:
         return JSONResponse(

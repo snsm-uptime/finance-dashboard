@@ -83,7 +83,7 @@ export function BulkReviewPanel({ sessionId }: BulkReviewPanelProps) {
 
   return (
     <main
-      className="min-h-screen py-[2.5rem] px-[1.5rem]"
+      className="min-h-full py-[2.5rem] px-[1.5rem]"
       style={{ fontFamily: "var(--font-ui), Manrope, system-ui, sans-serif" }}
     >
       <h1 className="m-0 mb-[1.75rem] text-[1.75rem] font-[550] text-foreground">

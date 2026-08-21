@@ -9,9 +9,7 @@ from collections.abc import Sequence
 from decimal import Decimal
 
 from domain.errors import (
-    ImportSessionAlreadyCommittedError,
     ImportSessionDiscardedError,
-    ImportStatementNotAvailableError,
     InvalidCanonicalLineError,
     NoCleanStatementsToCommitError,
     UnsupportedFileTypeError,
@@ -33,6 +31,36 @@ STATEMENT_STATUSES = frozenset(
     }
 )
 
+ROW_STATUS_PENDING = "pending"
+ROW_STATUS_COMMITTED = "committed"
+ROW_STATUS_DELETED = "deleted"
+ROW_STATUS_EXCLUDED_ZERO_AMOUNT = "excluded_zero_amount"
+ROW_STATUSES = frozenset(
+    {
+        ROW_STATUS_PENDING,
+        ROW_STATUS_COMMITTED,
+        ROW_STATUS_DELETED,
+        ROW_STATUS_EXCLUDED_ZERO_AMOUNT,
+    }
+)
+
+
+def row_is_zero_amount(amount: Decimal) -> bool:
+    """Exact zero only — negative payment/credit lines stay reviewable (AC #7)."""
+    return amount == 0
+
+
+def statement_is_fully_resolved(row_statuses: Sequence[str]) -> bool:
+    """True iff every non-excluded row has left pending (AC #8).
+
+    Vacuous true when every row is excluded (all-zero statement) or the
+    sequence is empty.
+    """
+    return all(
+        status == ROW_STATUS_EXCLUDED_ZERO_AMOUNT or status != ROW_STATUS_PENDING
+        for status in row_statuses
+    )
+
 
 def validate_pdf_upload(filename: str, content: bytes) -> None:
     """Guard an upload is actually a PDF before it touches storage or the pipeline.
@@ -47,47 +75,18 @@ def validate_pdf_upload(filename: str, content: bytes) -> None:
 def validate_bulk_commit_eligible(
     *, discarded_at: object | None, statement_statuses: Sequence[str]
 ) -> None:
-    """Pure Bulk-assignment gate (Story 4.7, Task 1.1, AD-4).
+    """Pure Bulk-assignment gate (Story 4.7, amended Story 4.10 / AD-4).
 
-    Confirms the session is available (not discarded), unassigned (no
-    statement already committed — no double-commit), and has at least one
-    clean-parse statement to commit (AC #4: a failed-parse statement is
-    excluded from Bulk's happy path, never silently committed).
+    Confirms the session is available (not discarded) and has at least one
+    staged statement to commit. A sibling already `committed` (e.g. an
+    all-zero statement flipped at create time) does not block Bulk —
+    mixed row status on a statement being committed is ImportRowNotAvailableError
+    in the service/repo, not this function.
     """
     if discarded_at is not None:
         raise ImportSessionDiscardedError()
-    if any(status == STATEMENT_STATUS_COMMITTED for status in statement_statuses):
-        raise ImportSessionAlreadyCommittedError()
     if not any(status == STATEMENT_STATUS_STAGED for status in statement_statuses):
         raise NoCleanStatementsToCommitError()
-
-
-def validate_individual_accept_eligible(
-    *, discarded_at: object | None, statement_status: str
-) -> None:
-    """Per-statement accept gate (Story 4.8, AC #6). Unlike Bulk's
-    session-wide `validate_bulk_commit_eligible`, Individual review commits
-    one statement at a time — possibly to different lists — so eligibility
-    is checked per statement, not per session. Only a `staged` (clean-parse)
-    statement is acceptable: `failed` has no comparison UI yet (Epic 5),
-    `committed`/`skipped` are already resolved.
-    """
-    if discarded_at is not None:
-        raise ImportSessionDiscardedError()
-    if statement_status != STATEMENT_STATUS_STAGED:
-        raise ImportStatementNotAvailableError()
-
-
-def validate_individual_skip_eligible(
-    *, discarded_at: object | None, statement_status: str
-) -> None:
-    """Per-statement skip gate (Story 4.8, FR-18). A `failed` statement CAN
-    be skipped — that's how review moves past it until Epic 5's comparison
-    UI exists. `committed`/already-`skipped` cannot be skipped again."""
-    if discarded_at is not None:
-        raise ImportSessionDiscardedError()
-    if statement_status not in (STATEMENT_STATUS_STAGED, STATEMENT_STATUS_FAILED):
-        raise ImportStatementNotAvailableError()
 
 
 def validate_bulk_candidate_row(*, amount: Decimal, normalized_description: str) -> None:
