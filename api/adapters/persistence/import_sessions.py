@@ -221,39 +221,49 @@ class SqlAlchemyImportSessionRepository:
     ) -> ImportBatchRecord:
         ids = [row.candidate_row_id for row in rows]
         now = datetime.now(UTC)
-        # Guarded UPDATE is the fast path / clean-error path and MUST precede
-        # any ledger INSERT (Story 4.10, AC #4).
-        result = self._session.execute(
-            update(ImportCandidateRowModel)
-            .where(
-                ImportCandidateRowModel.id.in_(ids),
-                ImportCandidateRowModel.status == ROW_STATUS_PENDING,
-            )
-            .values(
-                status=ROW_STATUS_COMMITTED,
-                resolved_list_id=list_id,
-                resolved_at=now,
-            )
-        )
-        if result.rowcount != len(ids):
-            raise ImportRowNotAvailableError()
-
-        # Batch row is flushed before any ledger entry references it via
-        # import_batch_id (FK ordering) — a mid-loop failure rolls back the
-        # whole request (get_db), so there is no orphaned batch either way.
-        batch_row = ImportBatchModel(
-            id=batch_id,
-            session_id=session_id,
-            statement_id=statement_id,
-            list_id=list_id,
-            actor_user_id=actor_user_id,
-        )
-        self._session.add(batch_row)
-        self._session.flush()
-
         entry_ids: list[UUID] = []
+        # The status flip, the batch INSERT and the ledger INSERTs are one
+        # atomic unit: they all live inside a single SAVEPOINT so that an
+        # IntegrityError on the ledger insert (layer 2 of the double-commit
+        # guard) cannot leave rows stamped `committed` with no ledger entries
+        # and an orphan batch behind. The caller converts the resulting
+        # ImportRowNotAvailableError into a 409 JSONResponse, which get_db
+        # treats as a normal return and commits — so anything left outside
+        # this SAVEPOINT would be persisted (Story 4.10 review).
         try:
             with self._session.begin_nested():
+                # Guarded UPDATE is the fast path / clean-error path and MUST
+                # precede any ledger INSERT (Story 4.10, AC #4). Scoped to the
+                # target statement so a row id from a sibling statement can
+                # never be swept into this batch.
+                result = self._session.execute(
+                    update(ImportCandidateRowModel)
+                    .where(
+                        ImportCandidateRowModel.id.in_(ids),
+                        ImportCandidateRowModel.statement_id == statement_id,
+                        ImportCandidateRowModel.status == ROW_STATUS_PENDING,
+                    )
+                    .values(
+                        status=ROW_STATUS_COMMITTED,
+                        resolved_list_id=list_id,
+                        resolved_at=now,
+                    )
+                )
+                if result.rowcount != len(ids):
+                    raise ImportRowNotAvailableError()
+
+                # Batch row is flushed before any ledger entry references it
+                # via import_batch_id (FK ordering).
+                batch_row = ImportBatchModel(
+                    id=batch_id,
+                    session_id=session_id,
+                    statement_id=statement_id,
+                    list_id=list_id,
+                    actor_user_id=actor_user_id,
+                )
+                self._session.add(batch_row)
+                self._session.flush()
+
                 for commit_row in rows:
                     draft = commit_row.draft
                     fx = commit_row.fx
@@ -378,9 +388,18 @@ class SqlAlchemyImportSessionRepository:
         return _session_record(row)
 
     def _complete_statement_if_resolved(self, statement_id: UUID) -> None:
-        statement_row = self._session.get(ImportStatementModel, statement_id)
+        # FOR UPDATE serializes concurrent resolutions of the same statement's
+        # last rows. Without it, under READ COMMITTED each transaction still
+        # sees its sibling's row as `pending`, so neither flips the statement
+        # and it stays `staged` with zero pending rows forever (Story 4.10
+        # review).
+        # populate_existing forces a real SELECT ... FOR UPDATE even when the
+        # statement is already in the identity map from an earlier read.
+        statement_row = self._session.get(
+            ImportStatementModel, statement_id, with_for_update=True, populate_existing=True
+        )
         if statement_row is None:
-            raise ImportSessionNotFoundError()
+            raise ImportStatementNotFoundError()
         statuses = list(
             self._session.scalars(
                 select(ImportCandidateRowModel.status).where(

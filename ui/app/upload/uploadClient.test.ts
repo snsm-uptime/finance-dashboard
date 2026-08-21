@@ -23,6 +23,7 @@ const bulkCommitMessages = {
   errorSessionNotFound: "session-not-found",
   errorSessionDiscarded: "discarded",
   errorAlreadyCommitted: "already-committed",
+  errorRowNotAvailable: "row-not-available",
   errorNoCleanStatements: "no-clean-statements",
   errorFxUnavailable: "fx-unavailable",
   errorGeneric: "generic",
@@ -237,6 +238,20 @@ describe("uploadClient", () => {
 
     const result = await bulkCommitSession("s1", "l1", bulkCommitMessages);
     expect(result).toEqual({ ok: false, error: "already-committed" });
+  });
+
+  it("bulkCommitSession maps import_row_not_available to errorRowNotAvailable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: async () => ({ code: "import_row_not_available", detail: "no" }),
+      }),
+    );
+
+    const result = await bulkCommitSession("s1", "l1", bulkCommitMessages);
+    expect(result).toEqual({ ok: false, error: "row-not-available" });
   });
 
   it("bulkCommitSession maps import_session_discarded to errorSessionDiscarded", async () => {

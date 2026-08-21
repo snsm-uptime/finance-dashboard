@@ -33,6 +33,7 @@ export type BulkCommitMessages = {
   errorSessionNotFound: string;
   errorSessionDiscarded: string;
   errorAlreadyCommitted: string;
+  errorRowNotAvailable: string;
   errorNoCleanStatements: string;
   errorFxUnavailable: string;
   errorGeneric: string;
@@ -93,6 +94,7 @@ function mapBulkCommitError(
   if (code === "import_session_not_found") return messages.errorSessionNotFound;
   if (code === "import_session_discarded") return messages.errorSessionDiscarded;
   if (code === "import_session_already_committed") return messages.errorAlreadyCommitted;
+  if (code === "import_row_not_available") return messages.errorRowNotAvailable;
   if (code === "no_clean_statements_to_commit") return messages.errorNoCleanStatements;
   if (code === "fx_service_unavailable") return messages.errorFxUnavailable;
   return messages.errorGeneric;
