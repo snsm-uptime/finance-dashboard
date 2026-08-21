@@ -222,3 +222,10 @@
 
 - `discarded_at: object | None` typing on `validate_individual_accept_eligible`/`validate_individual_skip_eligible` loses type-checker protection — inherited from Bulk's identical `validate_bulk_commit_eligible` signature (Story 4.7), not a new regression.
 - Zero-candidate-row staged statement can be committed via Individual accept with 0 ledger entries — extends the identical Bulk-path gap already accepted as "benign, untested" in the 4.7 deferred-work entry above; Individual has no equivalent check either.
+
+## Deferred from: code review of 4-10-row-level-review-data-model-per-row-commit (2026-08-21)
+
+- Blanket `except IntegrityError` around the ledger-insert SAVEPOINT (`api/adapters/persistence/import_sessions.py`) maps *any* integrity violation (FK, NOT NULL, other uniques) to `ImportRowNotAvailableError`/409, masking genuine bugs as a benign race — narrowing requires inspecting `orig.diag.constraint_name`, beyond this story's AC.
+- `ledger_entries.import_candidate_row_id` is never backfilled for pre-4.10 committed rows, so the reverse link stays permanently NULL for historical data — no AC required a backfill, and the pre-4.10 batch→statement association is not row-granular enough to reconstruct it.
+- The `uq_ledger_entries_import_candidate_row_id` backstop sits on an `ON DELETE SET NULL` column under a `delete-orphan` cascade: if a candidate row is deleted the link nulls out and the duplicate guard silently stops protecting that ledger entry (Postgres treats NULLs as distinct, so multiple orphaned entries coexist). Acceptable today since deleted rows are terminal, but fragile.
+- No HTTP-level test asserts the `ImportRowNotAvailableError` → 409 `import_row_not_available` mapping on the bulk-commit route; coverage stops at the application tier.
