@@ -60,7 +60,7 @@ describe("uploadClient", () => {
           created_at: "2026-08-18T00:00:00Z",
           discarded_at: null,
           statements: [
-            { id: "st1", product_id: "bac_credit", status: "staged", candidate_row_count: 12 },
+            { id: "st1", product_id: "bac_credit", status: "staged", candidate_row_count: 12, iban: null },
           ],
         }),
       }),
@@ -74,7 +74,7 @@ describe("uploadClient", () => {
         created_at: "2026-08-18T00:00:00Z",
         discarded_at: null,
         statements: [
-          { id: "st1", product_id: "bac_credit", status: "staged", candidate_row_count: 12 },
+          { id: "st1", product_id: "bac_credit", status: "staged", candidate_row_count: 12, iban: null },
         ],
       },
     });
@@ -278,8 +278,8 @@ describe("uploadClient", () => {
         created_at: "2026-08-19T00:00:00Z",
         discarded_at: null,
         statements: [
-          { id: "st1", product_id: "bac_credit", status: "committed", candidate_row_count: 3 },
-          { id: "st2", product_id: "bac_credit", status: "skipped", candidate_row_count: 1 },
+          { id: "st1", product_id: "bac_credit", status: "committed", candidate_row_count: 3, iban: null },
+          { id: "st2", product_id: "bac_credit", status: "skipped", candidate_row_count: 1, iban: null },
         ],
       }),
     });
@@ -294,8 +294,8 @@ describe("uploadClient", () => {
         created_at: "2026-08-19T00:00:00Z",
         discarded_at: null,
         statements: [
-          { id: "st1", product_id: "bac_credit", status: "committed", candidate_row_count: 3 },
-          { id: "st2", product_id: "bac_credit", status: "skipped", candidate_row_count: 1 },
+          { id: "st1", product_id: "bac_credit", status: "committed", candidate_row_count: 3, iban: null },
+          { id: "st2", product_id: "bac_credit", status: "skipped", candidate_row_count: 1, iban: null },
         ],
       },
     });
@@ -328,7 +328,7 @@ describe("uploadClient", () => {
         created_at: "2026-08-19T00:00:00Z",
         discarded_at: null,
         statements: [
-          { id: "st1", product_id: "bac_credit", status: "committed", candidate_row_count: 3 },
+          { id: "st1", product_id: "bac_credit", status: "committed", candidate_row_count: 3, iban: null },
         ],
       }),
     });
@@ -343,7 +343,7 @@ describe("uploadClient", () => {
         created_at: "2026-08-19T00:00:00Z",
         discarded_at: null,
         statements: [
-          { id: "st1", product_id: "bac_credit", status: "committed", candidate_row_count: 3 },
+          { id: "st1", product_id: "bac_credit", status: "committed", candidate_row_count: 3, iban: null },
         ],
       },
     });
@@ -432,7 +432,7 @@ describe("uploadClient", () => {
         created_at: "2026-08-19T00:00:00Z",
         discarded_at: null,
         statements: [
-          { id: "st1", product_id: "bac_credit", status: "skipped", candidate_row_count: 2 },
+          { id: "st1", product_id: "bac_credit", status: "skipped", candidate_row_count: 2, iban: null },
         ],
       }),
     });
