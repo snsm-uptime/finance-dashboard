@@ -18,6 +18,7 @@ class StagedStatementResponse(BaseModel):
     candidate_row_count: int
     iban: str | None = None  # Story 4.8.1: IBAN for card identification
     filename: str | None = None  # Story 4.8.2: original uploaded filename
+    card_id: UUID | None = None  # Story 4.8.3: identified card (if IBAN matched)
 
 
 class ImportSessionResponse(BaseModel):

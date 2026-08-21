@@ -92,6 +92,7 @@ def _session_response(session: ImportSessionRecord) -> ImportSessionResponse:
                 filename=s.pdf_path.split("/")[-1]
                 if s.pdf_path
                 else None,  # Story 4.8.2: extract filename from path
+                card_id=s.card_id,  # Story 4.8.3: identified card from upload
             )
             for s in session.statements
         ],
@@ -108,7 +109,9 @@ async def upload_statement_pdf(
 ) -> ImportSessionResponse | JSONResponse:
     content = await file.read()
     session_repo = SqlAlchemyImportSessionRepository(db)
-    service = UploadStatementPdfService(pdf_storage, adapters, session_repo)
+    card_repo = SqlAlchemyCardRepository(db)
+    card_match_service = MatchCardByIbanService(card_repo)
+    service = UploadStatementPdfService(pdf_storage, adapters, session_repo, card_match_service)
     try:
         result = service.execute(
             UploadStatementPdfCommand(

@@ -59,6 +59,7 @@ def _session_record(row: ImportSessionModel) -> ImportSessionRecord:
                 candidate_row_count=len(statement.candidate_rows),
                 pdf_path=statement.pdf_path,
                 iban=statement.iban,  # Story 4.8.1: carry IBAN through record
+                card_id=statement.card_id,  # Story 4.8.3: identified at upload time
                 candidate_rows=[
                     _candidate_row(candidate, statement) for candidate in statement.candidate_rows
                 ],

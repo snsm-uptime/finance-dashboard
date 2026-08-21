@@ -61,12 +61,16 @@ class DetectedStatement:
 
     iban is extracted from the statement header during parse (Story 4.8.1);
     normalized but not validated for checksum (FR-37, AD-20).
+
+    card_id is populated during upload if IBAN matches a registered card
+    (moved from individual review to upload stage for Story 4.8.3).
     """
 
     product_id: str
     status: str
     candidate_rows: list[CanonicalLine]
     iban: str | None = None
+    card_id: UUID | None = None  # Story 4.8.3: card identification at upload time
 
 
 def run_import_pipeline(
@@ -159,7 +163,11 @@ class StagedStatementRecord:
     drafts from the same fetched record without a second round-trip.
 
     `iban` (Story 4.8.1) is statement-level metadata extracted from the PDF
-    header, used for card identification at review-start."""
+    header, used for card identification at review-start.
+
+    `card_id` (Story 4.8.3) is populated during upload if IBAN matches a
+    registered card, making card context available to both bulk and
+    individual review flows."""
 
     id: UUID
     session_id: UUID
@@ -168,6 +176,7 @@ class StagedStatementRecord:
     candidate_row_count: int
     pdf_path: str | None
     iban: str | None = None
+    card_id: UUID | None = None  # Story 4.8.3: identified at upload time
     candidate_rows: list[CandidateRowRecord] = field(default_factory=list)
 
 
@@ -270,17 +279,23 @@ class UploadStatementPdfCommand:
 
 
 class UploadStatementPdfService:
-    """Validate → store → run the pipeline → persist the Import Session (AC #1/#2/#3)."""
+    """Validate → store → run the pipeline → identify cards → persist the Import Session.
+
+    Story 4.8.3: Card identification moved to upload time so both bulk and
+    individual review flows can use pre-identified cards.
+    """
 
     def __init__(
         self,
         pdf_storage: PdfStorage,
         adapters: list[BankAdapter],
         session_repo: ImportSessionRepository,
+        card_match_service: MatchCardByIbanService,
     ) -> None:
         self._pdf_storage = pdf_storage
         self._adapters = adapters
         self._session_repo = session_repo
+        self._card_match_service = card_match_service
 
     def execute(self, command: UploadStatementPdfCommand) -> ImportSessionRecord:
         validate_pdf_upload(command.filename, command.content)
@@ -293,6 +308,30 @@ class UploadStatementPdfService:
             detected = run_import_pipeline(
                 command.content, filename=command.filename, adapters=self._adapters
             )
+
+            # Story 4.8.3: Identify cards for all statements at upload time
+            for statement in detected:
+                if statement.iban:
+                    matched_card = self._card_match_service.execute(
+                        MatchCardByIbanCommand(
+                            actor_user_id=command.actor_user_id, iban=statement.iban
+                        )
+                    )
+                    if matched_card:
+                        statement.card_id = matched_card.id
+                        logger.debug(
+                            "upload_statement_card_identified session_filename=%s iban=%r card_id=%s",
+                            command.filename,
+                            statement.iban,
+                            matched_card.id,
+                        )
+                    else:
+                        logger.debug(
+                            "upload_statement_card_unknown session_filename=%s iban=%r",
+                            command.filename,
+                            statement.iban,
+                        )
+
             pdf_paths = {index: whole_pdf_path for index in range(len(detected))}
             return self._session_repo.create_session(
                 session_id=uuid4(),
