@@ -915,9 +915,7 @@ def test_assign_row_sets_undo_pointer_and_ledger_candidate_id(
     candidate = db_session.get(ImportCandidateRowModel, UUID(row["id"]))
     assert candidate is not None and candidate.status == ROW_STATUS_COMMITTED
     ledger = db_session.scalars(
-        select(LedgerEntryModel).where(
-            LedgerEntryModel.import_candidate_row_id == UUID(row["id"])
-        )
+        select(LedgerEntryModel).where(LedgerEntryModel.import_candidate_row_id == UUID(row["id"]))
     ).one()
     assert ledger.import_candidate_row_id == UUID(row["id"])
 

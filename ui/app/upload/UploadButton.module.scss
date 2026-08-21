@@ -2,8 +2,11 @@
    Border color lives here so it can beat IconButton / Tailwind !border-*. */
 
 .button {
-  border-width: calc(var(--upload-stroke) * 2) !important;
+  --upload-border: calc(var(--upload-stroke) * 4);
+  border-width: var(--upload-border) !important;
   border-color: var(--muted) !important;
+  /* Outer radius includes the stroke so the inner corners stay rounded-sm. */
+  border-radius: calc(var(--rounded-sm) + var(--upload-border)) !important;
 }
 
 .button:not(:disabled):hover {
