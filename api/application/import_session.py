@@ -503,6 +503,96 @@ def _find_candidate_row(
 
 
 @dataclass(frozen=True, slots=True)
+class AssignIndividualImportCommand:
+    actor_user_id: UUID
+    session_id: UUID
+    statement_id: UUID
+    list_id: UUID
+    card_id: UUID | None = None  # Story 4.8.1: optional card ID for origin assignment
+
+
+class AssignIndividualImportService:
+    """Individual review accept (Story 4.8, AC #1/#2/#3): commits exactly
+    one statement to one list — the same `commit_statement_batch` port
+    Story 4.7's Bulk service already calls in a loop, called here once.
+    Serves both the "chosen list" and "configurable default list" outcomes
+    identically — the caller decides which `list_id` to send.
+    """
+
+    def __init__(
+        self,
+        session_repo: ImportSessionRepository,
+        list_lookup: ListAccessLookup,
+        fx_service: MaterializeFxService,
+        pdf_storage: PdfStorage,
+    ) -> None:
+        self._session_repo = session_repo
+        self._list_lookup = list_lookup
+        self._fx_service = fx_service
+        self._pdf_storage = pdf_storage
+
+    def execute(self, command: AssignIndividualImportCommand) -> ImportBatchRecord:
+        session = self._session_repo.get_session(command.session_id, command.actor_user_id)
+        if session is None:
+            raise ImportSessionNotFoundError()
+
+        statement = _find_statement(session, command.statement_id)
+
+        AuthorizeListAccessService(self._list_lookup).execute(
+            AuthorizeListAccessCommand(
+                acting_user_id=command.actor_user_id,
+                list_id=command.list_id,
+                action="import_to_list",
+            )
+        )
+
+        validate_individual_accept_eligible(
+            discarded_at=session.discarded_at, statement_status=statement.status
+        )
+
+        rows: list[CommitRow] = []
+        for candidate in statement.candidate_rows:
+            validate_bulk_candidate_row(
+                amount=candidate.amount, normalized_description=candidate.normalized_description
+            )
+            draft = ManualExpenseDraft(
+                amount=candidate.amount,
+                currency=candidate.currency,
+                normalized_description=candidate.normalized_description,
+                payer_id=command.actor_user_id,
+                provenance=candidate.provenance,
+                line_type=candidate.line_type,
+                posted_date=candidate.posted_date,
+                external_ref=candidate.external_ref,
+                origin_kind=ORIGIN_KIND_CARD if command.card_id else None,
+                origin_card_id=command.card_id,
+            )
+            fx = self._fx_service.materialize_fx_for_entry(
+                amount=draft.amount,
+                currency=draft.currency,
+                posted_date=date.fromisoformat(draft.posted_date),
+            )
+            rows.append(CommitRow(candidate_row_id=candidate.id, draft=draft, fx=fx))
+
+        batch = self._session_repo.commit_statement_batch(
+            batch_id=uuid4(),
+            session_id=command.session_id,
+            statement_id=statement.id,
+            list_id=command.list_id,
+            actor_user_id=command.actor_user_id,
+            rows=rows,
+        )
+        updated = self._session_repo.get_session(command.session_id, command.actor_user_id)
+        if updated is not None:
+            _release_source_pdf_if_idle(
+                session=updated,
+                session_repo=self._session_repo,
+                pdf_storage=self._pdf_storage,
+            )
+        return batch
+
+
+@dataclass(frozen=True, slots=True)
 class AssignCandidateRowCommand:
     actor_user_id: UUID
     session_id: UUID
@@ -552,22 +642,6 @@ class AssignCandidateRowService:
         validate_bulk_candidate_row(
             amount=line.amount, normalized_description=line.normalized_description
         )
-        draft = ManualExpenseDraft(
-            amount=line.amount,
-            currency=line.currency,
-            normalized_description=line.normalized_description,
-            payer_id=command.actor_user_id,
-            provenance=line.provenance,
-            line_type=line.line_type,
-            posted_date=line.posted_date,
-            external_ref=line.external_ref,
-        )
-        fx = self._fx_service.materialize_fx_for_entry(
-            amount=draft.amount,
-            currency=draft.currency,
-            posted_date=date.fromisoformat(draft.posted_date),
-        )
-
         draft = ManualExpenseDraft(
             amount=line.amount,
             currency=line.currency,
