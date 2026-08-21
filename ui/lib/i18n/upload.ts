@@ -33,6 +33,8 @@ export const uploadMessages = {
     bulkReviewErrorSessionNotFound: "This import session could not be found.",
     bulkReviewErrorSessionDiscarded: "This import session has been discarded.",
     bulkReviewErrorAlreadyCommitted: "This import session has already been committed.",
+    bulkReviewErrorRowNotAvailable:
+      "Some rows were already committed or deleted. Reload and try again.",
     bulkReviewErrorNoCleanStatements: "There are no clean statements to commit.",
     bulkReviewErrorFxUnavailable: "Currency conversion is unavailable right now. Try again later.",
     // Individual review (Story 4.8)
@@ -101,6 +103,8 @@ export const uploadMessages = {
     bulkReviewErrorSessionNotFound: "No se encontró esta sesión de importación.",
     bulkReviewErrorSessionDiscarded: "Esta sesión de importación fue descartada.",
     bulkReviewErrorAlreadyCommitted: "Esta sesión de importación ya fue confirmada.",
+    bulkReviewErrorRowNotAvailable:
+      "Algunas filas ya fueron confirmadas o eliminadas. Recarga e inténtalo de nuevo.",
     bulkReviewErrorNoCleanStatements: "No hay estados de cuenta limpios para confirmar.",
     bulkReviewErrorFxUnavailable:
       "La conversión de moneda no está disponible ahora. Inténtalo más tarde.",

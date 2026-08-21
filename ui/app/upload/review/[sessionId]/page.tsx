@@ -1,8 +1,5 @@
 import { redirect } from "next/navigation";
 
-import { fetchSession } from "@/lib/session";
-import { IndividualReviewPanel } from "./IndividualReviewPanel";
-
 export const dynamic = "force-dynamic";
 
 type PageProps = {
@@ -10,17 +7,16 @@ type PageProps = {
 };
 
 /**
- * Individual review — phone swipe / desktop buttons (Story 4.8). Auth-gated
- * only, same minimal-entry-point rationale as
- * ui/app/upload/bulk/[sessionId]/page.tsx — Story 4.6 does not build an
- * Upload mode picker.
+ * Individual review is superseded by row-level review (Story 4.10). The
+ * statement-level API endpoints this page's buttons called (`/commit`,
+ * `/skip`) are deleted, so rendering IndividualReviewPanel here would show a
+ * fully-working UI whose every action 404s. Task 7.1 hid the entry Link in
+ * UploadPanel; this closes the direct-URL / bookmark / back-button path too.
+ *
+ * IndividualReviewPanel.tsx is intentionally left in the tree — Story 4.13
+ * rewrites it against the row-level endpoints and restores this route.
  */
 export default async function IndividualReviewPage({ params }: PageProps) {
   const { sessionId } = await params;
-  const session = await fetchSession();
-  if (!session) {
-    redirect(`/sign-in?returnTo=/upload/review/${encodeURIComponent(sessionId)}`);
-  }
-
-  return <IndividualReviewPanel sessionId={sessionId} />;
+  redirect(`/upload/bulk/${encodeURIComponent(sessionId)}`);
 }

@@ -10,6 +10,19 @@ backstop; NULLs stay distinct so manual expenses are unaffected), then drops
 `uq_import_batches_statement_id` so one statement may spawn many batches
 (amended AD-4). Both protection layers exist before that unique is dropped.
 
+PRE-MIGRATION REQUIREMENT (operator step, decided at code review 2026-08-21):
+discard and re-upload every open (non-discarded, non-committed) Import Session
+before applying this revision. The `sequence` backfill below cannot recover the
+original parse order for pre-existing rows: `import_candidate_rows.created_at`
+is a `now()` server default, which in Postgres is the *transaction* timestamp,
+so every row of a statement inserted in one request shares the same value and
+the ORDER BY falls through to a random `uuid4()` id. Because
+`ImportStatementModel.candidate_rows` now orders by `sequence` and
+`uq_import_candidate_rows_statement_sequence` freezes it, any surviving
+pre-4.10 statement would render in a permanently scrambled order. Rows created
+after this revision get their `sequence` from `create_session`'s deterministic
+`enumerate`, so only in-flight sessions are affected.
+
 Downgrade re-creates `uq_import_batches_statement_id`. That is unsafe once a
 statement has two batches — matches the Sprint Change Proposal rollback
 posture. Do not invent a data-repair downgrade.
