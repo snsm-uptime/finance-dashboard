@@ -66,13 +66,15 @@ export default async function Home() {
   const loaded = await fetchMembershipLists();
 
   return (
-    <main className={listsStyles.main}>
-      <div className={listsStyles.header}>
-        <p className={listsStyles.brand}>{t.brand}</p>
-        <AccountNavLink />
+    <main className={`${listsStyles.main} ${styles.page}`}>
+      <div className={styles.head}>
+        <div className={listsStyles.header}>
+          <p className={listsStyles.brand}>{t.brand}</p>
+          <AccountNavLink />
+        </div>
+        <h1 className={listsStyles.title}>{t.title}</h1>
+        <p className={listsStyles.copy}>{t.subtitle}</p>
       </div>
-      <h1 className={listsStyles.title}>{t.title}</h1>
-      <p className={listsStyles.copy}>{t.subtitle}</p>
 
       <div className={styles.layout}>
         <div className={styles.listsColumn}>
@@ -91,15 +93,19 @@ export default async function Home() {
           className={styles.cardsColumn}
           aria-labelledby="home-cards-title"
         >
-          <h2 id="home-cards-title" className={listsStyles.sectionTitle}>
-            {tCards.title}
-          </h2>
-          <p className={listsStyles.copy}>{tCards.subtitle}</p>
-          <CardsPanel embedded />
+          <div className={styles.columnHead}>
+            <h2 id="home-cards-title" className={listsStyles.sectionTitle}>
+              {tCards.title}
+            </h2>
+            <p className={listsStyles.copy}>{tCards.subtitle}</p>
+          </div>
+          <div className={styles.columnBody}>
+            <CardsPanel embedded />
+          </div>
         </section>
       </div>
 
-      <p className={listsStyles.copy}>
+      <p className={`${listsStyles.copy} ${styles.foot}`}>
         <a className={listsStyles.link} href="/upload">
           {t.uploadLink}
         </a>{" "}
