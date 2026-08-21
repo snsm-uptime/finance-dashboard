@@ -57,7 +57,7 @@ export function UploadButton({
   const isBusy = pending || Boolean(disabled);
   const name = pending ? pendingLabel : label;
   const chromeClasses =
-    "group !size-28 !p-0 box-border !border-solid !rounded-sm";
+    "group !size-[35vw] !p-0 box-border !border-solid";
   const classes = [chromeClasses, styles.button, className].filter(Boolean).join(" ");
 
   return (
