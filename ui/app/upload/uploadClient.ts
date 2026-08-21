@@ -9,6 +9,7 @@ export type StagedStatement = {
   candidate_row_count: number;
   iban: string | null; // Story 4.8.1: IBAN for card identification
   filename: string | null; // Story 4.8.2: original uploaded filename
+  card_id: string | null; // Story 4.8.3: identified card at upload time
 };
 
 export type ImportSession = {
@@ -147,6 +148,7 @@ function asStagedStatement(data: unknown): StagedStatement | null {
     candidate_row_count: row.candidate_row_count,
     iban: typeof row.iban === "string" ? row.iban : null,
     filename: typeof row.filename === "string" ? row.filename : null,
+    card_id: typeof row.card_id === "string" ? row.card_id : null,
   };
 }
 
