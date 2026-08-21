@@ -492,14 +492,14 @@ In individual review, each parsed transaction can be: assigned to a chosen list;
 - Undo is single-level: it reverses the most recent assign or delete and returns that transaction to the queue at its original position. Undo survives a reload.
 - A transaction with a zero amount is excluded before review and never appears; the user is told how many were excluded when the session completes.
 - Discarding a partially reviewed session abandons only the remaining unreviewed transactions. Already-assigned transactions keep their ledger rows.
+- After every pending row is assigned or deleted, **ImportReviewSheet** opens (items grouped by destination list). **One Save** at the bottom finalizes the session. **Discard is per row** on the sheet and returns that row to the review queue (ledger reverse, same as undo-assign). The sheet repeats whenever the pending queue becomes empty until Save. Session complete / FR-20 summary / PDF release happen **on Save**, not on last-card.
 - Assignment commits only after parse success (or after an explicit accept-with-quarantine under failure handling).
 - Statements that failed to parse are reported when the session completes, so the user knows what to enter by hand.
 
 > **Amended 2026-08-20** — Sprint Change Proposal 2026-08-20 (row-level individual review).
-> Previously written entirely in statement units, with Skip as the negative outcome and
-> "dismiss an entire file" abandoning remaining uncommitted statements. The unit is now the
-> transaction, Delete replaces Skip, Undo is added as a first-class outcome, and discard is
-> pinned as non-destructive to already-committed rows.
+> **Amended 2026-08-21** — Sprint Change Proposal 2026-08-21 (ImportReviewSheet). After the
+> pending queue is empty, grouped-by-list validation with per-row discard and one Save
+> finalizes the session. Last-card is not session complete.
 
 #### FR-19: Explicit payer (default: current user)
 

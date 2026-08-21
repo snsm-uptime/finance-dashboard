@@ -19,6 +19,11 @@ const cookieRequest = (url: string, init?: RequestInit) =>
     headers: { cookie: "fh_session=tok", ...(init?.headers ?? {}) },
   }) as never;
 
+function cookieOnLastFetch(): string | null {
+  const init = fetchMock.mock.calls.at(-1)?.[1] as { headers?: HeadersInit } | undefined;
+  return new Headers(init?.headers).get("Cookie");
+}
+
 describe("cards / import BFF smoke (coverage floor)", () => {
   beforeEach(() => {
     fetchMock.mockReset();
@@ -104,6 +109,83 @@ describe("cards / import BFF smoke (coverage floor)", () => {
         )
       ).status,
     ).toBe(200);
+  });
+
+  it("row assign/delete/patch and session undo forward cookie", async () => {
+    const assign = await import(
+      "@/app/api/import/sessions/[sessionId]/rows/[rowId]/assign/route"
+    );
+    const rowCtx = { params: Promise.resolve({ sessionId: "s1", rowId: "r1" }) };
+    expect(
+      (
+        await assign.POST(
+          cookieRequest("http://localhost/api/import/sessions/s1/rows/r1/assign", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ list_id: "l1" }),
+          }),
+          rowCtx,
+        )
+      ).status,
+    ).toBe(200);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test:8000/import/sessions/s1/rows/r1/assign",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(cookieOnLastFetch()).toBe("fh_session=tok");
+
+    const del = await import(
+      "@/app/api/import/sessions/[sessionId]/rows/[rowId]/delete/route"
+    );
+    expect(
+      (
+        await del.POST(
+          cookieRequest("http://localhost/api/import/sessions/s1/rows/r1/delete", {
+            method: "POST",
+          }),
+          rowCtx,
+        )
+      ).status,
+    ).toBe(200);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test:8000/import/sessions/s1/rows/r1/delete",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(cookieOnLastFetch()).toBe("fh_session=tok");
+
+    const patch = await import("@/app/api/import/sessions/[sessionId]/rows/[rowId]/route");
+    expect(
+      (
+        await patch.PATCH(
+          cookieRequest("http://localhost/api/import/sessions/s1/rows/r1", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ description: "Coffee" }),
+          }),
+          rowCtx,
+        )
+      ).status,
+    ).toBe(200);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test:8000/import/sessions/s1/rows/r1",
+      expect.objectContaining({ method: "PATCH" }),
+    );
+    expect(cookieOnLastFetch()).toBe("fh_session=tok");
+
+    const undo = await import("@/app/api/import/sessions/[sessionId]/undo/route");
+    expect(
+      (
+        await undo.POST(
+          cookieRequest("http://localhost/api/import/sessions/s1/undo", { method: "POST" }),
+          { params: Promise.resolve({ sessionId: "s1" }) },
+        )
+      ).status,
+    ).toBe(200);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test:8000/import/sessions/s1/undo",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(cookieOnLastFetch()).toBe("fh_session=tok");
   });
 
   it("PATCH expense origin forwards body", async () => {

@@ -2,6 +2,18 @@
 
 export type StatementStatus = "staged" | "failed" | "committed" | "skipped";
 
+export type RowStatus = "pending" | "committed" | "deleted" | "excluded_zero_amount";
+
+export type CandidateRow = {
+  id: string;
+  sequence: number;
+  description: string;
+  amount: string;
+  currency: string;
+  posted_date: string;
+  status: RowStatus;
+};
+
 export type StagedStatement = {
   id: string;
   product_id: string;
@@ -10,6 +22,8 @@ export type StagedStatement = {
   iban: string | null; // Story 4.8.1: IBAN for card identification
   filename: string | null; // Story 4.8.2: original uploaded filename
   card_id: string | null; // Story 4.8.3: identified card at upload time
+  rows: CandidateRow[];
+  zero_amount_excluded_count: number;
 };
 
 export type ImportSession = {
@@ -17,6 +31,7 @@ export type ImportSession = {
   created_at: string;
   discarded_at: string | null;
   statements: StagedStatement[];
+  undo: { row_id: string; action: "assign" | "delete" } | null;
 };
 
 export type UploadMessages = {
@@ -46,6 +61,9 @@ export type IndividualReviewMessages = {
   errorStatementNotFound: string;
   errorSessionDiscarded: string;
   errorStatementNotAvailable: string;
+  errorRowNotFound: string;
+  errorRowNotAvailable: string;
+  errorNothingToUndo: string;
   errorFxUnavailable: string;
   errorGeneric: string;
   errorUnauthorized: string;
@@ -112,6 +130,9 @@ function mapIndividualReviewError(
   if (code === "import_statement_not_found") return messages.errorStatementNotFound;
   if (code === "import_session_discarded") return messages.errorSessionDiscarded;
   if (code === "import_statement_not_available") return messages.errorStatementNotAvailable;
+  if (code === "import_row_not_found") return messages.errorRowNotFound;
+  if (code === "import_row_not_available") return messages.errorRowNotAvailable;
+  if (code === "import_nothing_to_undo") return messages.errorNothingToUndo;
   if (code === "fx_service_unavailable") return messages.errorFxUnavailable;
   return messages.errorGeneric;
 }
@@ -131,9 +152,52 @@ const STATEMENT_STATUSES: readonly StatementStatus[] = [
   "skipped",
 ];
 
+const ROW_STATUSES: readonly RowStatus[] = [
+  "pending",
+  "committed",
+  "deleted",
+  "excluded_zero_amount",
+];
+
+function asCandidateRow(data: unknown): CandidateRow | null {
+  if (!data || typeof data !== "object") return null;
+  const row = data as Partial<CandidateRow>;
+  if (
+    typeof row.id !== "string" ||
+    typeof row.sequence !== "number" ||
+    typeof row.description !== "string" ||
+    typeof row.amount !== "string" ||
+    typeof row.currency !== "string" ||
+    typeof row.posted_date !== "string" ||
+    !row.status ||
+    !ROW_STATUSES.includes(row.status)
+  ) {
+    return null;
+  }
+  return {
+    id: row.id,
+    sequence: row.sequence,
+    description: row.description,
+    amount: row.amount,
+    currency: row.currency,
+    posted_date: row.posted_date,
+    status: row.status,
+  };
+}
+
+function asUndoPointer(
+  data: unknown,
+): { row_id: string; action: "assign" | "delete" } | null {
+  if (!data || typeof data !== "object") return null;
+  const row = data as { row_id?: unknown; action?: unknown };
+  if (typeof row.row_id !== "string") return null;
+  if (row.action !== "assign" && row.action !== "delete") return null;
+  return { row_id: row.row_id, action: row.action };
+}
+
 function asStagedStatement(data: unknown): StagedStatement | null {
   if (!data || typeof data !== "object") return null;
-  const row = data as Partial<StagedStatement>;
+  const row = data as Partial<StagedStatement> & { rows?: unknown };
   if (
     typeof row.id !== "string" ||
     typeof row.product_id !== "string" ||
@@ -143,6 +207,13 @@ function asStagedStatement(data: unknown): StagedStatement | null {
   ) {
     return null;
   }
+  const rows: CandidateRow[] = [];
+  if (Array.isArray(row.rows)) {
+    for (const item of row.rows) {
+      const parsed = asCandidateRow(item);
+      if (parsed) rows.push(parsed);
+    }
+  }
   return {
     id: row.id,
     product_id: row.product_id,
@@ -151,6 +222,9 @@ function asStagedStatement(data: unknown): StagedStatement | null {
     iban: typeof row.iban === "string" ? row.iban : null,
     filename: typeof row.filename === "string" ? row.filename : null,
     card_id: typeof row.card_id === "string" ? row.card_id : null,
+    rows,
+    zero_amount_excluded_count:
+      typeof row.zero_amount_excluded_count === "number" ? row.zero_amount_excluded_count : 0,
   };
 }
 
@@ -174,6 +248,7 @@ function asImportSession(data: unknown): ImportSession | null {
     created_at: row.created_at,
     discarded_at: typeof row.discarded_at === "string" ? row.discarded_at : null,
     statements,
+    undo: asUndoPointer(row.undo),
   };
 }
 
@@ -313,31 +388,19 @@ export async function fetchImportSession(
   return { ok: true, session };
 }
 
-/**
- * Individual review accept (Story 4.8): commits one statement to one list.
- * Serves both the "chosen list" and "configurable default list" outcomes —
- * pass whichever list_id applies. Returns the updated session (mirroring
- * `skipStatement`) so the caller never needs a second round-trip to learn
- * what to review next (Story 4.8 review finding).
- */
-export async function commitIndividualStatement(
-  sessionId: string,
-  statementId: string,
-  listId: string,
-  cardId: string | undefined,
+async function postRowMutation(
+  path: string,
   messages: IndividualReviewMessages,
+  init?: RequestInit,
 ): Promise<OkSession | ErrorResult> {
   let response: Response;
   try {
-    response = await fetch(
-      `/api/import/sessions/${encodeURIComponent(sessionId)}/statements/${encodeURIComponent(statementId)}/commit`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({ list_id: listId, card_id: cardId || null }),
-      },
-    );
+    response = await fetch(path, {
+      method: "POST",
+      headers: { Accept: "application/json", ...(init?.headers ?? {}) },
+      credentials: "same-origin",
+      ...init,
+    });
   } catch {
     return { ok: false, error: messages.errorGeneric };
   }
@@ -350,20 +413,58 @@ export async function commitIndividualStatement(
   return { ok: true, session };
 }
 
-/** Individual review skip (Story 4.8, AC #5): no ledger rows. */
-export async function skipStatement(
+export async function assignRow(
   sessionId: string,
-  statementId: string,
+  rowId: string,
+  listId: string,
+  messages: IndividualReviewMessages,
+): Promise<OkSession | ErrorResult> {
+  return postRowMutation(
+    `/api/import/sessions/${encodeURIComponent(sessionId)}/rows/${encodeURIComponent(rowId)}/assign`,
+    messages,
+    {
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ list_id: listId }),
+    },
+  );
+}
+
+export async function deleteRow(
+  sessionId: string,
+  rowId: string,
+  messages: IndividualReviewMessages,
+): Promise<OkSession | ErrorResult> {
+  return postRowMutation(
+    `/api/import/sessions/${encodeURIComponent(sessionId)}/rows/${encodeURIComponent(rowId)}/delete`,
+    messages,
+  );
+}
+
+export async function undoLastResolution(
+  sessionId: string,
+  messages: IndividualReviewMessages,
+): Promise<OkSession | ErrorResult> {
+  return postRowMutation(
+    `/api/import/sessions/${encodeURIComponent(sessionId)}/undo`,
+    messages,
+  );
+}
+
+export async function editRowDescription(
+  sessionId: string,
+  rowId: string,
+  description: string,
   messages: IndividualReviewMessages,
 ): Promise<OkSession | ErrorResult> {
   let response: Response;
   try {
     response = await fetch(
-      `/api/import/sessions/${encodeURIComponent(sessionId)}/statements/${encodeURIComponent(statementId)}/skip`,
+      `/api/import/sessions/${encodeURIComponent(sessionId)}/rows/${encodeURIComponent(rowId)}`,
       {
-        method: "POST",
-        headers: { Accept: "application/json" },
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
         credentials: "same-origin",
+        body: JSON.stringify({ description }),
       },
     );
   } catch {

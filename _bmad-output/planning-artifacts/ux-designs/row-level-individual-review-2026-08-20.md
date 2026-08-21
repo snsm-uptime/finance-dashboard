@@ -258,6 +258,8 @@ Resumability (§ data model) is only half the feature — the user also needs a 
 
 A partially-resolved session offers **no** Bulk path and no new upload. Resume deep-links to `/upload/review/{sessionId}`, which picks up at the first `pending` row by `sequence` — the queue and the undo pointer are both already server-side, so the card comes back exactly where it was left.
 
+**Amended 2026-08-21 (Sprint Change Proposal 2026-08-21):** a session with **zero pending** rows that has **not** been Saved on ImportReviewSheet is still active. Resume opens the sheet. Last-card does not complete the session.
+
 This is why §1 needs no Bulk-side guard against half-reviewed statements: the state that would have confused Bulk is unreachable from the UI. Bulk only ever sees an untouched session. The API-level guard still belongs in `AssignBulkImportService` as defense in depth (a direct API call could still attempt it), returning `import_row_not_available` — but it is a backstop, not the user-facing mechanism.
 
 Discarding a partially-resolved session must **not** roll back already-committed ledger entries — those are real entries the user deliberately assigned. Discard only abandons the remaining `pending` rows and releases the source PDF via the existing `_release_source_pdf_if_idle` path. The discard confirmation copy should say so explicitly, since "discard" otherwise reads as "undo everything."

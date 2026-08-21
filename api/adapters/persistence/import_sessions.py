@@ -16,9 +16,9 @@ from application.import_session import (
 )
 from domain.canonical_line import CanonicalLine
 from domain.errors import (
+    ImportNothingToUndoError,
     ImportRowNotAvailableError,
     ImportSessionNotFoundError,
-    ImportStatementNotAvailableError,
     ImportStatementNotFoundError,
     InvalidCanonicalLineError,
 )
@@ -28,10 +28,11 @@ from domain.import_session import (
     ROW_STATUS_EXCLUDED_ZERO_AMOUNT,
     ROW_STATUS_PENDING,
     STATEMENT_STATUS_COMMITTED,
-    STATEMENT_STATUS_FAILED,
-    STATEMENT_STATUS_SKIPPED,
     STATEMENT_STATUS_STAGED,
+    UNDO_ACTION_ASSIGN,
+    UNDO_ACTION_DELETE,
     row_is_zero_amount,
+    statement_has_pending_rows,
     statement_is_fully_resolved,
 )
 from sqlalchemy import select, update
@@ -53,6 +54,8 @@ def _session_record(row: ImportSessionModel) -> ImportSessionRecord:
         user_id=row.user_id,
         created_at=row.created_at,
         discarded_at=row.discarded_at,
+        undo_row_id=row.last_resolved_row_id,
+        undo_action=row.last_resolved_action,
         statements=[
             StagedStatementRecord(
                 id=statement.id,
@@ -98,6 +101,18 @@ def _candidate_row(
 class SqlAlchemyImportSessionRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
+
+    def _load_session(self, session_id: UUID, user_id: UUID) -> ImportSessionModel | None:
+        return self._session.scalar(
+            select(ImportSessionModel)
+            .options(
+                selectinload(ImportSessionModel.statements).selectinload(
+                    ImportStatementModel.candidate_rows
+                )
+            )
+            .where(ImportSessionModel.id == session_id, ImportSessionModel.user_id == user_id)
+            .limit(1)
+        )
 
     def create_session(
         self,
@@ -160,31 +175,13 @@ class SqlAlchemyImportSessionRepository:
         return _session_record(session_row)
 
     def get_session(self, session_id: UUID, user_id: UUID) -> ImportSessionRecord | None:
-        row = self._session.scalar(
-            select(ImportSessionModel)
-            .options(
-                selectinload(ImportSessionModel.statements).selectinload(
-                    ImportStatementModel.candidate_rows
-                )
-            )
-            .where(ImportSessionModel.id == session_id, ImportSessionModel.user_id == user_id)
-            .limit(1)
-        )
+        row = self._load_session(session_id, user_id)
         if row is None:
             return None
         return _session_record(row)
 
     def discard_session(self, session_id: UUID, user_id: UUID) -> ImportSessionRecord:
-        row = self._session.scalar(
-            select(ImportSessionModel)
-            .options(
-                selectinload(ImportSessionModel.statements).selectinload(
-                    ImportStatementModel.candidate_rows
-                )
-            )
-            .where(ImportSessionModel.id == session_id, ImportSessionModel.user_id == user_id)
-            .limit(1)
-        )
+        row = self._load_session(session_id, user_id)
         if row is None:
             raise ImportSessionNotFoundError()
         if row.discarded_at is None:
@@ -218,6 +215,7 @@ class SqlAlchemyImportSessionRepository:
         list_id: UUID,
         actor_user_id: UUID,
         rows: list[CommitRow],
+        undo_row_id: UUID | None = None,
     ) -> ImportBatchRecord:
         ids = [row.candidate_row_id for row in rows]
         now = datetime.now(UTC)
@@ -297,6 +295,16 @@ class SqlAlchemyImportSessionRepository:
             raise ImportRowNotAvailableError() from exc
 
         self._complete_statement_if_resolved(statement_id)
+        # Only a row-grain assign is undoable per row. Bulk passes no
+        # undo_row_id even when a statement happens to hold a single row.
+        if undo_row_id is not None:
+            self.set_undo_pointer(
+                session_id=session_id,
+                user_id=actor_user_id,
+                row_id=undo_row_id,
+                action=UNDO_ACTION_ASSIGN,
+                prior_status=ROW_STATUS_PENDING,
+            )
         self._session.flush()
         return ImportBatchRecord(
             id=batch_id,
@@ -311,16 +319,7 @@ class SqlAlchemyImportSessionRepository:
     def mark_candidate_row_deleted(
         self, *, session_id: UUID, statement_id: UUID, row_id: UUID, user_id: UUID
     ) -> ImportSessionRecord:
-        row = self._session.scalar(
-            select(ImportSessionModel)
-            .options(
-                selectinload(ImportSessionModel.statements).selectinload(
-                    ImportStatementModel.candidate_rows
-                )
-            )
-            .where(ImportSessionModel.id == session_id, ImportSessionModel.user_id == user_id)
-            .limit(1)
-        )
+        row = self._load_session(session_id, user_id)
         if row is None:
             raise ImportSessionNotFoundError()
 
@@ -341,23 +340,23 @@ class SqlAlchemyImportSessionRepository:
             raise ImportRowNotAvailableError()
 
         self._complete_statement_if_resolved(statement_id)
+        row.last_resolved_row_id = row_id
+        row.last_resolved_action = UNDO_ACTION_DELETE
+        row.last_resolved_prior_status = ROW_STATUS_PENDING
         self._session.flush()
-        self._session.refresh(statement_row)
+        self._reload_statement(statement_row)
         return _session_record(row)
 
-    def skip_statement(
-        self, *, session_id: UUID, statement_id: UUID, user_id: UUID
+    def update_candidate_row_description(
+        self,
+        *,
+        session_id: UUID,
+        statement_id: UUID,
+        row_id: UUID,
+        user_id: UUID,
+        description: str,
     ) -> ImportSessionRecord:
-        row = self._session.scalar(
-            select(ImportSessionModel)
-            .options(
-                selectinload(ImportSessionModel.statements).selectinload(
-                    ImportStatementModel.candidate_rows
-                )
-            )
-            .where(ImportSessionModel.id == session_id, ImportSessionModel.user_id == user_id)
-            .limit(1)
-        )
+        row = self._load_session(session_id, user_id)
         if row is None:
             raise ImportSessionNotFoundError()
 
@@ -365,27 +364,182 @@ class SqlAlchemyImportSessionRepository:
         if statement_row is None:
             raise ImportStatementNotFoundError()
 
-        # Guarded write, not an unconditional set: a concurrent commit could
-        # land between the caller's eligibility check (against the snapshot
-        # above) and this write. The WHERE clause re-checks status against
-        # the database's current row at write time — if a concurrent commit
-        # already flipped it, this affects zero rows instead of silently
-        # clobbering a committed statement's status to "skipped" (Story 4.8
-        # review finding).
+        # Same guarded-UPDATE idiom as the resolution writes: the WHERE clause
+        # is what enforces "pending only" against the database's current row,
+        # not the snapshot the caller read.
         result = self._session.execute(
-            update(ImportStatementModel)
+            update(ImportCandidateRowModel)
             .where(
-                ImportStatementModel.id == statement_id,
-                ImportStatementModel.status.in_((STATEMENT_STATUS_STAGED, STATEMENT_STATUS_FAILED)),
+                ImportCandidateRowModel.id == row_id,
+                ImportCandidateRowModel.statement_id == statement_id,
+                ImportCandidateRowModel.status == ROW_STATUS_PENDING,
             )
-            .values(status=STATEMENT_STATUS_SKIPPED)
+            .values(normalized_description=description)
         )
         if result.rowcount == 0:
-            raise ImportStatementNotAvailableError()
+            raise ImportRowNotAvailableError()
 
         self._session.flush()
-        self._session.refresh(statement_row)
+        self._reload_statement(statement_row)
         return _session_record(row)
+
+    def set_undo_pointer(
+        self,
+        *,
+        session_id: UUID,
+        user_id: UUID,
+        row_id: UUID,
+        action: str,
+        prior_status: str,
+    ) -> None:
+        self._session.execute(
+            update(ImportSessionModel)
+            .where(ImportSessionModel.id == session_id, ImportSessionModel.user_id == user_id)
+            .values(
+                last_resolved_row_id=row_id,
+                last_resolved_action=action,
+                last_resolved_prior_status=prior_status,
+            )
+        )
+
+    def clear_undo_pointer(self, *, session_id: UUID, user_id: UUID) -> None:
+        self._session.execute(
+            update(ImportSessionModel)
+            .where(ImportSessionModel.id == session_id, ImportSessionModel.user_id == user_id)
+            .values(
+                last_resolved_row_id=None,
+                last_resolved_action=None,
+                last_resolved_prior_status=None,
+            )
+        )
+
+    def undo_last_resolution(self, *, session_id: UUID, user_id: UUID) -> ImportSessionRecord:
+        row = self._load_session(session_id, user_id)
+        if row is None:
+            raise ImportSessionNotFoundError()
+
+        row_id = row.last_resolved_row_id
+        action = row.last_resolved_action
+        if row_id is None or action is None:
+            self._clear_pointer_on(row)
+            self._session.flush()
+            raise ImportNothingToUndoError()
+
+        statement_row = next(
+            (
+                statement
+                for statement in row.statements
+                for candidate in statement.candidate_rows
+                if candidate.id == row_id
+            ),
+            None,
+        )
+        if statement_row is None:
+            # Stale pointer — the row was removed under it (FK SET NULL loses
+            # the id but not the action). Nothing to reverse; clear and report.
+            self._clear_pointer_on(row)
+            self._session.flush()
+            raise ImportNothingToUndoError()
+
+        try:
+            if action == UNDO_ACTION_ASSIGN:
+                self._undo_assign(row_id)
+            elif action == UNDO_ACTION_DELETE:
+                result = self._session.execute(
+                    update(ImportCandidateRowModel)
+                    .where(
+                        ImportCandidateRowModel.id == row_id,
+                        ImportCandidateRowModel.status == ROW_STATUS_DELETED,
+                    )
+                    .values(status=ROW_STATUS_PENDING, resolved_at=None)
+                )
+                if result.rowcount == 0:
+                    raise ImportRowNotAvailableError()
+            else:
+                raise ImportNothingToUndoError()
+        except (ImportRowNotAvailableError, ImportNothingToUndoError):
+            self._clear_pointer_on(row)
+            self._session.flush()
+            raise
+
+        self._reopen_statement_if_pending(statement_row.id)
+        self._clear_pointer_on(row)
+        self._session.flush()
+        self._reload_statement(statement_row)
+        return _session_record(row)
+
+    def _undo_assign(self, row_id: UUID) -> None:
+        result = self._session.execute(
+            update(ImportCandidateRowModel)
+            .where(
+                ImportCandidateRowModel.id == row_id,
+                ImportCandidateRowModel.status == ROW_STATUS_COMMITTED,
+            )
+            .values(status=ROW_STATUS_PENDING, resolved_list_id=None, resolved_at=None)
+        )
+        if result.rowcount == 0:
+            raise ImportRowNotAvailableError()
+
+        entry = self._session.scalar(
+            select(LedgerEntryModel)
+            .where(LedgerEntryModel.import_candidate_row_id == row_id)
+            .limit(1)
+        )
+        if entry is None:
+            return
+
+        batch_id = entry.import_batch_id
+        # Hard delete, not a soft one: ledger_entries has no deleted_at, and
+        # the UNIQUE on import_candidate_row_id must actually be freed or every
+        # later re-assign of this row would conflict forever.
+        self._session.delete(entry)
+        self._session.flush()
+
+        if batch_id is None:
+            return
+        # A batch is one commit action (AD-4). Undo means that action did not
+        # happen, so an emptied batch must not linger into Epic 5's rollback.
+        remaining = self._session.scalar(
+            select(LedgerEntryModel.id).where(LedgerEntryModel.import_batch_id == batch_id).limit(1)
+        )
+        if remaining is None:
+            batch_row = self._session.get(ImportBatchModel, batch_id)
+            if batch_row is not None:
+                self._session.delete(batch_row)
+                self._session.flush()
+
+    def _reload_statement(self, statement_row: ImportStatementModel) -> None:
+        # Core UPDATE() does not expire identity-map collections, so a later
+        # `_session_record` would still echo pre-update statuses/descriptions.
+        self._session.expire(statement_row, ["candidate_rows", "status"])
+        self._session.refresh(statement_row)
+
+    @staticmethod
+    def _clear_pointer_on(row: ImportSessionModel) -> None:
+        row.last_resolved_row_id = None
+        row.last_resolved_action = None
+        row.last_resolved_prior_status = None
+
+    def _reopen_statement_if_pending(self, statement_id: UUID) -> None:
+        """Mirror of `_complete_statement_if_resolved`, which only ever flips
+        *to* committed. Without this a restored row would sit pending inside a
+        statement still marked committed, invisible to review."""
+        statement_row = self._session.get(
+            ImportStatementModel, statement_id, with_for_update=True, populate_existing=True
+        )
+        if statement_row is None:
+            raise ImportStatementNotFoundError()
+        if statement_row.status != STATEMENT_STATUS_COMMITTED:
+            return
+        statuses = list(
+            self._session.scalars(
+                select(ImportCandidateRowModel.status).where(
+                    ImportCandidateRowModel.statement_id == statement_id
+                )
+            )
+        )
+        if statement_has_pending_rows(statuses):
+            statement_row.status = STATEMENT_STATUS_STAGED
 
     def _complete_statement_if_resolved(self, statement_id: UUID) -> None:
         # FOR UPDATE serializes concurrent resolutions of the same statement's

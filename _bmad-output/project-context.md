@@ -122,7 +122,7 @@ Pins: match majors; re-verify patches **only when creating lockfiles** (Story 1.
 - Quarantine: on Session pre-commit; after accept-with-quarantine → **durable on Statement** (incomplete) (AD-17)
 - Unknown IBAN: **block review** until label + IBAN registered (AD-20)
 - Fixed-list vs review-routing attaches to the **registered card** (not a global account default)
-- Clean commit + no unresolved quarantine → **delete PDF + clear path**; else retain (AD-3)
+- Clean commit + no unresolved quarantine → **delete PDF + clear path**; else retain (AD-3). Individual review: retain through ImportReviewSheet until **Save** (not last pending assign)
 
 #### FastAPI / domain — settle invariants
 

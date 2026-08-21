@@ -862,3 +862,280 @@ def test_identify_card_match_persists_existing_card_id(
     fetched = client.get(f"/import/sessions/{record.id}")
     assert fetched.status_code == 200, fetched.text
     assert fetched.json()["statements"][0]["card_id"] == card_id
+
+
+def _pending_rows(payload: dict) -> list[dict]:
+    return list(payload["statements"][0]["rows"])
+
+
+def test_get_session_rows_are_pending_only_ordered_amounts_are_strings(
+    client: TestClient, db_session: Session
+) -> None:
+    _register(client, "getrows@example.com")
+    session_id = _upload_bac_session(client)
+    payload = client.get(f"/import/sessions/{session_id}").json()
+    statement = payload["statements"][0]
+    rows = statement["rows"]
+    sequences = [row["sequence"] for row in rows]
+    assert sequences == sorted(sequences)
+    assert all(row["status"] == ROW_STATUS_PENDING for row in rows)
+    assert all(isinstance(row["amount"], str) for row in rows)
+    for row in rows:
+        Decimal(row["amount"])
+    db_session.expire_all()
+    excluded = db_session.scalars(
+        select(ImportCandidateRowModel).where(
+            ImportCandidateRowModel.statement_id == UUID(statement["id"]),
+            ImportCandidateRowModel.status == ROW_STATUS_EXCLUDED_ZERO_AMOUNT,
+        )
+    ).all()
+    assert statement["zero_amount_excluded_count"] == len(excluded)
+    assert payload["undo"] is None
+
+
+def test_assign_row_sets_undo_pointer_and_ledger_candidate_id(
+    client_with_fx: TestClient, db_session: Session
+) -> None:
+    client = client_with_fx
+    _register(client, "rowhttpassign@example.com")
+    session_id = _upload_bac_session(client)
+    list_id = _own_list_id(client)
+    row = _pending_rows(client.get(f"/import/sessions/{session_id}").json())[0]
+
+    assigned = client.post(
+        f"/import/sessions/{session_id}/rows/{row['id']}/assign",
+        json={"list_id": list_id},
+    )
+    assert assigned.status_code == 200, assigned.text
+    body = assigned.json()
+    assert body["undo"] == {"row_id": row["id"], "action": "assign"}
+    assert all(item["id"] != row["id"] for item in body["statements"][0]["rows"])
+
+    db_session.expire_all()
+    candidate = db_session.get(ImportCandidateRowModel, UUID(row["id"]))
+    assert candidate is not None and candidate.status == ROW_STATUS_COMMITTED
+    ledger = db_session.scalars(
+        select(LedgerEntryModel).where(
+            LedgerEntryModel.import_candidate_row_id == UUID(row["id"])
+        )
+    ).one()
+    assert ledger.import_candidate_row_id == UUID(row["id"])
+
+
+def test_assign_then_undo_restores_pending_and_hard_deletes_ledger(
+    client_with_fx: TestClient, db_session: Session
+) -> None:
+    client = client_with_fx
+    _register(client, "rowundoleger@example.com")
+    session_id = _upload_bac_session(client)
+    list_id = _own_list_id(client)
+    row = _pending_rows(client.get(f"/import/sessions/{session_id}").json())[0]
+    assigned = client.post(
+        f"/import/sessions/{session_id}/rows/{row['id']}/assign",
+        json={"list_id": list_id},
+    )
+    assert assigned.status_code == 200, assigned.text
+
+    undone = client.post(f"/import/sessions/{session_id}/undo")
+    assert undone.status_code == 200, undone.text
+    body = undone.json()
+    assert body["undo"] is None
+    restored = next(item for item in body["statements"][0]["rows"] if item["id"] == row["id"])
+    assert restored["status"] == ROW_STATUS_PENDING
+    assert body["statements"][0]["status"] == STATEMENT_STATUS_STAGED
+
+    db_session.expire_all()
+    assert (
+        db_session.scalars(
+            select(LedgerEntryModel).where(
+                LedgerEntryModel.import_candidate_row_id == UUID(row["id"])
+            )
+        ).first()
+        is None
+    )
+    batches = db_session.scalars(
+        select(ImportBatchModel).where(ImportBatchModel.session_id == UUID(session_id))
+    ).all()
+    assert batches == []
+
+    again = client.post(
+        f"/import/sessions/{session_id}/rows/{row['id']}/assign",
+        json={"list_id": list_id},
+    )
+    assert again.status_code == 200, again.text
+
+
+def test_delete_then_undo_restores_pending_row(client: TestClient) -> None:
+    _register(client, "rowundodelete@example.com")
+    session_id = _upload_bac_session(client)
+    row = _pending_rows(client.get(f"/import/sessions/{session_id}").json())[0]
+    deleted = client.post(f"/import/sessions/{session_id}/rows/{row['id']}/delete")
+    assert deleted.status_code == 200, deleted.text
+    assert deleted.json()["undo"] == {"row_id": row["id"], "action": "delete"}
+
+    undone = client.post(f"/import/sessions/{session_id}/undo")
+    assert undone.status_code == 200, undone.text
+    restored = next(
+        item for item in undone.json()["statements"][0]["rows"] if item["id"] == row["id"]
+    )
+    assert restored["status"] == ROW_STATUS_PENDING
+
+
+def test_undo_last_row_reopens_committed_statement(
+    client_with_fx: TestClient, db_session: Session
+) -> None:
+    """Assigning the only pending row commits the statement; undo must stage it
+    again so the restored row re-enters GET `rows`."""
+    client = client_with_fx
+    _register(client, "rowundoreopen@example.com")
+    user_id = UUID(client.get("/auth/me").json()["user_id"])
+    list_id = _own_list_id(client)
+    repo = SqlAlchemyImportSessionRepository(db_session)
+    record = repo.create_session(
+        session_id=uuid4(),
+        user_id=user_id,
+        statements=[
+            DetectedStatement(
+                product_id="fake_product",
+                status=STATEMENT_STATUS_STAGED,
+                candidate_rows=[_crc_line("only")],
+            )
+        ],
+        pdf_paths={0: "/data/pdfs/undo-reopen.pdf"},
+    )
+    row_id = record.statements[0].candidate_rows[0].id
+    assigned = client.post(
+        f"/import/sessions/{record.id}/rows/{row_id}/assign",
+        json={"list_id": list_id},
+    )
+    assert assigned.status_code == 200, assigned.text
+    assert assigned.json()["statements"][0]["status"] == STATEMENT_STATUS_COMMITTED
+    assert assigned.json()["statements"][0]["rows"] == []
+
+    undone = client.post(f"/import/sessions/{record.id}/undo")
+    assert undone.status_code == 200, undone.text
+    body = undone.json()
+    assert body["statements"][0]["status"] == STATEMENT_STATUS_STAGED
+    restored = next(item for item in body["statements"][0]["rows"] if item["id"] == str(row_id))
+    assert restored["status"] == ROW_STATUS_PENDING
+
+
+def test_undo_twice_returns_nothing_to_undo(client: TestClient) -> None:
+    _register(client, "rowundotwice@example.com")
+    session_id = _upload_bac_session(client)
+    row = _pending_rows(client.get(f"/import/sessions/{session_id}").json())[0]
+    assert client.post(f"/import/sessions/{session_id}/rows/{row['id']}/delete").status_code == 200
+    assert client.post(f"/import/sessions/{session_id}/undo").status_code == 200
+    second = client.post(f"/import/sessions/{session_id}/undo")
+    assert second.status_code == 409
+    assert second.json()["code"] == "import_nothing_to_undo"
+
+
+def test_undo_after_bulk_commit_is_nothing_to_undo(
+    client_with_fx: TestClient, db_session: Session
+) -> None:
+    """A successful bulk commit clears a row-grain undo pointer (superseded)."""
+    client = client_with_fx
+    _register(client, "rowundobulk@example.com")
+    user_id = UUID(client.get("/auth/me").json()["user_id"])
+    list_id = _own_list_id(client)
+    repo = SqlAlchemyImportSessionRepository(db_session)
+    record = repo.create_session(
+        session_id=uuid4(),
+        user_id=user_id,
+        statements=[
+            DetectedStatement(
+                product_id="fake_product",
+                status=STATEMENT_STATUS_STAGED,
+                candidate_rows=[_crc_line("one")],
+            ),
+            DetectedStatement(
+                product_id="fake_product",
+                status=STATEMENT_STATUS_STAGED,
+                candidate_rows=[_crc_line("two")],
+            ),
+        ],
+        pdf_paths={0: "/data/pdfs/undo-bulk-a.pdf", 1: "/data/pdfs/undo-bulk-b.pdf"},
+    )
+    first_row = record.statements[0].candidate_rows[0]
+    assigned = client.post(
+        f"/import/sessions/{record.id}/rows/{first_row.id}/assign",
+        json={"list_id": list_id},
+    )
+    assert assigned.status_code == 200, assigned.text
+    assert assigned.json()["undo"]["action"] == "assign"
+
+    bulk = client.post(f"/import/sessions/{record.id}/bulk-commit", json={"list_id": list_id})
+    assert bulk.status_code == 200, bulk.text
+    undone = client.post(f"/import/sessions/{record.id}/undo")
+    assert undone.status_code == 409
+    assert undone.json()["code"] == "import_nothing_to_undo"
+
+
+def test_patch_pending_row_updates_description_committed_row_rejected(
+    client_with_fx: TestClient,
+) -> None:
+    client = client_with_fx
+    _register(client, "rowpatchedit@example.com")
+    session_id = _upload_bac_session(client)
+    list_id = _own_list_id(client)
+    rows = _pending_rows(client.get(f"/import/sessions/{session_id}").json())
+    pending, sibling = rows[0], rows[1]
+
+    patched = client.patch(
+        f"/import/sessions/{session_id}/rows/{pending['id']}",
+        json={"description": "  Corrected merchant  "},
+    )
+    assert patched.status_code == 200, patched.text
+    echoed = next(
+        item for item in patched.json()["statements"][0]["rows"] if item["id"] == pending["id"]
+    )
+    assert echoed["description"] == "Corrected merchant"
+    fetched = client.get(f"/import/sessions/{session_id}").json()
+    again = next(item for item in fetched["statements"][0]["rows"] if item["id"] == pending["id"])
+    assert again["description"] == "Corrected merchant"
+
+    assigned = client.post(
+        f"/import/sessions/{session_id}/rows/{sibling['id']}/assign",
+        json={"list_id": list_id},
+    )
+    assert assigned.status_code == 200, assigned.text
+    rejected = client.patch(
+        f"/import/sessions/{session_id}/rows/{sibling['id']}",
+        json={"description": "too late"},
+    )
+    assert rejected.status_code == 409
+    assert rejected.json()["code"] == "import_row_not_available"
+
+
+def test_patch_discarded_session_rejected(client: TestClient) -> None:
+    _register(client, "rowpatchdiscarded@example.com")
+    session_id = _upload_bac_session(client)
+    row = _pending_rows(client.get(f"/import/sessions/{session_id}").json())[0]
+    discarded = client.delete(f"/import/sessions/{session_id}")
+    assert discarded.status_code == 200, discarded.text
+    patched = client.patch(
+        f"/import/sessions/{session_id}/rows/{row['id']}",
+        json={"description": "Coffee"},
+    )
+    assert patched.status_code == 409
+    assert patched.json()["code"] == "import_session_discarded"
+
+
+def test_assign_already_committed_row_not_available(client_with_fx: TestClient) -> None:
+    client = client_with_fx
+    _register(client, "rowassignagain@example.com")
+    session_id = _upload_bac_session(client)
+    list_id = _own_list_id(client)
+    row = _pending_rows(client.get(f"/import/sessions/{session_id}").json())[0]
+    first = client.post(
+        f"/import/sessions/{session_id}/rows/{row['id']}/assign",
+        json={"list_id": list_id},
+    )
+    assert first.status_code == 200, first.text
+    second = client.post(
+        f"/import/sessions/{session_id}/rows/{row['id']}/assign",
+        json={"list_id": list_id},
+    )
+    assert second.status_code == 409
+    assert second.json()["code"] == "import_row_not_available"

@@ -21,15 +21,20 @@ from application.import_session import (
     AssignBulkImportCommand,
     AssignBulkImportResult,
     AssignBulkImportService,
-    AssignIndividualImportCommand,
-    AssignIndividualImportService,
+    AssignCandidateRowCommand,
+    AssignCandidateRowService,
+    DeleteCandidateRowCommand,
+    DeleteCandidateRowService,
     DiscardImportSessionCommand,
     DiscardImportSessionService,
+    EditCandidateRowCommand,
+    EditCandidateRowService,
     ImportSessionRecord,
     MatchStatementCardCommand,
     MatchStatementCardService,
-    SkipStatementCommand,
-    SkipStatementService,
+    StagedStatementRecord,
+    UndoLastResolutionCommand,
+    UndoLastResolutionService,
     UploadStatementPdfCommand,
     UploadStatementPdfService,
     _find_statement,
@@ -43,10 +48,11 @@ from domain.errors import (
     FxFutureDateError,
     FxRateNotAvailableError,
     FxServiceUnavailableError,
+    ImportNothingToUndoError,
     ImportRowNotAvailableError,
+    ImportRowNotFoundError,
     ImportSessionDiscardedError,
     ImportSessionNotFoundError,
-    ImportStatementNotAvailableError,
     ImportStatementNotFoundError,
     InvalidCanonicalLineError,
     InvalidCardIbanError,
@@ -56,6 +62,7 @@ from domain.errors import (
     UnknownBankAdapterError,
     UnsupportedFileTypeError,
 )
+from domain.import_session import ROW_STATUS_EXCLUDED_ZERO_AMOUNT, ROW_STATUS_PENDING
 from fastapi import APIRouter, Depends, File, UploadFile, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -68,14 +75,17 @@ from api.deps import (
     require_authenticated_user,
 )
 from api.schemas.import_sessions import (
+    AssignRowBody,
     BulkCommitBody,
     BulkCommitResponse,
+    CandidateRowResponse,
     CardIdentificationResponse,
+    EditRowBody,
     IdentifyCardBody,
     ImportBatchResponse,
     ImportSessionResponse,
-    IndividualCommitBody,
     StagedStatementResponse,
+    UndoPointerResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -83,23 +93,54 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/import/sessions", tags=["import"])
 
 
+def _statement_response(statement: StagedStatementRecord) -> StagedStatementResponse:
+    # Only pending rows form the review queue, ordered by sequence: selectinload
+    # gives no ordering guarantee, and "a restored row re-enters at its original
+    # position" is a payload-ordering promise, not a data one.
+    pending = sorted(
+        (row for row in statement.candidate_rows if row.status == ROW_STATUS_PENDING),
+        key=lambda row: row.sequence,
+    )
+    return StagedStatementResponse(
+        id=statement.id,
+        product_id=statement.product_id,
+        status=statement.status,
+        # Still the total parsed rows — Bulk review (Story 4.7) renders this
+        # number. len(rows) is the pending count.
+        candidate_row_count=statement.candidate_row_count,
+        iban=statement.iban,  # Story 4.8.1: include IBAN for card identification
+        filename=statement.original_filename,  # original upload name, not the storage path
+        card_id=statement.card_id,  # Story 4.8.3: identified card from upload
+        rows=[
+            CandidateRowResponse(
+                id=row.id,
+                sequence=row.sequence,
+                description=row.line.normalized_description,
+                amount=str(row.line.amount),
+                currency=row.line.currency,
+                posted_date=row.line.posted_date,
+                status=row.status,
+            )
+            for row in pending
+        ],
+        zero_amount_excluded_count=sum(
+            1 for row in statement.candidate_rows if row.status == ROW_STATUS_EXCLUDED_ZERO_AMOUNT
+        ),
+    )
+
+
 def _session_response(session: ImportSessionRecord) -> ImportSessionResponse:
+    undo = (
+        UndoPointerResponse(row_id=session.undo_row_id, action=session.undo_action)
+        if session.undo_row_id is not None and session.undo_action is not None
+        else None
+    )
     return ImportSessionResponse(
         id=session.id,
         created_at=session.created_at,
         discarded_at=session.discarded_at,
-        statements=[
-            StagedStatementResponse(
-                id=s.id,
-                product_id=s.product_id,
-                status=s.status,
-                candidate_row_count=s.candidate_row_count,
-                iban=s.iban,  # Story 4.8.1: include IBAN for card identification
-                filename=s.original_filename,  # original upload name, not the storage path
-                card_id=s.card_id,  # Story 4.8.3: identified card from upload
-            )
-            for s in session.statements
-        ],
+        statements=[_statement_response(s) for s in session.statements],
+        undo=undo,
     )
 
 
@@ -299,139 +340,166 @@ def bulk_commit_import_session(
     return _bulk_commit_response(result)
 
 
-@router.post("/{session_id}/statements/{statement_id}/commit", response_model=ImportSessionResponse)
-def commit_individual_statement(
+# Shared row-endpoint error mapping (AC #7). JSONResponse with an explicit
+# `code`, not HTTPException — the established idiom in this module, and the
+# shape mapIndividualReviewError consumes on the client.
+_ROW_ERROR_MAP: tuple[tuple[type[Exception], int, str | None], ...] = (
+    (ImportSessionNotFoundError, status.HTTP_404_NOT_FOUND, "import_session_not_found"),
+    (ImportRowNotFoundError, status.HTTP_404_NOT_FOUND, "import_row_not_found"),
+    (ImportStatementNotFoundError, status.HTTP_404_NOT_FOUND, "import_statement_not_found"),
+    (NotListMemberError, status.HTTP_403_FORBIDDEN, "not_list_member"),
+    (ImportSessionDiscardedError, status.HTTP_409_CONFLICT, "import_session_discarded"),
+    (ImportRowNotAvailableError, status.HTTP_409_CONFLICT, "import_row_not_available"),
+    (ImportNothingToUndoError, status.HTTP_409_CONFLICT, "import_nothing_to_undo"),
+    (InvalidCanonicalLineError, status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_canonical_line"),
+    (FxAuthenticationError, status.HTTP_500_INTERNAL_SERVER_ERROR, None),
+    (FxServiceUnavailableError, status.HTTP_503_SERVICE_UNAVAILABLE, None),
+    (FxFutureDateError, status.HTTP_422_UNPROCESSABLE_CONTENT, None),
+    (FxCurrencyNotSupportedError, status.HTTP_422_UNPROCESSABLE_CONTENT, None),
+    (FxRateNotAvailableError, status.HTTP_422_UNPROCESSABLE_CONTENT, None),
+)
+
+_ROW_ERROR_TYPES = tuple(entry[0] for entry in _ROW_ERROR_MAP)
+
+
+def _row_error_response(exc: Exception) -> JSONResponse:
+    for error_type, status_code, code in _ROW_ERROR_MAP:
+        if isinstance(exc, error_type):
+            return JSONResponse(
+                status_code=status_code,
+                content={"detail": str(exc), "code": code or exc.CODE},
+            )
+    raise exc
+
+
+def _fresh_session_response(
+    session_repo: SqlAlchemyImportSessionRepository, session_id: uuid.UUID, user_id: uuid.UUID
+) -> ImportSessionResponse | JSONResponse:
+    """Return the whole updated session so the caller never needs a second
+    round-trip to learn what to review next."""
+    updated = session_repo.get_session(session_id, user_id)
+    if updated is None:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": "Import session not found.", "code": "import_session_not_found"},
+        )
+    return _session_response(updated)
+
+
+@router.post("/{session_id}/rows/{row_id}/assign", response_model=ImportSessionResponse)
+def assign_candidate_row(
     session_id: uuid.UUID,
-    statement_id: uuid.UUID,
-    body: IndividualCommitBody,
+    row_id: uuid.UUID,
+    body: AssignRowBody,
     user_id: uuid.UUID = Depends(require_authenticated_user),
     db: Session = Depends(get_db),
     fx_service: MaterializeFxService = Depends(get_fx_service),
     pdf_storage: PdfStorage = Depends(get_pdf_storage),
 ) -> ImportSessionResponse | JSONResponse:
-    """Individual review accept (Story 4.8, AC #1/#2/#3): commits exactly
-    one statement to one list — serves both the "chosen list" and
-    "configurable default list" outcomes identically, the caller decides
-    which list_id to send. Returns the updated session (not just the batch)
-    so the caller never has to make a second round-trip to learn what to
-    review next (Story 4.8 review finding)."""
+    """One endpoint for both accept directions — the caller supplies either the
+    default list or the picked one (AC #2)."""
     session_repo = SqlAlchemyImportSessionRepository(db)
     list_repo = SqlAlchemyListRepository(db)
-    service = AssignIndividualImportService(session_repo, list_repo, fx_service, pdf_storage)
+    service = AssignCandidateRowService(session_repo, list_repo, fx_service, pdf_storage)
     try:
         service.execute(
-            AssignIndividualImportCommand(
+            AssignCandidateRowCommand(
                 actor_user_id=user_id,
                 session_id=session_id,
-                statement_id=statement_id,
+                row_id=row_id,
                 list_id=body.list_id,
                 card_id=body.card_id,
             )
         )
-    except ImportSessionNotFoundError as exc:
-        return JSONResponse(
-            status_code=status.HTTP_404_NOT_FOUND,
-            content={"detail": str(exc), "code": "import_session_not_found"},
-        )
-    except ImportStatementNotFoundError as exc:
-        return JSONResponse(
-            status_code=status.HTTP_404_NOT_FOUND,
-            content={"detail": str(exc), "code": "import_statement_not_found"},
-        )
-    except NotListMemberError as exc:
-        return JSONResponse(
-            status_code=status.HTTP_403_FORBIDDEN,
-            content={"detail": str(exc), "code": "not_list_member"},
-        )
-    except ImportSessionDiscardedError as exc:
-        return JSONResponse(
-            status_code=status.HTTP_409_CONFLICT,
-            content={"detail": str(exc), "code": "import_session_discarded"},
-        )
-    except ImportStatementNotAvailableError as exc:
-        return JSONResponse(
-            status_code=status.HTTP_409_CONFLICT,
-            content={"detail": str(exc), "code": "import_statement_not_available"},
-        )
-    except InvalidCanonicalLineError as exc:
-        return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            content={"detail": str(exc), "code": "invalid_canonical_line"},
-        )
-    except FxAuthenticationError as exc:
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"detail": str(exc), "code": exc.CODE},
-        )
-    except FxServiceUnavailableError as exc:
-        return JSONResponse(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={"detail": str(exc), "code": exc.CODE},
-        )
-    except (FxFutureDateError, FxCurrencyNotSupportedError, FxRateNotAvailableError) as exc:
-        return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            content={"detail": str(exc), "code": exc.CODE},
-        )
+    except _ROW_ERROR_TYPES as exc:
+        db.rollback()
+        return _row_error_response(exc)
     logger.info(
-        "import_statement_committed session_id=%s statement_id=%s user_id=%s list_id=%s",
+        "import_row_assigned session_id=%s row_id=%s user_id=%s list_id=%s",
         session_id,
-        statement_id,
+        row_id,
         user_id,
         body.list_id,
     )
-    updated_session = session_repo.get_session(session_id, user_id)
-    if updated_session is None:
-        return JSONResponse(
-            status_code=status.HTTP_404_NOT_FOUND,
-            content={"detail": "Import session not found.", "code": "import_session_not_found"},
-        )
-    return _session_response(updated_session)
+    return _fresh_session_response(session_repo, session_id, user_id)
 
 
-@router.post("/{session_id}/statements/{statement_id}/skip", response_model=ImportSessionResponse)
-def skip_individual_statement(
+@router.post("/{session_id}/rows/{row_id}/delete", response_model=ImportSessionResponse)
+def delete_candidate_row(
     session_id: uuid.UUID,
-    statement_id: uuid.UUID,
+    row_id: uuid.UUID,
     user_id: uuid.UUID = Depends(require_authenticated_user),
     db: Session = Depends(get_db),
     pdf_storage: PdfStorage = Depends(get_pdf_storage),
 ) -> ImportSessionResponse | JSONResponse:
-    """Individual review skip (Story 4.8, AC #5, FR-18): no ledger writes."""
+    """Soft-marks the row deleted so undo can restore it (AC #3)."""
     session_repo = SqlAlchemyImportSessionRepository(db)
-    service = SkipStatementService(session_repo, pdf_storage)
+    service = DeleteCandidateRowService(session_repo, pdf_storage)
     try:
         result = service.execute(
-            SkipStatementCommand(
-                actor_user_id=user_id, session_id=session_id, statement_id=statement_id
-            )
+            DeleteCandidateRowCommand(actor_user_id=user_id, session_id=session_id, row_id=row_id)
         )
-    except ImportSessionNotFoundError as exc:
-        return JSONResponse(
-            status_code=status.HTTP_404_NOT_FOUND,
-            content={"detail": str(exc), "code": "import_session_not_found"},
-        )
-    except ImportStatementNotFoundError as exc:
-        return JSONResponse(
-            status_code=status.HTTP_404_NOT_FOUND,
-            content={"detail": str(exc), "code": "import_statement_not_found"},
-        )
-    except ImportSessionDiscardedError as exc:
-        return JSONResponse(
-            status_code=status.HTTP_409_CONFLICT,
-            content={"detail": str(exc), "code": "import_session_discarded"},
-        )
-    except ImportStatementNotAvailableError as exc:
-        return JSONResponse(
-            status_code=status.HTTP_409_CONFLICT,
-            content={"detail": str(exc), "code": "import_statement_not_available"},
-        )
+    except _ROW_ERROR_TYPES as exc:
+        db.rollback()
+        return _row_error_response(exc)
     logger.info(
-        "import_statement_skipped session_id=%s statement_id=%s user_id=%s",
+        "import_row_deleted session_id=%s row_id=%s user_id=%s", session_id, row_id, user_id
+    )
+    return _session_response(result)
+
+
+@router.post("/{session_id}/undo", response_model=ImportSessionResponse)
+def undo_last_resolution(
+    session_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> ImportSessionResponse | JSONResponse:
+    """Single-level undo of the session's last row resolution (AC #4)."""
+    session_repo = SqlAlchemyImportSessionRepository(db)
+    service = UndoLastResolutionService(session_repo)
+    snapshot = session_repo.get_session(session_id, user_id)
+    undone_row_id = snapshot.undo_row_id if snapshot is not None else None
+    try:
+        result = service.execute(
+            UndoLastResolutionCommand(actor_user_id=user_id, session_id=session_id)
+        )
+    except _ROW_ERROR_TYPES as exc:
+        db.rollback()
+        return _row_error_response(exc)
+    logger.info(
+        "import_row_undone session_id=%s row_id=%s user_id=%s",
         session_id,
-        statement_id,
+        undone_row_id,
         user_id,
     )
+    return _session_response(result)
+
+
+@router.patch("/{session_id}/rows/{row_id}", response_model=ImportSessionResponse)
+def edit_candidate_row(
+    session_id: uuid.UUID,
+    row_id: uuid.UUID,
+    body: EditRowBody,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> ImportSessionResponse | JSONResponse:
+    """Correct a still-pending row's description (AC #6). No description in the
+    log line — statement text is PII and never reaches info level."""
+    session_repo = SqlAlchemyImportSessionRepository(db)
+    service = EditCandidateRowService(session_repo)
+    try:
+        result = service.execute(
+            EditCandidateRowCommand(
+                actor_user_id=user_id,
+                session_id=session_id,
+                row_id=row_id,
+                description=body.description,
+            )
+        )
+    except _ROW_ERROR_TYPES as exc:
+        db.rollback()
+        return _row_error_response(exc)
+    logger.info("import_row_edited session_id=%s row_id=%s user_id=%s", session_id, row_id, user_id)
     return _session_response(result)
 
 

@@ -19,8 +19,13 @@ from domain.import_session import (
     ROW_STATUS_EXCLUDED_ZERO_AMOUNT,
     ROW_STATUS_PENDING,
     ROW_STATUSES,
+    UNDO_ACTION_ASSIGN,
+    UNDO_ACTION_DELETE,
+    UNDO_ACTIONS,
+    normalize_row_description,
     row_is_zero_amount,
     session_needs_source_pdf,
+    statement_has_pending_rows,
     statement_is_fully_resolved,
     validate_bulk_candidate_row,
     validate_bulk_commit_eligible,
@@ -198,3 +203,36 @@ def test_session_needs_source_pdf_false_when_all_committed_or_skipped() -> None:
     assert session_needs_source_pdf(["skipped"]) is False
     assert session_needs_source_pdf(["committed", "skipped"]) is False
     assert session_needs_source_pdf([]) is False
+
+
+def test_undo_action_constants_are_the_only_two_actions() -> None:
+    assert UNDO_ACTIONS == {UNDO_ACTION_ASSIGN, UNDO_ACTION_DELETE}
+    assert (UNDO_ACTION_ASSIGN, UNDO_ACTION_DELETE) == ("assign", "delete")
+
+
+def test_statement_has_pending_rows_true_when_any_row_pending() -> None:
+    assert statement_has_pending_rows([ROW_STATUS_COMMITTED, ROW_STATUS_PENDING]) is True
+
+
+def test_statement_has_pending_rows_false_when_none_pending() -> None:
+    assert statement_has_pending_rows([ROW_STATUS_COMMITTED, ROW_STATUS_DELETED]) is False
+    assert statement_has_pending_rows([ROW_STATUS_EXCLUDED_ZERO_AMOUNT]) is False
+    assert statement_has_pending_rows([]) is False
+
+
+def test_normalize_row_description_trims_surrounding_whitespace() -> None:
+    assert normalize_row_description("  Grocery store  ") == "Grocery store"
+
+
+def test_normalize_row_description_rejects_blank() -> None:
+    with pytest.raises(InvalidCanonicalLineError):
+        normalize_row_description("   ")
+
+
+def test_normalize_row_description_rejects_over_max_length() -> None:
+    with pytest.raises(InvalidCanonicalLineError):
+        normalize_row_description("x" * 501)
+
+
+def test_normalize_row_description_measures_length_after_trimming() -> None:
+    assert normalize_row_description(" " + "x" * 500 + " ") == "x" * 500

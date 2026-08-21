@@ -32,11 +32,10 @@ from domain.import_session import (
     ROW_STATUS_PENDING,
     STATEMENT_STATUS_FAILED,
     STATEMENT_STATUS_STAGED,
+    normalize_row_description,
     session_needs_source_pdf,
     validate_bulk_candidate_row,
     validate_bulk_commit_eligible,
-    validate_individual_accept_eligible,
-    validate_individual_skip_eligible,
     validate_pdf_upload,
 )
 
@@ -217,6 +216,10 @@ class ImportSessionRecord:
     created_at: datetime
     discarded_at: datetime | None
     statements: list[StagedStatementRecord]
+    # Single-level undo pointer (AC #1/#5): the last resolved row and how it
+    # was resolved, or None when there is nothing to undo.
+    undo_row_id: UUID | None = None
+    undo_action: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -263,11 +266,16 @@ class ImportSessionRepository(Protocol):
         list_id: UUID,
         actor_user_id: UUID,
         rows: list[CommitRow],
+        undo_row_id: UUID | None = None,
     ) -> ImportBatchRecord:
         """Persist one Import Batch atomically (Story 4.10, amended AD-4):
         guarded pending→committed UPDATE on the targeted candidate rows,
         the batch row, one ledger entry per row (with import_candidate_row_id),
         then complete the statement if every non-excluded row has left pending.
+
+        `undo_row_id` records the session undo pointer for a row-grain assign.
+        Bulk passes nothing: a single-row statement committed under Bulk is
+        still a statement-grain action and must not become undoable per row.
         """
         ...
 
@@ -279,12 +287,38 @@ class ImportSessionRepository(Protocol):
         not pending."""
         ...
 
-    def skip_statement(
-        self, *, session_id: UUID, statement_id: UUID, user_id: UUID
+    def update_candidate_row_description(
+        self,
+        *,
+        session_id: UUID,
+        statement_id: UUID,
+        row_id: UUID,
+        user_id: UUID,
+        description: str,
     ) -> ImportSessionRecord:
-        """Guarded staged|failed→skipped UPDATE on the targeted statement.
-        No ledger writes. Raises ImportStatementNotAvailableError when the
-        statement is already committed or skipped (Story 4.8, FR-18)."""
+        """Guarded UPDATE of a still-pending row's description. Raises
+        ImportRowNotAvailableError once the row has been resolved."""
+        ...
+
+    def set_undo_pointer(
+        self,
+        *,
+        session_id: UUID,
+        user_id: UUID,
+        row_id: UUID,
+        action: str,
+        prior_status: str,
+    ) -> None:
+        """Record the single-level undo pointer for the session."""
+        ...
+
+    def clear_undo_pointer(self, *, session_id: UUID, user_id: UUID) -> None:
+        """Drop the undo pointer — used or superseded."""
+        ...
+
+    def undo_last_resolution(self, *, session_id: UUID, user_id: UUID) -> ImportSessionRecord:
+        """Reverse the pointed-at resolution and clear the pointer. Raises
+        ImportNothingToUndoError when there is no usable pointer."""
         ...
 
     def clear_statement_pdf_paths(self, session_id: UUID, user_id: UUID) -> None:
@@ -555,6 +589,12 @@ class AssignBulkImportService:
             )
             batches.append(batch)
 
+        # A row-grain undo pointer is meaningless once a whole statement was
+        # bulk-committed on top of it (AC #5, "cleared once used or superseded").
+        self._session_repo.clear_undo_pointer(
+            session_id=command.session_id, user_id=command.actor_user_id
+        )
+
         updated = self._session_repo.get_session(command.session_id, command.actor_user_id)
         if updated is not None:
             _release_source_pdf_if_idle(
@@ -583,135 +623,6 @@ def _find_candidate_row(
             if row.id == row_id:
                 return statement, row
     raise ImportRowNotFoundError()
-
-
-@dataclass(frozen=True, slots=True)
-class AssignIndividualImportCommand:
-    actor_user_id: UUID
-    session_id: UUID
-    statement_id: UUID
-    list_id: UUID
-    card_id: UUID | None = None  # Story 4.8.1: optional card ID for origin assignment
-
-
-class AssignIndividualImportService:
-    """Individual review accept (Story 4.8, AC #1/#2/#3): commits exactly
-    one statement to one list — the same `commit_statement_batch` port
-    Story 4.7's Bulk service already calls in a loop, called here once.
-    Serves both the "chosen list" and "configurable default list" outcomes
-    identically — the caller decides which `list_id` to send.
-    """
-
-    def __init__(
-        self,
-        session_repo: ImportSessionRepository,
-        list_lookup: ListAccessLookup,
-        fx_service: MaterializeFxService,
-        pdf_storage: PdfStorage,
-    ) -> None:
-        self._session_repo = session_repo
-        self._list_lookup = list_lookup
-        self._fx_service = fx_service
-        self._pdf_storage = pdf_storage
-
-    def execute(self, command: AssignIndividualImportCommand) -> ImportBatchRecord:
-        session = self._session_repo.get_session(command.session_id, command.actor_user_id)
-        if session is None:
-            raise ImportSessionNotFoundError()
-
-        statement = _find_statement(session, command.statement_id)
-
-        AuthorizeListAccessService(self._list_lookup).execute(
-            AuthorizeListAccessCommand(
-                acting_user_id=command.actor_user_id,
-                list_id=command.list_id,
-                action="import_to_list",
-            )
-        )
-
-        validate_individual_accept_eligible(
-            discarded_at=session.discarded_at, statement_status=statement.status
-        )
-
-        rows: list[CommitRow] = []
-        for candidate in statement.candidate_rows:
-            validate_bulk_candidate_row(
-                amount=candidate.amount, normalized_description=candidate.normalized_description
-            )
-            draft = ManualExpenseDraft(
-                amount=candidate.amount,
-                currency=candidate.currency,
-                normalized_description=candidate.normalized_description,
-                payer_id=command.actor_user_id,
-                provenance=candidate.provenance,
-                line_type=candidate.line_type,
-                posted_date=candidate.posted_date,
-                external_ref=candidate.external_ref,
-                origin_kind=ORIGIN_KIND_CARD if command.card_id else None,
-                origin_card_id=command.card_id,
-            )
-            fx = self._fx_service.materialize_fx_for_entry(
-                amount=draft.amount,
-                currency=draft.currency,
-                posted_date=date.fromisoformat(draft.posted_date),
-            )
-            rows.append(CommitRow(candidate_row_id=candidate.id, draft=draft, fx=fx))
-
-        batch = self._session_repo.commit_statement_batch(
-            batch_id=uuid4(),
-            session_id=command.session_id,
-            statement_id=statement.id,
-            list_id=command.list_id,
-            actor_user_id=command.actor_user_id,
-            rows=rows,
-        )
-        updated = self._session_repo.get_session(command.session_id, command.actor_user_id)
-        if updated is not None:
-            _release_source_pdf_if_idle(
-                session=updated,
-                session_repo=self._session_repo,
-                pdf_storage=self._pdf_storage,
-            )
-        return batch
-
-
-@dataclass(frozen=True, slots=True)
-class SkipStatementCommand:
-    actor_user_id: UUID
-    session_id: UUID
-    statement_id: UUID
-
-
-class SkipStatementService:
-    """Individual review skip (Story 4.8, AC #5, FR-18): no ledger rows —
-    only flips the targeted statement's own status."""
-
-    def __init__(self, session_repo: ImportSessionRepository, pdf_storage: PdfStorage) -> None:
-        self._session_repo = session_repo
-        self._pdf_storage = pdf_storage
-
-    def execute(self, command: SkipStatementCommand) -> ImportSessionRecord:
-        session = self._session_repo.get_session(command.session_id, command.actor_user_id)
-        if session is None:
-            raise ImportSessionNotFoundError()
-
-        statement = _find_statement(session, command.statement_id)
-
-        validate_individual_skip_eligible(
-            discarded_at=session.discarded_at, statement_status=statement.status
-        )
-
-        updated = self._session_repo.skip_statement(
-            session_id=command.session_id,
-            statement_id=command.statement_id,
-            user_id=command.actor_user_id,
-        )
-        _release_source_pdf_if_idle(
-            session=updated,
-            session_repo=self._session_repo,
-            pdf_storage=self._pdf_storage,
-        )
-        return updated
 
 
 @dataclass(frozen=True, slots=True)
@@ -796,6 +707,7 @@ class AssignCandidateRowService:
             list_id=command.list_id,
             actor_user_id=command.actor_user_id,
             rows=[CommitRow(candidate_row_id=candidate.id, draft=draft, fx=fx)],
+            undo_row_id=candidate.id,
         )
         updated = self._session_repo.get_session(command.session_id, command.actor_user_id)
         if updated is not None:
@@ -846,6 +758,73 @@ class DeleteCandidateRowService:
             pdf_storage=self._pdf_storage,
         )
         return updated
+
+
+@dataclass(frozen=True, slots=True)
+class UndoLastResolutionCommand:
+    actor_user_id: UUID
+    session_id: UUID
+
+
+class UndoLastResolutionService:
+    """Single-level undo of the session's last row resolution.
+
+    No PDF release here: undo makes a session less resolved, never more, so
+    the retain rule (AD-3) can only move in the direction of keeping the file.
+    """
+
+    def __init__(self, session_repo: ImportSessionRepository) -> None:
+        self._session_repo = session_repo
+
+    def execute(self, command: UndoLastResolutionCommand) -> ImportSessionRecord:
+        session = self._session_repo.get_session(command.session_id, command.actor_user_id)
+        if session is None:
+            raise ImportSessionNotFoundError()
+
+        if session.discarded_at is not None:
+            raise ImportSessionDiscardedError()
+
+        return self._session_repo.undo_last_resolution(
+            session_id=command.session_id, user_id=command.actor_user_id
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class EditCandidateRowCommand:
+    actor_user_id: UUID
+    session_id: UUID
+    row_id: UUID
+    description: str
+
+
+class EditCandidateRowService:
+    """Correct a still-pending row's description before it is resolved.
+
+    Description only — no ledger, no FX, no PDF release.
+    """
+
+    def __init__(self, session_repo: ImportSessionRepository) -> None:
+        self._session_repo = session_repo
+
+    def execute(self, command: EditCandidateRowCommand) -> ImportSessionRecord:
+        session = self._session_repo.get_session(command.session_id, command.actor_user_id)
+        if session is None:
+            raise ImportSessionNotFoundError()
+
+        statement, candidate = _find_candidate_row(session, command.row_id)
+
+        if session.discarded_at is not None:
+            raise ImportSessionDiscardedError()
+
+        description = normalize_row_description(command.description)
+
+        return self._session_repo.update_candidate_row_description(
+            session_id=command.session_id,
+            statement_id=statement.id,
+            row_id=candidate.id,
+            user_id=command.actor_user_id,
+            description=description,
+        )
 
 
 @dataclass(frozen=True, slots=True)

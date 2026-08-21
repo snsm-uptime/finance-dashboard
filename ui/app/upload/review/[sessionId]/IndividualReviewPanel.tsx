@@ -12,10 +12,10 @@ import { fetchLists, type ListItem } from "@/app/lists/listsClient";
 import { uploadCopy } from "@/lib/i18n/upload";
 import { useCardIdentification } from "@/hooks/useCardIdentification";
 import {
-  commitIndividualStatement,
+  assignRow,
+  deleteRow,
   discardSession,
   fetchImportSession,
-  skipStatement,
   type CardIdentificationMessages,
   type ImportSession,
   type IndividualReviewMessages,
@@ -69,6 +69,9 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     errorStatementNotFound: t.individualReviewErrorStatementNotFound,
     errorSessionDiscarded: t.individualReviewErrorSessionDiscarded,
     errorStatementNotAvailable: t.individualReviewErrorStatementNotAvailable,
+    errorRowNotFound: t.individualReviewErrorRowNotFound,
+    errorRowNotAvailable: t.individualReviewErrorRowNotAvailable,
+    errorNothingToUndo: t.individualReviewErrorNothingToUndo,
     errorFxUnavailable: t.individualReviewErrorFxUnavailable,
     errorGeneric: t.errorGeneric,
     errorUnauthorized: t.errorUnauthorized,
@@ -157,8 +160,11 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   const action = useFormSubmission(async (act: Action) => {
     if (!current) return { ok: false, error: t.errorGeneric };
 
+    const pendingRow = current.rows.find((row) => row.status === "pending") ?? current.rows[0];
+    if (!pendingRow) return { ok: false, error: t.errorGeneric };
+
     if (act.kind === "skip") {
-      const result = await skipStatement(sessionId, current.id, messages);
+      const result = await deleteRow(sessionId, pendingRow.id, messages);
       if (result.ok) {
         setSession(result.session);
         setPickedListId("");
@@ -168,14 +174,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
 
     const listId = act.kind === "acceptChosen" ? pickedListId : defaultListId;
     if (!listId) return { ok: false, error: t.errorGeneric };
-    // Story 4.8.2: Pass identified card ID to commit (will be set as origin)
-    const result = await commitIndividualStatement(
-      sessionId,
-      current.id,
-      listId,
-      card.cardId,
-      messages,
-    );
+    const result = await assignRow(sessionId, pendingRow.id, listId, messages);
     if (result.ok) {
       setLastAcceptedListId(listId);
       setPickedListId("");

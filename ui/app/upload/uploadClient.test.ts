@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  assignRow,
   bulkCommitSession,
-  commitIndividualStatement,
+  deleteRow,
   discardSession,
+  editRowDescription,
   fetchImportSession,
-  skipStatement,
+  undoLastResolution,
   uploadStatement,
 } from "./uploadClient";
 
@@ -36,10 +38,15 @@ const individualReviewMessages = {
   errorStatementNotFound: "statement-not-found",
   errorSessionDiscarded: "discarded",
   errorStatementNotAvailable: "statement-not-available",
+  errorRowNotFound: "row-not-found",
+  errorRowNotAvailable: "row-not-available",
+  errorNothingToUndo: "nothing-to-undo",
   errorFxUnavailable: "fx-unavailable",
   errorGeneric: "generic",
   errorUnauthorized: "unauthorized",
 };
+
+const emptyStatementFields = { rows: [], zero_amount_excluded_count: 0 };
 
 function fakeFile(): File {
   return new File(["%PDF-1.4"], "statement.pdf", { type: "application/pdf" });
@@ -74,8 +81,9 @@ describe("uploadClient", () => {
         id: "s1",
         created_at: "2026-08-18T00:00:00Z",
         discarded_at: null,
+        undo: null,
         statements: [
-          { id: "st1", product_id: "bac_credit", status: "staged", candidate_row_count: 12, iban: null, filename: null, card_id: null },
+          { id: "st1", product_id: "bac_credit", status: "staged", candidate_row_count: 12, iban: null, filename: null, card_id: null, ...emptyStatementFields },
         ],
       },
     });
@@ -282,7 +290,7 @@ describe("uploadClient", () => {
     expect(result).toEqual({ ok: false, error: "fx-unavailable" });
   });
 
-  // --- Story 4.8: fetchImportSession / commitIndividualStatement / skipStatement ---
+  // --- Row-level review client (Story 4.11) ---
 
   it("fetchImportSession returns the parsed session including committed/skipped statuses", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
@@ -308,9 +316,10 @@ describe("uploadClient", () => {
         id: "s1",
         created_at: "2026-08-19T00:00:00Z",
         discarded_at: null,
+        undo: null,
         statements: [
-          { id: "st1", product_id: "bac_credit", status: "committed", candidate_row_count: 3, iban: null, filename: null, card_id: null },
-          { id: "st2", product_id: "bac_credit", status: "skipped", candidate_row_count: 1, iban: null, filename: null, card_id: null },
+          { id: "st1", product_id: "bac_credit", status: "committed", candidate_row_count: 3, iban: null, filename: null, card_id: null, ...emptyStatementFields },
+          { id: "st2", product_id: "bac_credit", status: "skipped", candidate_row_count: 1, iban: null, filename: null, card_id: null, ...emptyStatementFields },
         ],
       },
     });
@@ -318,6 +327,61 @@ describe("uploadClient", () => {
       "/api/import/sessions/s1",
       expect.objectContaining({ method: "GET" }),
     );
+  });
+
+  it("asStagedStatement defaults missing rows and drops malformed row entries", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: "s1",
+          created_at: "2026-08-19T00:00:00Z",
+          discarded_at: null,
+          undo: { row_id: "r1", action: "assign" },
+          statements: [
+            {
+              id: "st1",
+              product_id: "bac_credit",
+              status: "staged",
+              candidate_row_count: 2,
+              iban: null,
+              filename: null,
+              card_id: null,
+              rows: [
+                {
+                  id: "r1",
+                  sequence: 1,
+                  description: "Coffee",
+                  amount: "10.00",
+                  currency: "CRC",
+                  posted_date: "2026-01-01",
+                  status: "pending",
+                },
+                { id: "bad", amount: 12 },
+              ],
+            },
+          ],
+        }),
+      }),
+    );
+
+    const result = await fetchImportSession("s1", individualReviewMessages);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.session.undo).toEqual({ row_id: "r1", action: "assign" });
+    expect(result.session.statements[0].rows).toEqual([
+      {
+        id: "r1",
+        sequence: 1,
+        description: "Coffee",
+        amount: "10.00",
+        currency: "CRC",
+        posted_date: "2026-01-01",
+        status: "pending",
+      },
+    ]);
   });
 
   it("fetchImportSession maps import_session_not_found to errorSessionNotFound", async () => {
@@ -334,7 +398,7 @@ describe("uploadClient", () => {
     expect(result).toEqual({ ok: false, error: "session-not-found" });
   });
 
-  it("commitIndividualStatement posts list_id and returns the updated session", async () => {
+  it("assignRow posts list_id and returns the updated session", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -343,32 +407,22 @@ describe("uploadClient", () => {
         created_at: "2026-08-19T00:00:00Z",
         discarded_at: null,
         statements: [
-          { id: "st1", product_id: "bac_credit", status: "committed", candidate_row_count: 3, iban: null, filename: null, card_id: null },
+          { id: "st1", product_id: "bac_credit", status: "staged", candidate_row_count: 3, iban: null, filename: null, card_id: null },
         ],
       }),
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await commitIndividualStatement("s1", "st1", "l1", undefined, individualReviewMessages);
+    const result = await assignRow("s1", "r1", "l1", individualReviewMessages);
 
-    expect(result).toEqual({
-      ok: true,
-      session: {
-        id: "s1",
-        created_at: "2026-08-19T00:00:00Z",
-        discarded_at: null,
-        statements: [
-          { id: "st1", product_id: "bac_credit", status: "committed", candidate_row_count: 3, iban: null, filename: null, card_id: null },
-        ],
-      },
-    });
+    expect(result.ok).toBe(true);
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/import/sessions/s1/statements/st1/commit",
-      expect.objectContaining({ method: "POST", body: JSON.stringify({ list_id: "l1", card_id: null }) }),
+      "/api/import/sessions/s1/rows/r1/assign",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ list_id: "l1" }) }),
     );
   });
 
-  it("commitIndividualStatement maps 403 not_list_member to errorForbidden", async () => {
+  it("assignRow maps 403 not_list_member to errorForbidden", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -378,39 +432,39 @@ describe("uploadClient", () => {
       }),
     );
 
-    const result = await commitIndividualStatement("s1", "st1", "l1", undefined, individualReviewMessages);
+    const result = await assignRow("s1", "r1", "l1", individualReviewMessages);
     expect(result).toEqual({ ok: false, error: "forbidden" });
   });
 
-  it("commitIndividualStatement maps import_statement_not_found to errorStatementNotFound", async () => {
+  it("assignRow maps import_row_not_found to errorRowNotFound", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
         ok: false,
         status: 404,
-        json: async () => ({ code: "import_statement_not_found", detail: "no" }),
+        json: async () => ({ code: "import_row_not_found", detail: "no" }),
       }),
     );
 
-    const result = await commitIndividualStatement("s1", "st1", "l1", undefined, individualReviewMessages);
-    expect(result).toEqual({ ok: false, error: "statement-not-found" });
+    const result = await assignRow("s1", "r1", "l1", individualReviewMessages);
+    expect(result).toEqual({ ok: false, error: "row-not-found" });
   });
 
-  it("commitIndividualStatement maps import_statement_not_available to errorStatementNotAvailable (409)", async () => {
+  it("assignRow maps import_row_not_available to errorRowNotAvailable (409)", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
         ok: false,
         status: 409,
-        json: async () => ({ code: "import_statement_not_available", detail: "no" }),
+        json: async () => ({ code: "import_row_not_available", detail: "no" }),
       }),
     );
 
-    const result = await commitIndividualStatement("s1", "st1", "l1", undefined, individualReviewMessages);
-    expect(result).toEqual({ ok: false, error: "statement-not-available" });
+    const result = await assignRow("s1", "r1", "l1", individualReviewMessages);
+    expect(result).toEqual({ ok: false, error: "row-not-available" });
   });
 
-  it("commitIndividualStatement maps import_session_discarded to errorSessionDiscarded (409)", async () => {
+  it("assignRow maps import_session_discarded to errorSessionDiscarded (409)", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -420,11 +474,11 @@ describe("uploadClient", () => {
       }),
     );
 
-    const result = await commitIndividualStatement("s1", "st1", "l1", undefined, individualReviewMessages);
+    const result = await assignRow("s1", "r1", "l1", individualReviewMessages);
     expect(result).toEqual({ ok: false, error: "discarded" });
   });
 
-  it("commitIndividualStatement maps fx_service_unavailable to errorFxUnavailable (503)", async () => {
+  it("assignRow maps fx_service_unavailable to errorFxUnavailable (503)", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -434,11 +488,11 @@ describe("uploadClient", () => {
       }),
     );
 
-    const result = await commitIndividualStatement("s1", "st1", "l1", undefined, individualReviewMessages);
+    const result = await assignRow("s1", "r1", "l1", individualReviewMessages);
     expect(result).toEqual({ ok: false, error: "fx-unavailable" });
   });
 
-  it("skipStatement posts to the statement skip route and returns the updated session", async () => {
+  it("deleteRow posts to the row delete route", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -446,33 +500,54 @@ describe("uploadClient", () => {
         id: "s1",
         created_at: "2026-08-19T00:00:00Z",
         discarded_at: null,
-        statements: [
-          { id: "st1", product_id: "bac_credit", status: "skipped", candidate_row_count: 2, iban: null, filename: null, card_id: null },
-        ],
+        statements: [],
       }),
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await skipStatement("s1", "st1", individualReviewMessages);
-
+    const result = await deleteRow("s1", "r1", individualReviewMessages);
     expect(result.ok).toBe(true);
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/import/sessions/s1/statements/st1/skip",
+      "/api/import/sessions/s1/rows/r1/delete",
       expect.objectContaining({ method: "POST" }),
     );
   });
 
-  it("skipStatement maps import_statement_not_available to errorStatementNotAvailable (409)", async () => {
+  it("undoLastResolution maps import_nothing_to_undo", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
         ok: false,
         status: 409,
-        json: async () => ({ code: "import_statement_not_available", detail: "no" }),
+        json: async () => ({ code: "import_nothing_to_undo", detail: "no" }),
       }),
     );
 
-    const result = await skipStatement("s1", "st1", individualReviewMessages);
-    expect(result).toEqual({ ok: false, error: "statement-not-available" });
+    const result = await undoLastResolution("s1", individualReviewMessages);
+    expect(result).toEqual({ ok: false, error: "nothing-to-undo" });
+  });
+
+  it("editRowDescription patches description", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        id: "s1",
+        created_at: "2026-08-19T00:00:00Z",
+        discarded_at: null,
+        statements: [],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await editRowDescription("s1", "r1", "Coffee", individualReviewMessages);
+    expect(result.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/import/sessions/s1/rows/r1",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ description: "Coffee" }),
+      }),
+    );
   });
 });

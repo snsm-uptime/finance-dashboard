@@ -4,7 +4,7 @@ baseline_commit: 8390624
 
 # Story 4.11: Row-level review API — rows, assign, delete, undo, edit
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -34,30 +34,30 @@ so that the review UI can act on a transaction instead of a file.
 
 ### Task 1 — Domain: undo vocabulary + description edit rule (AC: 4, 5, 6, 7)
 
-- [ ] 1.1 In `api/domain/errors.py`, add `ImportNothingToUndoError(DomainError)` with `CODE = "import_nothing_to_undo"`, following the exact shape of the neighbouring `ImportRowNotAvailableError` / `ImportRowNotFoundError` (message in `__init__`, `CODE` classvar).
-- [ ] 1.2 In `api/domain/import_session.py`, add `UNDO_ACTION_ASSIGN = "assign"`, `UNDO_ACTION_DELETE = "delete"`, and `UNDO_ACTIONS = frozenset({...})` beside the existing `ROW_STATUS_*` block.
-- [ ] 1.3 Add `normalize_row_description(description: str) -> str`: strips, raises `InvalidCanonicalLineError` on empty-after-strip or `len > DESCRIPTION_MAX_LENGTH`, returns the trimmed value. Reuse `DESCRIPTION_MAX_LENGTH`, already imported from `domain.expenses` in this module — do **not** call `validate_bulk_candidate_row`, which also bounds `amount` and is not applicable to a description-only edit.
-- [ ] 1.4 Add `statement_has_pending_rows(row_statuses: Sequence[str]) -> bool` — the mirror of the existing `statement_is_fully_resolved`, used by undo to re-open a statement that was flipped to `committed`.
-- [ ] 1.5 **Delete** `validate_individual_accept_eligible` and `validate_individual_skip_eligible` (AC #8), and their tests in `api/tests/test_import_session_domain.py`.
-- [ ] 1.6 Unit-test the new helpers in `api/tests/test_import_session_domain.py` (pure, no DB).
+- [x] 1.1 In `api/domain/errors.py`, add `ImportNothingToUndoError(DomainError)` with `CODE = "import_nothing_to_undo"`, following the exact shape of the neighbouring `ImportRowNotAvailableError` / `ImportRowNotFoundError` (message in `__init__`, `CODE` classvar).
+- [x] 1.2 In `api/domain/import_session.py`, add `UNDO_ACTION_ASSIGN = "assign"`, `UNDO_ACTION_DELETE = "delete"`, and `UNDO_ACTIONS = frozenset({...})` beside the existing `ROW_STATUS_*` block.
+- [x] 1.3 Add `normalize_row_description(description: str) -> str`: strips, raises `InvalidCanonicalLineError` on empty-after-strip or `len > DESCRIPTION_MAX_LENGTH`, returns the trimmed value. Reuse `DESCRIPTION_MAX_LENGTH`, already imported from `domain.expenses` in this module — do **not** call `validate_bulk_candidate_row`, which also bounds `amount` and is not applicable to a description-only edit.
+- [x] 1.4 Add `statement_has_pending_rows(row_statuses: Sequence[str]) -> bool` — the mirror of the existing `statement_is_fully_resolved`, used by undo to re-open a statement that was flipped to `committed`.
+- [x] 1.5 **Delete** `validate_individual_accept_eligible` and `validate_individual_skip_eligible` (AC #8), and their tests in `api/tests/test_import_session_domain.py`.
+- [x] 1.6 Unit-test the new helpers in `api/tests/test_import_session_domain.py` (pure, no DB).
 
 ### Task 2 — Migration `0023_import_session_undo_pointer` (AC: 5)
 
-- [ ] 2.1 New revision `api/adapters/persistence/migrations/versions/0023_import_session_undo_pointer.py`, `revision = "0023_import_session_undo_pointer"`, `down_revision = "0022_original_filename"` (verified current head).
-- [ ] 2.2 `upgrade()` adds to `import_sessions`: `last_resolved_row_id` (`postgresql.UUID(as_uuid=True)`, nullable, FK → `import_candidate_rows.id`, `ondelete="SET NULL"`), `last_resolved_action` (`sa.String(16)`, nullable), `last_resolved_prior_status` (`sa.String(20)`, nullable — `excluded_zero_amount` is 20 chars, which is why 4.10 chose that width for the row `status` column).
-- [ ] 2.3 `downgrade()` drops the FK then the three columns. No data repair — matches 0020's posture.
-- [ ] 2.4 No backfill: an existing session with a null pointer is correctly "nothing to undo".
-- [ ] 2.5 Mirror the columns on `ImportSessionModel` in `api/adapters/persistence/models.py`. **Do not** add a `relationship()` — a plain FK column avoids a cycle with `ImportCandidateRowModel`.
+- [x] 2.1 New revision `api/adapters/persistence/migrations/versions/0023_import_session_undo_pointer.py`, `revision = "0023_import_session_undo_pointer"`, `down_revision = "0022_original_filename"` (verified current head).
+- [x] 2.2 `upgrade()` adds to `import_sessions`: `last_resolved_row_id` (`postgresql.UUID(as_uuid=True)`, nullable, FK → `import_candidate_rows.id`, `ondelete="SET NULL"`), `last_resolved_action` (`sa.String(16)`, nullable), `last_resolved_prior_status` (`sa.String(20)`, nullable — `excluded_zero_amount` is 20 chars, which is why 4.10 chose that width for the row `status` column).
+- [x] 2.3 `downgrade()` drops the FK then the three columns. No data repair — matches 0020's posture.
+- [x] 2.4 No backfill: an existing session with a null pointer is correctly "nothing to undo".
+- [x] 2.5 Mirror the columns on `ImportSessionModel` in `api/adapters/persistence/models.py`. **Do not** add a `relationship()` — a plain FK column avoids a cycle with `ImportCandidateRowModel`.
 
 ### Task 3 — Persistence: pointer writes, undo, description edit (AC: 3, 4, 5, 6)
 
 New repo methods live on `SqlAlchemyImportSessionRepository` in `api/adapters/persistence/import_sessions.py` **and** must be declared on the `ImportSessionRepository` Protocol in `api/application/import_session.py` — otherwise the fake repos in `test_import_session_application.py` silently drift from the real one.
 
-- [ ] 3.1 `set_undo_pointer(*, session_id, user_id, row_id, action, prior_status) -> None` and `clear_undo_pointer(*, session_id, user_id) -> None`.
-- [ ] 3.2 Call `set_undo_pointer` at the end of `commit_statement_batch` **only for a row-level assign**. Do not infer it from `len(rows) == 1` — a single-row statement under Bulk would falsely qualify. Add a keyword-only `undo_row_id: UUID | None = None` parameter; `AssignCandidateRowService` passes the row id, `AssignBulkImportService` passes nothing.
-- [ ] 3.3 In `mark_candidate_row_deleted`, set the pointer to `(row_id, "delete", "pending")` after the guarded UPDATE succeeds.
-- [ ] 3.4 **Bulk supersedes undo:** `AssignBulkImportService` calls `clear_undo_pointer` after its commit loop — a row-grain pointer is meaningless once a whole statement was bulk-committed (AC #5, "cleared once used or **superseded**").
-- [ ] 3.5 `undo_last_resolution(*, session_id, user_id) -> ImportSessionRecord`:
+- [x] 3.1 `set_undo_pointer(*, session_id, user_id, row_id, action, prior_status) -> None` and `clear_undo_pointer(*, session_id, user_id) -> None`.
+- [x] 3.2 Call `set_undo_pointer` at the end of `commit_statement_batch` **only for a row-level assign**. Do not infer it from `len(rows) == 1` — a single-row statement under Bulk would falsely qualify. Add a keyword-only `undo_row_id: UUID | None = None` parameter; `AssignCandidateRowService` passes the row id, `AssignBulkImportService` passes nothing.
+- [x] 3.3 In `mark_candidate_row_deleted`, set the pointer to `(row_id, "delete", "pending")` after the guarded UPDATE succeeds.
+- [x] 3.4 **Bulk supersedes undo:** `AssignBulkImportService` calls `clear_undo_pointer` after its commit loop — a row-grain pointer is meaningless once a whole statement was bulk-committed (AC #5, "cleared once used or **superseded**").
+- [x] 3.5 `undo_last_resolution(*, session_id, user_id) -> ImportSessionRecord`:
   - Load the session with `selectinload(statements).selectinload(candidate_rows)` (same options as `get_session`). `None` → `ImportSessionNotFoundError`.
   - Pointer null → `ImportNothingToUndoError`.
   - Locate the pointed row; not found (FK `SET NULL`-ed, or stale pointer) → clear the pointer and raise `ImportNothingToUndoError`.
@@ -65,21 +65,21 @@ New repo methods live on `SqlAlchemyImportSessionRepository` in `api/adapters/pe
   - **action == `delete`:** guarded `UPDATE ... SET status='pending', resolved_at=NULL WHERE id=:row AND status='deleted'`; `rowcount == 0` → `ImportRowNotAvailableError`.
   - Re-open the statement: if `statement_row.status == STATEMENT_STATUS_COMMITTED` and `statement_has_pending_rows([...])` is now true, set it back to `STATEMENT_STATUS_STAGED`. Add this as `_reopen_statement_if_pending(statement_id)`, the mirror of the existing `_complete_statement_if_resolved`.
   - Clear the pointer, `flush()`, `refresh()` the touched statement, return `_session_record(row)`.
-- [ ] 3.6 `update_candidate_row_description(*, session_id, statement_id, row_id, user_id, description) -> ImportSessionRecord`: guarded `UPDATE ... SET normalized_description=:d WHERE id=:row AND statement_id=:st AND status='pending'`; `rowcount == 0` → `ImportRowNotAvailableError`. Same session-ownership preamble as `mark_candidate_row_deleted`.
-- [ ] 3.7 `CandidateRowRecord` already exposes `sequence`, `status`, `resolved_list_id`, and `line` — sufficient for the response layer. Do **not** duplicate `amount`/`description` onto the record.
-- [ ] 3.8 **Delete** `skip_statement` from the repo and from the Protocol (AC #8) — 4.10 removed it, `021ce2c` restored it.
+- [x] 3.6 `update_candidate_row_description(*, session_id, statement_id, row_id, user_id, description) -> ImportSessionRecord`: guarded `UPDATE ... SET normalized_description=:d WHERE id=:row AND statement_id=:st AND status='pending'`; `rowcount == 0` → `ImportRowNotAvailableError`. Same session-ownership preamble as `mark_candidate_row_deleted`.
+- [x] 3.7 `CandidateRowRecord` already exposes `sequence`, `status`, `resolved_list_id`, and `line` — sufficient for the response layer. Do **not** duplicate `amount`/`description` onto the record.
+- [x] 3.8 **Delete** `skip_statement` from the repo and from the Protocol (AC #8) — 4.10 removed it, `021ce2c` restored it.
 
 ### Task 4 — Application services (AC: 2, 3, 4, 6, 8)
 
-- [ ] 4.1 `AssignCandidateRowService` and `DeleteCandidateRowService` already exist and are correct — **reuse them, do not rewrite**. The only change is wiring `undo_row_id` through `AssignCandidateRowService` (Task 3.2).
-- [ ] 4.2 New `UndoLastResolutionCommand(actor_user_id, session_id)` + `UndoLastResolutionService(session_repo)`: `get_session` → `None` → `ImportSessionNotFoundError`; `discarded_at is not None` → `ImportSessionDiscardedError`; then `session_repo.undo_last_resolution(...)`. Returns `ImportSessionRecord`.
+- [x] 4.1 `AssignCandidateRowService` and `DeleteCandidateRowService` already exist and are correct — **reuse them, do not rewrite**. The only change is wiring `undo_row_id` through `AssignCandidateRowService` (Task 3.2).
+- [x] 4.2 New `UndoLastResolutionCommand(actor_user_id, session_id)` + `UndoLastResolutionService(session_repo)`: `get_session` → `None` → `ImportSessionNotFoundError`; `discarded_at is not None` → `ImportSessionDiscardedError`; then `session_repo.undo_last_resolution(...)`. Returns `ImportSessionRecord`.
   - **Do not** call `_release_source_pdf_if_idle` here — undo makes the session *less* idle, never more.
-- [ ] 4.3 New `EditCandidateRowCommand(actor_user_id, session_id, row_id, description)` + `EditCandidateRowService`: `get_session`; `_find_candidate_row` (raises `ImportRowNotFoundError`); discarded → `ImportSessionDiscardedError`; `normalize_row_description(...)`; `session_repo.update_candidate_row_description(...)`. No FX, no ledger, no PDF release.
-- [ ] 4.4 **Delete** `AssignIndividualImportService`, `AssignIndividualImportCommand`, `SkipStatementService`, `SkipStatementCommand` and their tests in `api/tests/test_import_session_application.py` (AC #8). **Run Task 5.10 first** — these symbols only survive today because orphaned routes still call them. **Keep `_find_statement`** — `identify_card_for_statement` still imports it. **Keep `AssignBulkImportService` and `AssignCandidateRowService` entirely** — they carry the card-origin stamp and are not part of this deletion.
+- [x] 4.3 New `EditCandidateRowCommand(actor_user_id, session_id, row_id, description)` + `EditCandidateRowService`: `get_session`; `_find_candidate_row` (raises `ImportRowNotFoundError`); discarded → `ImportSessionDiscardedError`; `normalize_row_description(...)`; `session_repo.update_candidate_row_description(...)`. No FX, no ledger, no PDF release.
+- [x] 4.4 **Delete** `AssignIndividualImportService`, `AssignIndividualImportCommand`, `SkipStatementService`, `SkipStatementCommand` and their tests in `api/tests/test_import_session_application.py` (AC #8). **Run Task 5.10 first** — these symbols only survive today because orphaned routes still call them. **Keep `_find_statement`** — `identify_card_for_statement` still imports it. **Keep `AssignBulkImportService` and `AssignCandidateRowService` entirely** — they carry the card-origin stamp and are not part of this deletion.
 
 ### Task 5 — Schemas + routes (AC: 1, 2, 3, 4, 6, 7, 8)
 
-- [ ] 5.1 `api/api/schemas/import_sessions.py`:
+- [x] 5.1 `api/api/schemas/import_sessions.py`:
   - `CandidateRowResponse`: `id: UUID`, `sequence: int`, `description: str`, `amount: str`, `currency: str`, `posted_date: str`, `status: str`.
     **`amount` and `posted_date` are `str`, not `Decimal`/`date`** — project-context: "JSON/API boundary: serialize money as **string** — never JSON numbers for amounts"; `posted_date` is an ISO calendar-date string. `api/api/schemas/lists.py:52-58` is the precedent to copy.
   - `UndoPointerResponse`: `row_id: UUID`, `action: str`.
@@ -88,13 +88,13 @@ New repo methods live on `SqlAlchemyImportSessionRepository` in `api/adapters/pe
   - `AssignRowBody`: `list_id: UUID`, `card_id: UUID | None = None`.
   - `EditRowBody`: `description: str`.
   - **Delete** `IndividualCommitBody` (AC #8).
-- [ ] 5.2 In `_session_response` (`api/api/routes/import_sessions.py`): build `rows` from `statement.candidate_rows` filtered to `status == ROW_STATUS_PENDING`, **sorted by `sequence` ascending** — AC #4's "original sequence position" is only real if the payload is ordered, and `selectinload` guarantees no order. Map `description=row.line.normalized_description`, `amount=str(row.line.amount)`, `posted_date=row.line.posted_date` (already an ISO string on `CanonicalLine`). Compute `zero_amount_excluded_count` from **all** rows with `status == ROW_STATUS_EXCLUDED_ZERO_AMOUNT`.
+- [x] 5.2 In `_session_response` (`api/api/routes/import_sessions.py`): build `rows` from `statement.candidate_rows` filtered to `status == ROW_STATUS_PENDING`, **sorted by `sequence` ascending** — AC #4's "original sequence position" is only real if the payload is ordered, and `selectinload` guarantees no order. Map `description=row.line.normalized_description`, `amount=str(row.line.amount)`, `posted_date=row.line.posted_date` (already an ISO string on `CanonicalLine`). Compute `zero_amount_excluded_count` from **all** rows with `status == ROW_STATUS_EXCLUDED_ZERO_AMOUNT`.
   - **Leave `candidate_row_count` semantics unchanged** (total parsed rows). Story 4.7's Bulk UI reads it; narrowing it to pending would silently change that display. `len(rows)` is the pending count.
-- [ ] 5.3 `POST /{session_id}/rows/{row_id}/assign` → `AssignCandidateRowService`, returns `ImportSessionResponse` built from a fresh `get_session` (mirrors the retired statement commit route's "return the session so the caller never needs a second round-trip").
-- [ ] 5.4 `POST /{session_id}/rows/{row_id}/delete` → `DeleteCandidateRowService`, returns `ImportSessionResponse`.
-- [ ] 5.5 `POST /{session_id}/undo` → `UndoLastResolutionService`, returns `ImportSessionResponse`.
-- [ ] 5.6 `PATCH /{session_id}/rows/{row_id}` → `EditCandidateRowService`, returns `ImportSessionResponse`.
-- [ ] 5.7 Error mapping on every new route as `JSONResponse(status_code=..., content={"detail": str(exc), "code": ...})` — the established idiom in this file, **not** `HTTPException`:
+- [x] 5.3 `POST /{session_id}/rows/{row_id}/assign` → `AssignCandidateRowService`, returns `ImportSessionResponse` built from a fresh `get_session` (mirrors the retired statement commit route's "return the session so the caller never needs a second round-trip").
+- [x] 5.4 `POST /{session_id}/rows/{row_id}/delete` → `DeleteCandidateRowService`, returns `ImportSessionResponse`.
+- [x] 5.5 `POST /{session_id}/undo` → `UndoLastResolutionService`, returns `ImportSessionResponse`.
+- [x] 5.6 `PATCH /{session_id}/rows/{row_id}` → `EditCandidateRowService`, returns `ImportSessionResponse`.
+- [x] 5.7 Error mapping on every new route as `JSONResponse(status_code=..., content={"detail": str(exc), "code": ...})` — the established idiom in this file, **not** `HTTPException`:
 
   | Exception | Status | `code` |
   |---|---|---|
@@ -110,21 +110,21 @@ New repo methods live on `SqlAlchemyImportSessionRepository` in `api/adapters/pe
   | `FxFutureDateError` / `FxCurrencyNotSupportedError` / `FxRateNotAvailableError` | 422 | `exc.CODE` |
 
   FX errors apply to `/assign` only — `/delete`, `/undo`, and the row `PATCH` touch no FX.
-- [ ] 5.8 All new routes gate on `Depends(require_authenticated_user)` only, same rationale the module docstring already records for upload.
-- [ ] 5.9 One `logger.info` per successful mutation with `session_id` / `row_id` / `user_id` (+ `list_id` for assign), matching the existing `import_bulk_committed` style. **No `normalized_description` in logs** — statement PII never reaches `info`.
-- [ ] 5.10 **Delete** the `commit_individual_statement` and `skip_individual_statement` routes and their now-unused imports (AC #8). **Do this before Task 4.4 and Task 1.5 delete the services and validators** — deleting the services while these routes still reference them is exactly what produced the `F821` breakage that commit `021ce2c` had to repair. Routes first, then the code they call.
+- [x] 5.8 All new routes gate on `Depends(require_authenticated_user)` only, same rationale the module docstring already records for upload.
+- [x] 5.9 One `logger.info` per successful mutation with `session_id` / `row_id` / `user_id` (+ `list_id` for assign), matching the existing `import_bulk_committed` style. **No `normalized_description` in logs** — statement PII never reaches `info`.
+- [x] 5.10 **Delete** the `commit_individual_statement` and `skip_individual_statement` routes and their now-unused imports (AC #8). **Do this before Task 4.4 and Task 1.5 delete the services and validators** — deleting the services while these routes still reference them is exactly what produced the `F821` breakage that commit `021ce2c` had to repair. Routes first, then the code they call.
 
 ### Task 6 — UI BFF proxies + typed client (AC: 2, 3, 4, 6, 7)
 
 Thin transport only. **No component redesign.**
 
-- [ ] 6.1 New route handlers, each a copy of `ui/app/api/import/sessions/[sessionId]/bulk-commit/route.ts` (cookie forward → `getApiInternalUrl()` → pass through upstream status + body verbatim; 502 `bad_gateway` on fetch failure):
+- [x] 6.1 New route handlers, each a copy of `ui/app/api/import/sessions/[sessionId]/bulk-commit/route.ts` (cookie forward → `getApiInternalUrl()` → pass through upstream status + body verbatim; 502 `bad_gateway` on fetch failure):
   - `ui/app/api/import/sessions/[sessionId]/rows/[rowId]/assign/route.ts` — `POST`
   - `ui/app/api/import/sessions/[sessionId]/rows/[rowId]/delete/route.ts` — `POST`
   - `ui/app/api/import/sessions/[sessionId]/rows/[rowId]/route.ts` — `PATCH`
   - `ui/app/api/import/sessions/[sessionId]/undo/route.ts` — `POST` (no body)
   - `RouteContext` params type is `Promise<{ sessionId: string; rowId: string }>` for the row routes — this Next version awaits `context.params`.
-- [ ] 6.2 `ui/app/upload/uploadClient.ts`:
+- [x] 6.2 `ui/app/upload/uploadClient.ts`:
   - `export type RowStatus = "pending" | "committed" | "deleted" | "excluded_zero_amount";`
   - `export type CandidateRow = { id: string; sequence: number; description: string; amount: string; currency: string; posted_date: string; status: RowStatus };` — **`amount` stays a `string`.** Never `Number()` it; no money math in the browser.
   - `StagedStatement` gains `rows: CandidateRow[]` and `zero_amount_excluded_count: number`.
@@ -133,14 +133,14 @@ Thin transport only. **No component redesign.**
   - New functions returning `OkSession | ErrorResult`: `assignRow(sessionId, rowId, listId, messages)`, `deleteRow(sessionId, rowId, messages)`, `undoLastResolution(sessionId, messages)`, `editRowDescription(sessionId, rowId, description, messages)` — all mapping errors through `mapIndividualReviewError`.
   - Extend `mapIndividualReviewError` with `import_row_not_found` → `errorRowNotFound`, `import_row_not_available` → `errorRowNotAvailable`, `import_nothing_to_undo` → `errorNothingToUndo`, and add those three to `IndividualReviewMessages`.
   - **Delete** `commitIndividualStatement` and `skipStatement` — their BFF routes were already deleted by 4.10, so they are dead code that cannot succeed.
-- [ ] 6.3 `ui/lib/i18n/upload.ts` — add `individualReviewErrorRowNotFound`, `individualReviewErrorRowNotAvailable`, `individualReviewErrorNothingToUndo` **on both `en` and `es`**. Per-domain TS message objects; never JSON files.
-- [ ] 6.4 `IndividualReviewPanel.tsx` imports `commitIndividualStatement` / `skipStatement`; deleting them breaks its typecheck. **Satisfy `tsc` with the smallest possible edit** — repoint the two call sites at `assignRow` / `deleteRow` for the statement's first pending row. Do **not** restructure the panel, change its gestures, or start 4.13's card layout. Record what you did in Completion Notes so 4.13 knows the starting state.
+- [x] 6.3 `ui/lib/i18n/upload.ts` — add `individualReviewErrorRowNotFound`, `individualReviewErrorRowNotAvailable`, `individualReviewErrorNothingToUndo` **on both `en` and `es`**. Per-domain TS message objects; never JSON files.
+- [x] 6.4 `IndividualReviewPanel.tsx` imports `commitIndividualStatement` / `skipStatement`; deleting them breaks its typecheck. **Satisfy `tsc` with the smallest possible edit** — repoint the two call sites at `assignRow` / `deleteRow` for the statement's first pending row. Do **not** restructure the panel, change its gestures, or start 4.13's card layout. Record what you did in Completion Notes so 4.13 knows the starting state.
 
 ### Task 7 — Tests (AC: all)
 
-- [ ] 7.1 `api/tests/test_import_session_domain.py` — pure unit tests for `normalize_row_description` (trim, empty → raise, over-length → raise) and `statement_has_pending_rows`. Delete tests for the two removed validators.
-- [ ] 7.2 `api/tests/test_import_session_application.py` — fake-repo tests: `UndoLastResolutionService` raises `ImportSessionNotFoundError` / `ImportSessionDiscardedError` before touching the repo; `EditCandidateRowService` raises `ImportRowNotFoundError` for an unknown row and `InvalidCanonicalLineError` for a blank description; `AssignCandidateRowService` passes `undo_row_id`; `AssignBulkImportService` calls `clear_undo_pointer`. Delete the statement-level individual service tests.
-- [ ] 7.3 `api/tests/test_import_sessions_integration.py` — **Postgres 16 only, never a SQLite stand-in** (these already skip without `DATABASE_URL`):
+- [x] 7.1 `api/tests/test_import_session_domain.py` — pure unit tests for `normalize_row_description` (trim, empty → raise, over-length → raise) and `statement_has_pending_rows`. Delete tests for the two removed validators.
+- [x] 7.2 `api/tests/test_import_session_application.py` — fake-repo tests: `UndoLastResolutionService` raises `ImportSessionNotFoundError` / `ImportSessionDiscardedError` before touching the repo; `EditCandidateRowService` raises `ImportRowNotFoundError` for an unknown row and `InvalidCanonicalLineError` for a blank description; `AssignCandidateRowService` passes `undo_row_id`; `AssignBulkImportService` calls `clear_undo_pointer`. Delete the statement-level individual service tests.
+- [x] 7.3 `api/tests/test_import_sessions_integration.py` — **Postgres 16 only, never a SQLite stand-in** (these already skip without `DATABASE_URL`):
   - assign → row `committed`, ledger entry carries `import_candidate_row_id`, session `undo` pointer = `(row, "assign")`.
   - assign → **undo** → row back to `pending`, ledger entry **gone**, emptied batch gone, pointer `null`, statement back to `staged` if it had flipped to `committed`.
   - **undo → re-assign the same row succeeds.** This is the single most important test in the story: it proves the hard delete actually freed the `UNIQUE import_candidate_row_id` value.
@@ -152,12 +152,12 @@ Thin transport only. **No component redesign.**
   - `GET` payload: rows are pending-only, ordered by `sequence`, `amount` is a **JSON string**, `zero_amount_excluded_count` counts the excluded rows.
   - Money assertions use `Decimal` — never `float`.
   - Keep the row-grain concurrent-commit race test 4.10 added; do not weaken it.
-- [ ] 7.4 UI: extend `ui/app/api/cards-import.bff.test.ts` (the existing BFF test file — do not create a new one) for the four new proxies, and `ui/app/upload/uploadClient.test.ts` for the new client functions plus tolerant `asStagedStatement` parsing.
-- [ ] 7.5 Full gate before flipping to `review`: `api` pytest (host **and** inside the Compose api container after `alembic upgrade head`), `ui` typecheck + lint + vitest.
+- [x] 7.4 UI: extend `ui/app/api/cards-import.bff.test.ts` (the existing BFF test file — do not create a new one) for the four new proxies, and `ui/app/upload/uploadClient.test.ts` for the new client functions plus tolerant `asStagedStatement` parsing.
+- [x] 7.5 Full gate before flipping to `review`: `api` pytest (host **and** inside the Compose api container after `alembic upgrade head`), `ui` typecheck + lint + vitest.
 
 ### Task 8 — Story close
 
-- [ ] 8.1 Write the how/why overview per `_bmad-output/implementation-artifacts/story-close-overview-checklist.md` before flipping to `review`.
+- [x] 8.1 Write the how/why overview per `_bmad-output/implementation-artifacts/story-close-overview-checklist.md` before flipping to `review`.
 
 ## Dev Notes
 
@@ -437,12 +437,83 @@ changes.
 
 ### Agent Model Used
 
+Cursor Grok 4.6 (bmad-dev-story)
+
 ### Debug Log References
+
+- Session resume after a broken run: fake-repo methods for undo/edit were already in `test_import_session_application.py`; remaining work was Task 7.2+ (application tests, UI BFF/client, integration, close).
+- Host `.venv` is required for pytest (`uv run pytest` on PATH does not see the project venv).
+- First `test_undo_after_bulk_commit_is_nothing_to_undo` used a mixed pending/committed statement; bulk correctly 409s and does **not** clear the pointer. Replaced with two staged statements: row-assign fully resolves the first, bulk commits the second and supersedes undo.
 
 ### Completion Notes List
 
+- Domain: `ImportNothingToUndoError`, undo action constants, `normalize_row_description`, `statement_has_pending_rows`; statement-level accept/skip validators removed.
+- Persistence: migration `0023_import_session_undo_pointer`; `set_undo_pointer` / `clear_undo_pointer` / `undo_last_resolution` (hard-delete ledger + empty batch, reopen staged statement) / `update_candidate_row_description`; row assign passes `undo_row_id`; bulk clears the pointer; `skip_statement` removed.
+- Application: `UndoLastResolutionService`, `EditCandidateRowService`; `AssignCandidateRowService` wires `undo_row_id`; statement-level individual services removed.
+- HTTP: GET session includes pending `rows[]` (sequence order, amount as string), `zero_amount_excluded_count`, `undo`; POST assign/delete/undo and PATCH description; statement commit/skip routes removed.
+- UI: BFF proxies for the four new routes; typed `assignRow` / `deleteRow` / `undoLastResolution` / `editRowDescription`; `commitIndividualStatement` / `skipStatement` deleted. Task 6.4: `IndividualReviewPanel` now calls `assignRow`/`deleteRow` on the statement's first pending row — layout/gestures unchanged for 4.13.
+- `SessionReviewPanel.tsx` only gained the three new `IndividualReviewMessages` fields so `tsc` stays green after the client type change.
+
+## Story-close overview — 4.11
+
+**Request path:**
+browser → `ui/app/api/import/sessions/[sessionId]/…` (cookie BFF) → FastAPI `/import/sessions/{id}/rows/{rowId}/assign|delete` | `PATCH …/rows/{rowId}` | `POST …/undo` → `AssignCandidateRowService` / `DeleteCandidateRowService` / `EditCandidateRowService` / `UndoLastResolutionService` → `SqlAlchemyImportSessionRepository` (guarded UPDATE, ledger hard-delete on undo) → Postgres 16
+
+**Key components:**
+`api/domain/import_session.py`, `api/application/import_session.py`, `api/adapters/persistence/import_sessions.py`, `0023_import_session_undo_pointer.py`, `api/api/routes/import_sessions.py`, `ui/app/upload/uploadClient.ts`
+
+**Why this shape:**
+AD-9: the reviewed unit is one parsed row. Undo is session-scoped and single-level so it survives reload without a stack. Ledger `import_candidate_row_id` UNIQUE requires a hard delete on undo so re-assign can reuse the id (Sprint Change Proposal 2026-08-20).
+
+**What not to break:**
+- Guarded `UPDATE … WHERE status='pending'` before any ledger insert; SAVEPOINT on IntegrityError → `import_row_not_available`.
+- Undo hard-deletes the ledger row **and** an emptied batch; re-opens a fully-resolved statement to `staged`.
+- GET `rows` are pending-only, ordered by `sequence`; `amount` is a JSON string; `candidate_row_count` stays total parsed rows.
+- Origin stamp stays on `AssignBulkImportService` / `AssignCandidateRowService` / identify-card — not on the deleted statement-grain path.
+- `_release_source_pdf_if_idle` is not called from undo.
+
 ### File List
+
+- api/domain/errors.py
+- api/domain/import_session.py
+- api/adapters/persistence/migrations/versions/0023_import_session_undo_pointer.py
+- api/adapters/persistence/models.py
+- api/adapters/persistence/import_sessions.py
+- api/application/import_session.py
+- api/api/schemas/import_sessions.py
+- api/api/routes/import_sessions.py
+- api/tests/test_import_session_domain.py
+- api/tests/test_import_session_application.py
+- api/tests/test_import_sessions_integration.py
+- ui/app/api/import/sessions/[sessionId]/rows/[rowId]/assign/route.ts
+- ui/app/api/import/sessions/[sessionId]/rows/[rowId]/delete/route.ts
+- ui/app/api/import/sessions/[sessionId]/rows/[rowId]/route.ts
+- ui/app/api/import/sessions/[sessionId]/undo/route.ts
+- ui/app/upload/uploadClient.ts
+- ui/app/upload/uploadClient.test.ts
+- ui/app/api/cards-import.bff.test.ts
+- ui/lib/i18n/upload.ts
+- ui/app/upload/review/[sessionId]/IndividualReviewPanel.tsx
+- ui/app/upload/review/[sessionId]/IndividualReviewPanel.test.tsx
+- ui/app/upload/SessionReviewPanel.tsx
+- ui/app/upload/SessionReviewPanel.test.tsx
+- ui/app/upload/UploadPanel.test.tsx
+- _bmad-output/implementation-artifacts/4-11-row-level-review-api-rows-assign-delete-undo-edit.md
+- _bmad-output/implementation-artifacts/sprint-status.yaml
 
 ## Change Log
 
 - 2026-08-21: Story context created via `bmad-create-story` for `4-11-row-level-review-api-rows-assign-delete-undo-edit`. Status → ready-for-dev.
+- 2026-08-21: Code review patches applied (stuck undo pointer, mutation reload, row error map, tests, undo log). Status → done.
+
+### Review Findings
+
+- [x] [Review][Defer] Last-row assign/delete can delete the source PDF before undo [`api/application/import_session.py:459`] — deferred: replace last-row PDF drop with a post-assign `ImportReviewSheet` (items grouped by list; discard rows then resume review on unconfigured items); out of 4.11 API/BFF scope
+- [x] [Review][Defer] Failed-statement Skip is now a row delete [`ui/app/upload/review/[sessionId]/IndividualReviewPanel.tsx:166`] — deferred to Story 4.13
+- [x] [Review][Patch] Clear a stuck undo pointer on unrestorable state [`api/adapters/persistence/import_sessions.py:423`]
+- [x] [Review][Patch] Reload candidate rows after guarded UPDATE (delete/undo/edit) [`api/adapters/persistence/import_sessions.py:347`]
+- [x] [Review][Patch] Map `ImportStatementNotFoundError` on row routes [`api/api/routes/import_sessions.py:346`]
+- [x] [Review][Patch] Cover undo that reopens a committed statement [`api/tests/test_import_sessions_integration.py:925`]
+- [x] [Review][Patch] Cover discarded-session description edit [`api/tests/test_import_session_application.py:1231`]
+- [x] [Review][Patch] Assert BFF delete/patch/undo upstream fetch [`ui/app/api/cards-import.bff.test.ts:109`]
+- [x] [Review][Patch] Include `row_id` on undo success log [`api/api/routes/import_sessions.py:466`]

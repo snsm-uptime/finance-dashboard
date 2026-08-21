@@ -512,3 +512,14 @@ class ImportRowNotFoundError(DomainError):
 
     def __init__(self) -> None:
         super().__init__(self.MESSAGE)
+
+
+class ImportNothingToUndoError(DomainError):
+    """Raised when undo is called on a session with no recorded last
+    resolution (never resolved, already undone, or superseded)."""
+
+    MESSAGE = "There is nothing to undo."
+    CODE = "import_nothing_to_undo"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)

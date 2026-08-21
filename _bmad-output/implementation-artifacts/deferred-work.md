@@ -229,3 +229,8 @@
 - `ledger_entries.import_candidate_row_id` is never backfilled for pre-4.10 committed rows, so the reverse link stays permanently NULL for historical data — no AC required a backfill, and the pre-4.10 batch→statement association is not row-granular enough to reconstruct it.
 - The `uq_ledger_entries_import_candidate_row_id` backstop sits on an `ON DELETE SET NULL` column under a `delete-orphan` cascade: if a candidate row is deleted the link nulls out and the duplicate guard silently stops protecting that ledger entry (Postgres treats NULLs as distinct, so multiple orphaned entries coexist). Acceptable today since deleted rows are terminal, but fragile.
 - No HTTP-level test asserts the `ImportRowNotAvailableError` → 409 `import_row_not_available` mapping on the bulk-commit route; coverage stops at the application tier.
+
+## Deferred from: code review of 4-11-row-level-review-api-rows-assign-delete-undo-edit.md (2026-08-21)
+
+- ~~Last-row assign/delete still runs `_release_source_pdf_if_idle` … ImportReviewSheet …~~ **Owned by Story 4.13.1** (`sprint-change-proposal-2026-08-21.md`): last-card opens the sheet; PDF stays until Save; per-row discard; one Save at the bottom.
+- Failed-statement Skip is wired to `deleteRow` on the first pending row (`IndividualReviewPanel.tsx`); leave failed-statement UX for Story 4.13.
