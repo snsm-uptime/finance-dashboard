@@ -13,7 +13,7 @@ import os
 import shutil
 import time
 from collections.abc import Iterator
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -382,6 +382,105 @@ def test_bulk_commit_duplicate_row_insert_raises_not_available_not_integrity_err
                 )
             ],
         )
+
+
+def test_bulk_commit_ledger_unique_backstop_raises_not_available(
+    client_with_fx: TestClient,
+    db_session: Session,
+) -> None:
+    """Story 4.10 AC #6, layer 2: the guarded UPDATE is not the only defense.
+
+    The sibling test above exercises layer 1 only — it targets an already
+    `committed` row, so the guarded UPDATE raises before any ledger INSERT
+    runs and `uq_ledger_entries_import_candidate_row_id` is never touched.
+    Here the candidate row is left `pending` while a ledger entry already
+    claims it, which is exactly the state two concurrent commits produce
+    after both pass the UPDATE. The INSERT must violate the unique and
+    surface as ImportRowNotAvailableError, not a bare IntegrityError.
+    """
+    client = client_with_fx
+    _register(client, "bulkbackstop@example.com")
+    session_id = _upload_bac_session(client)
+    list_id = _own_list_id(client)
+    actor_id = client.get("/auth/me").json()["user_id"]
+
+    statement = db_session.scalars(
+        select(ImportStatementModel).where(ImportStatementModel.session_id == UUID(session_id))
+    ).first()
+    assert statement is not None
+    pending = db_session.scalars(
+        select(ImportCandidateRowModel).where(
+            ImportCandidateRowModel.statement_id == statement.id,
+            ImportCandidateRowModel.status == ROW_STATUS_PENDING,
+        )
+    ).first()
+    assert pending is not None
+
+    # Pre-claim the row in the ledger without touching its status — the row
+    # stays `pending`, so layer 1 lets the commit through.
+    db_session.add(
+        LedgerEntryModel(
+            id=uuid4(),
+            list_id=UUID(list_id),
+            amount=Decimal(str(pending.amount)),
+            currency=pending.currency,
+            normalized_description=pending.normalized_description,
+            payer_id=UUID(actor_id),
+            provenance=pending.provenance,
+            line_type=pending.line_type,
+            posted_date=pending.posted_date,
+            receipt_id=None,
+            product_id=None,
+            external_ref=pending.external_ref,
+            origin_kind=None,
+            origin_card_id=None,
+            import_batch_id=None,
+            import_candidate_row_id=pending.id,
+            amount_crc=Decimal(str(pending.amount)),
+            fx_rate=Decimal("1"),
+            fx_rate_date=pending.posted_date,
+            fx_fallback=False,
+            created_at=datetime.now(UTC),
+        )
+    )
+    db_session.flush()
+
+    repo = SqlAlchemyImportSessionRepository(db_session)
+    with pytest.raises(ImportRowNotAvailableError):
+        repo.commit_statement_batch(
+            batch_id=uuid4(),
+            session_id=UUID(session_id),
+            statement_id=statement.id,
+            list_id=UUID(list_id),
+            actor_user_id=UUID(actor_id),
+            rows=[
+                CommitRow(
+                    candidate_row_id=pending.id,
+                    draft=ManualExpenseDraft(
+                        amount=Decimal(str(pending.amount)),
+                        currency=pending.currency,
+                        normalized_description=pending.normalized_description,
+                        payer_id=UUID(actor_id),
+                        provenance=pending.provenance,
+                        line_type=pending.line_type,
+                        posted_date=pending.posted_date.isoformat(),
+                        external_ref=pending.external_ref,
+                    ),
+                    fx=MaterializedFx(
+                        amount_crc=Decimal(str(pending.amount)),
+                        fx_rate=Decimal("1"),
+                        fx_rate_date=pending.posted_date,
+                        fx_fallback=False,
+                    ),
+                )
+            ],
+        )
+
+    # The SAVEPOINT must roll the status flip and the batch INSERT back too —
+    # otherwise the row is stranded `committed` with no ledger entry and can
+    # never be re-committed (Story 4.10 review).
+    db_session.refresh(pending)
+    assert pending.status == ROW_STATUS_PENDING
 
 
 def test_bulk_commit_non_member_list_denied(client: TestClient) -> None:

@@ -54,13 +54,16 @@ def row_is_zero_amount(amount: Decimal) -> bool:
 def statement_is_fully_resolved(row_statuses: Sequence[str]) -> bool:
     """True iff every non-excluded row has left pending (AC #8).
 
+    Excluded (zero-amount) rows are dropped from consideration entirely
+    rather than being treated as "resolved" — that is what AC #8's "excluded
+    rows must not block resolution" actually means, and stating it this way
+    keeps the rule meaningful instead of collapsing into `all(s != pending)`.
+
     Vacuous true when every row is excluded (all-zero statement) or the
     sequence is empty.
     """
-    return all(
-        status == ROW_STATUS_EXCLUDED_ZERO_AMOUNT or status != ROW_STATUS_PENDING
-        for status in row_statuses
-    )
+    reviewable = [status for status in row_statuses if status != ROW_STATUS_EXCLUDED_ZERO_AMOUNT]
+    return all(status != ROW_STATUS_PENDING for status in reviewable)
 
 
 def validate_pdf_upload(filename: str, content: bytes) -> None:

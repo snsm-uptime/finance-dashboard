@@ -234,6 +234,29 @@ def _bulk_commit_response(result: AssignBulkImportResult) -> BulkCommitResponse:
     )
 
 
+# Bulk commit's domain-error → HTTP mapping. A `None` code means the
+# exception carries its own `CODE` (the Fx* family).
+_BULK_COMMIT_ERROR_MAP: tuple[tuple[type[Exception], int, str | None], ...] = (
+    (ImportSessionNotFoundError, status.HTTP_404_NOT_FOUND, "import_session_not_found"),
+    (NotListMemberError, status.HTTP_403_FORBIDDEN, "not_list_member"),
+    (ImportSessionDiscardedError, status.HTTP_409_CONFLICT, "import_session_discarded"),
+    (ImportRowNotAvailableError, status.HTTP_409_CONFLICT, "import_row_not_available"),
+    (
+        NoCleanStatementsToCommitError,
+        status.HTTP_422_UNPROCESSABLE_CONTENT,
+        "no_clean_statements_to_commit",
+    ),
+    (InvalidCanonicalLineError, status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_canonical_line"),
+    (FxAuthenticationError, status.HTTP_500_INTERNAL_SERVER_ERROR, None),
+    (FxServiceUnavailableError, status.HTTP_503_SERVICE_UNAVAILABLE, None),
+    (FxFutureDateError, status.HTTP_422_UNPROCESSABLE_CONTENT, None),
+    (FxCurrencyNotSupportedError, status.HTTP_422_UNPROCESSABLE_CONTENT, None),
+    (FxRateNotAvailableError, status.HTTP_422_UNPROCESSABLE_CONTENT, None),
+)
+
+_BULK_COMMIT_ERROR_TYPES = tuple(entry[0] for entry in _BULK_COMMIT_ERROR_MAP)
+
+
 @router.post("/{session_id}/bulk-commit", response_model=BulkCommitResponse)
 def bulk_commit_import_session(
     session_id: uuid.UUID,
@@ -252,51 +275,20 @@ def bulk_commit_import_session(
                 actor_user_id=user_id, session_id=session_id, list_id=body.list_id
             )
         )
-    except ImportSessionNotFoundError as exc:
-        return JSONResponse(
-            status_code=status.HTTP_404_NOT_FOUND,
-            content={"detail": str(exc), "code": "import_session_not_found"},
-        )
-    except NotListMemberError as exc:
-        return JSONResponse(
-            status_code=status.HTTP_403_FORBIDDEN,
-            content={"detail": str(exc), "code": "not_list_member"},
-        )
-    except ImportSessionDiscardedError as exc:
-        return JSONResponse(
-            status_code=status.HTTP_409_CONFLICT,
-            content={"detail": str(exc), "code": "import_session_discarded"},
-        )
-    except ImportRowNotAvailableError as exc:
-        return JSONResponse(
-            status_code=status.HTTP_409_CONFLICT,
-            content={"detail": str(exc), "code": "import_row_not_available"},
-        )
-    except NoCleanStatementsToCommitError as exc:
-        return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            content={"detail": str(exc), "code": "no_clean_statements_to_commit"},
-        )
-    except InvalidCanonicalLineError as exc:
-        return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            content={"detail": str(exc), "code": "invalid_canonical_line"},
-        )
-    except FxAuthenticationError as exc:
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"detail": str(exc), "code": exc.CODE},
-        )
-    except FxServiceUnavailableError as exc:
-        return JSONResponse(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={"detail": str(exc), "code": exc.CODE},
-        )
-    except (FxFutureDateError, FxCurrencyNotSupportedError, FxRateNotAvailableError) as exc:
-        return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            content={"detail": str(exc), "code": exc.CODE},
-        )
+    except _BULK_COMMIT_ERROR_TYPES as exc:
+        # Bulk commit is all-or-nothing (Task 5.1). get_db commits on *normal
+        # return*, and returning a JSONResponse is a normal return — so without
+        # this rollback the statements committed before the failing one would
+        # be persisted while the client is told the commit failed
+        # (Story 4.10 review).
+        db.rollback()
+        for error_type, status_code, code in _BULK_COMMIT_ERROR_MAP:
+            if isinstance(exc, error_type):
+                return JSONResponse(
+                    status_code=status_code,
+                    content={"detail": str(exc), "code": code or exc.CODE},
+                )
+        raise
     logger.info(
         "import_bulk_committed session_id=%s user_id=%s list_id=%s batch_count=%s",
         session_id,

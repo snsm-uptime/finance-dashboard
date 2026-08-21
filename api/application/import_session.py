@@ -364,12 +364,24 @@ class UploadStatementPdfService:
                 )
 
             pdf_paths = {index: whole_pdf_path for index in range(len(detected_with_cards))}
-            return self._session_repo.create_session(
+            created = self._session_repo.create_session(
                 session_id=uuid4(),
                 user_id=command.actor_user_id,
                 statements=detected_with_cards,
                 pdf_paths=pdf_paths,
             )
+            # A statement that parses to zero rows (zero-activity month) or to
+            # nothing but excluded zero-amount rows is stamped `committed` at
+            # create time — there is nothing left to review. Bulk commit then
+            # refuses the session outright, so the release that normally runs
+            # after a commit never fires and the PDF leaks. Release here so
+            # AD-3 holds for a session that is born fully resolved.
+            _release_source_pdf_if_idle(
+                session=created,
+                session_repo=self._session_repo,
+                pdf_storage=self._pdf_storage,
+            )
+            return self._session_repo.get_session(created.id, command.actor_user_id) or created
         except Exception:
             try:
                 self._pdf_storage.delete(whole_pdf_path)
@@ -747,6 +759,13 @@ class AssignCandidateRowService:
 
         if session.discarded_at is not None:
             raise ImportSessionDiscardedError()
+
+        # Cheap pre-check so a stale-UI retry on an already-resolved row fails
+        # as 409 instead of burning an external FX call and surfacing a 503
+        # during an FX outage. The repo's guarded UPDATE stays authoritative
+        # for the actual race (Story 4.10 review).
+        if candidate.status != ROW_STATUS_PENDING:
+            raise ImportRowNotAvailableError()
 
         line = candidate.line
         validate_bulk_candidate_row(

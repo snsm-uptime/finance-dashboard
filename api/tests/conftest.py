@@ -37,7 +37,16 @@ def engine() -> Iterator[Engine]:
 def db_session(engine: Engine) -> Iterator[Session]:
     connection = engine.connect()
     transaction = connection.begin()
-    session = sessionmaker(bind=connection, autoflush=False, autocommit=False)()
+    # Route app-level rollback() to a SAVEPOINT instead of the outer test
+    # transaction. Bulk commit rolls back on error (Story 4.10); without this
+    # the app's rollback would discard the fixture's registered user/auth
+    # session too, and the next request in the test would 401.
+    session = sessionmaker(
+        bind=connection,
+        autoflush=False,
+        autocommit=False,
+        join_transaction_mode="create_savepoint",
+    )()
     try:
         yield session
     finally:

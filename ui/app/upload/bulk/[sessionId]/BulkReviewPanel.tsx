@@ -65,6 +65,7 @@ export function BulkReviewPanel({ sessionId }: BulkReviewPanelProps) {
     errorSessionNotFound: t.bulkReviewErrorSessionNotFound,
     errorSessionDiscarded: t.bulkReviewErrorSessionDiscarded,
     errorAlreadyCommitted: t.bulkReviewErrorAlreadyCommitted,
+    errorRowNotAvailable: t.bulkReviewErrorRowNotAvailable,
     errorNoCleanStatements: t.bulkReviewErrorNoCleanStatements,
     errorFxUnavailable: t.bulkReviewErrorFxUnavailable,
     errorGeneric: t.errorGeneric,
