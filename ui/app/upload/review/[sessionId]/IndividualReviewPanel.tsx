@@ -269,6 +269,59 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
 
         {current ? (
           <>
+            {/* Story 4.8.2: Card identification at top */}
+            <div className="flex flex-col gap-2">
+              <p className="m-0 text-[0.9rem] font-[550] text-foreground">
+                {t.cardIdentificationTitle}:
+              </p>
+              {card.loading ? (
+                <p className="m-0 text-[0.9rem] text-muted">
+                  {t.cardIdentificationTitle}…
+                </p>
+              ) : card.cardMatched && card.cardLabel ? (
+                <p className="m-0 text-[0.9rem] text-foreground font-[550]">
+                  {card.cardLabel}
+                </p>
+              ) : card.needsRegistration && card.iban ? (
+                <p className="m-0 text-[0.9rem] text-owe">
+                  {t.cardIdentificationUnknown}
+                </p>
+              ) : !card.iban ? (
+                <p className="m-0 text-[0.9rem] text-muted">
+                  {t.individualReviewLoadingSession}
+                </p>
+              ) : null}
+            </div>
+
+            {/* Story 4.8.2: File information */}
+            <div className="flex flex-col gap-2">
+              <p className="m-0 text-[0.85rem] text-foreground">
+                {current.product_id} {current.status !== "failed" && `[${current.candidate_row_count}]`}
+              </p>
+              {current.status === "failed" ? (
+                <p className="text-owe text-[0.85rem] mt-0 mb-0">
+                  {t.individualReviewFailedStatement}
+                </p>
+              ) : null}
+            </div>
+
+            <div
+              ref={cardRef}
+              className="py-[1rem] px-[1.1rem] rounded-[10px] border border-border bg-surface touch-none"
+            >
+              {/* Story 4.8.1: Card identification details */}
+              {card.iban && (
+                <div>
+                  <p className="m-0 text-[0.85rem] text-muted font-[550] mb-[0.5rem]">
+                    {t.cardIdentificationIban}
+                  </p>
+                  <p className="m-0 text-[0.9rem] text-foreground font-mono">
+                    {card.iban}
+                  </p>
+                </div>
+              )}
+            </div>
+
             <div className="flex flex-col gap-2">
               <label htmlFor={selectId} className="text-[0.9rem] font-[550] text-foreground">
                 {t.individualReviewChooseList}
@@ -295,49 +348,6 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
                   onChange={setPickedListId}
                 />
               ) : null}
-            </div>
-
-            <div
-              ref={cardRef}
-              className="py-[1rem] px-[1.1rem] rounded-[10px] border border-border bg-surface touch-none"
-            >
-              <p className="m-0 font-[550] text-foreground text-[1.05rem]">
-                {current.product_id}
-              </p>
-              {current.status === "failed" ? (
-                <p className="text-owe text-[0.85rem] mt-2 mb-0">
-                  {t.individualReviewFailedStatement}
-                </p>
-              ) : (
-                <p className="text-muted text-[0.85rem] mt-2 mb-0">
-                  {current.candidate_row_count}
-                </p>
-              )}
-
-              {/* Story 4.8.1: Card identification */}
-              {card.iban && (
-                <div className="mt-[1rem] pt-[1rem] border-t border-border">
-                  <p className="m-0 text-[0.85rem] text-muted font-[550] mb-[0.5rem]">
-                    {t.cardIdentificationIban}
-                  </p>
-                  <p className="m-0 text-[0.9rem] text-foreground font-mono">
-                    {card.iban}
-                  </p>
-                  {card.cardMatched && card.cardLabel ? (
-                    <p className="m-0 text-[0.85rem] text-accent mt-[0.5rem]">
-                      {t.cardIdentificationMatched.replace("{label}", card.cardLabel)}
-                    </p>
-                  ) : card.loading ? (
-                    <p className="m-0 text-[0.85rem] text-muted mt-[0.5rem]">
-                      {t.cardIdentificationTitle}…
-                    </p>
-                  ) : card.needsRegistration ? (
-                    <p className="m-0 text-[0.85rem] text-owe mt-[0.5rem]">
-                      {t.cardIdentificationUnknown}
-                    </p>
-                  ) : null}
-                </div>
-              )}
             </div>
 
             {/* Card registration form (Story 4.8.1) */}
@@ -396,18 +406,18 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
                       chosenListName || t.individualReviewChooseList,
                     )}
               </PrimaryButton>
-              <button
-                type="button"
-                disabled={!canAcceptDefault || action.pending || dismiss.pending}
-                onClick={() => action.submit({ kind: "acceptDefault" })}
-                className="m-0 px-3 py-[9px] rounded-sm border border-border bg-surface text-foreground cursor-pointer font-[550] text-[0.95rem] disabled:opacity-55 disabled:cursor-not-allowed"
-              >
-                {action.pending
-                  ? t.individualReviewCommitting
-                  : defaultListName
-                    ? t.individualReviewAcceptDefault.replace("{list}", defaultListName)
-                    : t.individualReviewNoDefaultListShort}
-              </button>
+              {defaultListId ? (
+                <button
+                  type="button"
+                  disabled={!canAcceptDefault || action.pending || dismiss.pending}
+                  onClick={() => action.submit({ kind: "acceptDefault" })}
+                  className="m-0 px-3 py-[9px] rounded-sm border border-border bg-surface text-foreground cursor-pointer font-[550] text-[0.95rem] disabled:opacity-55 disabled:cursor-not-allowed"
+                >
+                  {action.pending
+                    ? t.individualReviewCommitting
+                    : t.individualReviewAcceptDefault.replace("{list}", defaultListName)}
+                </button>
+              ) : null}
               <button
                 type="button"
                 disabled={!canSkip || action.pending || dismiss.pending}
