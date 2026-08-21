@@ -117,7 +117,7 @@ development_status:
   # Old → new: 4.11→4.9, 4.12→4.10, 4.13→4.11, 4.9→4.12, 4.14→4.13, 4.15→4.14, 4.16→4.15, 4.10→4.16.
   4-9-bac-credit-real-statement-compatibility-fix: done
   4-10-row-level-review-data-model-per-row-commit: done
-  4-11-row-level-review-api-rows-assign-delete-undo-edit: backlog
+  4-11-row-level-review-api-rows-assign-delete-undo-edit: ready-for-dev
   4-12-commit-batch-dedup-summary-land-on-settle-strip: backlog
   4-13-individual-review-card-four-direction-actions-inline-title-edit: backlog
   4-14-resume-entry-point-session-completion-summary: backlog
