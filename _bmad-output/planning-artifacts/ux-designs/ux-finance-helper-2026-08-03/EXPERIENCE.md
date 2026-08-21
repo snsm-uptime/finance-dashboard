@@ -28,7 +28,7 @@ Appearance: Light / Dark / System (both token sets in scope; default System). Pr
 | Lists homepage | First paint fallback; navigate away from a list | All lists the user belongs to |
 | Shared-expenses (list detail) | First paint (remembered), Lists homepage row, post-import landing | Settle-up balances first; receipt/items newest-first below |
 | Upload | Global Upload; also from inside a list | Pick PDF → Individual or Bulk review mode → ingest |
-| Individual review | Upload (mode = Individual) | One statement at a time; accept to list / default / skip |
+| Individual review | Upload (mode = Individual); Resume from Upload | One transaction at a time; assign to list / default / delete, with undo *(amended 2026-08-20)* |
 | Bulk review | Upload (mode = Bulk) | Assign/commit statements; list-context upload may pre-select destination for Bulk only |
 | Parse comparison | Mid-review on parse failure | PDF evidence vs extracted rows → quarantine accept or dismiss |
 | Card registration | Upload/detect unknown IBAN | Blocks review until user label + IBAN saved |
@@ -170,10 +170,20 @@ EN + ES from v1.
 2. Starts Upload via global Upload (Individual tonight; not list-Bulk shortcut).
 3. Picks a multi-statement BAC PDF from phone files.
 4. Chooses Individual review (not Bulk).
-5. Reviews statements one-at-a-time: list picker then swipe-right to chosen list; swipe-left → configurable default; swipe-down → skip / dismiss file.
+5. Reviews **parsed transactions** one-at-a-time on a centered card over a dimmed backdrop: list picker, then swipe-right to chosen list; swipe-left → configurable default; swipe-up → delete. Undo is a button on every platform, never a gesture. *(Amended 2026-08-20 — see below.)*
 6. Clean parses skip comparison; failures → PDF lower half vs extracted → quarantine accept or dismiss (see J3).
-7. Commit summary (imported N / skipped M duplicates); same-price conflicts if any (see J7).
-8. Lands on shared-expenses for the list he mostly fed.
+7. Completion summary (rows committed by destination list, deleted, zero-amount excluded, parse failures, imported N / skipped M duplicates); same-price conflicts if any (see J7).
+8. Lands on shared-expenses for the list that received the most rows.
+
+> **Amended 2026-08-20** — Sprint Change Proposal 2026-08-20 (row-level individual review).
+> Step 5 originally read: *"Reviews statements one-at-a-time: list picker then swipe-right to
+> chosen list; swipe-left → configurable default; swipe-down → skip / dismiss file."* Statement-level
+> routing made Individual review functionally identical to Bulk. The reviewed unit is now the
+> transaction; `up → delete` replaces skip; undo takes the down slot as a button, not a swipe.
+> Steps 7–8 gained the completion summary's new counts and a defined "mostly fed" tiebreak.
+> The authoritative spec for this flow is
+> `_bmad-output/planning-artifacts/ux-designs/row-level-individual-review-2026-08-20.md`;
+> the `mockups/review-individual.html` mockup in this run folder still depicts the old flow.
 9. **Climax:** settle-up strip shows what changed — the number he came to update (`{colors.owe}` / `{colors.owed}`).
 
 → Review chrome: [`mockups/review-individual.html`](./mockups/review-individual.html).

@@ -108,9 +108,18 @@ development_status:
   4-6-upload-pdf-detect-split-import-session: done
   4-7-bulk-review-assign-commit-path: done
   4-8-individual-review-swipe-desktop-buttons: done
-  4-9-commit-batch-dedup-summary-land-on-settle-strip: backlog
-  4-10-multi-file-upload-pending-queue-dedup: backlog
-  4-11-bac-credit-real-statement-compatibility-fix: review
+  # Renumbered 2026-08-20 (Sprint Change Proposal 2026-08-20) so numeric order = build order.
+  # 4.10, 4.11, 4.13, 4.14, 4.15 replace 4.8's statement-level routing; 4.12's ACs are amended.
+  # 4.8 stays `done` — it satisfied its own ACs; the defect was in the spec, not the build.
+  # Old → new: 4.11→4.9, 4.12→4.10, 4.13→4.11, 4.9→4.12, 4.14→4.13, 4.15→4.14, 4.16→4.15, 4.10→4.16.
+  4-9-bac-credit-real-statement-compatibility-fix: review
+  4-10-row-level-review-data-model-per-row-commit: backlog
+  4-11-row-level-review-api-rows-assign-delete-undo-edit: backlog
+  4-12-commit-batch-dedup-summary-land-on-settle-strip: backlog
+  4-13-individual-review-card-four-direction-actions-inline-title-edit: backlog
+  4-14-resume-entry-point-session-completion-summary: backlog
+  4-15-new-badge-on-freshly-imported-rows: backlog
+  4-16-multi-file-upload-pending-queue-dedup: backlog
   epic-4-retrospective: optional
 
   epic-5: backlog

@@ -2,9 +2,19 @@
 baseline_commit: 3a7066026faec831380b9d8101e5533c558cd91b
 ---
 
-# Story 4.11: BAC credit real-statement compatibility fix
+# Story 4.9: BAC credit real-statement compatibility fix
 
 Status: review
+
+> **Renumbered 2026-08-20: was Story 4.11.** Epic 4 was reordered so numeric order matches build
+> order (Sprint Change Proposal 2026-08-20). This story's work shipped under the old number, so its
+> branches and PRs still carry `4-11` in their names — that is expected, not a stale reference:
+>
+> - PR [#61](https://github.com/snsm-uptime/finance-dashboard/pull/61) — `fix/4/4-11-bac-credit-real-statement-compatibility-fix` (merged)
+> - PR [#62](https://github.com/snsm-uptime/finance-dashboard/pull/62) — `fix/4/4-11-ignore-empty-fg-sections` (merged)
+> - PR [#63](https://github.com/snsm-uptime/finance-dashboard/pull/63) — `fix/4/4-11-ignore-empty-fg-sections` (merged)
+>
+> Note the status above still reads `review` while all three PRs are merged — worth reconciling.
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -130,7 +140,7 @@ Cursor Grok 4.6
 - api/tests/fixtures/pdf/bac_credit_synthetic_goldens.py
 - api/tests/fixtures/pdf/bac_credit_acceptance_bar.pdf
 - api/tests/fixtures/pdf/bac_credit_acceptance_bar_goldens.py
-- _bmad-output/implementation-artifacts/4-11-bac-credit-real-statement-compatibility-fix.md
+- _bmad-output/implementation-artifacts/4-9-bac-credit-real-statement-compatibility-fix.md
 - _bmad-output/implementation-artifacts/sprint-status.yaml
 
 ## Change Log
