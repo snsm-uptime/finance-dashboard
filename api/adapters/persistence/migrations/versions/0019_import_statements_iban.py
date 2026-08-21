@@ -1,7 +1,7 @@
 """Alembic revision: import_statements.iban for card identification (Story 4.8.1).
 
-Revision ID: 0018_import_statements_iban
-Revises: 0017_import_batches
+Revision ID: 0019_import_statements_iban
+Revises: 0018_nullable_pdf_path
 Create Date: 2026-08-20
 
 Adds `import_statements.iban` (String(64), nullable, indexed) to store the
@@ -20,8 +20,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy import text
 
-revision: str = "0018_import_statements_iban"
-down_revision: str | None = "0017_import_batches"
+revision: str = "0019_import_statements_iban"
+down_revision: str | None = "0018_nullable_pdf_path"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
