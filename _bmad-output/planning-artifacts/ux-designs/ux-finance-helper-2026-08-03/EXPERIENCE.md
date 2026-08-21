@@ -3,7 +3,7 @@ name: finance-helper
 status: final
 sources:
   - {planning_artifacts}/prds/prd-finance-helper-2026-08-02/prd.md
-updated: 2026-08-03
+updated: 2026-08-21
 ---
 
 # finance-helper — Experience Spine
@@ -77,6 +77,7 @@ Behavioral. Visual specs live in `DESIGN.md.Components`.
 | Receipt row | Shared-expenses below strip | Newest-first. Tap → item detail / edit when those exist. FX: show enough original + converted CRC to audit. |
 | List row | Lists homepage | Opens shared-expenses for that list. |
 | Upload entry | Global + list chrome | Global reaches ingest always. From list: Bulk may pre-select that list as destination; Individual default destination unchanged. |
+| UploadButton | Upload empty state | Icon-only square. Composes IconButton (focus, disabled, accessible name). Activates the hidden PDF picker. Idle: muted outline + File glyph. Hover: accent fill, accent outline at 2× SVG stroke, File-import glyph in page background. Busy: filled + spinner; picker disabled. Accessible name = Upload / Uploading. Visual spec: `{components.upload-button}`. |
 | Review card (statement) | Individual review | One statement in focus. Outcomes: chosen list / default list / skip (or dismiss file). High-intent accept: **list picker first**, then commit gesture/button. |
 | Review action buttons | Desktop Individual review | Same three outcomes as phone swipes; buttons are primary on desktop. |
 | Parse comparison pane | Failure mid-review | PDF in lower half; extracted items above. Actions: accept with quarantine, or dismiss statement/file. |
@@ -99,6 +100,9 @@ Behavioral. Visual specs live in `DESIGN.md.Components`.
 | Incomplete balance (quarantine) | Shared-expenses | Disclose that balance for the period may understate; quarantine-sourced statements remain identifiable as incomplete. |
 | Parse failure alert | Individual review | Statement-scoped; does not auto-discard siblings in the same PDF. |
 | Accept with quarantine | Comparison → continue review | Good rows import; unresolved stored; statement incomplete; user continues remaining statements. |
+| Upload idle | Upload empty | Outlined `{components.upload-button}`; File glyph; picker enabled. |
+| Upload hover | Upload empty | Filled `{components.upload-button}`; File-import glyph. Keyboard focus uses the same accent ring as primary buttons. |
+| Upload in flight | Upload empty | Filled `{components.upload-button}` + spinner; control `aria-busy`; picker disabled. Reduce Motion: spinner may be static; busy name still announced. |
 | Unknown IBAN | Upload / pre-review | Registration modal/sheet blocks review until labeled. |
 | Same-price conflicts present | Post-review / pre-landing | Conflict list must be resolved (Manual or Parsed each) before confident settle-up; no silent merge. |
 | Import commit summary | End of import | Imported N / skipped M duplicates; then conflicts if any; then land shared-expenses. |

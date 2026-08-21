@@ -1,0 +1,36 @@
+/* Square outline: idle = SVG `ICON_STROKE`; hover/busy = 2× and accent.
+   Border color lives here so it can beat IconButton / Tailwind !border-*. */
+
+.button {
+  border-width: calc(var(--upload-stroke) * 2) !important;
+  border-color: var(--muted) !important;
+}
+
+.button:not(:disabled):hover {
+  color: var(--background) !important;
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+}
+
+.button:disabled {
+  color: var(--background) !important;
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  opacity: 1 !important;
+  cursor: wait;
+}
+
+/* Reset hover state on touch to prevent sticky appearance after tap */
+@media (hover: none) and (pointer: coarse) {
+  .button:not(:disabled):active {
+    color: var(--background) !important;
+    background: var(--accent) !important;
+    border-color: var(--accent) !important;
+  }
+
+  .button:not(:disabled):active:not(:focus-visible) {
+    color: var(--muted) !important;
+    background: transparent !important;
+    border-color: var(--muted) !important;
+  }
+}

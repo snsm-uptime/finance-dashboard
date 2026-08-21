@@ -84,6 +84,15 @@ vi.mock("@/components/IconButton/IconButton.module.scss", () => ({
   ),
 }));
 
+vi.mock("./UploadButton.module.scss", () => ({
+  default: new Proxy(
+    {},
+    {
+      get: (_t, prop) => String(prop),
+    },
+  ),
+}));
+
 function fakeFile(): File {
   return new File(["%PDF-1.4"], "statement.pdf", { type: "application/pdf" });
 }
@@ -149,8 +158,9 @@ describe("UploadPanel", () => {
     const input = container.querySelector('input[type="file"]');
     expect(input).not.toBeNull();
     expect(input?.className).toContain("sr-only");
-    const buttons = Array.from(container.querySelectorAll("button"));
-    expect(buttons.some((b) => b.textContent === "Upload")).toBe(true);
+    const button = container.querySelector('button[aria-label="Upload"]');
+    expect(button).not.toBeNull();
+    expect(button?.textContent).toBe("");
   });
 
   it("hides the picker and shows New card! registration after a successful upload", async () => {
@@ -169,9 +179,7 @@ describe("UploadPanel", () => {
     expect(container.textContent).toContain("DE89370400440532013000");
     expect(container.textContent).not.toContain("bac_credit");
     expect(container.querySelector('input[type="file"]')).toBeNull();
-    expect(Array.from(container.querySelectorAll("button")).some((b) => b.textContent === "Upload")).toBe(
-      false,
-    );
+    expect(container.querySelector('button[aria-label="Upload"]')).toBeNull();
   });
 
   it("shows the unsupported-file-type error inline on a non-PDF rejection", async () => {
@@ -187,6 +195,30 @@ describe("UploadPanel", () => {
 
     const alert = container.querySelector('[role="alert"]');
     expect(alert?.textContent).toBe("Only PDF files are supported.");
+  });
+
+  it("fills the UploadButton with a spinner while the upload is in flight", async () => {
+    let release!: (value: unknown) => void;
+    uploadStatement.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+
+    await act(async () => {
+      root.render(<UploadPanel />);
+    });
+    await selectFile(container, fakeFile());
+
+    const busy = container.querySelector('button[aria-busy="true"]');
+    expect(busy).not.toBeNull();
+    expect(busy?.getAttribute("aria-label")).toBe("Uploading…");
+    expect(container.querySelector(".animate-spin")).not.toBeNull();
+
+    await act(async () => {
+      release({ ok: true, session: unmatchedSession });
+    });
   });
 
   it("unmounts the file picker while a session is active", async () => {

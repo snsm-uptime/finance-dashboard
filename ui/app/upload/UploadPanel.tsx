@@ -2,11 +2,10 @@
 
 import { ChangeEvent, useId, useRef, useState } from "react";
 
-import { FileIcon } from "@/app/icons";
-import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { useFormSubmission } from "@/hooks";
 import { uploadCopy } from "@/lib/i18n/upload";
+import { UploadButton } from "./UploadButton";
 import {
   uploadStatement,
   type ImportSession,
@@ -68,14 +67,13 @@ export function UploadPanel() {
         </div>
       ) : (
         <div className="flex-1 flex flex-col items-center justify-center px-[1.5rem] py-[2.5rem]">
-          <div className="flex flex-col items-center gap-6">
-            <FileIcon className="w-28 h-28 text-muted" />
-            <PrimaryButton
-              disabled={upload.pending}
+          <div className="flex flex-col items-center">
+            <UploadButton
+              pending={upload.pending}
+              label={t.uploadCta}
+              pendingLabel={t.uploading}
               onClick={() => inputRef.current?.click()}
-            >
-              {upload.pending ? t.uploading : t.uploadCta}
-            </PrimaryButton>
+            />
             <input
               ref={inputRef}
               id={inputId}

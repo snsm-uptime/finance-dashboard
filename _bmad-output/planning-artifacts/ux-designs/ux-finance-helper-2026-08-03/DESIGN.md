@@ -2,7 +2,7 @@
 name: finance-helper
 description: Household settle-up web app — calm clarity on warm sand; Soft-Ledger hybrid layout within the Ledger Strip family.
 status: final
-updated: 2026-08-14
+updated: 2026-08-21
 colors:
   background: '#F7F3EC'
   surface: '#FFFCF7'
@@ -102,6 +102,19 @@ components:
     borderRadius: '{rounded.sm}'
     padding: '9px 12px'
     typography: '{typography.button}'
+  upload-button:
+    size: 7rem
+    border: '{components.upload-button.icon-stroke}px solid {colors.muted}'
+    borderRadius: '{rounded.sm}'
+    background: transparent
+    color: '{colors.muted}'
+    hover-background: '{colors.accent}'
+    hover-color: '{colors.background}'
+    hover-border: '4px solid {colors.accent}'
+    busy-background: '{colors.accent}'
+    busy-color: '{colors.background}'
+    busy-border: '4px solid {colors.accent}'
+    icon-stroke: 2
   receipt-row:
     padding: '{spacing.row-y} 4px'
     border-bottom: '1px solid {colors.border}'
@@ -268,6 +281,10 @@ Hero of the shared-list surface. Anatomy: who-line (`{typography.strip-who}`, `{
 ### Button — primary (`components.button-primary`)
 
 Moss fill `{colors.accent}`, label `{colors.on-accent}`, `{rounded.sm}`, compact padding `9px 12px`. List strip may omit a primary CTA when the amount itself is the climax (J2 balances-only). Never label a control “paid”, “mark settled”, or anything that records settlement in v1. Secondary/ghost buttons: [ASSUMPTION] text or border-only using `{colors.border}` / `{colors.text}` — not drawn in Soft-Ledger hybrid strip.
+
+### Upload button (`components.upload-button`)
+
+Empty-state upload control on the Upload surface. Square `{components.upload-button.size}` frame, `{components.upload-button.icon-stroke}` `{colors.muted}` outline (same width as the File / File-import / spinner stroke), `{rounded.sm}` (same corner as primary buttons). Idle: transparent fill, `{colors.muted}` File glyph centered. Hover: fill `{colors.accent}`, outline `{colors.accent}` at **2×** `{components.upload-button.icon-stroke}`, glyph `{colors.background}` (page canvas behind the control), File swaps to File-import (same document + fold; left edge gapped so the inbound arrow body starts outside the file at vertical center, head toward the icon’s middle — not the idle text lines). Busy (upload in flight): keeps the filled hover chrome; glyph becomes a spinner. File, File-import, and spinner strokes share `{components.upload-button.icon-stroke}`. Icon-only; accessible name is the Upload CTA (or Uploading while busy). Do not pair with a moss `{components.button-primary}` label on this surface.
 
 ### Receipt row (`components.receipt-row`)
 
