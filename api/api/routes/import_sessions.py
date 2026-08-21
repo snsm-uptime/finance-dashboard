@@ -94,6 +94,7 @@ def _session_response(session: ImportSessionRecord) -> ImportSessionResponse:
                 product_id=s.product_id,
                 status=s.status,
                 candidate_row_count=s.candidate_row_count,
+                iban=s.iban,  # Story 4.8.1: include IBAN for card identification
             )
             for s in session.statements
         ],

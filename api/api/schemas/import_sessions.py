@@ -16,6 +16,7 @@ class StagedStatementResponse(BaseModel):
     product_id: str
     status: str
     candidate_row_count: int
+    iban: str | None = None  # Story 4.8.1: IBAN for card identification
 
 
 class ImportSessionResponse(BaseModel):
