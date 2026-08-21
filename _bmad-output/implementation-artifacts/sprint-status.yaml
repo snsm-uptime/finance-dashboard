@@ -1,5 +1,5 @@
 # generated: 2026-08-03T22:46:31
-# last_updated: 2026-08-20T20:20:00
+# last_updated: 2026-08-21T00:00:00
 
 # project: finance-dashboard
 # project_key: NOKEY
@@ -42,7 +42,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-03T22:46:31
-last_updated: 2026-08-20T20:20:00
+last_updated: 2026-08-21T00:00:00
 
 project: finance-dashboard
 project_key: NOKEY
@@ -91,13 +91,16 @@ development_status:
 
   # Epic 3.5 — Tailwind + SCSS styling stack (before Epic 4; product 3.5–3.6 may still be open)
   # Key naming: 3-5-N-… = Epic 3.5 story N (distinct from Epic 3 story 3.5: 3-5-materialize-…)
-  epic-3-5: in-progress
+  epic-3-5: done
   3-5-1-install-tailwind-sass-warm-balance-theme: done
   3-5-2-migrate-soft-ledger-primitives-tailwind: done
   3-5-3-migrate-lists-auth-account-surfaces: done
   3-5-4-convention-lock-project-context-architecture: done
-  epic-3-5-retrospective: optional
-  # Do not start Epic 4 until epic-3-5 demo gate done
+  epic-3-5-retrospective: done
+  # Demo gate CLOSED 2026-08-21 (Epic 3.5 retro): accepted by Sebas as satisfied in
+  # practice — condition A (0 *.module.css under ui/) verified; condition B (visual
+  # parity) confirmed through real use across Epic 4 rather than a formal checklist.
+  # The "do not start Epic 4" sequencing note is spent; it is NOT an open blocker.
 
   epic-4: in-progress
   4-1-register-and-match-cards-by-iban: done
@@ -175,4 +178,30 @@ action_items:
   - epic: 1
     action: "Later: session hashing/HMAC, token cleanup, Story 1.1 artifact hygiene"
     owner: "Charlie"
+    status: open
+
+  # Epic 3.5 retrospective (2026-08-21) — see epic-3-5-retro-2026-08-21.md
+  - epic: 3.5
+    action: "Tests guarding build-pipeline behavior must compile and assert on real output, never source text (ref: ui/tests/tailwind-integration.test.ts)"
+    owner: "Amelia + Winston"
+    status: open
+  - epic: 3.5
+    action: "Run a local/Docker build before marking any build-affecting story done — compensating control for the deliberate no-build-in-CI decision"
+    owner: "Amelia"
+    status: open
+  - epic: 3.5
+    action: "One status signal per story: sync story-file header to sprint-status.yaml at close; sprint-status.yaml stays authoritative"
+    owner: "Paige"
+    status: open
+  - epic: 3.5
+    action: "No story closes without a Review Findings section, including an explicit zero-findings note; retro-fit one for Story 3.5.2"
+    owner: "Mary + Amelia"
+    status: open
+  - epic: 3.5
+    action: "Audit the 13 *.module.scss files for custom-only compliance (AD-23); move utility-expressible rules to Tailwind"
+    owner: "Sally + Winston"
+    status: open
+  - epic: 3.5
+    action: "Record gate closure explicitly when an epic demo gate is accepted rather than formally executed"
+    owner: "John"
     status: open
