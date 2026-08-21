@@ -1,23 +1,16 @@
 "use client";
 
 import { ChangeEvent, useId, useState } from "react";
-import Link from "next/link";
 
-import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { useFormSubmission } from "@/hooks";
 import { uploadCopy } from "@/lib/i18n/upload";
 import {
-  discardSession,
   uploadStatement,
   type ImportSession,
   type UploadMessages,
 } from "./uploadClient";
-
-const statusBadgeClass =
-  "inline-block py-[2px] px-2 rounded-full border text-[0.75rem] font-[550]";
-const statusStagedClass = `${statusBadgeClass} border-owed text-owed`;
-const statusFailedClass = `${statusBadgeClass} border-owe text-owe`;
+import { SessionReviewPanel } from "./SessionReviewPanel";
 
 export function UploadPanel() {
   const { locale } = usePreferences();
@@ -44,14 +37,6 @@ export function UploadPanel() {
     return result;
   });
 
-  const discard = useFormSubmission(async (sessionId: string) => {
-    const result = await discardSession(sessionId, messages);
-    if (result.ok) {
-      setSession(null);
-      setDiscarded(true);
-    }
-    return result;
-  });
 
   async function onFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -96,49 +81,20 @@ export function UploadPanel() {
               {upload.error}
             </p>
           ) : null}
-          {discard.error ? (
-            <p className="text-owe text-[0.9rem] m-0" role="alert">
-              {discard.error}
-            </p>
-          ) : null}
           {discarded ? <p className="text-muted text-[0.85rem] m-0">{t.discarded}</p> : null}
         </div>
 
         {session ? (
-          <section aria-label={t.title}>
-            <ul className="list-none m-0 p-0 flex flex-col gap-2">
-              {session.statements.map((statement) => (
-                <li
-                  key={statement.id}
-                  className="flex items-center justify-between gap-3 py-[0.6rem] px-[0.85rem] rounded-[8px] border border-border bg-surface"
-                >
-                  <span className="font-[550] text-foreground text-[0.95rem]">
-                    {statement.product_id}
-                  </span>
-                  <span
-                    className={
-                      statement.status === "staged" ? statusStagedClass : statusFailedClass
-                    }
-                  >
-                    {statement.status === "staged" ? t.statementStaged : t.statementFailed}
-                  </span>
-                </li>
-              ))}
-            </ul>
-
-            <div className="mt-4 flex gap-3">
-              <PrimaryButton disabled={discard.pending} onClick={() => discard.submit(session.id)}>
-                {discard.pending ? t.discarding : t.discard}
-              </PrimaryButton>
-              <Link
-                href={`/upload/bulk/${encodeURIComponent(session.id)}`}
-                className="inline-flex items-center px-3 py-[9px] rounded-sm border border-border text-foreground no-underline font-[550] text-[0.95rem]"
-              >
-                {t.assignToList}
-              </Link>
-              {/* Individual review entry is hidden until Story 4.13 rewrites the card. */}
-            </div>
-          </section>
+          <div className="mt-4">
+            <SessionReviewPanel
+              session={session}
+              onSessionChanged={setSession}
+              onDiscarded={() => {
+                setSession(null);
+                setDiscarded(true);
+              }}
+            />
+          </div>
         ) : null}
       </div>
     </main>
