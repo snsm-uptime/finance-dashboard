@@ -10,11 +10,13 @@ import { usePreferences } from "@/components/PreferencesProvider";
 import { useFormSubmission } from "@/hooks";
 import { fetchLists, type ListItem } from "@/app/lists/listsClient";
 import { uploadCopy } from "@/lib/i18n/upload";
+import { useCardIdentification } from "@/hooks/useCardIdentification";
 import {
   commitIndividualStatement,
   discardSession,
   fetchImportSession,
   skipStatement,
+  type CardIdentificationMessages,
   type ImportSession,
   type IndividualReviewMessages,
   type StagedStatement,
@@ -58,6 +60,8 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   const [isCoarsePointer] = useState(
     () => typeof window !== "undefined" && !!window.matchMedia?.("(pointer: coarse)").matches,
   );
+  const [cardLabelInput, setCardLabelInput] = useState<string>("");
+  const [registering, setRegistering] = useState(false);
 
   const messages: IndividualReviewMessages = {
     errorForbidden: t.individualReviewErrorForbidden,
@@ -66,6 +70,13 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     errorSessionDiscarded: t.individualReviewErrorSessionDiscarded,
     errorStatementNotAvailable: t.individualReviewErrorStatementNotAvailable,
     errorFxUnavailable: t.individualReviewErrorFxUnavailable,
+    errorGeneric: t.errorGeneric,
+    errorUnauthorized: t.errorUnauthorized,
+  };
+
+  const cardMessages: CardIdentificationMessages = {
+    errorCardAlreadyRegistered: t.errorCardAlreadyRegistered,
+    errorInvalidCardLabel: t.errorInvalidCardLabel,
     errorGeneric: t.errorGeneric,
     errorUnauthorized: t.errorUnauthorized,
   };
@@ -138,6 +149,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   }, []);
 
   const current = nextReviewable(session);
+  const card = useCardIdentification(sessionId, current, cardMessages);
 
   const action = useFormSubmission(async (act: Action) => {
     if (!current) return { ok: false, error: t.errorGeneric };
@@ -184,8 +196,12 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   const defaultListName = (lists ?? []).find((l) => l.id === defaultListId)?.name ?? "";
   const chosenListName = (lists ?? []).find((l) => l.id === pickedListId)?.name ?? "";
 
-  const canAcceptChosen = !!current && current.status === "staged" && !!pickedListId;
-  const canAcceptDefault = !!current && current.status === "staged" && !!defaultListId;
+  // Story 4.8.1: Block accept until card is identified (if IBAN present)
+  const cardReadyOrNoIban = !current?.iban || card.cardMatched;
+  const canAcceptChosen =
+    !!current && current.status === "staged" && !!pickedListId && cardReadyOrNoIban && !card.loading;
+  const canAcceptDefault =
+    !!current && current.status === "staged" && !!defaultListId && cardReadyOrNoIban && !card.loading;
   const canSkip = !!current && (current.status === "staged" || current.status === "failed");
 
   useDrag(
@@ -294,7 +310,68 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
                   {current.candidate_row_count}
                 </p>
               )}
+
+              {/* Story 4.8.1: Card identification */}
+              {card.iban && (
+                <div className="mt-[1rem] pt-[1rem] border-t border-border">
+                  <p className="m-0 text-[0.85rem] text-muted font-[550] mb-[0.5rem]">
+                    {t.cardIdentificationIban}
+                  </p>
+                  <p className="m-0 text-[0.9rem] text-foreground font-mono">
+                    {card.iban}
+                  </p>
+                  {card.cardMatched && card.cardLabel ? (
+                    <p className="m-0 text-[0.85rem] text-accent mt-[0.5rem]">
+                      {t.cardIdentificationMatched.replace("{label}", card.cardLabel)}
+                    </p>
+                  ) : card.loading ? (
+                    <p className="m-0 text-[0.85rem] text-muted mt-[0.5rem]">
+                      {t.cardIdentificationTitle}…
+                    </p>
+                  ) : card.needsRegistration ? (
+                    <p className="m-0 text-[0.85rem] text-owe mt-[0.5rem]">
+                      {t.cardIdentificationUnknown}
+                    </p>
+                  ) : null}
+                </div>
+              )}
             </div>
+
+            {/* Card registration form (Story 4.8.1) */}
+            {card.needsRegistration && card.iban && (
+              <div className="flex flex-col gap-2 py-[1rem] px-[1.1rem] rounded-[10px] border border-border bg-surface">
+                <label htmlFor="card-label" className="text-[0.9rem] font-[550] text-foreground">
+                  {t.cardIdentificationLabel}
+                </label>
+                <input
+                  id="card-label"
+                  type="text"
+                  value={cardLabelInput}
+                  onChange={(e) => setCardLabelInput(e.currentTarget.value)}
+                  placeholder="e.g., My Visa"
+                  disabled={registering || card.loading}
+                  className="m-0 px-3 py-[9px] rounded-sm border border-border bg-surface text-foreground font-[450] text-[0.95rem] placeholder-muted disabled:opacity-55"
+                />
+                {card.error && (
+                  <p className="m-0 text-owe text-[0.85rem]">{card.error}</p>
+                )}
+                <button
+                  type="button"
+                  disabled={!cardLabelInput.trim() || registering || card.loading}
+                  onClick={async () => {
+                    setRegistering(true);
+                    const result = await card.registerCard(cardLabelInput.trim());
+                    setRegistering(false);
+                    if (result.ok) {
+                      setCardLabelInput("");
+                    }
+                  }}
+                  className="m-0 px-3 py-[9px] rounded-sm border border-accent bg-accent text-surface cursor-pointer font-[550] text-[0.95rem] disabled:opacity-55 disabled:cursor-not-allowed"
+                >
+                  {registering ? t.cardIdentificationRegistering : t.cardIdentificationRegister}
+                </button>
+              </div>
+            )}
 
             <div aria-live="polite">
               {action.error ? (

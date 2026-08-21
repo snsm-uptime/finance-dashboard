@@ -37,6 +37,7 @@ export function useCardIdentification(
     let cancelled = false;
 
     async function identify() {
+      if (!statement) return;
       setLoading(true);
       setError(null);
       setNeedsRegistration(false);
@@ -55,12 +56,12 @@ export function useCardIdentification(
         setCardMatched(false);
         setCardId(undefined);
         setCardLabel(undefined);
-        setIban(result.error.includes("unauthorized") ? undefined : statement.iban || null);
+        setIban(result.error.includes("unauthorized") ? undefined : statement?.iban || null);
         setNeedsRegistration(true);
         return;
       }
 
-      setIban(result.iban || statement.iban || null);
+      setIban(result.iban || statement?.iban || null);
       if (result.matched) {
         setCardMatched(true);
         setCardId(result.cardId);
