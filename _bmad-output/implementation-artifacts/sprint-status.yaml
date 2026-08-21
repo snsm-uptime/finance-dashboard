@@ -1,5 +1,5 @@
 # generated: 2026-08-03T22:46:31
-# last_updated: 2026-08-20T18:38:00
+# last_updated: 2026-08-20T20:20:00
 
 # project: finance-dashboard
 # project_key: NOKEY
@@ -42,7 +42,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-03T22:46:31
-last_updated: 2026-08-20T18:38:00
+last_updated: 2026-08-20T20:20:00
 
 project: finance-dashboard
 project_key: NOKEY
@@ -113,7 +113,7 @@ development_status:
   # 4.8 stays `done` — it satisfied its own ACs; the defect was in the spec, not the build.
   # Old → new: 4.11→4.9, 4.12→4.10, 4.13→4.11, 4.9→4.12, 4.14→4.13, 4.15→4.14, 4.16→4.15, 4.10→4.16.
   4-9-bac-credit-real-statement-compatibility-fix: done
-  4-10-row-level-review-data-model-per-row-commit: ready-for-dev
+  4-10-row-level-review-data-model-per-row-commit: review
   4-11-row-level-review-api-rows-assign-delete-undo-edit: backlog
   4-12-commit-batch-dedup-summary-land-on-settle-strip: backlog
   4-13-individual-review-card-four-direction-actions-inline-title-edit: backlog

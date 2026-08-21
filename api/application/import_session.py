@@ -18,6 +18,9 @@ from uuid import UUID, uuid4
 from domain.canonical_line import CanonicalLine
 from domain.cards import normalize_iban
 from domain.errors import (
+    ImportRowNotAvailableError,
+    ImportRowNotFoundError,
+    ImportSessionDiscardedError,
     ImportSessionNotFoundError,
     ImportStatementNotFoundError,
     InvalidCanonicalLineError,
@@ -25,13 +28,13 @@ from domain.errors import (
 )
 from domain.expenses import ManualExpenseDraft
 from domain.import_session import (
+    ROW_STATUS_EXCLUDED_ZERO_AMOUNT,
+    ROW_STATUS_PENDING,
     STATEMENT_STATUS_FAILED,
     STATEMENT_STATUS_STAGED,
     session_needs_source_pdf,
     validate_bulk_candidate_row,
     validate_bulk_commit_eligible,
-    validate_individual_accept_eligible,
-    validate_individual_skip_eligible,
     validate_pdf_upload,
 )
 
@@ -142,7 +145,30 @@ class StagedStatementRecord:
     candidate_row_count: int
     pdf_path: str | None
     iban: str | None = None
-    candidate_rows: list[CanonicalLine] = field(default_factory=list)
+    candidate_rows: list[CandidateRowRecord] = field(default_factory=list)
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateRowRecord:
+    """CanonicalLine plus session review fields (Story 4.10, AD-16).
+
+    Review status/sequence/resolution live here — never on CanonicalLine.
+    """
+
+    id: UUID
+    sequence: int
+    status: str
+    resolved_list_id: UUID | None
+    line: CanonicalLine
+
+
+@dataclass(frozen=True, slots=True)
+class CommitRow:
+    """One row handed to `commit_statement_batch` (Story 4.10)."""
+
+    candidate_row_id: UUID
+    draft: ManualExpenseDraft
+    fx: MaterializedFx
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,7 +182,7 @@ class ImportSessionRecord:
 
 @dataclass(frozen=True, slots=True)
 class ImportBatchRecord:
-    """One committed Import Batch — one Statement's accept (Story 4.7, AD-4)."""
+    """One committed Import Batch — one commit action (Story 4.10, amended AD-4)."""
 
     id: UUID
     session_id: UUID
@@ -191,21 +217,21 @@ class ImportSessionRepository(Protocol):
         statement_id: UUID,
         list_id: UUID,
         actor_user_id: UUID,
-        rows: list[tuple[ManualExpenseDraft, MaterializedFx]],
+        rows: list[CommitRow],
     ) -> ImportBatchRecord:
-        """Persist one Import Batch atomically (Story 4.7, AD-4): the batch
-        row, one ledger entry per row, and flips the statement to
-        committed. `rows` order does not matter — no ledger row depends on
-        another within the same batch."""
+        """Persist one Import Batch atomically (Story 4.10, amended AD-4):
+        guarded pending→committed UPDATE on the targeted candidate rows,
+        the batch row, one ledger entry per row (with import_candidate_row_id),
+        then complete the statement if every non-excluded row has left pending.
+        """
         ...
 
-    def skip_statement(
-        self, *, session_id: UUID, statement_id: UUID, user_id: UUID
+    def mark_candidate_row_deleted(
+        self, *, session_id: UUID, statement_id: UUID, row_id: UUID, user_id: UUID
     ) -> ImportSessionRecord:
-        """Flip one statement to skipped (Story 4.8, FR-18) — no ledger
-        writes. Raises ImportSessionNotFoundError if the session/user pair
-        doesn't match, ImportStatementNotFoundError if the statement isn't
-        in that session."""
+        """Guarded pending→deleted UPDATE; complete the statement if resolved.
+        No ledger writes. Raises ImportRowNotAvailableError when the row is
+        not pending."""
         ...
 
     def clear_statement_pdf_paths(self, session_id: UUID, user_id: UUID) -> None:
@@ -379,28 +405,39 @@ class AssignBulkImportService:
         for statement in session.statements:
             if statement.status != STATEMENT_STATUS_STAGED:
                 continue
-            rows: list[tuple[ManualExpenseDraft, MaterializedFx]] = []
-            for candidate in statement.candidate_rows:
+            non_excluded = [
+                candidate
+                for candidate in statement.candidate_rows
+                if candidate.status != ROW_STATUS_EXCLUDED_ZERO_AMOUNT
+            ]
+            if any(candidate.status != ROW_STATUS_PENDING for candidate in non_excluded):
+                raise ImportRowNotAvailableError()
+            rows: list[CommitRow] = []
+            for candidate in non_excluded:
+                line = candidate.line
                 validate_bulk_candidate_row(
-                    amount=candidate.amount,
-                    normalized_description=candidate.normalized_description,
+                    amount=line.amount,
+                    normalized_description=line.normalized_description,
                 )
                 draft = ManualExpenseDraft(
-                    amount=candidate.amount,
-                    currency=candidate.currency,
-                    normalized_description=candidate.normalized_description,
+                    amount=line.amount,
+                    currency=line.currency,
+                    normalized_description=line.normalized_description,
                     payer_id=command.actor_user_id,
-                    provenance=candidate.provenance,
-                    line_type=candidate.line_type,
-                    posted_date=candidate.posted_date,
-                    external_ref=candidate.external_ref,
+                    provenance=line.provenance,
+                    line_type=line.line_type,
+                    posted_date=line.posted_date,
+                    external_ref=line.external_ref,
                 )
                 fx = self._fx_service.materialize_fx_for_entry(
                     amount=draft.amount,
                     currency=draft.currency,
                     posted_date=date.fromisoformat(draft.posted_date),
                 )
-                rows.append((draft, fx))
+                rows.append(CommitRow(candidate_row_id=candidate.id, draft=draft, fx=fx))
+
+            if not rows:
+                continue
 
             batch = self._session_repo.commit_statement_batch(
                 batch_id=uuid4(),
@@ -432,20 +469,29 @@ def _find_statement(session: ImportSessionRecord, statement_id: UUID) -> StagedS
     raise ImportStatementNotFoundError()
 
 
+def _find_candidate_row(
+    session: ImportSessionRecord, row_id: UUID
+) -> tuple[StagedStatementRecord, CandidateRowRecord]:
+    for statement in session.statements:
+        for row in statement.candidate_rows:
+            if row.id == row_id:
+                return statement, row
+    raise ImportRowNotFoundError()
+
+
 @dataclass(frozen=True, slots=True)
-class AssignIndividualImportCommand:
+class AssignCandidateRowCommand:
     actor_user_id: UUID
     session_id: UUID
-    statement_id: UUID
+    row_id: UUID
     list_id: UUID
 
 
-class AssignIndividualImportService:
-    """Individual review accept (Story 4.8, AC #1/#2/#3): commits exactly
-    one statement to one list — the same `commit_statement_batch` port
-    Story 4.7's Bulk service already calls in a loop, called here once.
-    Serves both the "chosen list" and "configurable default list" outcomes
-    identically — the caller decides which `list_id` to send.
+class AssignCandidateRowService:
+    """Per-row assign (Story 4.10): one candidate row → one commit action.
+
+    Reuses `commit_statement_batch` with a 1-element rows list. HTTP lands
+    in Story 4.11.
     """
 
     def __init__(
@@ -460,17 +506,12 @@ class AssignIndividualImportService:
         self._fx_service = fx_service
         self._pdf_storage = pdf_storage
 
-    def execute(self, command: AssignIndividualImportCommand) -> ImportBatchRecord:
-        # Same missing-card/routing_mode gap as AssignBulkImportService.execute
-        # (Story 4.7 review finding) — no card/routing_mode linkage exists on
-        # a statement yet, so there is nothing to check here today. See that
-        # service's identical comment and
-        # test_staged_statement_record_has_no_unchecked_card_routing_field.
+    def execute(self, command: AssignCandidateRowCommand) -> ImportBatchRecord:
         session = self._session_repo.get_session(command.session_id, command.actor_user_id)
         if session is None:
             raise ImportSessionNotFoundError()
 
-        statement = _find_statement(session, command.statement_id)
+        statement, candidate = _find_candidate_row(session, command.row_id)
 
         AuthorizeListAccessService(self._list_lookup).execute(
             AuthorizeListAccessCommand(
@@ -480,39 +521,35 @@ class AssignIndividualImportService:
             )
         )
 
-        validate_individual_accept_eligible(
-            discarded_at=session.discarded_at, statement_status=statement.status
+        if session.discarded_at is not None:
+            raise ImportSessionDiscardedError()
+
+        line = candidate.line
+        validate_bulk_candidate_row(
+            amount=line.amount, normalized_description=line.normalized_description
         )
-
-        rows: list[tuple[ManualExpenseDraft, MaterializedFx]] = []
-        for candidate in statement.candidate_rows:
-            validate_bulk_candidate_row(
-                amount=candidate.amount, normalized_description=candidate.normalized_description
-            )
-            draft = ManualExpenseDraft(
-                amount=candidate.amount,
-                currency=candidate.currency,
-                normalized_description=candidate.normalized_description,
-                payer_id=command.actor_user_id,
-                provenance=candidate.provenance,
-                line_type=candidate.line_type,
-                posted_date=candidate.posted_date,
-                external_ref=candidate.external_ref,
-            )
-            fx = self._fx_service.materialize_fx_for_entry(
-                amount=draft.amount,
-                currency=draft.currency,
-                posted_date=date.fromisoformat(draft.posted_date),
-            )
-            rows.append((draft, fx))
-
+        draft = ManualExpenseDraft(
+            amount=line.amount,
+            currency=line.currency,
+            normalized_description=line.normalized_description,
+            payer_id=command.actor_user_id,
+            provenance=line.provenance,
+            line_type=line.line_type,
+            posted_date=line.posted_date,
+            external_ref=line.external_ref,
+        )
+        fx = self._fx_service.materialize_fx_for_entry(
+            amount=draft.amount,
+            currency=draft.currency,
+            posted_date=date.fromisoformat(draft.posted_date),
+        )
         batch = self._session_repo.commit_statement_batch(
             batch_id=uuid4(),
             session_id=command.session_id,
             statement_id=statement.id,
             list_id=command.list_id,
             actor_user_id=command.actor_user_id,
-            rows=rows,
+            rows=[CommitRow(candidate_row_id=candidate.id, draft=draft, fx=fx)],
         )
         updated = self._session_repo.get_session(command.session_id, command.actor_user_id)
         if updated is not None:
@@ -525,34 +562,36 @@ class AssignIndividualImportService:
 
 
 @dataclass(frozen=True, slots=True)
-class SkipStatementCommand:
+class DeleteCandidateRowCommand:
     actor_user_id: UUID
     session_id: UUID
-    statement_id: UUID
+    row_id: UUID
 
 
-class SkipStatementService:
-    """Individual review skip (Story 4.8, AC #5, FR-18): no ledger rows —
-    only flips the targeted statement's own status."""
+class DeleteCandidateRowService:
+    """Per-row delete (Story 4.10): guarded pending→deleted, no ledger writes.
+
+    HTTP lands in Story 4.11.
+    """
 
     def __init__(self, session_repo: ImportSessionRepository, pdf_storage: PdfStorage) -> None:
         self._session_repo = session_repo
         self._pdf_storage = pdf_storage
 
-    def execute(self, command: SkipStatementCommand) -> ImportSessionRecord:
+    def execute(self, command: DeleteCandidateRowCommand) -> ImportSessionRecord:
         session = self._session_repo.get_session(command.session_id, command.actor_user_id)
         if session is None:
             raise ImportSessionNotFoundError()
 
-        statement = _find_statement(session, command.statement_id)
+        statement, candidate = _find_candidate_row(session, command.row_id)
 
-        validate_individual_skip_eligible(
-            discarded_at=session.discarded_at, statement_status=statement.status
-        )
+        if session.discarded_at is not None:
+            raise ImportSessionDiscardedError()
 
-        updated = self._session_repo.skip_statement(
+        updated = self._session_repo.mark_candidate_row_deleted(
             session_id=command.session_id,
-            statement_id=command.statement_id,
+            statement_id=statement.id,
+            row_id=candidate.id,
             user_id=command.actor_user_id,
         )
         _release_source_pdf_if_idle(

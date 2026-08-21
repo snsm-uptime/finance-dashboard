@@ -1,4 +1,4 @@
-"""SQLAlchemy repository for Import Sessions (Story 4.6, AD-4)."""
+"""SQLAlchemy repository for Import Sessions (Story 4.6, AD-4; Story 4.10 row grain)."""
 
 from __future__ import annotations
 
@@ -6,8 +6,9 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from application.fx_service import MaterializedFx
 from application.import_session import (
+    CandidateRowRecord,
+    CommitRow,
     DetectedStatement,
     ImportBatchRecord,
     ImportSessionRecord,
@@ -15,18 +16,20 @@ from application.import_session import (
 )
 from domain.canonical_line import CanonicalLine
 from domain.errors import (
-    ImportSessionAlreadyCommittedError,
+    ImportRowNotAvailableError,
     ImportSessionNotFoundError,
-    ImportStatementNotAvailableError,
     ImportStatementNotFoundError,
     InvalidCanonicalLineError,
 )
-from domain.expenses import ManualExpenseDraft
 from domain.import_session import (
+    ROW_STATUS_COMMITTED,
+    ROW_STATUS_DELETED,
+    ROW_STATUS_EXCLUDED_ZERO_AMOUNT,
+    ROW_STATUS_PENDING,
     STATEMENT_STATUS_COMMITTED,
-    STATEMENT_STATUS_FAILED,
-    STATEMENT_STATUS_SKIPPED,
     STATEMENT_STATUS_STAGED,
+    row_is_zero_amount,
+    statement_is_fully_resolved,
 )
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
@@ -57,7 +60,7 @@ def _session_record(row: ImportSessionModel) -> ImportSessionRecord:
                 pdf_path=statement.pdf_path,
                 iban=statement.iban,  # Story 4.8.1: carry IBAN through record
                 candidate_rows=[
-                    _candidate_line(candidate, statement) for candidate in statement.candidate_rows
+                    _candidate_row(candidate, statement) for candidate in statement.candidate_rows
                 ],
             )
             for statement in row.statements
@@ -65,19 +68,25 @@ def _session_record(row: ImportSessionModel) -> ImportSessionRecord:
     )
 
 
-def _candidate_line(
+def _candidate_row(
     candidate: ImportCandidateRowModel, statement: ImportStatementModel
-) -> CanonicalLine:
-    return CanonicalLine(
-        posted_date=candidate.posted_date.isoformat(),
-        amount=Decimal(str(candidate.amount)),
-        currency=candidate.currency,
-        product_id=statement.product_id,
-        line_type=candidate.line_type,
-        normalized_description=candidate.normalized_description,
-        provenance=candidate.provenance,
-        external_ref=candidate.external_ref,
-        ref_quality=candidate.ref_quality,
+) -> CandidateRowRecord:
+    return CandidateRowRecord(
+        id=candidate.id,
+        sequence=candidate.sequence,
+        status=candidate.status,
+        resolved_list_id=candidate.resolved_list_id,
+        line=CanonicalLine(
+            posted_date=candidate.posted_date.isoformat(),
+            amount=Decimal(str(candidate.amount)),
+            currency=candidate.currency,
+            product_id=statement.product_id,
+            line_type=candidate.line_type,
+            normalized_description=candidate.normalized_description,
+            provenance=candidate.provenance,
+            external_ref=candidate.external_ref,
+            ref_quality=candidate.ref_quality,
+        ),
     )
 
 
@@ -109,13 +118,18 @@ class SqlAlchemyImportSessionRepository:
             session_row.statements.append(statement_row)
 
             if detected.status == STATEMENT_STATUS_STAGED:
-                for line in detected.candidate_rows:
+                for sequence, line in enumerate(detected.candidate_rows):
                     try:
                         posted_date = date.fromisoformat(line.posted_date)
                     except ValueError as exc:
                         raise InvalidCanonicalLineError(
                             f"Malformed posted_date: {line.posted_date!r}."
                         ) from exc
+                    status = (
+                        ROW_STATUS_EXCLUDED_ZERO_AMOUNT
+                        if row_is_zero_amount(line.amount)
+                        else ROW_STATUS_PENDING
+                    )
                     row = ImportCandidateRowModel(
                         id=uuid4(),
                         statement_id=statement_row.id,
@@ -127,9 +141,13 @@ class SqlAlchemyImportSessionRepository:
                         external_ref=line.external_ref,
                         ref_quality=line.ref_quality,
                         provenance=line.provenance,
+                        status=status,
+                        sequence=sequence,
                     )
                     self._session.add(row)
                     statement_row.candidate_rows.append(row)
+                if statement_is_fully_resolved([c.status for c in statement_row.candidate_rows]):
+                    statement_row.status = STATEMENT_STATUS_COMMITTED
 
         self._session.flush()
         return _session_record(session_row)
@@ -175,17 +193,30 @@ class SqlAlchemyImportSessionRepository:
         statement_id: UUID,
         list_id: UUID,
         actor_user_id: UUID,
-        rows: list[tuple[ManualExpenseDraft, MaterializedFx]],
+        rows: list[CommitRow],
     ) -> ImportBatchRecord:
+        ids = [row.candidate_row_id for row in rows]
+        now = datetime.now(UTC)
+        # Guarded UPDATE is the fast path / clean-error path and MUST precede
+        # any ledger INSERT (Story 4.10, AC #4).
+        result = self._session.execute(
+            update(ImportCandidateRowModel)
+            .where(
+                ImportCandidateRowModel.id.in_(ids),
+                ImportCandidateRowModel.status == ROW_STATUS_PENDING,
+            )
+            .values(
+                status=ROW_STATUS_COMMITTED,
+                resolved_list_id=list_id,
+                resolved_at=now,
+            )
+        )
+        if result.rowcount != len(ids):
+            raise ImportRowNotAvailableError()
+
         # Batch row is flushed before any ledger entry references it via
         # import_batch_id (FK ordering) — a mid-loop failure rolls back the
         # whole request (get_db), so there is no orphaned batch either way.
-        #
-        # Wrapped in a SAVEPOINT: a concurrent double bulk-commit for the
-        # same statement trips uq_import_batches_statement_id right here —
-        # surfaced as the same domain error the sequential double-commit
-        # path already raises, instead of an unhandled IntegrityError
-        # (Story 4.7 review finding).
         batch_row = ImportBatchModel(
             id=batch_id,
             session_id=session_id,
@@ -193,45 +224,45 @@ class SqlAlchemyImportSessionRepository:
             list_id=list_id,
             actor_user_id=actor_user_id,
         )
-        try:
-            with self._session.begin_nested():
-                self._session.add(batch_row)
-                self._session.flush()
-        except IntegrityError as exc:
-            raise ImportSessionAlreadyCommittedError() from exc
+        self._session.add(batch_row)
+        self._session.flush()
 
         entry_ids: list[UUID] = []
-        for draft, fx in rows:
-            entry = LedgerEntryModel(
-                id=uuid4(),
-                list_id=list_id,
-                amount=draft.amount,
-                currency=draft.currency,
-                normalized_description=draft.normalized_description,
-                payer_id=draft.payer_id,
-                provenance=draft.provenance,
-                line_type=draft.line_type,
-                posted_date=date.fromisoformat(draft.posted_date),
-                receipt_id=None,
-                product_id=None,
-                external_ref=draft.external_ref,
-                origin_kind=draft.origin_kind,
-                origin_card_id=draft.origin_card_id,
-                import_batch_id=batch_id,
-                amount_crc=fx.amount_crc,
-                fx_rate=fx.fx_rate,
-                fx_rate_date=fx.fx_rate_date,
-                fx_fallback=fx.fx_fallback,
-                created_at=datetime.now(UTC),
-            )
-            self._session.add(entry)
-            entry_ids.append(entry.id)
+        try:
+            with self._session.begin_nested():
+                for commit_row in rows:
+                    draft = commit_row.draft
+                    fx = commit_row.fx
+                    entry = LedgerEntryModel(
+                        id=uuid4(),
+                        list_id=list_id,
+                        amount=draft.amount,
+                        currency=draft.currency,
+                        normalized_description=draft.normalized_description,
+                        payer_id=draft.payer_id,
+                        provenance=draft.provenance,
+                        line_type=draft.line_type,
+                        posted_date=date.fromisoformat(draft.posted_date),
+                        receipt_id=None,
+                        product_id=None,
+                        external_ref=draft.external_ref,
+                        origin_kind=draft.origin_kind,
+                        origin_card_id=draft.origin_card_id,
+                        import_batch_id=batch_id,
+                        import_candidate_row_id=commit_row.candidate_row_id,
+                        amount_crc=fx.amount_crc,
+                        fx_rate=fx.fx_rate,
+                        fx_rate_date=fx.fx_rate_date,
+                        fx_fallback=fx.fx_fallback,
+                        created_at=datetime.now(UTC),
+                    )
+                    self._session.add(entry)
+                    entry_ids.append(entry.id)
+                self._session.flush()
+        except IntegrityError as exc:
+            raise ImportRowNotAvailableError() from exc
 
-        statement_row = self._session.get(ImportStatementModel, statement_id)
-        if statement_row is None:
-            raise ImportSessionNotFoundError()
-        statement_row.status = STATEMENT_STATUS_COMMITTED
-
+        self._complete_statement_if_resolved(statement_id)
         self._session.flush()
         return ImportBatchRecord(
             id=batch_id,
@@ -243,8 +274,8 @@ class SqlAlchemyImportSessionRepository:
             ledger_entry_ids=entry_ids,
         )
 
-    def skip_statement(
-        self, *, session_id: UUID, statement_id: UUID, user_id: UUID
+    def mark_candidate_row_deleted(
+        self, *, session_id: UUID, statement_id: UUID, row_id: UUID, user_id: UUID
     ) -> ImportSessionRecord:
         row = self._session.scalar(
             select(ImportSessionModel)
@@ -263,27 +294,36 @@ class SqlAlchemyImportSessionRepository:
         if statement_row is None:
             raise ImportStatementNotFoundError()
 
-        # Guarded write, not an unconditional set: a concurrent commit could
-        # land between the caller's eligibility check (against the snapshot
-        # above) and this write. The WHERE clause re-checks status against
-        # the database's current row at write time — if a concurrent commit
-        # already flipped it, this affects zero rows instead of silently
-        # clobbering a committed statement's status to "skipped" (Story 4.8
-        # review finding).
         result = self._session.execute(
-            update(ImportStatementModel)
+            update(ImportCandidateRowModel)
             .where(
-                ImportStatementModel.id == statement_id,
-                ImportStatementModel.status.in_((STATEMENT_STATUS_STAGED, STATEMENT_STATUS_FAILED)),
+                ImportCandidateRowModel.id == row_id,
+                ImportCandidateRowModel.statement_id == statement_id,
+                ImportCandidateRowModel.status == ROW_STATUS_PENDING,
             )
-            .values(status=STATEMENT_STATUS_SKIPPED)
+            .values(status=ROW_STATUS_DELETED, resolved_at=datetime.now(UTC))
         )
         if result.rowcount == 0:
-            raise ImportStatementNotAvailableError()
+            raise ImportRowNotAvailableError()
 
+        self._complete_statement_if_resolved(statement_id)
         self._session.flush()
         self._session.refresh(statement_row)
         return _session_record(row)
+
+    def _complete_statement_if_resolved(self, statement_id: UUID) -> None:
+        statement_row = self._session.get(ImportStatementModel, statement_id)
+        if statement_row is None:
+            raise ImportSessionNotFoundError()
+        statuses = list(
+            self._session.scalars(
+                select(ImportCandidateRowModel.status).where(
+                    ImportCandidateRowModel.statement_id == statement_id
+                )
+            )
+        )
+        if statement_is_fully_resolved(statuses):
+            statement_row.status = STATEMENT_STATUS_COMMITTED
 
     def clear_statement_pdf_paths(self, session_id: UUID, user_id: UUID) -> None:
         row = self._session.scalar(
