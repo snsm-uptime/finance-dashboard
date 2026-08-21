@@ -246,6 +246,12 @@ class ImportSessionRepository(Protocol):
         """Set discarded_at. Idempotent — calling twice does not error."""
         ...
 
+    def set_statement_card_id(
+        self, *, session_id: UUID, user_id: UUID, statement_id: UUID, card_id: UUID
+    ) -> None:
+        """Persist an identified/registered card on a statement in this session."""
+        ...
+
     def commit_statement_batch(
         self,
         *,
@@ -453,13 +459,11 @@ class AssignBulkImportService:
         self._pdf_storage = pdf_storage
 
     def execute(self, command: AssignBulkImportCommand) -> AssignBulkImportResult:
-        # AC #1 assumes Bulk only ever sees review-routed cards, but no card
-        # / routing_mode linkage exists on a statement yet (Stories 4.4/4.6's
-        # territory, per this story's Prerequisites gap) — there is nothing
-        # to check here today. `test_staged_statement_record_has_no_unchecked_
-        # card_routing_field` in test_import_session_application.py fails
-        # loud if that linkage lands without a routing_mode gate being added
-        # here — do not remove this comment or that test until it is.
+        # statement.card_id is origin for committed ledger rows (Story 4.8.1
+        # stamp; restored after 4.8.3 moved identification to upload). It is
+        # not a routing_mode gate — Bulk still does not check review vs fixed
+        # routing. test_staged_statement_record_has_no_unchecked_routing_mode_field
+        # fails loud if routing_mode lands on a statement record without a gate.
         session = self._session_repo.get_session(command.session_id, command.actor_user_id)
         if session is None:
             raise ImportSessionNotFoundError()
@@ -489,6 +493,7 @@ class AssignBulkImportService:
             if any(candidate.status != ROW_STATUS_PENDING for candidate in non_excluded):
                 raise ImportRowNotAvailableError()
             rows: list[CommitRow] = []
+            card_id = statement.card_id
             for candidate in non_excluded:
                 line = candidate.line
                 validate_bulk_candidate_row(
@@ -504,6 +509,8 @@ class AssignBulkImportService:
                     line_type=line.line_type,
                     posted_date=line.posted_date,
                     external_ref=line.external_ref,
+                    origin_kind=ORIGIN_KIND_CARD if card_id else None,
+                    origin_card_id=card_id,
                 )
                 fx = self._fx_service.materialize_fx_for_entry(
                     amount=draft.amount,
@@ -695,6 +702,7 @@ class AssignCandidateRowService:
         validate_bulk_candidate_row(
             amount=line.amount, normalized_description=line.normalized_description
         )
+        card_id = command.card_id or statement.card_id
         draft = ManualExpenseDraft(
             amount=line.amount,
             currency=line.currency,
@@ -704,8 +712,8 @@ class AssignCandidateRowService:
             line_type=line.line_type,
             posted_date=line.posted_date,
             external_ref=line.external_ref,
-            origin_kind=ORIGIN_KIND_CARD if command.card_id else None,
-            origin_card_id=command.card_id,
+            origin_kind=ORIGIN_KIND_CARD if card_id else None,
+            origin_card_id=card_id,
         )
         fx = self._fx_service.materialize_fx_for_entry(
             amount=draft.amount,

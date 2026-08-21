@@ -189,6 +189,23 @@ class SqlAlchemyImportSessionRepository:
             self._session.flush()
         return _session_record(row)
 
+    def set_statement_card_id(
+        self, *, session_id: UUID, user_id: UUID, statement_id: UUID, card_id: UUID
+    ) -> None:
+        row = self._session.scalar(
+            select(ImportSessionModel)
+            .options(selectinload(ImportSessionModel.statements))
+            .where(ImportSessionModel.id == session_id, ImportSessionModel.user_id == user_id)
+            .limit(1)
+        )
+        if row is None:
+            raise ImportSessionNotFoundError()
+        statement_row = next((s for s in row.statements if s.id == statement_id), None)
+        if statement_row is None:
+            raise ImportStatementNotFoundError()
+        statement_row.card_id = card_id
+        self._session.flush()
+
     def commit_statement_batch(
         self,
         *,

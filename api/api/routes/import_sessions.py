@@ -147,6 +147,34 @@ async def upload_statement_pdf(
     return _session_response(result)
 
 
+def _persist_identified_card(
+    session_repo: SqlAlchemyImportSessionRepository,
+    *,
+    session_id: uuid.UUID,
+    user_id: uuid.UUID,
+    statement_id: uuid.UUID,
+    card_id: uuid.UUID,
+) -> JSONResponse | None:
+    try:
+        session_repo.set_statement_card_id(
+            session_id=session_id,
+            user_id=user_id,
+            statement_id=statement_id,
+            card_id=card_id,
+        )
+    except ImportSessionNotFoundError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": str(exc), "code": "import_session_not_found"},
+        )
+    except ImportStatementNotFoundError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": str(exc), "code": "import_statement_not_found"},
+        )
+    return None
+
+
 @router.get("/{session_id}", response_model=ImportSessionResponse)
 def get_import_session(
     session_id: uuid.UUID,
@@ -486,6 +514,15 @@ def identify_card_for_statement(
             statement_id,
             match_result.matched_card.id,
         )
+        persist_error = _persist_identified_card(
+            session_repo,
+            session_id=session_id,
+            user_id=user_id,
+            statement_id=statement_id,
+            card_id=match_result.matched_card.id,
+        )
+        if persist_error is not None:
+            return persist_error
         return CardIdentificationResponse(
             matched=True,
             card_id=match_result.matched_card.id,
@@ -526,6 +563,15 @@ def identify_card_for_statement(
                 new_card.id,
                 user_id,
             )
+            persist_error = _persist_identified_card(
+                session_repo,
+                session_id=session_id,
+                user_id=user_id,
+                statement_id=statement_id,
+                card_id=new_card.id,
+            )
+            if persist_error is not None:
+                return persist_error
             return CardIdentificationResponse(
                 matched=True,
                 card_id=new_card.id,
@@ -559,6 +605,15 @@ def identify_card_for_statement(
                     statement_id,
                     recheck_result.matched_card.id,
                 )
+                persist_error = _persist_identified_card(
+                    session_repo,
+                    session_id=session_id,
+                    user_id=user_id,
+                    statement_id=statement_id,
+                    card_id=recheck_result.matched_card.id,
+                )
+                if persist_error is not None:
+                    return persist_error
                 return CardIdentificationResponse(
                     matched=True,
                     card_id=recheck_result.matched_card.id,

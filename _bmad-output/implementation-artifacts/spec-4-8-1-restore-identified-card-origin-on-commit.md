@@ -2,8 +2,9 @@
 title: 'Restore 4.8.1 identified-card origin on list commit'
 type: 'bugfix'
 created: '2026-08-20'
-status: 'draft'
+status: 'done'
 review_loop_iteration: 0
+baseline_commit: 'cd9925004c94fea5e7480fd0d7323520d54b6892'
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/spec-4-8-1-bac-iban-extraction.md'
 ---
@@ -61,15 +62,15 @@ context:
 
 **Execution:**
 
-- [ ] `api/application/import_session.py` -- Add `set_statement_card_id` to `ImportSessionRepository`. In `AssignBulkImportService.execute`, set draft origin from `statement.card_id` using the 4.8.1 two-liner. In `AssignCandidateRowService.execute`, use `command.card_id or statement.card_id` for the same stamp so 4.11 inherits this without a new origin design. Rewrite the 4.7 bulk comment: `card_id` is origin, not a routing_mode gate.
+- [x] `api/application/import_session.py` -- Add `set_statement_card_id` to `ImportSessionRepository`. In `AssignBulkImportService.execute`, set draft origin from `statement.card_id` using the 4.8.1 two-liner. In `AssignCandidateRowService.execute`, use `command.card_id or statement.card_id` for the same stamp so 4.11 inherits this without a new origin design. Rewrite the 4.7 bulk comment: `card_id` is origin, not a routing_mode gate.
 
-- [ ] `api/adapters/persistence/import_sessions.py` -- Implement `set_statement_card_id` (session+user scoped, statement in session, set `ImportStatementModel.card_id`, flush). Raise the existing not-found errors; do not invent a new error type.
+- [x] `api/adapters/persistence/import_sessions.py` -- Implement `set_statement_card_id` (session+user scoped, statement in session, set `ImportStatementModel.card_id`, flush). Raise the existing not-found errors; do not invent a new error type.
 
-- [ ] `api/api/routes/import_sessions.py` -- After a successful match, register, or concurrent-register recheck in `identify_card_for_statement`, persist `card_id` via the new repo method before returning. Do not persist on unmatched / no-label unknown.
+- [x] `api/api/routes/import_sessions.py` -- After a successful match, register, or concurrent-register recheck in `identify_card_for_statement`, persist `card_id` via the new repo method before returning. Do not persist on unmatched / no-label unknown.
 
-- [ ] `api/tests/test_import_session_application.py` -- Fake repo grows `set_statement_card_id`. Assert bulk drafts get origin when `statement.card_id` is set and stay blank when it is not; mixed two-statement session does not bleed. Assert per-row assign uses `statement.card_id` when `command.card_id` is omitted. Rewrite the canary: `card_id` on statement records is allowed; `routing_mode` still fails loud if it appears without a bulk routing gate.
+- [x] `api/tests/test_import_session_application.py` -- Fake repo grows `set_statement_card_id`. Assert bulk drafts get origin when `statement.card_id` is set and stay blank when it is not; mixed two-statement session does not bleed. Assert per-row assign uses `statement.card_id` when `command.card_id` is omitted. Rewrite the canary: `card_id` on statement records is allowed; `routing_mode` still fails loud if it appears without a bulk routing gate.
 
-- [ ] `api/tests/test_import_sessions_integration.py` -- Register a card whose IBAN matches the BAC fixture (or identify-card with a label), bulk-commit, assert every ledger row's `origin_kind`/`origin_card_id`. Cover identify-card persist via GET session `statements[].card_id`. Cover no-card bulk still null origin.
+- [x] `api/tests/test_import_sessions_integration.py` -- Register a card whose IBAN matches the BAC fixture (or identify-card with a label), bulk-commit, assert every ledger row's `origin_kind`/`origin_card_id`. Cover identify-card persist via GET session `statements[].card_id`. Cover no-card bulk still null origin.
 
 **Acceptance Criteria:**
 
@@ -94,10 +95,37 @@ origin_card_id=card_id,
 
 **Commands:**
 
-- `uv run pytest api/tests/test_import_session_application.py -xvs -k "origin or card_routing or bulk_assign or candidate_row"` -- origin stamp + rewritten canary
+- `uv run pytest api/tests/test_import_session_application.py -xvs -k "origin or routing_mode or bulk_assign or candidate_row"` -- origin stamp + rewritten canary
 - `uv run pytest api/tests/test_import_sessions_integration.py -xvs -k "origin or identify or bulk_commit_happy"` -- persist + ledger origin
 
 **Manual checks:**
 
 - Upload a BAC PDF with a registered matching card, Assign to list, open the list: origin chip shows that card on every imported row.
 - Upload with an unknown IBAN, register a label in SessionReviewPanel, Assign to list: same, using the new card.
+
+## Suggested Review Order
+
+**Stamp origin from the statement card**
+
+- Bulk commit applies the 4.8.1 two-liner from `statement.card_id`.
+  [`import_session.py:496`](../../api/application/import_session.py#L496)
+
+- Same stamp on per-row assign, preferring `command.card_id` then statement.
+  [`import_session.py:705`](../../api/application/import_session.py#L705)
+
+**Persist identification**
+
+- Identify/register writes `card_id` before returning so bulk can see it.
+  [`import_sessions.py:150`](../../api/api/routes/import_sessions.py#L150)
+
+- Session-scoped UPDATE; existing not-found errors, no new type.
+  [`import_sessions.py:192`](../../api/adapters/persistence/import_sessions.py#L192)
+
+**Tests**
+
+- Unit: stamp, blank origin, no cross-statement bleed.
+  [`test_import_session_application.py:1070`](../../api/tests/test_import_session_application.py#L1070)
+
+- Integration: register via identify-card, GET `card_id`, ledger origin after bulk.
+  [`test_import_sessions_integration.py:687`](../../api/tests/test_import_sessions_integration.py#L687)
+

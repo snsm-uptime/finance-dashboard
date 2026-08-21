@@ -40,12 +40,14 @@ from domain.errors import (
     ImportRowNotFoundError,
     ImportSessionDiscardedError,
     ImportSessionNotFoundError,
+    ImportStatementNotFoundError,
     InvalidCanonicalLineError,
     NoCleanStatementsToCommitError,
     NotListMemberError,
     UnknownBankAdapterError,
     UnsupportedFileTypeError,
 )
+from domain.expenses import ORIGIN_KIND_CARD
 from domain.import_session import (
     ROW_STATUS_COMMITTED,
     ROW_STATUS_DELETED,
@@ -198,6 +200,7 @@ def _copy_statement(
     *,
     status: str | None = None,
     pdf_path: str | None | object = ...,
+    card_id: UUID | None | object = ...,
     candidate_rows: list[CandidateRowRecord] | None = None,
 ) -> StagedStatementRecord:
     rows = statement.candidate_rows if candidate_rows is None else candidate_rows
@@ -209,7 +212,7 @@ def _copy_statement(
         candidate_row_count=len(rows),
         pdf_path=statement.pdf_path if pdf_path is ... else pdf_path,  # type: ignore[arg-type]
         iban=statement.iban,
-        card_id=statement.card_id,
+        card_id=statement.card_id if card_id is ... else card_id,  # type: ignore[arg-type]
         original_filename=statement.original_filename,
         candidate_rows=rows,
     )
@@ -286,6 +289,30 @@ class _FakeImportSessionRepo:
         )
         self.sessions[session_id] = updated
         return updated
+
+    def set_statement_card_id(
+        self, *, session_id: UUID, user_id: UUID, statement_id: UUID, card_id: UUID
+    ) -> None:
+        record = self.sessions.get(session_id)
+        if record is None or record.user_id != user_id:
+            raise ImportSessionNotFoundError()
+        updated_statements: list[StagedStatementRecord] = []
+        found = False
+        for statement in record.statements:
+            if statement.id != statement_id:
+                updated_statements.append(statement)
+                continue
+            found = True
+            updated_statements.append(_copy_statement(statement, card_id=card_id))
+        if not found:
+            raise ImportStatementNotFoundError()
+        self.sessions[session_id] = ImportSessionRecord(
+            id=record.id,
+            user_id=record.user_id,
+            created_at=record.created_at,
+            discarded_at=record.discarded_at,
+            statements=updated_statements,
+        )
 
     def commit_statement_batch(
         self,
@@ -490,10 +517,15 @@ class _FakeFxService:
         )
 
 
+class _FakeCardMatch:
+    def execute(self, command: object) -> None:
+        return None
+
+
 def test_upload_non_pdf_rejected_before_storage() -> None:
     storage = _FakePdfStorage()
     repo = _FakeImportSessionRepo()
-    service = UploadStatementPdfService(storage, [FakeAdapter()], repo)
+    service = UploadStatementPdfService(storage, [FakeAdapter()], repo, _FakeCardMatch())
 
     with pytest.raises(UnsupportedFileTypeError):
         service.execute(
@@ -507,7 +539,7 @@ def test_upload_non_pdf_rejected_before_storage() -> None:
 def test_upload_no_adapter_matches_deletes_saved_file_and_propagates() -> None:
     storage = _FakePdfStorage()
     repo = _FakeImportSessionRepo()
-    service = UploadStatementPdfService(storage, [], repo)
+    service = UploadStatementPdfService(storage, [], repo, _FakeCardMatch())
 
     with pytest.raises(UnknownBankAdapterError):
         service.execute(
@@ -524,7 +556,7 @@ def test_upload_two_staged_chunks_creates_session_with_both() -> None:
     adapter = FakeAdapter(split_chunks=[b"c1", b"c2"], parse_results=[[_row("r1")], [_row("r2")]])
     storage = _FakePdfStorage()
     repo = _FakeImportSessionRepo()
-    service = UploadStatementPdfService(storage, [adapter], repo)
+    service = UploadStatementPdfService(storage, [adapter], repo, _FakeCardMatch())
 
     session = service.execute(
         UploadStatementPdfCommand(
@@ -544,7 +576,7 @@ def test_upload_mixed_staged_and_failed_persist_in_same_session() -> None:
     )
     storage = _FakePdfStorage()
     repo = _FakeImportSessionRepo()
-    service = UploadStatementPdfService(storage, [adapter], repo)
+    service = UploadStatementPdfService(storage, [adapter], repo, _FakeCardMatch())
 
     session = service.execute(
         UploadStatementPdfCommand(
@@ -567,7 +599,7 @@ def _upload_session(
     repo: _FakeImportSessionRepo, storage: _FakePdfStorage, *, user_id: UUID
 ) -> UUID:
     adapter = FakeAdapter()
-    service = UploadStatementPdfService(storage, [adapter], repo)
+    service = UploadStatementPdfService(storage, [adapter], repo, _FakeCardMatch())
     session = service.execute(
         UploadStatementPdfCommand(
             actor_user_id=user_id, filename="statement.pdf", content=PDF_BYTES
@@ -632,13 +664,38 @@ def _multi_statement_session(
         split_chunks=[f"c{i}".encode() for i in range(len(parse_results))],
         parse_results=parse_results,
     )
-    service = UploadStatementPdfService(storage, [adapter], repo)
+    service = UploadStatementPdfService(storage, [adapter], repo, _FakeCardMatch())
     session = service.execute(
         UploadStatementPdfCommand(
             actor_user_id=user_id, filename="statement.pdf", content=PDF_BYTES
         )
     )
     return session.id
+
+
+def _direct_session(
+    repo: _FakeImportSessionRepo,
+    *,
+    user_id: UUID,
+    statements: list[DetectedStatement],
+) -> UUID:
+    session_id = uuid4()
+    repo.create_session(
+        session_id=session_id,
+        user_id=user_id,
+        statements=statements,
+        pdf_paths={index: f"/data/pdfs/{user_id}/{index}.pdf" for index in range(len(statements))},
+    )
+    return session_id
+
+
+def _staged(*rows: CanonicalLine, card_id: UUID | None = None) -> DetectedStatement:
+    return DetectedStatement(
+        product_id="fake_product",
+        status=STATEMENT_STATUS_STAGED,
+        candidate_rows=list(rows),
+        card_id=card_id,
+    )
 
 
 def test_bulk_assign_two_clean_statements_creates_two_batches_payer_is_actor() -> None:
@@ -994,25 +1051,112 @@ def test_assign_candidate_row_discarded_session_rejected() -> None:
     assert repo.commit_calls == []
 
 
-def test_staged_statement_record_has_no_unchecked_card_routing_field() -> None:
-    """Canary (Story 4.7 code review): AC #1 assumes Bulk only ever sees
-    review-routed cards, but no card/routing_mode linkage exists on a
-    statement today (that's Stories 4.4/4.6's territory) — so
-    AssignBulkImportService.execute has no gate to enforce it and none is
-    needed yet.
-
-    If a future story adds `card_id` / `routing_mode` to
-    `StagedStatementRecord` or `DetectedStatement` without also adding an
-    explicit routing_mode check in AssignBulkImportService.execute, this
-    test fails loud instead of the gap silently persisting.
+def test_staged_statement_record_has_no_unchecked_routing_mode_field() -> None:
+    """Canary (Story 4.7): card_id on a statement is origin, not routing.
+    routing_mode still requires an explicit bulk gate if it ever lands here.
     """
     from dataclasses import fields
 
     staged_names = {f.name for f in fields(StagedStatementRecord)}
     detected_names = {f.name for f in fields(DetectedStatement)}
-    leaked = (staged_names | detected_names) & {"card_id", "routing_mode"}
+    leaked = (staged_names | detected_names) & {"routing_mode"}
     assert not leaked, (
         f"{leaked} landed on a statement record without a routing_mode gate in "
         "AssignBulkImportService.execute (Story 4.7 review finding) — add the "
         "AC #1 review-routing check before removing this canary."
     )
+
+
+def test_bulk_assign_stamps_origin_from_statement_card_id() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    lookup = _FakeListLookup()
+    actor = uuid4()
+    list_id = uuid4()
+    card_id = uuid4()
+    lookup.add_member(list_id, owner_id=actor, user_id=actor)
+    session_id = _direct_session(
+        repo, user_id=actor, statements=[_staged(_row("r1"), _row("r2"), card_id=card_id)]
+    )
+
+    AssignBulkImportService(repo, lookup, _FakeFxService(), storage).execute(
+        AssignBulkImportCommand(actor_user_id=actor, session_id=session_id, list_id=list_id)
+    )
+
+    drafts = [row.draft for row in repo.commit_calls[0]["rows"]]
+    assert len(drafts) == 2
+    assert all(d.origin_kind == ORIGIN_KIND_CARD for d in drafts)
+    assert all(d.origin_card_id == card_id for d in drafts)
+
+
+def test_bulk_assign_blank_origin_when_statement_has_no_card() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    lookup = _FakeListLookup()
+    actor = uuid4()
+    list_id = uuid4()
+    lookup.add_member(list_id, owner_id=actor, user_id=actor)
+    session_id = _direct_session(repo, user_id=actor, statements=[_staged(_row("r1"))])
+
+    AssignBulkImportService(repo, lookup, _FakeFxService(), storage).execute(
+        AssignBulkImportCommand(actor_user_id=actor, session_id=session_id, list_id=list_id)
+    )
+
+    draft = repo.commit_calls[0]["rows"][0].draft
+    assert draft.origin_kind is None
+    assert draft.origin_card_id is None
+
+
+def test_bulk_assign_origin_does_not_bleed_across_statements() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    lookup = _FakeListLookup()
+    actor = uuid4()
+    list_id = uuid4()
+    card_id = uuid4()
+    lookup.add_member(list_id, owner_id=actor, user_id=actor)
+    session_id = _direct_session(
+        repo,
+        user_id=actor,
+        statements=[_staged(_row("with-card"), card_id=card_id), _staged(_row("no-card"))],
+    )
+
+    AssignBulkImportService(repo, lookup, _FakeFxService(), storage).execute(
+        AssignBulkImportCommand(actor_user_id=actor, session_id=session_id, list_id=list_id)
+    )
+
+    session = repo.get_session(session_id, actor)
+    by_statement = {call["statement_id"]: call for call in repo.commit_calls}
+    with_card = session.statements[0]
+    without = session.statements[1]
+    stamped = by_statement[with_card.id]["rows"][0].draft
+    blank = by_statement[without.id]["rows"][0].draft
+    assert stamped.origin_kind == ORIGIN_KIND_CARD
+    assert stamped.origin_card_id == card_id
+    assert blank.origin_kind is None
+    assert blank.origin_card_id is None
+
+
+def test_assign_candidate_row_uses_statement_card_id_when_command_omits_it() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    lookup = _FakeListLookup()
+    actor = uuid4()
+    list_id = uuid4()
+    card_id = uuid4()
+    lookup.add_member(list_id, owner_id=actor, user_id=actor)
+    session_id = _direct_session(
+        repo, user_id=actor, statements=[_staged(_row("a"), _row("b"), card_id=card_id)]
+    )
+    session = repo.get_session(session_id, actor)
+    target = session.statements[0].candidate_rows[0]
+
+    AssignCandidateRowService(repo, lookup, _FakeFxService(), storage).execute(
+        AssignCandidateRowCommand(
+            actor_user_id=actor, session_id=session_id, row_id=target.id, list_id=list_id
+        )
+    )
+
+    draft = repo.commit_calls[0]["rows"][0].draft
+    assert draft.origin_kind == ORIGIN_KIND_CARD
+    assert draft.origin_card_id == card_id

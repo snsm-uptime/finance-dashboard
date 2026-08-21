@@ -322,6 +322,8 @@ def test_bulk_commit_happy_path_lands_ledger_rows_payer_is_actor(
     assert all(str(row.import_batch_id) == batch_id for row in ledger_rows)
     assert all(row.import_candidate_row_id is not None for row in ledger_rows)
     assert len({row.import_candidate_row_id for row in ledger_rows}) == len(ledger_rows)
+    assert all(row.origin_kind is None for row in ledger_rows)
+    assert all(row.origin_card_id is None for row in ledger_rows)
 
     _assert_source_pdf_released(db_session, session_id=session_id, user_id=me["user_id"])
 
@@ -666,3 +668,98 @@ def test_dismiss_after_partial_row_commit_leaves_committed_ledger_untouched(
     ).all()
     assert len(ledger_rows) == 1
     assert ledger_rows[0].import_candidate_row_id == first.id
+
+
+_IDENTIFY_IBAN = "CR03010202412935924228"
+
+
+def _crc_line(description: str = "keep") -> CanonicalLine:
+    return CanonicalLine(
+        posted_date="2026-01-01",
+        amount=Decimal("10.00"),
+        currency="CRC",
+        product_id="fake_product",
+        line_type="purchase",
+        normalized_description=description,
+    )
+
+
+def test_identify_card_register_persists_card_id_and_bulk_stamps_origin(
+    client: TestClient, db_session: Session
+) -> None:
+    _register(client, "originregister@example.com")
+    user_id = UUID(client.get("/auth/me").json()["user_id"])
+    list_id = _own_list_id(client)
+    repo = SqlAlchemyImportSessionRepository(db_session)
+    record = repo.create_session(
+        session_id=uuid4(),
+        user_id=user_id,
+        statements=[
+            DetectedStatement(
+                product_id="fake_product",
+                status=STATEMENT_STATUS_STAGED,
+                candidate_rows=[_crc_line()],
+                iban=_IDENTIFY_IBAN,
+            )
+        ],
+        pdf_paths={0: "/data/pdfs/origin-register.pdf"},
+    )
+    statement_id = record.statements[0].id
+
+    identified = client.post(
+        f"/import/sessions/{record.id}/statements/{statement_id}/identify-card",
+        json={"label": "My Visa"},
+    )
+    assert identified.status_code == 200, identified.text
+    card_id = identified.json()["card_id"]
+    assert identified.json()["matched"] is True
+
+    fetched = client.get(f"/import/sessions/{record.id}")
+    assert fetched.status_code == 200, fetched.text
+    assert fetched.json()["statements"][0]["card_id"] == card_id
+
+    committed = client.post(f"/import/sessions/{record.id}/bulk-commit", json={"list_id": list_id})
+    assert committed.status_code == 200, committed.text
+
+    ledger_rows = db_session.scalars(
+        select(LedgerEntryModel).where(LedgerEntryModel.list_id == UUID(list_id))
+    ).all()
+    assert len(ledger_rows) == 1
+    assert ledger_rows[0].origin_kind == "card"
+    assert str(ledger_rows[0].origin_card_id) == card_id
+
+
+def test_identify_card_match_persists_existing_card_id(
+    client: TestClient, db_session: Session
+) -> None:
+    _register(client, "originmatch@example.com")
+    user_id = UUID(client.get("/auth/me").json()["user_id"])
+    created = client.post("/cards", json={"label": "My Visa", "iban": _IDENTIFY_IBAN})
+    assert created.status_code == 201, created.text
+    card_id = created.json()["id"]
+    repo = SqlAlchemyImportSessionRepository(db_session)
+    record = repo.create_session(
+        session_id=uuid4(),
+        user_id=user_id,
+        statements=[
+            DetectedStatement(
+                product_id="fake_product",
+                status=STATEMENT_STATUS_STAGED,
+                candidate_rows=[_crc_line()],
+                iban=_IDENTIFY_IBAN,
+            )
+        ],
+        pdf_paths={0: "/data/pdfs/origin-match.pdf"},
+    )
+    statement_id = record.statements[0].id
+
+    identified = client.post(
+        f"/import/sessions/{record.id}/statements/{statement_id}/identify-card",
+        json={},
+    )
+    assert identified.status_code == 200, identified.text
+    assert identified.json()["card_id"] == card_id
+
+    fetched = client.get(f"/import/sessions/{record.id}")
+    assert fetched.status_code == 200, fetched.text
+    assert fetched.json()["statements"][0]["card_id"] == card_id
