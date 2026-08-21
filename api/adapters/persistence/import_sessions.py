@@ -60,6 +60,7 @@ def _session_record(row: ImportSessionModel) -> ImportSessionRecord:
                 pdf_path=statement.pdf_path,
                 iban=statement.iban,  # Story 4.8.1: carry IBAN through record
                 card_id=statement.card_id,  # Story 4.8.3: identified at upload time
+                original_filename=statement.original_filename,
                 candidate_rows=[
                     _candidate_row(candidate, statement) for candidate in statement.candidate_rows
                 ],
@@ -113,6 +114,8 @@ class SqlAlchemyImportSessionRepository:
                 product_id=detected.product_id,
                 pdf_path=pdf_paths[index],
                 iban=detected.iban,  # Story 4.8.1: persist IBAN
+                card_id=detected.card_id,  # Story 4.8.3: persist identified card
+                original_filename=detected.original_filename,
                 status=detected.status,
             )
             self._session.add(statement_row)

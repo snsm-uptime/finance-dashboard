@@ -5,6 +5,8 @@ export const uploadMessages = {
   en: {
     title: "Upload",
     pickFile: "Choose PDF",
+    uploadCta: "Upload",
+    newCardTitle: "New card!",
     uploading: "Uploading…",
     statementStaged: "Staged",
     statementFailed: "Could not parse this statement",
@@ -70,6 +72,8 @@ export const uploadMessages = {
   es: {
     title: "Subir",
     pickFile: "Elegir PDF",
+    uploadCta: "Subir",
+    newCardTitle: "¡Nueva tarjeta!",
     uploading: "Subiendo…",
     statementStaged: "En espera",
     statementFailed: "No se pudo procesar este estado",

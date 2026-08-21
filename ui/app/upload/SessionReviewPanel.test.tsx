@@ -20,14 +20,17 @@ vi.mock("./uploadClient", async () => {
 });
 
 vi.mock("@/hooks/useCardIdentification", () => ({
-  useCardIdentification: () => ({
-    cardMatched: false,
-    cardId: undefined,
-    cardLabel: undefined,
-    iban: null,
+  useCardIdentification: (
+    _sessionId: string,
+    statement: { card_id: string | null; iban: string | null } | null,
+  ) => ({
+    cardMatched: Boolean(statement?.card_id),
+    cardId: statement?.card_id ?? undefined,
+    cardLabel: statement?.card_id ? "My Visa" : undefined,
+    iban: statement?.iban ?? null,
     loading: false,
     error: null,
-    needsRegistration: false,
+    needsRegistration: Boolean(statement?.iban && !statement?.card_id),
     registerCard: vi.fn(),
   }),
 }));
@@ -47,6 +50,15 @@ vi.mock("@/hooks", () => ({
   }),
 }));
 
+vi.mock("@/components/IconButton/IconButton.module.scss", () => ({
+  default: new Proxy(
+    {},
+    {
+      get: (_t, prop) => String(prop),
+    },
+  ),
+}));
+
 const mockSession: ImportSession = {
   id: "sess1",
   created_at: "2026-08-20T10:00:00Z",
@@ -54,7 +66,7 @@ const mockSession: ImportSession = {
   statements: [
     {
       id: "st1",
-      product_id: "Card 1234",
+      product_id: "bac_credit",
       status: "staged",
       candidate_row_count: 10,
       iban: "DE89370400440532013000",
@@ -63,7 +75,7 @@ const mockSession: ImportSession = {
     },
     {
       id: "st2",
-      product_id: "Card 5678",
+      product_id: "bac_credit",
       status: "staged",
       candidate_row_count: 5,
       iban: "ES9121000418450200051332",
@@ -89,15 +101,27 @@ describe("SessionReviewPanel", () => {
     document.body.removeChild(container);
   });
 
-  it("renders statements with card info", async () => {
+  it("titles a matched statement with the uploaded filename, not product_id", async () => {
     await act(async () => {
       root.render(<SessionReviewPanel session={mockSession} />);
     });
 
-    expect(container.textContent).toContain("Card 1234");
-    expect(container.textContent).toContain("Card 5678");
+    expect(container.textContent).toContain("statement.pdf");
+    expect(container.textContent).toContain("From your My Visa card");
     expect(container.textContent).toContain("DE89370400440532013000");
+    expect(container.textContent).not.toContain("bac_credit");
+  });
+
+  it("titles an unmatched statement New card! with IBAN and a save form", async () => {
+    await act(async () => {
+      root.render(<SessionReviewPanel session={mockSession} />);
+    });
+
+    expect(container.textContent).toContain("New card!");
     expect(container.textContent).toContain("ES9121000418450200051332");
+    const save = container.querySelector('button[aria-label="Register"]');
+    expect(save).not.toBeNull();
+    expect(container.querySelector('input[name="label"]')).not.toBeNull();
   });
 
   it("shows Discard and Assign to a list buttons", async () => {

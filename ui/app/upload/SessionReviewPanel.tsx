@@ -1,8 +1,10 @@
 "use client";
 
-import { useId, useMemo, useState } from "react";
+import { FormEvent, useId, useMemo, useState } from "react";
 import Link from "next/link";
 
+import { SaveIcon } from "@/app/icons";
+import { IconButton } from "@/components/IconButton";
 import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { useFormSubmission } from "@/hooks";
@@ -13,6 +15,7 @@ import {
   fetchImportSession,
   type CardIdentificationMessages,
   type ImportSession,
+  type StagedStatement,
   type UploadMessages,
 } from "./uploadClient";
 
@@ -26,7 +29,6 @@ const statementCardClass =
   "flex flex-col gap-2 py-[0.85rem] px-[0.85rem] rounded-[8px] border border-border bg-surface";
 const cardInfoClass = "text-[0.9rem]";
 const cardLabelClass = `${cardInfoClass} font-[550] text-foreground`;
-const cardUnknownClass = `${cardInfoClass} text-muted`;
 const cardIbanClass = `${cardInfoClass} text-[0.8rem] text-muted`;
 
 export function SessionReviewPanel({
@@ -36,8 +38,6 @@ export function SessionReviewPanel({
 }: SessionReviewPanelProps) {
   const { locale } = usePreferences();
   const t = uploadCopy(locale);
-  const inputId = useId();
-  const [expandedStatementId, setExpandedStatementId] = useState<string | null>(null);
   const [registrationError, setRegistrationError] = useState<string | null>(null);
   const [cardLabelInput, setCardLabelInput] = useState<string>("");
 
@@ -85,21 +85,13 @@ export function SessionReviewPanel({
   }
 
   return (
-    <section aria-label="Review identified cards">
-      <h2 className="mb-[1.25rem] text-[1.25rem] font-[550] text-foreground">
-        {t.cardIdentificationTitle}
-      </h2>
-
-      <ul className="list-none m-0 p-0 flex flex-col gap-3 mb-4">
+    <section aria-label={t.cardIdentificationTitle}>
+      <ul className="list-none m-0 p-0 flex flex-col gap-3 mb-4 max-w-[28rem]">
         {session.statements.map((statement) => (
           <StatementCard
             key={statement.id}
             statement={statement}
             sessionId={session.id}
-            isExpanded={expandedStatementId === statement.id}
-            onToggleExpand={() =>
-              setExpandedStatementId(expandedStatementId === statement.id ? null : statement.id)
-            }
             onRegistered={refreshSession}
             cardMessages={cardMessages}
             registrationError={registrationError}
@@ -111,7 +103,7 @@ export function SessionReviewPanel({
         ))}
       </ul>
 
-      <div className="flex gap-3">
+      <div className="flex gap-3 max-w-[28rem]">
         <PrimaryButton disabled={discard.pending} onClick={() => discard.submit(session.id)}>
           {discard.pending ? t.discarding : t.discard}
         </PrimaryButton>
@@ -133,10 +125,8 @@ export function SessionReviewPanel({
 }
 
 type StatementCardProps = {
-  statement: any;
+  statement: StagedStatement;
   sessionId: string;
-  isExpanded: boolean;
-  onToggleExpand: () => void;
   onRegistered: () => void;
   cardMessages: CardIdentificationMessages;
   registrationError: string | null;
@@ -149,8 +139,6 @@ type StatementCardProps = {
 function StatementCard({
   statement,
   sessionId,
-  isExpanded,
-  onToggleExpand,
   onRegistered,
   cardMessages,
   registrationError,
@@ -159,10 +147,19 @@ function StatementCard({
   setCardLabelInput,
   t,
 }: StatementCardProps) {
+  const labelId = useId();
   const card = useCardIdentification(sessionId, statement, cardMessages);
   const [registering, setRegistering] = useState(false);
 
-  async function handleRegisterCard() {
+  const needsRegistration =
+    card.needsRegistration ||
+    (!card.cardMatched && Boolean(statement.iban) && !statement.card_id);
+  const title = needsRegistration
+    ? t.newCardTitle
+    : statement.filename || card.cardLabel || t.cardIdentificationTitle;
+
+  async function handleRegisterCard(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     if (!cardLabelInput.trim()) return;
     setRegistering(true);
     const result = await card.registerCard(cardLabelInput);
@@ -177,67 +174,55 @@ function StatementCard({
     }
   }
 
-  const needsRegistration = statement.iban && !statement.card_id;
+  const canSave = cardLabelInput.trim().length > 0 && !registering && !card.loading;
 
   return (
     <li className={statementCardClass}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1">
-          <p className="m-0 font-[550] text-foreground text-[0.95rem]">{statement.product_id}</p>
+      <div className="flex flex-col gap-1">
+        <p className="m-0 font-[550] text-foreground text-[1rem]">{title}</p>
 
-          {statement.card_id && card.cardLabel ? (
-            <p className={cardLabelClass}>{`From your ${card.cardLabel} card`}</p>
-          ) : needsRegistration ? (
-            <p className={cardUnknownClass}>{t.cardIdentificationUnknown}</p>
-          ) : statement.iban ? (
-            <p className={cardUnknownClass}>{t.cardIdentificationUnknown}</p>
-          ) : (
-            <p className={cardUnknownClass}>No card info</p>
-          )}
+        {statement.card_id && card.cardLabel && !needsRegistration ? (
+          <p className={cardLabelClass}>{t.cardIdentificationMatched.replace("{label}", card.cardLabel)}</p>
+        ) : null}
 
-          {statement.iban ? (
-            <p className={cardIbanClass}>
-              {t.cardIdentificationIban}: {statement.iban}
-            </p>
-          ) : null}
-        </div>
-
-        {needsRegistration && !isExpanded ? (
-          <button
-            type="button"
-            onClick={onToggleExpand}
-            className="py-[6px] px-[12px] rounded-sm border border-border bg-surface text-foreground font-[550] text-[0.85rem] hover:bg-muted transition-colors"
-          >
-            Register
-          </button>
+        {statement.iban ? (
+          <p className={cardIbanClass}>
+            {t.cardIdentificationIban}: {statement.iban}
+          </p>
         ) : null}
       </div>
 
-      {isExpanded && needsRegistration ? (
-        <div className="flex flex-col gap-2 pt-2 border-t border-border">
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={cardLabelInput}
-              onChange={(e) => setCardLabelInput(e.target.value)}
-              placeholder={t.cardIdentificationLabel}
-              disabled={registering || card.loading}
-              className="flex-1 px-3 py-[6px] rounded-sm border border-border bg-background text-foreground placeholder:text-muted text-[0.9rem] disabled:opacity-55"
-            />
-            <button
-              type="button"
-              onClick={handleRegisterCard}
-              disabled={!cardLabelInput.trim() || registering || card.loading}
-              className="py-[6px] px-[12px] rounded-sm bg-accent text-on-accent font-[550] text-[0.85rem] hover:opacity-90 disabled:opacity-55 transition-opacity"
-            >
-              {registering || card.loading ? t.cardIdentificationRegistering : t.cardIdentificationRegister}
-            </button>
-          </div>
+      {needsRegistration ? (
+        <form className="flex flex-col gap-2 pt-1" onSubmit={handleRegisterCard}>
+          <label className="flex flex-col gap-[0.35rem]">
+            <span className="sr-only">{t.cardIdentificationLabel}</span>
+            <div className="flex items-center gap-2 border border-border rounded-[8px] bg-background py-2 px-[0.65rem] overflow-hidden">
+              <input
+                id={labelId}
+                type="text"
+                name="label"
+                value={cardLabelInput}
+                onChange={(e) => setCardLabelInput(e.target.value)}
+                placeholder={t.cardIdentificationLabel}
+                disabled={registering || card.loading}
+                autoComplete="off"
+                maxLength={200}
+                className="flex-1 min-w-0 m-0 p-0 border-0 bg-transparent text-foreground text-base font-normal leading-[1.4] placeholder:text-muted placeholder:opacity-60 focus:outline-none disabled:opacity-55"
+              />
+              <IconButton
+                className="w-7 h-7 min-w-7 !p-0 !rounded-[4px] enabled:hover:!text-accent enabled:hover:!bg-transparent"
+                type="submit"
+                disabled={!canSave}
+                label={registering || card.loading ? t.cardIdentificationRegistering : t.cardIdentificationRegister}
+                icon={<SaveIcon className="block w-5 h-5" />}
+              />
+            </div>
+          </label>
 
           {registrationError || card.error ? (
             <p className="text-owe text-[0.85rem] m-0">{registrationError || card.error}</p>
           ) : null}
-        </div>
+        </form>
       ) : null}
     </li>
   );

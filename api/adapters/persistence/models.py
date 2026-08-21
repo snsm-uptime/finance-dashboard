@@ -440,6 +440,7 @@ class ImportStatementModel(Base):
         nullable=True,
         index=True,
     )  # Story 4.8.3: identified at upload time
+    original_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

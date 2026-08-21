@@ -71,6 +71,7 @@ class DetectedStatement:
     candidate_rows: list[CanonicalLine]
     iban: str | None = None
     card_id: UUID | None = None  # Story 4.8.3: card identification at upload time
+    original_filename: str | None = None
 
 
 def run_import_pipeline(
@@ -167,7 +168,10 @@ class StagedStatementRecord:
 
     `card_id` (Story 4.8.3) is populated during upload if IBAN matches a
     registered card, making card context available to both bulk and
-    individual review flows."""
+    individual review flows.
+
+    `original_filename` is the client-supplied upload name (display only —
+    never used as a storage path)."""
 
     id: UUID
     session_id: UUID
@@ -177,6 +181,7 @@ class StagedStatementRecord:
     pdf_path: str | None
     iban: str | None = None
     card_id: UUID | None = None  # Story 4.8.3: identified at upload time
+    original_filename: str | None = None
     candidate_rows: list[CandidateRowRecord] = field(default_factory=list)
 
 
@@ -312,6 +317,7 @@ class UploadStatementPdfService:
             # Story 4.8.3: Identify cards for all statements at upload time
             detected_with_cards = []
             for statement in detected:
+                card_id = statement.card_id
                 if statement.iban:
                     matched_card = self._card_match_service.execute(
                         MatchCardByIbanCommand(
@@ -319,7 +325,7 @@ class UploadStatementPdfService:
                         )
                     )
                     if matched_card:
-                        statement = replace(statement, card_id=matched_card.id)
+                        card_id = matched_card.id
                         logger.debug(
                             "upload_statement_card_identified session_filename=%s iban=%r card_id=%s",
                             command.filename,
@@ -332,7 +338,13 @@ class UploadStatementPdfService:
                             command.filename,
                             statement.iban,
                         )
-                detected_with_cards.append(statement)
+                detected_with_cards.append(
+                    replace(
+                        statement,
+                        card_id=card_id,
+                        original_filename=command.filename,
+                    )
+                )
 
             pdf_paths = {index: whole_pdf_path for index in range(len(detected_with_cards))}
             return self._session_repo.create_session(

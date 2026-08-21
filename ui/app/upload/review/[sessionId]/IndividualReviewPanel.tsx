@@ -291,7 +291,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
                 ) : card.cardMatched && card.cardLabel ? (
                   <p className="m-0 text-[1rem] text-foreground font-[550]">{card.cardLabel}</p>
                 ) : card.needsRegistration && card.iban ? (
-                  <p className="m-0 text-[1rem] text-owe font-[550]">{t.cardIdentificationUnknown}</p>
+                  <p className="m-0 text-[1rem] text-foreground font-[550]">{t.newCardTitle}</p>
                 ) : (
                   <p className="m-0 text-[0.95rem] text-muted">{t.individualReviewLoadingSession}</p>
                 )}
@@ -300,7 +300,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
               {/* File information */}
               <div className="mb-[1rem]">
                 <p className="m-0 text-[0.9rem] text-muted font-mono">
-                  {current.filename || current.product_id}
+                  {current.filename}
                   {current.status !== "failed" && ` [${current.candidate_row_count}]`}
                 </p>
                 {current.status === "failed" ? (

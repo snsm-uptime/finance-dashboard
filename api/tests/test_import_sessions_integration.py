@@ -507,6 +507,7 @@ def test_create_session_persists_zero_amount_as_excluded_and_keeps_count(
                 product_id="fake_product",
                 status=STATEMENT_STATUS_STAGED,
                 candidate_rows=[zero, keep],
+                original_filename="estado.pdf",
             )
         ],
         pdf_paths={0: "/data/pdfs/zero-test.pdf"},
@@ -519,6 +520,7 @@ def test_create_session_persists_zero_amount_as_excluded_and_keeps_count(
     assert rows[1].status == ROW_STATUS_PENDING
     assert record.statements[0].status == STATEMENT_STATUS_STAGED
     assert record.statements[0].candidate_row_count == 2
+    assert record.statements[0].original_filename == "estado.pdf"
 
 
 def test_create_session_all_zero_statement_committed_without_batch(

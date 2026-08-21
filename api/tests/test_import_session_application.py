@@ -209,6 +209,8 @@ def _copy_statement(
         candidate_row_count=len(rows),
         pdf_path=statement.pdf_path if pdf_path is ... else pdf_path,  # type: ignore[arg-type]
         iban=statement.iban,
+        card_id=statement.card_id,
+        original_filename=statement.original_filename,
         candidate_rows=rows,
     )
 
@@ -251,6 +253,9 @@ class _FakeImportSessionRepo:
                     status=status,
                     candidate_row_count=len(rows),
                     pdf_path=pdf_paths[index],
+                    iban=detected.iban,
+                    card_id=detected.card_id,
+                    original_filename=detected.original_filename,
                     candidate_rows=rows,
                 )
             )
