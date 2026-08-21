@@ -17,11 +17,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const account = accountCopy(locale);
 
   if (!showsAppChrome(pathname)) {
-    return <div className="h-full overflow-y-auto">{children}</div>;
+    return <div className="fixed inset-0 overflow-y-auto">{children}</div>;
   }
 
   return (
-    <div className="flex flex-col h-full max-h-full overflow-hidden">
+    <div className="fixed inset-0 flex flex-col overflow-hidden">
       <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">{children}</div>
       <TabBar
         homeHref="/home"
