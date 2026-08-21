@@ -46,6 +46,7 @@ def main() -> None:
         port=8000,
         proxy_headers=False,
         reload=reload,
+        log_level=log_level_str.lower(),
     )
 
 
