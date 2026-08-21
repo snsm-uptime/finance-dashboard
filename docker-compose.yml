@@ -63,6 +63,12 @@ services:
       # Pin tighter (ui container CIDR) if api is reachable beyond the Compose network.
       TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-172.16.0.0/12,127.0.0.1,::1}
       PDF_STORAGE_PATH: ${PDF_STORAGE_PATH:-/data/pdfs}
+      # Dev/worktree only — seeds a pre-verified account at boot (see api/scripts/seed_dev_user.py).
+      SEED_DEV_USER: ${SEED_DEV_USER:-0}
+      SEED_DEV_USER_EMAIL: ${SEED_DEV_USER_EMAIL:-}
+      SEED_DEV_USER_PASSWORD: ${SEED_DEV_USER_PASSWORD:-}
+      SEED_DEV_USER_ALIAS: ${SEED_DEV_USER_ALIAS:-}
+      SEED_DEV_USER_LISTS: ${SEED_DEV_USER_LISTS:-}
     ports:
       - "${API_HOST_PORT:-8000}:8000"
     volumes:
