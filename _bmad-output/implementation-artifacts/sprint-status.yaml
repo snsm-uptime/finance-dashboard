@@ -85,7 +85,7 @@ development_status:
   3-2-manual-expense-with-payer-adjust-split-ui: done
   3-3-shared-expenses-view-strip-receipt-list: done
   3-4-settle-up-from-shares-payer-and-line-types: done
-  3-5-materialize-fx-to-crc-bccr-for-non-crc-lines: review
+  3-5-materialize-fx-to-crc-bccr-for-non-crc-lines: done
   3-6-incomplete-disclosure-pattern-slot-only: done
   epic-3-retrospective: optional
 
@@ -112,7 +112,7 @@ development_status:
   # 4.10, 4.11, 4.13, 4.14, 4.15 replace 4.8's statement-level routing; 4.12's ACs are amended.
   # 4.8 stays `done` — it satisfied its own ACs; the defect was in the spec, not the build.
   # Old → new: 4.11→4.9, 4.12→4.10, 4.13→4.11, 4.9→4.12, 4.14→4.13, 4.15→4.14, 4.16→4.15, 4.10→4.16.
-  4-9-bac-credit-real-statement-compatibility-fix: review
+  4-9-bac-credit-real-statement-compatibility-fix: done
   4-10-row-level-review-data-model-per-row-commit: backlog
   4-11-row-level-review-api-rows-assign-delete-undo-edit: backlog
   4-12-commit-batch-dedup-summary-land-on-settle-strip: backlog
