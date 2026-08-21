@@ -85,19 +85,42 @@ def run_import_pipeline(
     chunks = adapter.split(pdf_bytes)
 
     detected: list[DetectedStatement] = []
-    for chunk in chunks:
+    for chunk_idx, chunk in enumerate(chunks):
         # Extract IBAN first (Story 4.8.1); normalize if present
         iban_raw = None
         iban_normalized = None
         if hasattr(adapter, "extract_iban"):
+            logger.debug(
+                "iban_extraction_starting chunk_idx=%d adapter=%s",
+                chunk_idx,
+                adapter.__class__.__name__,
+            )
             iban_raw = adapter.extract_iban(chunk)
+            logger.debug("iban_extraction_result chunk_idx=%d iban_raw=%r", chunk_idx, iban_raw)
             if iban_raw:
                 try:
                     iban_normalized = normalize_iban(iban_raw)
+                    logger.debug(
+                        "iban_normalization_success chunk_idx=%d iban_raw=%r iban_normalized=%r",
+                        chunk_idx,
+                        iban_raw,
+                        iban_normalized,
+                    )
                 except InvalidCardIbanError as e:
                     # IBAN normalization fails → treat as absent (AC #5, graceful degrade)
-                    logger.warning("iban_normalization_failed iban_raw=%r error=%s", iban_raw, e)
+                    logger.warning(
+                        "iban_normalization_failed chunk_idx=%d iban_raw=%r error=%s",
+                        chunk_idx,
+                        iban_raw,
+                        e,
+                    )
                     iban_normalized = None
+        else:
+            logger.debug(
+                "iban_extraction_not_available adapter=%s has_extract_iban=%s",
+                adapter.__class__.__name__,
+                hasattr(adapter, "extract_iban"),
+            )
 
         try:
             rows = adapter.parse(chunk)
@@ -603,9 +626,21 @@ class MatchStatementCardService:
         IBAN will be normalized by MatchCardByIbanService before matching.
         """
         if not command.iban:
+            logger.debug("match_statement_card_empty_iban user_id=%s", command.actor_user_id)
             return MatchStatementCardResult(matched_card=None)
 
+        logger.debug(
+            "match_statement_card_lookup_start user_id=%s iban=%r",
+            command.actor_user_id,
+            command.iban,
+        )
         matched = self._card_match_service.execute(
             MatchCardByIbanCommand(actor_user_id=command.actor_user_id, iban=command.iban)
+        )
+        logger.debug(
+            "match_statement_card_lookup_result user_id=%s iban=%r matched=%s",
+            command.actor_user_id,
+            command.iban,
+            matched.id if matched else None,
         )
         return MatchStatementCardResult(matched_card=matched)

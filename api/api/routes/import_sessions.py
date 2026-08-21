@@ -456,6 +456,11 @@ def identify_card_for_statement(
     # Note: both None (missing field) and empty string (whitespace-only normalized)
     # are treated as "no IBAN"; iban=None in response for both cases.
     if not statement.iban:
+        logger.debug(
+            "identify_card_no_iban session_id=%s statement_id=%s",
+            session_id,
+            statement_id,
+        )
         return CardIdentificationResponse(matched=False, iban=None)
 
     # Try to match IBAN to existing card
@@ -463,12 +468,24 @@ def identify_card_for_statement(
     card_match_service = MatchCardByIbanService(card_repo)
     statement_card_service = MatchStatementCardService(card_match_service)
 
+    logger.debug(
+        "identify_card_iban_found session_id=%s statement_id=%s iban=%r",
+        session_id,
+        statement_id,
+        statement.iban,
+    )
     match_result = statement_card_service.execute(
         MatchStatementCardCommand(actor_user_id=user_id, iban=statement.iban)
     )
 
     # Known card → auto-assign silently (AC #2, no prompt required)
     if match_result.matched_card is not None:
+        logger.debug(
+            "identify_card_matched session_id=%s statement_id=%s card_id=%s",
+            session_id,
+            statement_id,
+            match_result.matched_card.id,
+        )
         return CardIdentificationResponse(
             matched=True,
             card_id=match_result.matched_card.id,
@@ -477,8 +494,22 @@ def identify_card_for_statement(
         )
 
     # Unknown IBAN
+    logger.debug(
+        "identify_card_unknown_iban session_id=%s statement_id=%s iban=%r has_label=%s",
+        session_id,
+        statement_id,
+        statement.iban,
+        bool(body.label),
+    )
     if body.label:
         # AC #3: Register new card with provided label
+        logger.debug(
+            "identify_card_registering_new_card session_id=%s statement_id=%s iban=%r label=%r",
+            session_id,
+            statement_id,
+            statement.iban,
+            body.label,
+        )
         try:
             register_service = RegisterCardService(card_repo)
             new_card = register_service.execute(
@@ -541,4 +572,10 @@ def identify_card_for_statement(
             )
     else:
         # No label provided → return unknown, UI will prompt
+        logger.debug(
+            "identify_card_no_label_prompt_registration session_id=%s statement_id=%s iban=%r",
+            session_id,
+            statement_id,
+            statement.iban,
+        )
         return CardIdentificationResponse(matched=False, iban=statement.iban)

@@ -145,16 +145,24 @@ def extract_iban_from_statement(lines: list[str]) -> str | None:
     statement structure; if a future BAC version splits this across lines,
     re-parsing may be needed (see Story 4.11 for real-PDF compatibility).
     """
+    # Log all lines that might contain account info for debugging
+    for line in lines:
+        if "cuenta" in line.lower() or "iban" in line.lower():
+            _logger.debug("iban_extraction_candidate_line line=%r", line)
+
     for line in lines:
         match = _IBAN_CRC_RE.search(line)
         if match is not None:
             iban = match.group(1).strip()
+            _logger.debug("iban_crc_found iban_raw=%r", iban)
             return iban if iban else None
     for line in lines:
         match = _IBAN_USD_RE.search(line)
         if match is not None:
             iban = match.group(1).strip()
+            _logger.debug("iban_usd_found iban_raw=%r", iban)
             return iban if iban else None
+    _logger.debug("iban_extraction_not_found total_lines=%d", len(lines))
     return None
 
 
@@ -259,11 +267,14 @@ class BacCreditAdapter:
         except Exception as e:
             # If we can't read the PDF, return None gracefully
             # (parse() will fail with a proper error later)
-            _logger.debug("iban_extraction_failed pdf_read_error=%s", e)
+            _logger.debug("iban_extraction_pdf_read_error error=%s", e)
             return None
 
+        _logger.debug("iban_extraction_pdf_lines_extracted total_lines=%d", len(lines))
         stripped_lines = [raw.strip() for raw in lines if raw.strip()]
-        return extract_iban_from_statement(stripped_lines)
+        result = extract_iban_from_statement(stripped_lines)
+        _logger.debug("iban_extraction_final_result result=%r", result)
+        return result
 
     def parse(self, statement_bytes: bytes) -> list[CanonicalLine]:
         try:
