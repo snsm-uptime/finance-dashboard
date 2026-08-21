@@ -60,6 +60,9 @@ export const uploadMessages = {
     individualReviewErrorStatementNotAvailable: "This statement is no longer available.",
     individualReviewErrorFxUnavailable:
       "Currency conversion is unavailable right now. Try again later.",
+    individualReviewErrorRowNotFound: "This transaction could not be found.",
+    individualReviewErrorRowNotAvailable: "This transaction is no longer available.",
+    individualReviewErrorNothingToUndo: "There is nothing to undo.",
     // Card identification (Story 4.8.1)
     cardIdentificationTitle: "Identify card",
     cardIdentificationIban: "IBAN",
@@ -133,6 +136,9 @@ export const uploadMessages = {
     individualReviewErrorStatementNotAvailable: "Este estado de cuenta ya no está disponible.",
     individualReviewErrorFxUnavailable:
       "La conversión de moneda no está disponible ahora. Inténtalo más tarde.",
+    individualReviewErrorRowNotFound: "No se encontró esta transacción.",
+    individualReviewErrorRowNotAvailable: "Esta transacción ya no está disponible.",
+    individualReviewErrorNothingToUndo: "No hay nada que deshacer.",
     // Card identification (Story 4.8.1)
     cardIdentificationTitle: "Identificar tarjeta",
     cardIdentificationIban: "IBAN",

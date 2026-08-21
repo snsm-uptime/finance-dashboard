@@ -10,7 +10,6 @@ from decimal import Decimal
 
 from domain.errors import (
     ImportSessionDiscardedError,
-    ImportStatementNotAvailableError,
     InvalidCanonicalLineError,
     NoCleanStatementsToCommitError,
     UnsupportedFileTypeError,
@@ -45,6 +44,10 @@ ROW_STATUSES = frozenset(
     }
 )
 
+UNDO_ACTION_ASSIGN = "assign"
+UNDO_ACTION_DELETE = "delete"
+UNDO_ACTIONS = frozenset({UNDO_ACTION_ASSIGN, UNDO_ACTION_DELETE})
+
 
 def row_is_zero_amount(amount: Decimal) -> bool:
     """Exact zero only — negative payment/credit lines stay reviewable (AC #7)."""
@@ -64,6 +67,28 @@ def statement_is_fully_resolved(row_statuses: Sequence[str]) -> bool:
     """
     reviewable = [status for status in row_statuses if status != ROW_STATUS_EXCLUDED_ZERO_AMOUNT]
     return all(status != ROW_STATUS_PENDING for status in reviewable)
+
+
+def statement_has_pending_rows(row_statuses: Sequence[str]) -> bool:
+    """Mirror of `statement_is_fully_resolved`, used to re-open a statement
+    whose rows returned to pending (undo)."""
+    return any(status == ROW_STATUS_PENDING for status in row_statuses)
+
+
+def normalize_row_description(description: str) -> str:
+    """Trim and bound a user-supplied row description edit.
+
+    Description-only: amount bounds belong to `validate_bulk_candidate_row`
+    and are not in play when only the text changes.
+    """
+    trimmed = description.strip()
+    if not trimmed:
+        raise InvalidCanonicalLineError("Statement row description is empty.")
+    if len(trimmed) > DESCRIPTION_MAX_LENGTH:
+        raise InvalidCanonicalLineError(
+            f"Statement row description exceeds {DESCRIPTION_MAX_LENGTH} characters."
+        )
+    return trimmed
 
 
 def validate_pdf_upload(filename: str, content: bytes) -> None:
@@ -91,34 +116,6 @@ def validate_bulk_commit_eligible(
         raise ImportSessionDiscardedError()
     if not any(status == STATEMENT_STATUS_STAGED for status in statement_statuses):
         raise NoCleanStatementsToCommitError()
-
-
-def validate_individual_accept_eligible(
-    *, discarded_at: object | None, statement_status: str
-) -> None:
-    """Per-statement accept gate (Story 4.8, AC #6). Unlike Bulk's
-    session-wide `validate_bulk_commit_eligible`, Individual review commits
-    one statement at a time — possibly to different lists — so eligibility
-    is checked per statement, not per session. Only a `staged` (clean-parse)
-    statement is acceptable: `failed` has no comparison UI yet (Epic 5),
-    `committed`/`skipped` are already resolved.
-    """
-    if discarded_at is not None:
-        raise ImportSessionDiscardedError()
-    if statement_status != STATEMENT_STATUS_STAGED:
-        raise ImportStatementNotAvailableError()
-
-
-def validate_individual_skip_eligible(
-    *, discarded_at: object | None, statement_status: str
-) -> None:
-    """Per-statement skip gate (Story 4.8, FR-18). A `failed` statement CAN
-    be skipped — that's how review moves past it until Epic 5's comparison
-    UI exists. `committed`/already-`skipped` cannot be skipped again."""
-    if discarded_at is not None:
-        raise ImportSessionDiscardedError()
-    if statement_status not in (STATEMENT_STATUS_STAGED, STATEMENT_STATUS_FAILED):
-        raise ImportStatementNotAvailableError()
 
 
 def validate_bulk_candidate_row(*, amount: Decimal, normalized_description: str) -> None:

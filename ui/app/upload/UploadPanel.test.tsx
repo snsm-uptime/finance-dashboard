@@ -118,6 +118,7 @@ const unmatchedSession = {
   id: "s1",
   created_at: "2026-08-18T00:00:00Z",
   discarded_at: null,
+  undo: null,
   statements: [
     {
       id: "st1",
@@ -127,6 +128,8 @@ const unmatchedSession = {
       iban: "DE89370400440532013000",
       filename: "statement.pdf",
       card_id: null,
+      rows: [],
+      zero_amount_excluded_count: 0,
     },
   ],
 };

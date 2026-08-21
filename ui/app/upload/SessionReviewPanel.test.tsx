@@ -65,6 +65,7 @@ const mockSession: ImportSession = {
   id: "sess1",
   created_at: "2026-08-20T10:00:00Z",
   discarded_at: null,
+  undo: null,
   statements: [
     {
       id: "st1",
@@ -74,6 +75,8 @@ const mockSession: ImportSession = {
       iban: "DE89370400440532013000",
       filename: "statement.pdf",
       card_id: "card1",
+      rows: [],
+      zero_amount_excluded_count: 0,
     },
     {
       id: "st2",
@@ -83,6 +86,8 @@ const mockSession: ImportSession = {
       iban: "ES9121000418450200051332",
       filename: "statement2.pdf",
       card_id: null,
+      rows: [],
+      zero_amount_excluded_count: 0,
     },
   ],
 };

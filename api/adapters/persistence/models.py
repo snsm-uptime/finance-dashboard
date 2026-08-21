@@ -405,6 +405,17 @@ class ImportSessionModel(Base):
     )
     discarded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Single-level undo pointer. A plain FK column, deliberately without a
+    # relationship() — a mapped link back to ImportCandidateRowModel would
+    # close a cycle with the statements→rows cascade.
+    last_resolved_row_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("import_candidate_rows.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    last_resolved_action: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    last_resolved_prior_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
     user: Mapped[UserModel] = relationship(back_populates="import_sessions")
     statements: Mapped[list[ImportStatementModel]] = relationship(
         back_populates="session", cascade="all, delete-orphan"

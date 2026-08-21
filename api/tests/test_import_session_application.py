@@ -26,9 +26,13 @@ from application.import_session import (
     DetectedStatement,
     DiscardImportSessionCommand,
     DiscardImportSessionService,
+    EditCandidateRowCommand,
+    EditCandidateRowService,
     ImportBatchRecord,
     ImportSessionRecord,
     StagedStatementRecord,
+    UndoLastResolutionCommand,
+    UndoLastResolutionService,
     UploadStatementPdfCommand,
     UploadStatementPdfService,
     run_import_pipeline,
@@ -223,6 +227,10 @@ class _FakeImportSessionRepo:
     sessions: dict[UUID, ImportSessionRecord] = field(default_factory=dict)
     create_calls: list[dict] = field(default_factory=list)
     commit_calls: list[dict] = field(default_factory=list)
+    undo_pointer_calls: list[dict] = field(default_factory=list)
+    cleared_undo_pointers: list[UUID] = field(default_factory=list)
+    description_edits: list[dict] = field(default_factory=list)
+    undo_calls: list[UUID] = field(default_factory=list)
 
     def create_session(
         self,
@@ -323,6 +331,7 @@ class _FakeImportSessionRepo:
         list_id: UUID,
         actor_user_id: UUID,
         rows: list[CommitRow],
+        undo_row_id: UUID | None = None,
     ) -> ImportBatchRecord:
         record = self.sessions[session_id]
         targeted = {row.candidate_row_id for row in rows}
@@ -367,6 +376,7 @@ class _FakeImportSessionRepo:
                 "list_id": list_id,
                 "actor_user_id": actor_user_id,
                 "rows": rows,
+                "undo_row_id": undo_row_id,
             }
         )
         self.sessions[session_id] = ImportSessionRecord(
@@ -458,6 +468,52 @@ class _FakeImportSessionRepo:
             discarded_at=record.discarded_at,
             statements=updated_statements,
         )
+
+    def update_candidate_row_description(
+        self,
+        *,
+        session_id: UUID,
+        statement_id: UUID,
+        row_id: UUID,
+        user_id: UUID,
+        description: str,
+    ) -> ImportSessionRecord:
+        self.description_edits.append(
+            {
+                "session_id": session_id,
+                "statement_id": statement_id,
+                "row_id": row_id,
+                "user_id": user_id,
+                "description": description,
+            }
+        )
+        return self.sessions[session_id]
+
+    def set_undo_pointer(
+        self,
+        *,
+        session_id: UUID,
+        user_id: UUID,
+        row_id: UUID,
+        action: str,
+        prior_status: str,
+    ) -> None:
+        self.undo_pointer_calls.append(
+            {
+                "session_id": session_id,
+                "user_id": user_id,
+                "row_id": row_id,
+                "action": action,
+                "prior_status": prior_status,
+            }
+        )
+
+    def clear_undo_pointer(self, *, session_id: UUID, user_id: UUID) -> None:
+        self.cleared_undo_pointers.append(session_id)
+
+    def undo_last_resolution(self, *, session_id: UUID, user_id: UUID) -> ImportSessionRecord:
+        self.undo_calls.append(session_id)
+        return self.sessions[session_id]
 
     def clear_statement_pdf_paths(self, session_id: UUID, user_id: UUID) -> None:
         record = self.sessions.get(session_id)
@@ -1160,3 +1216,105 @@ def test_assign_candidate_row_uses_statement_card_id_when_command_omits_it() -> 
     draft = repo.commit_calls[0]["rows"][0].draft
     assert draft.origin_kind == ORIGIN_KIND_CARD
     assert draft.origin_card_id == card_id
+    assert repo.commit_calls[0]["undo_row_id"] == target.id
+
+
+def test_undo_unknown_session_not_found_before_repo_call() -> None:
+    repo = _FakeImportSessionRepo()
+    with pytest.raises(ImportSessionNotFoundError):
+        UndoLastResolutionService(repo).execute(
+            UndoLastResolutionCommand(actor_user_id=uuid4(), session_id=uuid4())
+        )
+    assert repo.undo_calls == []
+
+
+def test_undo_discarded_session_rejected_before_repo_call() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    actor = uuid4()
+    session_id = _multi_statement_session(repo, storage, user_id=actor, parse_results=[[_row()]])
+    DiscardImportSessionService(repo, storage).execute(
+        DiscardImportSessionCommand(actor_user_id=actor, session_id=session_id)
+    )
+
+    with pytest.raises(ImportSessionDiscardedError):
+        UndoLastResolutionService(repo).execute(
+            UndoLastResolutionCommand(actor_user_id=actor, session_id=session_id)
+        )
+    assert repo.undo_calls == []
+
+
+def test_edit_candidate_row_discarded_session_rejected_before_repo_call() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    actor = uuid4()
+    session_id = _multi_statement_session(repo, storage, user_id=actor, parse_results=[[_row()]])
+    row_id = repo.get_session(session_id, actor).statements[0].candidate_rows[0].id
+    DiscardImportSessionService(repo, storage).execute(
+        DiscardImportSessionCommand(actor_user_id=actor, session_id=session_id)
+    )
+
+    with pytest.raises(ImportSessionDiscardedError):
+        EditCandidateRowService(repo).execute(
+            EditCandidateRowCommand(
+                actor_user_id=actor,
+                session_id=session_id,
+                row_id=row_id,
+                description="Coffee",
+            )
+        )
+    assert repo.description_edits == []
+
+
+def test_edit_candidate_row_unknown_id_not_found() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    actor = uuid4()
+    session_id = _multi_statement_session(repo, storage, user_id=actor, parse_results=[[_row()]])
+
+    with pytest.raises(ImportRowNotFoundError):
+        EditCandidateRowService(repo).execute(
+            EditCandidateRowCommand(
+                actor_user_id=actor,
+                session_id=session_id,
+                row_id=uuid4(),
+                description="Coffee",
+            )
+        )
+    assert repo.description_edits == []
+
+
+def test_edit_candidate_row_blank_description_rejected() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    actor = uuid4()
+    session_id = _multi_statement_session(repo, storage, user_id=actor, parse_results=[[_row()]])
+    row_id = repo.get_session(session_id, actor).statements[0].candidate_rows[0].id
+
+    with pytest.raises(InvalidCanonicalLineError):
+        EditCandidateRowService(repo).execute(
+            EditCandidateRowCommand(
+                actor_user_id=actor,
+                session_id=session_id,
+                row_id=row_id,
+                description="   ",
+            )
+        )
+    assert repo.description_edits == []
+
+
+def test_bulk_assign_clears_undo_pointer() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    lookup = _FakeListLookup()
+    actor = uuid4()
+    list_id = uuid4()
+    lookup.add_member(list_id, owner_id=actor, user_id=actor)
+    session_id = _direct_session(repo, user_id=actor, statements=[_staged(_row("r1"))])
+
+    AssignBulkImportService(repo, lookup, _FakeFxService(), storage).execute(
+        AssignBulkImportCommand(actor_user_id=actor, session_id=session_id, list_id=list_id)
+    )
+
+    assert repo.cleared_undo_pointers == [session_id]
+    assert repo.commit_calls[0]["undo_row_id"] is None

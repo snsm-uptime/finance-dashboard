@@ -23,16 +23,16 @@ vi.mock("@/app/lists/listsClient", async () => {
 });
 
 const fetchImportSession = vi.fn();
-const commitIndividualStatement = vi.fn();
-const skipStatement = vi.fn();
+const assignRow = vi.fn();
+const deleteRow = vi.fn();
 const discardSession = vi.fn();
 vi.mock("../../uploadClient", async () => {
   const actual = await vi.importActual<typeof import("../../uploadClient")>("../../uploadClient");
   return {
     ...actual,
     fetchImportSession: (...args: unknown[]) => fetchImportSession(...args),
-    commitIndividualStatement: (...args: unknown[]) => commitIndividualStatement(...args),
-    skipStatement: (...args: unknown[]) => skipStatement(...args),
+    assignRow: (...args: unknown[]) => assignRow(...args),
+    deleteRow: (...args: unknown[]) => deleteRow(...args),
     discardSession: (...args: unknown[]) => discardSession(...args),
   };
 });
@@ -69,8 +69,29 @@ const SESSION_ONE_STAGED = {
   id: "s1",
   created_at: "2026-08-19T00:00:00Z",
   discarded_at: null,
+  undo: null,
   statements: [
-    { id: "st1", product_id: "bac_credit", status: "staged" as const, candidate_row_count: 3 },
+    {
+      id: "st1",
+      product_id: "bac_credit",
+      status: "staged" as const,
+      candidate_row_count: 3,
+      iban: null,
+      filename: null,
+      card_id: null,
+      zero_amount_excluded_count: 0,
+      rows: [
+        {
+          id: "r1",
+          sequence: 1,
+          description: "Coffee",
+          amount: "10.00",
+          currency: "CRC",
+          posted_date: "2026-01-01",
+          status: "pending" as const,
+        },
+      ],
+    },
   ],
 };
 
@@ -111,8 +132,8 @@ describe("IndividualReviewPanel", () => {
     push.mockReset();
     fetchLists.mockReset();
     fetchImportSession.mockReset();
-    commitIndividualStatement.mockReset();
-    skipStatement.mockReset();
+    assignRow.mockReset();
+    deleteRow.mockReset();
     discardSession.mockReset();
     capturedDragHandler = undefined;
     container = document.createElement("div");
@@ -151,7 +172,7 @@ describe("IndividualReviewPanel", () => {
     const acceptButtonAfterPick = selectByText(container, "Accept to Groceries");
     expect(acceptButtonAfterPick.disabled).toBe(false);
 
-    commitIndividualStatement.mockResolvedValue({
+    assignRow.mockResolvedValue({
       ok: true,
       session: { ...SESSION_ONE_STAGED, statements: [] },
     });
@@ -164,11 +185,10 @@ describe("IndividualReviewPanel", () => {
       await Promise.resolve();
     });
 
-    expect(commitIndividualStatement).toHaveBeenCalledWith(
+    expect(assignRow).toHaveBeenCalledWith(
       "s1",
-      "st1",
+      "r1",
       "l1",
-      undefined,
       expect.anything(),
     );
   });
@@ -180,7 +200,7 @@ describe("IndividualReviewPanel", () => {
       lists: [{ id: "l2", name: "Household", owner_id: "u1", role: "member" }],
     });
     stubAuthMeFetch("l2");
-    commitIndividualStatement.mockResolvedValue({
+    assignRow.mockResolvedValue({
       ok: true,
       session: {
         ...SESSION_ONE_STAGED,
@@ -208,11 +228,10 @@ describe("IndividualReviewPanel", () => {
       await Promise.resolve();
     });
 
-    expect(commitIndividualStatement).toHaveBeenCalledWith(
+    expect(assignRow).toHaveBeenCalledWith(
       "s1",
-      "st1",
+      "r1",
       "l2",
-      undefined,
       expect.anything(),
     );
   });
@@ -221,7 +240,7 @@ describe("IndividualReviewPanel", () => {
     fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_STAGED });
     fetchLists.mockResolvedValue({ ok: true, lists: [] });
     stubAuthMeFetch(null);
-    skipStatement.mockResolvedValue({
+    deleteRow.mockResolvedValue({
       ok: true,
       session: {
         ...SESSION_ONE_STAGED,
@@ -245,8 +264,8 @@ describe("IndividualReviewPanel", () => {
       await Promise.resolve();
     });
 
-    expect(skipStatement).toHaveBeenCalledWith("s1", "st1", expect.anything());
-    expect(commitIndividualStatement).not.toHaveBeenCalled();
+    expect(deleteRow).toHaveBeenCalledWith("s1", "r1", expect.anything());
+    expect(assignRow).not.toHaveBeenCalled();
   });
 
   it("Accept is disabled for a failed statement — only Skip/Dismiss are usable", async () => {
@@ -331,7 +350,7 @@ describe("IndividualReviewPanel", () => {
     await openAndChoose(container, "Groceries");
     const acceptButton = selectByText(container, "Accept to Groceries");
 
-    commitIndividualStatement.mockResolvedValue({
+    assignRow.mockResolvedValue({
       ok: true,
       session: { ...SESSION_ONE_STAGED, statements: [] },
     });
@@ -356,8 +375,8 @@ describe("IndividualReviewPanel", () => {
       lists: [{ id: "l1", name: "Groceries", owner_id: "u1", role: "owner" }],
     });
     stubAuthMeFetch("l2");
-    commitIndividualStatement.mockResolvedValue({ ok: true, session: SESSION_ONE_STAGED });
-    skipStatement.mockResolvedValue({ ok: true, session: SESSION_ONE_STAGED });
+    assignRow.mockResolvedValue({ ok: true, session: SESSION_ONE_STAGED });
+    deleteRow.mockResolvedValue({ ok: true, session: SESSION_ONE_STAGED });
 
     await act(async () => {
       root.render(<IndividualReviewPanel sessionId="s1" />);
@@ -375,8 +394,8 @@ describe("IndividualReviewPanel", () => {
     await act(async () => {
       capturedDragHandler!({ last: true, movement: [10, 10], velocity: [1, 1], direction: [1, 0] });
     });
-    expect(commitIndividualStatement).not.toHaveBeenCalled();
-    expect(skipStatement).not.toHaveBeenCalled();
+    expect(assignRow).not.toHaveBeenCalled();
+    expect(deleteRow).not.toHaveBeenCalled();
 
     // Swipe right past the threshold: accept to the chosen list.
     await act(async () => {
@@ -385,11 +404,10 @@ describe("IndividualReviewPanel", () => {
     await act(async () => {
       await Promise.resolve();
     });
-    expect(commitIndividualStatement).toHaveBeenCalledWith(
+    expect(assignRow).toHaveBeenCalledWith(
       "s1",
-      "st1",
+      "r1",
       "l1",
-      undefined,
       expect.anything(),
     );
 
@@ -400,11 +418,10 @@ describe("IndividualReviewPanel", () => {
     await act(async () => {
       await Promise.resolve();
     });
-    expect(commitIndividualStatement).toHaveBeenCalledWith(
+    expect(assignRow).toHaveBeenCalledWith(
       "s1",
-      "st1",
+      "r1",
       "l2",
-      undefined,
       expect.anything(),
     );
 
@@ -415,6 +432,6 @@ describe("IndividualReviewPanel", () => {
     await act(async () => {
       await Promise.resolve();
     });
-    expect(skipStatement).toHaveBeenCalledWith("s1", "st1", expect.anything());
+    expect(deleteRow).toHaveBeenCalledWith("s1", "r1", expect.anything());
   });
 });

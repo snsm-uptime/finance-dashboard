@@ -11,6 +11,27 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class CandidateRowResponse(BaseModel):
+    """One reviewable transaction on the wire.
+
+    amount is a string and posted_date an ISO calendar-date string — money
+    never crosses the JSON boundary as a number (AD-5).
+    """
+
+    id: UUID
+    sequence: int
+    description: str
+    amount: str
+    currency: str
+    posted_date: str
+    status: str
+
+
+class UndoPointerResponse(BaseModel):
+    row_id: UUID
+    action: str
+
+
 class StagedStatementResponse(BaseModel):
     id: UUID
     product_id: str
@@ -19,6 +40,8 @@ class StagedStatementResponse(BaseModel):
     iban: str | None = None  # Story 4.8.1: IBAN for card identification
     filename: str | None = None  # Story 4.8.2: original uploaded filename
     card_id: UUID | None = None  # Story 4.8.3: identified card (if IBAN matched)
+    rows: list[CandidateRowResponse] = Field(default_factory=list)
+    zero_amount_excluded_count: int = 0
 
 
 class ImportSessionResponse(BaseModel):
@@ -26,15 +49,20 @@ class ImportSessionResponse(BaseModel):
     created_at: datetime
     discarded_at: datetime | None = None
     statements: list[StagedStatementResponse] = Field(default_factory=list)
+    undo: UndoPointerResponse | None = None
 
 
 class BulkCommitBody(BaseModel):
     list_id: UUID
 
 
-class IndividualCommitBody(BaseModel):
+class AssignRowBody(BaseModel):
     list_id: UUID
     card_id: UUID | None = None  # Story 4.8.1: optional card ID for origin assignment
+
+
+class EditRowBody(BaseModel):
+    description: str
 
 
 class ImportBatchResponse(BaseModel):

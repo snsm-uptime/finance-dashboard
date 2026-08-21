@@ -297,7 +297,9 @@ Users register cards by IBAN, set optional manual-expense origin (card / Cash / 
 **Sequencing note:** Do not start Epic 4 until Epic 3.5 demo gate passes.
 **Scope change (2026-08-20):** Stories 4.10, 4.11, 4.13, 4.14 and 4.15 replace Story 4.8's statement-level individual review with per-transaction routing; Story 4.12's ACs are amended by the same change. FR-17, FR-18, AD-4 and AD-9 are amended by Sprint Change Proposal 2026-08-20; 4.8 stays `done` and is annotated as superseded. AD-4's batch boundary must be amended before 4.10 starts.
 
-**Build order = numeric order:** 4.9 → 4.10 → 4.11 → 4.12 → 4.13 → 4.14. Story 4.15 parallelizes any time after 4.11; Story 4.16 is independent of review granularity and can run at any point.
+**Scope change (2026-08-21):** Story **4.13.1** (ImportReviewSheet) is inserted after 4.13 and before 4.14. Last pending assign/delete opens a grouped-by-list sheet (per-row discard, one Save at the bottom); the session is not finalized and the PDF is not released until Save. FR-18, AD-3, AD-4, and Stories 4.12–4.14 are amended by Sprint Change Proposal 2026-08-21. Stories 4.14–4.16 keep their numbers.
+
+**Build order = numeric order:** 4.9 → 4.10 → 4.11 → 4.12 → 4.13 → 4.13.1 → 4.14. Story 4.15 parallelizes any time after 4.11; Story 4.16 is independent of review granularity and can run at any point.
 
 **Renumbered 2026-08-20** so numeric order matches build order. Stories 4.1–4.8 were untouched. Story files and `sprint-status.yaml` keys were renamed to match; **completed story files (4.1–4.8) were deliberately left as written**, so a "Story 4.9" reference inside one of them means what is now 4.12, and a range like "Stories 4.4–4.9" describes the original import pipeline. Decode with this table:
 
@@ -308,6 +310,7 @@ Users register cards by IBAN, set optional manual-expense origin (card / Cash / 
 | 4.13 | **4.11** | Row-level review API |
 | 4.9 | **4.12** | Commit batch, dedup summary, land on settle strip |
 | 4.14 | **4.13** | Individual review card |
+| — | **4.13.1** | ImportReviewSheet — grouped validation, discard, save *(added 2026-08-21; not a 2026-08-20 rename)* |
 | 4.15 | **4.14** | Resume entry point + completion summary |
 | 4.16 | **4.15** | "New" badge on freshly imported rows |
 | 4.10 | **4.16** | Multi-file upload |
@@ -1327,14 +1330,17 @@ So that I see the number I came to update (J1 climax).
 **And** imported-new and skipped-duplicate counts are exposed for the completion summary, which Story 4.14 renders (FR-20, UX-DR22)
 
 **Given** the session completes (no Epic 5 conflicts yet)
-**When** the review queue is exhausted
+**When** the review queue is exhausted — pending rows are gone **and** the user has Saved on ImportReviewSheet (Story 4.13.1)
 **Then** I land on shared-expenses for the list that received the most rows this session — the completion summary itself is Story 4.14's surface, not this story's
+**And** an empty pending queue **without** Save does not land and does not delete the PDF
+**And** Bulk review (Story 4.7) is unchanged: no sheet; existing bulk commit may still idle-release as today
 **And** the Soft-Ledger settle strip reflects the new committed purchases — same strip as Epic 3, no parallel settle UI
 **And** when Epic 5 same-price conflicts exist, Story 5.7 inserts conflict review after this summary and before Soft-Ledger land — do not land on a confident strip then interrupt (UX-DR22)
 
 **Given** a statement parsed correctly and committed with no unresolved quarantine
-**When** the Import Batch commit succeeds
+**When** the session is **finalized** (ImportReviewSheet Save for individual review, or bulk commit for Bulk)
 **Then** the statement PDF file is deleted from the operator volume and its Postgres path reference is cleared (AD-3) — ledger rows in SQL are the durable record
+**And** last pending assign/delete is not finalization
 **And** clean PDF delete is skipped if the statement is incomplete or still has unresolved quarantine (Epic 5 Stories 5.2–5.3 own retain-until-resolved)
 
 **And** same-price / quarantine flows are out of scope for this story (Epic 5); Epic 5 retains the PDF while quarantine needs it, then clears when resolved
@@ -1388,6 +1394,43 @@ So that routing each transaction is deliberate but fast.
 **When** the PATCH returns import_row_not_available
 **Then** the card refreshes from the next GET rather than showing a stale edit
 
+**Given** I assign or delete the last pending row
+**When** that action succeeds
+**Then** I am taken to ImportReviewSheet (Story 4.13.1) — not the 4.14 completion summary and not a “session complete” empty state
+**And** this story does not implement the sheet; 4.13.1 owns that surface
+**And** undo on the last card still applies **before** the sheet if the card’s down/undo fires; once the sheet is showing, last-card undo is not this story’s job
+
+### Story 4.13.1: ImportReviewSheet — grouped validation, discard, save
+
+As a user who just routed every pending transaction,
+I want a sheet of those items grouped by destination list, with Save or per-row discard,
+So that I can confirm placements before the session is finalized and the source PDF is released.
+
+**Acceptance Criteria:**
+
+**Given** individual review has no remaining pending rows
+**When** the last assign or delete succeeds
+**Then** ImportReviewSheet opens; the source PDF is **not** deleted yet
+**And** items are grouped by the list they were assigned to (deleted/excluded rows are not in those groups)
+
+**Given** the sheet is open
+**When** it renders
+**Then** there is **exactly one Save** control, at the **bottom** of the sheet
+**And** each assigned row has its **own discard** control — there is no bulk/sheet-level discard
+
+**Given** I Save (bottom button)
+**Then** the session is finalized: AD-3 PDF delete + path clear may run (Story 4.12 rules: clean, no unresolved quarantine), and the 4.14 completion summary / 4.12 landing proceed
+**And** Save is always present; an empty pending queue does not skip the sheet
+
+**Given** I discard **a single row**
+**Then** that row returns to `pending` and its ledger row is reversed (same hard-delete as undo-assign)
+**And** if any pending rows remain, Story 4.13 resumes on those rows in original `sequence`; if the pending queue is empty again, the sheet opens again
+**And** the loop continues until Save
+
+**Given** I leave mid-sheet
+**When** I return
+**Then** resume opens the sheet (zero pending + not Saved still counts as active)
+
 ### Story 4.14: Resume entry point + session completion summary
 
 As a user who closed the app mid-review,
@@ -1398,7 +1441,7 @@ So that a long review survives interruption and never leaves a half-reviewed ses
 
 **Given** GET /import/sessions/active
 **When** called
-**Then** it returns the caller's most recent non-discarded session holding at least one pending row, or null
+**Then** it returns the caller's most recent non-discarded **not-finalized** session — one that still has pending rows **or** has zero pending rows but has not been Saved on ImportReviewSheet — or null
 
 **Given** the upload page
 **When** it loads
@@ -1413,15 +1456,21 @@ So that a long review survives interruption and never leaves a half-reviewed ses
 **Then** only Resume review and Discard are offered — no Bulk path and no new upload
 **And** Resume deep-links to /upload/review/{sessionId}, which picks up at the first pending row by sequence with the undo pointer intact
 
+**Given** an active session with zero pending rows that has not been Saved (ImportReviewSheet waiting)
+**When** the upload page renders
+**Then** only Resume review and Discard are offered — no Bulk path and no new upload
+**And** Resume opens ImportReviewSheet, not the completion summary and not an empty upload state
+
 **Given** a partially reviewed session
 **When** I discard it
 **Then** already-committed ledger rows are retained — only the remaining pending rows are abandoned and the source PDF is released via the existing _release_source_pdf_if_idle path
 **And** the confirmation copy states this explicitly, because "discard" otherwise reads as "undo everything"
 
-**Given** the review queue is exhausted
-**When** the session completes
+**Given** the user Saves on ImportReviewSheet (Story 4.13.1)
+**When** the session is finalized
 **Then** a summary reports rows committed by destination list, rows deleted, zero-amount rows excluded across all statements, statements that failed to parse, and the imported-new / skipped-duplicate counts Story 4.12 exposes — the failed-statement report replaces Story 4.8's per-statement skip card (FR-18)
 **And** this story owns the completion summary surface; Story 4.12 owns commit correctness and the post-summary landing
+**And** the summary does **not** run when the pending queue first hits zero without Save
 
 ### Story 4.15: "New" badge on freshly imported rows
 
