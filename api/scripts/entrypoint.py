@@ -17,8 +17,10 @@ def _env_truthy(name: str) -> bool:
 
 
 def main() -> None:
+    log_level_str = os.environ.get("LOG_LEVEL", "INFO").upper()
+    log_level = getattr(logging, log_level_str, logging.INFO)
     logging.basicConfig(
-        level=logging.INFO,
+        level=log_level,
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
     )
     logger.info("Running Alembic migrations")
