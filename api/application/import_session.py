@@ -10,7 +10,7 @@ module implements.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from typing import Protocol
 from uuid import UUID, uuid4
@@ -310,6 +310,7 @@ class UploadStatementPdfService:
             )
 
             # Story 4.8.3: Identify cards for all statements at upload time
+            detected_with_cards = []
             for statement in detected:
                 if statement.iban:
                     matched_card = self._card_match_service.execute(
@@ -318,7 +319,7 @@ class UploadStatementPdfService:
                         )
                     )
                     if matched_card:
-                        statement.card_id = matched_card.id
+                        statement = replace(statement, card_id=matched_card.id)
                         logger.debug(
                             "upload_statement_card_identified session_filename=%s iban=%r card_id=%s",
                             command.filename,
@@ -331,12 +332,13 @@ class UploadStatementPdfService:
                             command.filename,
                             statement.iban,
                         )
+                detected_with_cards.append(statement)
 
-            pdf_paths = {index: whole_pdf_path for index in range(len(detected))}
+            pdf_paths = {index: whole_pdf_path for index in range(len(detected_with_cards))}
             return self._session_repo.create_session(
                 session_id=uuid4(),
                 user_id=command.actor_user_id,
-                statements=detected,
+                statements=detected_with_cards,
                 pdf_paths=pdf_paths,
             )
         except Exception:
