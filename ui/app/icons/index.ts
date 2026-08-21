@@ -9,5 +9,6 @@ export { EyeIcon } from "./EyeIcon";
 export { CopyIcon } from "./CopyIcon";
 export { HomeIcon } from "./HomeIcon";
 export { UploadIcon } from "./UploadIcon";
+export { FileIcon } from "./FileIcon";
 export { UserIcon } from "./UserIcon";
 

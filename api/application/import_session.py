@@ -10,7 +10,7 @@ module implements.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from typing import Protocol
 from uuid import UUID, uuid4
@@ -26,7 +26,7 @@ from domain.errors import (
     InvalidCanonicalLineError,
     InvalidCardIbanError,
 )
-from domain.expenses import ManualExpenseDraft
+from domain.expenses import ORIGIN_KIND_CARD, ManualExpenseDraft
 from domain.import_session import (
     ROW_STATUS_EXCLUDED_ZERO_AMOUNT,
     ROW_STATUS_PENDING,
@@ -35,6 +35,8 @@ from domain.import_session import (
     session_needs_source_pdf,
     validate_bulk_candidate_row,
     validate_bulk_commit_eligible,
+    validate_individual_accept_eligible,
+    validate_individual_skip_eligible,
     validate_pdf_upload,
 )
 
@@ -61,12 +63,17 @@ class DetectedStatement:
 
     iban is extracted from the statement header during parse (Story 4.8.1);
     normalized but not validated for checksum (FR-37, AD-20).
+
+    card_id is populated during upload if IBAN matches a registered card
+    (moved from individual review to upload stage for Story 4.8.3).
     """
 
     product_id: str
     status: str
     candidate_rows: list[CanonicalLine]
     iban: str | None = None
+    card_id: UUID | None = None  # Story 4.8.3: card identification at upload time
+    original_filename: str | None = None
 
 
 def run_import_pipeline(
@@ -88,19 +95,42 @@ def run_import_pipeline(
     chunks = adapter.split(pdf_bytes)
 
     detected: list[DetectedStatement] = []
-    for chunk in chunks:
+    for chunk_idx, chunk in enumerate(chunks):
         # Extract IBAN first (Story 4.8.1); normalize if present
         iban_raw = None
         iban_normalized = None
         if hasattr(adapter, "extract_iban"):
+            logger.debug(
+                "iban_extraction_starting chunk_idx=%d adapter=%s",
+                chunk_idx,
+                adapter.__class__.__name__,
+            )
             iban_raw = adapter.extract_iban(chunk)
+            logger.debug("iban_extraction_result chunk_idx=%d iban_raw=%r", chunk_idx, iban_raw)
             if iban_raw:
                 try:
                     iban_normalized = normalize_iban(iban_raw)
+                    logger.debug(
+                        "iban_normalization_success chunk_idx=%d iban_raw=%r iban_normalized=%r",
+                        chunk_idx,
+                        iban_raw,
+                        iban_normalized,
+                    )
                 except InvalidCardIbanError as e:
                     # IBAN normalization fails → treat as absent (AC #5, graceful degrade)
-                    logger.warning("iban_normalization_failed iban_raw=%r error=%s", iban_raw, e)
+                    logger.warning(
+                        "iban_normalization_failed chunk_idx=%d iban_raw=%r error=%s",
+                        chunk_idx,
+                        iban_raw,
+                        e,
+                    )
                     iban_normalized = None
+        else:
+            logger.debug(
+                "iban_extraction_not_available adapter=%s has_extract_iban=%s",
+                adapter.__class__.__name__,
+                hasattr(adapter, "extract_iban"),
+            )
 
         try:
             rows = adapter.parse(chunk)
@@ -136,7 +166,14 @@ class StagedStatementRecord:
     drafts from the same fetched record without a second round-trip.
 
     `iban` (Story 4.8.1) is statement-level metadata extracted from the PDF
-    header, used for card identification at review-start."""
+    header, used for card identification at review-start.
+
+    `card_id` (Story 4.8.3) is populated during upload if IBAN matches a
+    registered card, making card context available to both bulk and
+    individual review flows.
+
+    `original_filename` is the client-supplied upload name (display only —
+    never used as a storage path)."""
 
     id: UUID
     session_id: UUID
@@ -145,6 +182,8 @@ class StagedStatementRecord:
     candidate_row_count: int
     pdf_path: str | None
     iban: str | None = None
+    card_id: UUID | None = None  # Story 4.8.3: identified at upload time
+    original_filename: str | None = None
     candidate_rows: list[CandidateRowRecord] = field(default_factory=list)
 
 
@@ -209,6 +248,12 @@ class ImportSessionRepository(Protocol):
         """Set discarded_at. Idempotent — calling twice does not error."""
         ...
 
+    def set_statement_card_id(
+        self, *, session_id: UUID, user_id: UUID, statement_id: UUID, card_id: UUID
+    ) -> None:
+        """Persist an identified/registered card on a statement in this session."""
+        ...
+
     def commit_statement_batch(
         self,
         *,
@@ -234,6 +279,14 @@ class ImportSessionRepository(Protocol):
         not pending."""
         ...
 
+    def skip_statement(
+        self, *, session_id: UUID, statement_id: UUID, user_id: UUID
+    ) -> ImportSessionRecord:
+        """Guarded staged|failed→skipped UPDATE on the targeted statement.
+        No ledger writes. Raises ImportStatementNotAvailableError when the
+        statement is already committed or skipped (Story 4.8, FR-18)."""
+        ...
+
     def clear_statement_pdf_paths(self, session_id: UUID, user_id: UUID) -> None:
         """Null out path references after the source PDF has been deleted (AD-3)."""
         ...
@@ -247,17 +300,23 @@ class UploadStatementPdfCommand:
 
 
 class UploadStatementPdfService:
-    """Validate → store → run the pipeline → persist the Import Session (AC #1/#2/#3)."""
+    """Validate → store → run the pipeline → identify cards → persist the Import Session.
+
+    Story 4.8.3: Card identification moved to upload time so both bulk and
+    individual review flows can use pre-identified cards.
+    """
 
     def __init__(
         self,
         pdf_storage: PdfStorage,
         adapters: list[BankAdapter],
         session_repo: ImportSessionRepository,
+        card_match_service: MatchCardByIbanService,
     ) -> None:
         self._pdf_storage = pdf_storage
         self._adapters = adapters
         self._session_repo = session_repo
+        self._card_match_service = card_match_service
 
     def execute(self, command: UploadStatementPdfCommand) -> ImportSessionRecord:
         validate_pdf_upload(command.filename, command.content)
@@ -270,11 +329,45 @@ class UploadStatementPdfService:
             detected = run_import_pipeline(
                 command.content, filename=command.filename, adapters=self._adapters
             )
-            pdf_paths = {index: whole_pdf_path for index in range(len(detected))}
+
+            # Story 4.8.3: Identify cards for all statements at upload time
+            detected_with_cards = []
+            for statement in detected:
+                card_id = statement.card_id
+                if statement.iban:
+                    matched_card = self._card_match_service.execute(
+                        MatchCardByIbanCommand(
+                            actor_user_id=command.actor_user_id, iban=statement.iban
+                        )
+                    )
+                    if matched_card:
+                        card_id = matched_card.id
+                        logger.debug(
+                            "upload_statement_card_identified session_filename=%s "
+                            "iban=%r card_id=%s",
+                            command.filename,
+                            statement.iban,
+                            matched_card.id,
+                        )
+                    else:
+                        logger.debug(
+                            "upload_statement_card_unknown session_filename=%s iban=%r",
+                            command.filename,
+                            statement.iban,
+                        )
+                detected_with_cards.append(
+                    replace(
+                        statement,
+                        card_id=card_id,
+                        original_filename=command.filename,
+                    )
+                )
+
+            pdf_paths = {index: whole_pdf_path for index in range(len(detected_with_cards))}
             return self._session_repo.create_session(
                 session_id=uuid4(),
                 user_id=command.actor_user_id,
-                statements=detected,
+                statements=detected_with_cards,
                 pdf_paths=pdf_paths,
             )
         except Exception:
@@ -377,13 +470,11 @@ class AssignBulkImportService:
         self._pdf_storage = pdf_storage
 
     def execute(self, command: AssignBulkImportCommand) -> AssignBulkImportResult:
-        # AC #1 assumes Bulk only ever sees review-routed cards, but no card
-        # / routing_mode linkage exists on a statement yet (Stories 4.4/4.6's
-        # territory, per this story's Prerequisites gap) — there is nothing
-        # to check here today. `test_staged_statement_record_has_no_unchecked_
-        # card_routing_field` in test_import_session_application.py fails
-        # loud if that linkage lands without a routing_mode gate being added
-        # here — do not remove this comment or that test until it is.
+        # statement.card_id is origin for committed ledger rows (Story 4.8.1
+        # stamp; restored after 4.8.3 moved identification to upload). It is
+        # not a routing_mode gate — Bulk still does not check review vs fixed
+        # routing. test_staged_statement_record_has_no_unchecked_routing_mode_field
+        # fails loud if routing_mode lands on a statement record without a gate.
         session = self._session_repo.get_session(command.session_id, command.actor_user_id)
         if session is None:
             raise ImportSessionNotFoundError()
@@ -413,6 +504,7 @@ class AssignBulkImportService:
             if any(candidate.status != ROW_STATUS_PENDING for candidate in non_excluded):
                 raise ImportRowNotAvailableError()
             rows: list[CommitRow] = []
+            card_id = statement.card_id
             for candidate in non_excluded:
                 line = candidate.line
                 validate_bulk_candidate_row(
@@ -428,6 +520,8 @@ class AssignBulkImportService:
                     line_type=line.line_type,
                     posted_date=line.posted_date,
                     external_ref=line.external_ref,
+                    origin_kind=ORIGIN_KIND_CARD if card_id else None,
+                    origin_card_id=card_id,
                 )
                 fx = self._fx_service.materialize_fx_for_entry(
                     amount=draft.amount,
@@ -480,11 +574,141 @@ def _find_candidate_row(
 
 
 @dataclass(frozen=True, slots=True)
+class AssignIndividualImportCommand:
+    actor_user_id: UUID
+    session_id: UUID
+    statement_id: UUID
+    list_id: UUID
+    card_id: UUID | None = None  # Story 4.8.1: optional card ID for origin assignment
+
+
+class AssignIndividualImportService:
+    """Individual review accept (Story 4.8, AC #1/#2/#3): commits exactly
+    one statement to one list — the same `commit_statement_batch` port
+    Story 4.7's Bulk service already calls in a loop, called here once.
+    Serves both the "chosen list" and "configurable default list" outcomes
+    identically — the caller decides which `list_id` to send.
+    """
+
+    def __init__(
+        self,
+        session_repo: ImportSessionRepository,
+        list_lookup: ListAccessLookup,
+        fx_service: MaterializeFxService,
+        pdf_storage: PdfStorage,
+    ) -> None:
+        self._session_repo = session_repo
+        self._list_lookup = list_lookup
+        self._fx_service = fx_service
+        self._pdf_storage = pdf_storage
+
+    def execute(self, command: AssignIndividualImportCommand) -> ImportBatchRecord:
+        session = self._session_repo.get_session(command.session_id, command.actor_user_id)
+        if session is None:
+            raise ImportSessionNotFoundError()
+
+        statement = _find_statement(session, command.statement_id)
+
+        AuthorizeListAccessService(self._list_lookup).execute(
+            AuthorizeListAccessCommand(
+                acting_user_id=command.actor_user_id,
+                list_id=command.list_id,
+                action="import_to_list",
+            )
+        )
+
+        validate_individual_accept_eligible(
+            discarded_at=session.discarded_at, statement_status=statement.status
+        )
+
+        rows: list[CommitRow] = []
+        for candidate in statement.candidate_rows:
+            validate_bulk_candidate_row(
+                amount=candidate.amount, normalized_description=candidate.normalized_description
+            )
+            draft = ManualExpenseDraft(
+                amount=candidate.amount,
+                currency=candidate.currency,
+                normalized_description=candidate.normalized_description,
+                payer_id=command.actor_user_id,
+                provenance=candidate.provenance,
+                line_type=candidate.line_type,
+                posted_date=candidate.posted_date,
+                external_ref=candidate.external_ref,
+                origin_kind=ORIGIN_KIND_CARD if command.card_id else None,
+                origin_card_id=command.card_id,
+            )
+            fx = self._fx_service.materialize_fx_for_entry(
+                amount=draft.amount,
+                currency=draft.currency,
+                posted_date=date.fromisoformat(draft.posted_date),
+            )
+            rows.append(CommitRow(candidate_row_id=candidate.id, draft=draft, fx=fx))
+
+        batch = self._session_repo.commit_statement_batch(
+            batch_id=uuid4(),
+            session_id=command.session_id,
+            statement_id=statement.id,
+            list_id=command.list_id,
+            actor_user_id=command.actor_user_id,
+            rows=rows,
+        )
+        updated = self._session_repo.get_session(command.session_id, command.actor_user_id)
+        if updated is not None:
+            _release_source_pdf_if_idle(
+                session=updated,
+                session_repo=self._session_repo,
+                pdf_storage=self._pdf_storage,
+            )
+        return batch
+
+
+@dataclass(frozen=True, slots=True)
+class SkipStatementCommand:
+    actor_user_id: UUID
+    session_id: UUID
+    statement_id: UUID
+
+
+class SkipStatementService:
+    """Individual review skip (Story 4.8, AC #5, FR-18): no ledger rows —
+    only flips the targeted statement's own status."""
+
+    def __init__(self, session_repo: ImportSessionRepository, pdf_storage: PdfStorage) -> None:
+        self._session_repo = session_repo
+        self._pdf_storage = pdf_storage
+
+    def execute(self, command: SkipStatementCommand) -> ImportSessionRecord:
+        session = self._session_repo.get_session(command.session_id, command.actor_user_id)
+        if session is None:
+            raise ImportSessionNotFoundError()
+
+        statement = _find_statement(session, command.statement_id)
+
+        validate_individual_skip_eligible(
+            discarded_at=session.discarded_at, statement_status=statement.status
+        )
+
+        updated = self._session_repo.skip_statement(
+            session_id=command.session_id,
+            statement_id=command.statement_id,
+            user_id=command.actor_user_id,
+        )
+        _release_source_pdf_if_idle(
+            session=updated,
+            session_repo=self._session_repo,
+            pdf_storage=self._pdf_storage,
+        )
+        return updated
+
+
+@dataclass(frozen=True, slots=True)
 class AssignCandidateRowCommand:
     actor_user_id: UUID
     session_id: UUID
     row_id: UUID
     list_id: UUID
+    card_id: UUID | None = None  # Story 4.8.1: optional card ID for origin assignment
 
 
 class AssignCandidateRowService:
@@ -528,6 +752,7 @@ class AssignCandidateRowService:
         validate_bulk_candidate_row(
             amount=line.amount, normalized_description=line.normalized_description
         )
+        card_id = command.card_id or statement.card_id
         draft = ManualExpenseDraft(
             amount=line.amount,
             currency=line.currency,
@@ -537,6 +762,8 @@ class AssignCandidateRowService:
             line_type=line.line_type,
             posted_date=line.posted_date,
             external_ref=line.external_ref,
+            origin_kind=ORIGIN_KIND_CARD if card_id else None,
+            origin_card_id=card_id,
         )
         fx = self._fx_service.materialize_fx_for_entry(
             amount=draft.amount,
@@ -642,9 +869,21 @@ class MatchStatementCardService:
         IBAN will be normalized by MatchCardByIbanService before matching.
         """
         if not command.iban:
+            logger.debug("match_statement_card_empty_iban user_id=%s", command.actor_user_id)
             return MatchStatementCardResult(matched_card=None)
 
+        logger.debug(
+            "match_statement_card_lookup_start user_id=%s iban=%r",
+            command.actor_user_id,
+            command.iban,
+        )
         matched = self._card_match_service.execute(
             MatchCardByIbanCommand(actor_user_id=command.actor_user_id, iban=command.iban)
+        )
+        logger.debug(
+            "match_statement_card_lookup_result user_id=%s iban=%r matched=%s",
+            command.actor_user_id,
+            command.iban,
+            matched.id if matched else None,
         )
         return MatchStatementCardResult(matched_card=matched)

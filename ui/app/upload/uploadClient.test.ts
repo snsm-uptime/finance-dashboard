@@ -60,7 +60,7 @@ describe("uploadClient", () => {
           created_at: "2026-08-18T00:00:00Z",
           discarded_at: null,
           statements: [
-            { id: "st1", product_id: "bac_credit", status: "staged", candidate_row_count: 12 },
+            { id: "st1", product_id: "bac_credit", status: "staged", candidate_row_count: 12, iban: null, filename: null, card_id: null },
           ],
         }),
       }),
@@ -74,7 +74,7 @@ describe("uploadClient", () => {
         created_at: "2026-08-18T00:00:00Z",
         discarded_at: null,
         statements: [
-          { id: "st1", product_id: "bac_credit", status: "staged", candidate_row_count: 12 },
+          { id: "st1", product_id: "bac_credit", status: "staged", candidate_row_count: 12, iban: null, filename: null, card_id: null },
         ],
       },
     });
@@ -278,8 +278,8 @@ describe("uploadClient", () => {
         created_at: "2026-08-19T00:00:00Z",
         discarded_at: null,
         statements: [
-          { id: "st1", product_id: "bac_credit", status: "committed", candidate_row_count: 3 },
-          { id: "st2", product_id: "bac_credit", status: "skipped", candidate_row_count: 1 },
+          { id: "st1", product_id: "bac_credit", status: "committed", candidate_row_count: 3, iban: null, filename: null, card_id: null },
+          { id: "st2", product_id: "bac_credit", status: "skipped", candidate_row_count: 1, iban: null, filename: null, card_id: null },
         ],
       }),
     });
@@ -294,8 +294,8 @@ describe("uploadClient", () => {
         created_at: "2026-08-19T00:00:00Z",
         discarded_at: null,
         statements: [
-          { id: "st1", product_id: "bac_credit", status: "committed", candidate_row_count: 3 },
-          { id: "st2", product_id: "bac_credit", status: "skipped", candidate_row_count: 1 },
+          { id: "st1", product_id: "bac_credit", status: "committed", candidate_row_count: 3, iban: null, filename: null, card_id: null },
+          { id: "st2", product_id: "bac_credit", status: "skipped", candidate_row_count: 1, iban: null, filename: null, card_id: null },
         ],
       },
     });
@@ -328,13 +328,13 @@ describe("uploadClient", () => {
         created_at: "2026-08-19T00:00:00Z",
         discarded_at: null,
         statements: [
-          { id: "st1", product_id: "bac_credit", status: "committed", candidate_row_count: 3 },
+          { id: "st1", product_id: "bac_credit", status: "committed", candidate_row_count: 3, iban: null, filename: null, card_id: null },
         ],
       }),
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await commitIndividualStatement("s1", "st1", "l1", individualReviewMessages);
+    const result = await commitIndividualStatement("s1", "st1", "l1", undefined, individualReviewMessages);
 
     expect(result).toEqual({
       ok: true,
@@ -343,13 +343,13 @@ describe("uploadClient", () => {
         created_at: "2026-08-19T00:00:00Z",
         discarded_at: null,
         statements: [
-          { id: "st1", product_id: "bac_credit", status: "committed", candidate_row_count: 3 },
+          { id: "st1", product_id: "bac_credit", status: "committed", candidate_row_count: 3, iban: null, filename: null, card_id: null },
         ],
       },
     });
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/import/sessions/s1/statements/st1/commit",
-      expect.objectContaining({ method: "POST", body: JSON.stringify({ list_id: "l1" }) }),
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ list_id: "l1", card_id: null }) }),
     );
   });
 
@@ -363,7 +363,7 @@ describe("uploadClient", () => {
       }),
     );
 
-    const result = await commitIndividualStatement("s1", "st1", "l1", individualReviewMessages);
+    const result = await commitIndividualStatement("s1", "st1", "l1", undefined, individualReviewMessages);
     expect(result).toEqual({ ok: false, error: "forbidden" });
   });
 
@@ -377,7 +377,7 @@ describe("uploadClient", () => {
       }),
     );
 
-    const result = await commitIndividualStatement("s1", "st1", "l1", individualReviewMessages);
+    const result = await commitIndividualStatement("s1", "st1", "l1", undefined, individualReviewMessages);
     expect(result).toEqual({ ok: false, error: "statement-not-found" });
   });
 
@@ -391,7 +391,7 @@ describe("uploadClient", () => {
       }),
     );
 
-    const result = await commitIndividualStatement("s1", "st1", "l1", individualReviewMessages);
+    const result = await commitIndividualStatement("s1", "st1", "l1", undefined, individualReviewMessages);
     expect(result).toEqual({ ok: false, error: "statement-not-available" });
   });
 
@@ -405,7 +405,7 @@ describe("uploadClient", () => {
       }),
     );
 
-    const result = await commitIndividualStatement("s1", "st1", "l1", individualReviewMessages);
+    const result = await commitIndividualStatement("s1", "st1", "l1", undefined, individualReviewMessages);
     expect(result).toEqual({ ok: false, error: "discarded" });
   });
 
@@ -419,7 +419,7 @@ describe("uploadClient", () => {
       }),
     );
 
-    const result = await commitIndividualStatement("s1", "st1", "l1", individualReviewMessages);
+    const result = await commitIndividualStatement("s1", "st1", "l1", undefined, individualReviewMessages);
     expect(result).toEqual({ ok: false, error: "fx-unavailable" });
   });
 
@@ -432,7 +432,7 @@ describe("uploadClient", () => {
         created_at: "2026-08-19T00:00:00Z",
         discarded_at: null,
         statements: [
-          { id: "st1", product_id: "bac_credit", status: "skipped", candidate_row_count: 2 },
+          { id: "st1", product_id: "bac_credit", status: "skipped", candidate_row_count: 2, iban: null, filename: null, card_id: null },
         ],
       }),
     });

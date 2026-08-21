@@ -7,6 +7,9 @@ export type StagedStatement = {
   product_id: string;
   status: StatementStatus;
   candidate_row_count: number;
+  iban: string | null; // Story 4.8.1: IBAN for card identification
+  filename: string | null; // Story 4.8.2: original uploaded filename
+  card_id: string | null; // Story 4.8.3: identified card at upload time
 };
 
 export type ImportSession = {
@@ -143,6 +146,9 @@ function asStagedStatement(data: unknown): StagedStatement | null {
     product_id: row.product_id,
     status: row.status,
     candidate_row_count: row.candidate_row_count,
+    iban: typeof row.iban === "string" ? row.iban : null,
+    filename: typeof row.filename === "string" ? row.filename : null,
+    card_id: typeof row.card_id === "string" ? row.card_id : null,
   };
 }
 
@@ -316,6 +322,7 @@ export async function commitIndividualStatement(
   sessionId: string,
   statementId: string,
   listId: string,
+  cardId: string | undefined,
   messages: IndividualReviewMessages,
 ): Promise<OkSession | ErrorResult> {
   let response: Response;
@@ -326,7 +333,7 @@ export async function commitIndividualStatement(
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ list_id: listId }),
+        body: JSON.stringify({ list_id: listId, card_id: cardId || null }),
       },
     );
   } catch {
@@ -367,4 +374,93 @@ export async function skipStatement(
   const session = asImportSession(body);
   if (!session) return { ok: false, error: messages.errorGeneric };
   return { ok: true, session };
+}
+
+// Story 4.8.1: Card identification during individual review
+export type CardIdentificationResponse = {
+  matched: boolean;
+  card_id?: string;
+  card_label?: string;
+  iban?: string | null;
+};
+
+export type CardIdentificationMessages = {
+  errorCardAlreadyRegistered: string;
+  errorInvalidCardLabel: string;
+  errorGeneric: string;
+  errorUnauthorized: string;
+};
+
+function mapCardIdentificationError(
+  status: number,
+  body: { detail?: unknown; code?: unknown } | null,
+  messages: CardIdentificationMessages,
+): string {
+  const code = typeof body?.code === "string" ? body.code : "";
+  if (status === 401) return messages.errorUnauthorized;
+  if (code === "card_iban_already_registered") return messages.errorCardAlreadyRegistered;
+  if (code === "invalid_card_label") return messages.errorInvalidCardLabel;
+  return messages.errorGeneric;
+}
+
+function asCardIdentificationResponse(data: unknown): CardIdentificationResponse | null {
+  if (!data || typeof data !== "object") return null;
+  const resp = data as Partial<CardIdentificationResponse>;
+  if (typeof resp.matched !== "boolean") return null;
+  return {
+    matched: resp.matched,
+    card_id: typeof resp.card_id === "string" ? resp.card_id : undefined,
+    card_label: typeof resp.card_label === "string" ? resp.card_label : undefined,
+    iban: typeof resp.iban === "string" ? resp.iban : null,
+  };
+}
+
+export async function identifyCardForStatement(
+  sessionId: string,
+  statementId: string,
+  label: string | undefined,
+  messages: CardIdentificationMessages,
+): Promise<
+  | { ok: true; matched: boolean; cardId?: string; cardLabel?: string; iban?: string | null }
+  | { ok: false; error: string }
+> {
+  let response: Response;
+  try {
+    response = await fetch(
+      `/api/import/sessions/${encodeURIComponent(sessionId)}/statements/${encodeURIComponent(
+        statementId,
+      )}/identify-card`,
+      {
+        method: "POST",
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify({ label: label || null }),
+        credentials: "same-origin",
+      },
+    );
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  const body = (await parseJson(response)) as
+    | { detail?: unknown; code?: unknown }
+    | CardIdentificationResponse
+    | null;
+  if (!response.ok) {
+    return {
+      ok: false,
+      error: mapCardIdentificationError(
+        response.status,
+        (body as { detail?: unknown; code?: unknown } | null) || null,
+        messages,
+      ),
+    };
+  }
+  const identified = asCardIdentificationResponse(body);
+  if (!identified) return { ok: false, error: messages.errorGeneric };
+  return {
+    ok: true,
+    matched: identified.matched,
+    cardId: identified.card_id,
+    cardLabel: identified.card_label,
+    iban: identified.iban,
+  };
 }

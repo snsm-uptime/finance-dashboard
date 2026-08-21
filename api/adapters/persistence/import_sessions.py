@@ -18,6 +18,7 @@ from domain.canonical_line import CanonicalLine
 from domain.errors import (
     ImportRowNotAvailableError,
     ImportSessionNotFoundError,
+    ImportStatementNotAvailableError,
     ImportStatementNotFoundError,
     InvalidCanonicalLineError,
 )
@@ -27,6 +28,8 @@ from domain.import_session import (
     ROW_STATUS_EXCLUDED_ZERO_AMOUNT,
     ROW_STATUS_PENDING,
     STATEMENT_STATUS_COMMITTED,
+    STATEMENT_STATUS_FAILED,
+    STATEMENT_STATUS_SKIPPED,
     STATEMENT_STATUS_STAGED,
     row_is_zero_amount,
     statement_is_fully_resolved,
@@ -59,6 +62,8 @@ def _session_record(row: ImportSessionModel) -> ImportSessionRecord:
                 candidate_row_count=len(statement.candidate_rows),
                 pdf_path=statement.pdf_path,
                 iban=statement.iban,  # Story 4.8.1: carry IBAN through record
+                card_id=statement.card_id,  # Story 4.8.3: identified at upload time
+                original_filename=statement.original_filename,
                 candidate_rows=[
                     _candidate_row(candidate, statement) for candidate in statement.candidate_rows
                 ],
@@ -112,6 +117,8 @@ class SqlAlchemyImportSessionRepository:
                 product_id=detected.product_id,
                 pdf_path=pdf_paths[index],
                 iban=detected.iban,  # Story 4.8.1: persist IBAN
+                card_id=detected.card_id,  # Story 4.8.3: persist identified card
+                original_filename=detected.original_filename,
                 status=detected.status,
             )
             self._session.add(statement_row)
@@ -184,6 +191,23 @@ class SqlAlchemyImportSessionRepository:
             row.discarded_at = datetime.now(UTC)
             self._session.flush()
         return _session_record(row)
+
+    def set_statement_card_id(
+        self, *, session_id: UUID, user_id: UUID, statement_id: UUID, card_id: UUID
+    ) -> None:
+        row = self._session.scalar(
+            select(ImportSessionModel)
+            .options(selectinload(ImportSessionModel.statements))
+            .where(ImportSessionModel.id == session_id, ImportSessionModel.user_id == user_id)
+            .limit(1)
+        )
+        if row is None:
+            raise ImportSessionNotFoundError()
+        statement_row = next((s for s in row.statements if s.id == statement_id), None)
+        if statement_row is None:
+            raise ImportStatementNotFoundError()
+        statement_row.card_id = card_id
+        self._session.flush()
 
     def commit_statement_batch(
         self,
@@ -307,6 +331,48 @@ class SqlAlchemyImportSessionRepository:
             raise ImportRowNotAvailableError()
 
         self._complete_statement_if_resolved(statement_id)
+        self._session.flush()
+        self._session.refresh(statement_row)
+        return _session_record(row)
+
+    def skip_statement(
+        self, *, session_id: UUID, statement_id: UUID, user_id: UUID
+    ) -> ImportSessionRecord:
+        row = self._session.scalar(
+            select(ImportSessionModel)
+            .options(
+                selectinload(ImportSessionModel.statements).selectinload(
+                    ImportStatementModel.candidate_rows
+                )
+            )
+            .where(ImportSessionModel.id == session_id, ImportSessionModel.user_id == user_id)
+            .limit(1)
+        )
+        if row is None:
+            raise ImportSessionNotFoundError()
+
+        statement_row = next((s for s in row.statements if s.id == statement_id), None)
+        if statement_row is None:
+            raise ImportStatementNotFoundError()
+
+        # Guarded write, not an unconditional set: a concurrent commit could
+        # land between the caller's eligibility check (against the snapshot
+        # above) and this write. The WHERE clause re-checks status against
+        # the database's current row at write time — if a concurrent commit
+        # already flipped it, this affects zero rows instead of silently
+        # clobbering a committed statement's status to "skipped" (Story 4.8
+        # review finding).
+        result = self._session.execute(
+            update(ImportStatementModel)
+            .where(
+                ImportStatementModel.id == statement_id,
+                ImportStatementModel.status.in_((STATEMENT_STATUS_STAGED, STATEMENT_STATUS_FAILED)),
+            )
+            .values(status=STATEMENT_STATUS_SKIPPED)
+        )
+        if result.rowcount == 0:
+            raise ImportStatementNotAvailableError()
+
         self._session.flush()
         self._session.refresh(statement_row)
         return _session_record(row)

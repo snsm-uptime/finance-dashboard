@@ -22,6 +22,68 @@ vi.mock("@/components/PreferencesProvider", () => ({
   usePreferences: () => ({ locale: "en", theme: "light" }),
 }));
 
+vi.mock("@/hooks/useCardIdentification", () => ({
+  useCardIdentification: (
+    _sessionId: string,
+    statement: { card_id: string | null; iban: string | null } | null,
+  ) => ({
+    cardMatched: Boolean(statement?.card_id),
+    cardId: statement?.card_id ?? undefined,
+    cardLabel: statement?.card_id ? "My Visa" : undefined,
+    iban: statement?.iban ?? null,
+    loading: false,
+    error: null,
+    needsRegistration: Boolean(statement?.iban && !statement?.card_id),
+    registerCard: vi.fn(),
+  }),
+}));
+
+type MockSubmitFn = (data: unknown) => Promise<{ ok: boolean; error?: string }>;
+
+vi.mock("@/hooks", async () => {
+  const React = await import("react");
+  return {
+    useFormSubmission: (fn: MockSubmitFn) => {
+      const [error, setError] = React.useState<string | null>(null);
+      const [pending, setPending] = React.useState(false);
+
+      const submit = React.useCallback(
+        async (arg: unknown) => {
+          setPending(true);
+          try {
+            const result = await fn(arg);
+            if (!result.ok) {
+              setError(result.error ?? null);
+            } else {
+              setError(null);
+            }
+          } catch (err) {
+            setError((err as Error).message);
+          } finally {
+            setPending(false);
+          }
+        },
+        [fn],
+      );
+
+      return {
+        submit,
+        pending,
+        error,
+      };
+    },
+  };
+});
+
+vi.mock("@/components/IconButton/IconButton.module.scss", () => ({
+  default: new Proxy(
+    {},
+    {
+      get: (_t, prop) => String(prop),
+    },
+  ),
+}));
+
 function fakeFile(): File {
   return new File(["%PDF-1.4"], "statement.pdf", { type: "application/pdf" });
 }
@@ -43,6 +105,23 @@ async function selectFile(container: HTMLElement, file: File) {
   });
 }
 
+const unmatchedSession = {
+  id: "s1",
+  created_at: "2026-08-18T00:00:00Z",
+  discarded_at: null,
+  statements: [
+    {
+      id: "st1",
+      product_id: "bac_credit",
+      status: "staged",
+      candidate_row_count: 3,
+      iban: "DE89370400440532013000",
+      filename: "statement.pdf",
+      card_id: null,
+    },
+  ],
+};
+
 describe("UploadPanel", () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -62,18 +141,22 @@ describe("UploadPanel", () => {
     container.remove();
   });
 
-  it("renders staged and failed statements on a successful upload", async () => {
+  it("renders a centered Upload control instead of the native file-picker chrome", async () => {
+    await act(async () => {
+      root.render(<UploadPanel />);
+    });
+
+    const input = container.querySelector('input[type="file"]');
+    expect(input).not.toBeNull();
+    expect(input?.className).toContain("sr-only");
+    const buttons = Array.from(container.querySelectorAll("button"));
+    expect(buttons.some((b) => b.textContent === "Upload")).toBe(true);
+  });
+
+  it("hides the picker and shows New card! registration after a successful upload", async () => {
     uploadStatement.mockResolvedValue({
       ok: true,
-      session: {
-        id: "s1",
-        created_at: "2026-08-18T00:00:00Z",
-        discarded_at: null,
-        statements: [
-          { id: "st1", product_id: "bac_credit", status: "staged", candidate_row_count: 3 },
-          { id: "st2", product_id: "bac_credit", status: "failed", candidate_row_count: 0 },
-        ],
-      },
+      session: unmatchedSession,
     });
 
     await act(async () => {
@@ -82,8 +165,13 @@ describe("UploadPanel", () => {
     await selectFile(container, fakeFile());
 
     expect(uploadStatement).toHaveBeenCalled();
-    expect(container.textContent).toContain("Staged");
-    expect(container.textContent).toContain("Could not parse this statement");
+    expect(container.textContent).toContain("New card!");
+    expect(container.textContent).toContain("DE89370400440532013000");
+    expect(container.textContent).not.toContain("bac_credit");
+    expect(container.querySelector('input[type="file"]')).toBeNull();
+    expect(Array.from(container.querySelectorAll("button")).some((b) => b.textContent === "Upload")).toBe(
+      false,
+    );
   });
 
   it("shows the unsupported-file-type error inline on a non-PDF rejection", async () => {
@@ -93,55 +181,19 @@ describe("UploadPanel", () => {
       root.render(<UploadPanel />);
     });
     await selectFile(container, fakeFile());
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
 
     const alert = container.querySelector('[role="alert"]');
     expect(alert?.textContent).toBe("Only PDF files are supported.");
   });
 
-  it("discard clears the session view and shows a confirmation", async () => {
+  it("unmounts the file picker while a session is active", async () => {
     uploadStatement.mockResolvedValue({
       ok: true,
-      session: {
-        id: "s1",
-        created_at: "2026-08-18T00:00:00Z",
-        discarded_at: null,
-        statements: [
-          { id: "st1", product_id: "bac_credit", status: "staged", candidate_row_count: 3 },
-        ],
-      },
+      session: unmatchedSession,
     });
-    discardSession.mockResolvedValue({ ok: true });
-
-    await act(async () => {
-      root.render(<UploadPanel />);
-    });
-    await selectFile(container, fakeFile());
-
-    const discardButton = Array.from(container.querySelectorAll("button")).find(
-      (b) => b.textContent === "Discard",
-    ) as HTMLButtonElement;
-    await act(async () => {
-      discardButton.click();
-    });
-
-    expect(discardSession).toHaveBeenCalledWith("s1", expect.anything());
-    expect(container.querySelector("ul")).toBeNull();
-    expect(container.textContent).toContain("Discarded.");
-  });
-
-  it("blocks a second upload while a session is active, until discarded", async () => {
-    uploadStatement.mockResolvedValue({
-      ok: true,
-      session: {
-        id: "s1",
-        created_at: "2026-08-18T00:00:00Z",
-        discarded_at: null,
-        statements: [
-          { id: "st1", product_id: "bac_credit", status: "staged", candidate_row_count: 3 },
-        ],
-      },
-    });
-    discardSession.mockResolvedValue({ ok: true });
 
     await act(async () => {
       root.render(<UploadPanel />);
@@ -149,22 +201,6 @@ describe("UploadPanel", () => {
     await selectFile(container, fakeFile());
 
     expect(uploadStatement).toHaveBeenCalledTimes(1);
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
-    expect(input.disabled).toBe(true);
-    expect(container.textContent).toContain("Discard this session before uploading another");
-
-    await selectFile(container, fakeFile());
-    expect(uploadStatement).toHaveBeenCalledTimes(1);
-
-    const discardButton = Array.from(container.querySelectorAll("button")).find(
-      (b) => b.textContent === "Discard",
-    ) as HTMLButtonElement;
-    await act(async () => {
-      discardButton.click();
-    });
-
-    expect(input.disabled).toBe(false);
-    await selectFile(container, fakeFile());
-    expect(uploadStatement).toHaveBeenCalledTimes(2);
+    expect(container.querySelector('input[type="file"]')).toBeNull();
   });
 });

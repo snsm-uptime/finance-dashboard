@@ -5,6 +5,8 @@ export const uploadMessages = {
   en: {
     title: "Upload",
     pickFile: "Choose PDF",
+    uploadCta: "Upload",
+    newCardTitle: "New card!",
     uploading: "Uploading…",
     statementStaged: "Staged",
     statementFailed: "Could not parse this statement",
@@ -56,10 +58,22 @@ export const uploadMessages = {
     individualReviewErrorStatementNotAvailable: "This statement is no longer available.",
     individualReviewErrorFxUnavailable:
       "Currency conversion is unavailable right now. Try again later.",
+    // Card identification (Story 4.8.1)
+    cardIdentificationTitle: "Identify card",
+    cardIdentificationIban: "IBAN",
+    cardIdentificationMatched: "From your {label} card",
+    cardIdentificationUnknown: "This card is not registered yet",
+    cardIdentificationLabel: "Card name",
+    cardIdentificationRegister: "Register",
+    cardIdentificationRegistering: "Registering…",
+    errorCardAlreadyRegistered: "This IBAN is already registered to another card.",
+    errorInvalidCardLabel: "Card name is invalid.",
   },
   es: {
     title: "Subir",
     pickFile: "Elegir PDF",
+    uploadCta: "Subir",
+    newCardTitle: "¡Nueva tarjeta!",
     uploading: "Subiendo…",
     statementStaged: "En espera",
     statementFailed: "No se pudo procesar este estado",
@@ -115,6 +129,16 @@ export const uploadMessages = {
     individualReviewErrorStatementNotAvailable: "Este estado de cuenta ya no está disponible.",
     individualReviewErrorFxUnavailable:
       "La conversión de moneda no está disponible ahora. Inténtalo más tarde.",
+    // Card identification (Story 4.8.1)
+    cardIdentificationTitle: "Identificar tarjeta",
+    cardIdentificationIban: "IBAN",
+    cardIdentificationMatched: "De tu tarjeta {label}",
+    cardIdentificationUnknown: "Esta tarjeta aún no está registrada",
+    cardIdentificationLabel: "Nombre de la tarjeta",
+    cardIdentificationRegister: "Registrar",
+    cardIdentificationRegistering: "Registrando…",
+    errorCardAlreadyRegistered: "Este IBAN ya está registrado en otra tarjeta.",
+    errorInvalidCardLabel: "El nombre de la tarjeta es inválido.",
   },
 } as const;
 

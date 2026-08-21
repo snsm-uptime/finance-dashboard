@@ -10,11 +10,13 @@ import { usePreferences } from "@/components/PreferencesProvider";
 import { useFormSubmission } from "@/hooks";
 import { fetchLists, type ListItem } from "@/app/lists/listsClient";
 import { uploadCopy } from "@/lib/i18n/upload";
+import { useCardIdentification } from "@/hooks/useCardIdentification";
 import {
   commitIndividualStatement,
   discardSession,
   fetchImportSession,
   skipStatement,
+  type CardIdentificationMessages,
   type ImportSession,
   type IndividualReviewMessages,
   type StagedStatement,
@@ -58,6 +60,8 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   const [isCoarsePointer] = useState(
     () => typeof window !== "undefined" && !!window.matchMedia?.("(pointer: coarse)").matches,
   );
+  const [cardLabelInput, setCardLabelInput] = useState<string>("");
+  const [registering, setRegistering] = useState(false);
 
   const messages: IndividualReviewMessages = {
     errorForbidden: t.individualReviewErrorForbidden,
@@ -69,6 +73,16 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     errorGeneric: t.errorGeneric,
     errorUnauthorized: t.errorUnauthorized,
   };
+
+  const cardMessages: CardIdentificationMessages = useMemo(
+    () => ({
+      errorCardAlreadyRegistered: t.errorCardAlreadyRegistered,
+      errorInvalidCardLabel: t.errorInvalidCardLabel,
+      errorGeneric: t.errorGeneric,
+      errorUnauthorized: t.errorUnauthorized,
+    }),
+    [t.errorCardAlreadyRegistered, t.errorInvalidCardLabel, t.errorGeneric, t.errorUnauthorized],
+  );
 
   const dismissMessages: UploadMessages = {
     errorUnsupportedFileType: t.errorUnsupportedFileType,
@@ -138,6 +152,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   }, []);
 
   const current = nextReviewable(session);
+  const card = useCardIdentification(sessionId, current, cardMessages);
 
   const action = useFormSubmission(async (act: Action) => {
     if (!current) return { ok: false, error: t.errorGeneric };
@@ -153,7 +168,14 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
 
     const listId = act.kind === "acceptChosen" ? pickedListId : defaultListId;
     if (!listId) return { ok: false, error: t.errorGeneric };
-    const result = await commitIndividualStatement(sessionId, current.id, listId, messages);
+    // Story 4.8.2: Pass identified card ID to commit (will be set as origin)
+    const result = await commitIndividualStatement(
+      sessionId,
+      current.id,
+      listId,
+      card.cardId,
+      messages,
+    );
     if (result.ok) {
       setLastAcceptedListId(listId);
       setPickedListId("");
@@ -184,8 +206,12 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   const defaultListName = (lists ?? []).find((l) => l.id === defaultListId)?.name ?? "";
   const chosenListName = (lists ?? []).find((l) => l.id === pickedListId)?.name ?? "";
 
-  const canAcceptChosen = !!current && current.status === "staged" && !!pickedListId;
-  const canAcceptDefault = !!current && current.status === "staged" && !!defaultListId;
+  // Story 4.8.1: Block accept until card is identified (if IBAN present)
+  const cardReadyOrNoIban = !current?.iban || card.cardMatched;
+  const canAcceptChosen =
+    !!current && current.status === "staged" && !!pickedListId && cardReadyOrNoIban && !card.loading;
+  const canAcceptDefault =
+    !!current && current.status === "staged" && !!defaultListId && cardReadyOrNoIban && !card.loading;
   const canSkip = !!current && (current.status === "staged" || current.status === "failed");
 
   useDrag(
@@ -250,61 +276,131 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
 
         {current ? (
           <>
-            <div className="flex flex-col gap-2">
-              <label htmlFor={selectId} className="text-[0.9rem] font-[550] text-foreground">
-                {t.individualReviewChooseList}
-              </label>
-              {lists === null && !listsError ? (
-                <p className="text-muted text-[0.85rem] m-0">
-                  {t.individualReviewLoadingLists}
-                </p>
-              ) : null}
-              {!defaultListId ? (
-                <p className="text-muted text-[0.8rem] m-0">{t.individualReviewNoDefaultList}</p>
-              ) : null}
-              {lists !== null && lists.length === 0 ? (
-                <p className="text-muted text-[0.85rem] m-0">{t.individualReviewNoLists}</p>
-              ) : null}
-              {lists !== null && lists.length > 0 ? (
-                <SoftLedgerSelect
-                  id={selectId}
-                  value={pickedListId}
-                  options={[
-                    { value: "", label: t.individualReviewChooseList },
-                    ...listOptions,
-                  ]}
-                  onChange={setPickedListId}
-                />
-              ) : null}
-            </div>
-
+            {/* Story 4.8.2: Consolidated card + file info + buttons (compact layout) */}
             <div
               ref={cardRef}
-              className="py-[1rem] px-[1.1rem] rounded-[10px] border border-border bg-surface touch-none"
+              className="py-[1.25rem] px-[1.1rem] rounded-[10px] border border-border bg-surface touch-none"
             >
-              <p className="m-0 font-[550] text-foreground text-[1.05rem]">
-                {current.product_id}
-              </p>
-              {current.status === "failed" ? (
-                <p className="text-owe text-[0.85rem] mt-2 mb-0">
-                  {t.individualReviewFailedStatement}
+              {/* Card identification */}
+              <div className="mb-[0.75rem]">
+                <p className="m-0 text-[0.75rem] uppercase tracking-[0.05rem] font-[550] text-muted mb-[0.25rem]">
+                  Card
                 </p>
-              ) : (
-                <p className="text-muted text-[0.85rem] mt-2 mb-0">
-                  {current.candidate_row_count}
+                {card.loading ? (
+                  <p className="m-0 text-[0.95rem] text-muted">{t.cardIdentificationTitle}…</p>
+                ) : card.cardMatched && card.cardLabel ? (
+                  <p className="m-0 text-[1rem] text-foreground font-[550]">{card.cardLabel}</p>
+                ) : card.needsRegistration && card.iban ? (
+                  <p className="m-0 text-[1rem] text-foreground font-[550]">{t.newCardTitle}</p>
+                ) : (
+                  <p className="m-0 text-[0.95rem] text-muted">{t.individualReviewLoadingSession}</p>
+                )}
+              </div>
+
+              {/* File information */}
+              <div className="mb-[1rem]">
+                <p className="m-0 text-[0.9rem] text-muted font-mono">
+                  {current.filename}
+                  {current.status !== "failed" && ` [${current.candidate_row_count}]`}
                 </p>
+                {current.status === "failed" ? (
+                  <p className="m-0 text-owe text-[0.75rem] mt-[0.25rem]">
+                    {t.individualReviewFailedStatement}
+                  </p>
+                ) : null}
+              </div>
+
+              {/* Action buttons - inline */}
+              <div className="flex gap-2">
+                {defaultListId ? (
+                  <button
+                    type="button"
+                    disabled={!canAcceptDefault || action.pending || dismiss.pending}
+                    onClick={() => action.submit({ kind: "acceptDefault" })}
+                    className="flex-1 m-0 px-3 py-[8px] rounded-sm border border-accent bg-accent text-surface cursor-pointer font-[550] text-[0.85rem] disabled:opacity-55 disabled:cursor-not-allowed"
+                  >
+                    {action.pending ? t.individualReviewCommitting : t.individualReviewAcceptDefault.replace("{list}", defaultListName)}
+                  </button>
+                ) : null}
+                {lists !== null && lists.length > 0 ? (
+                  <div className="flex-1">
+                    <SoftLedgerSelect
+                      id={selectId}
+                      value={pickedListId}
+                      options={[
+                        { value: "", label: t.individualReviewChooseList },
+                        ...listOptions,
+                      ]}
+                      onChange={setPickedListId}
+                    />
+                  </div>
+                ) : null}
+              </div>
+
+              {/* IBAN display (collapsed inside card) */}
+              {card.iban && (
+                <div className="mt-[1rem] pt-[1rem] border-t border-border">
+                  <p className="m-0 text-[0.75rem] text-muted font-[550] mb-[0.25rem]">
+                    {t.cardIdentificationIban}
+                  </p>
+                  <p className="m-0 text-[0.85rem] text-foreground font-mono">{card.iban}</p>
+                </div>
               )}
             </div>
 
+            {/* Card registration form (Story 4.8.1) - only show if card needs registration */}
+            {card.needsRegistration && card.iban && (
+              <div className="flex flex-col gap-2 py-[1rem] px-[1.1rem] rounded-[10px] border border-border bg-surface">
+                <label htmlFor="card-label" className="text-[0.9rem] font-[550] text-foreground">
+                  {t.cardIdentificationLabel}
+                </label>
+                <input
+                  id="card-label"
+                  type="text"
+                  value={cardLabelInput}
+                  onChange={(e) => setCardLabelInput(e.currentTarget.value)}
+                  placeholder="e.g., My Visa"
+                  disabled={registering || card.loading}
+                  className="m-0 px-3 py-[9px] rounded-sm border border-border bg-surface text-foreground font-[450] text-[0.95rem] placeholder-muted disabled:opacity-55"
+                />
+                {card.error && (
+                  <p className="m-0 text-owe text-[0.85rem]">{card.error}</p>
+                )}
+                <button
+                  type="button"
+                  disabled={!cardLabelInput.trim() || registering || card.loading}
+                  onClick={async () => {
+                    setRegistering(true);
+                    const result = await card.registerCard(cardLabelInput.trim());
+                    setRegistering(false);
+                    if (result.ok) {
+                      setCardLabelInput("");
+                    }
+                  }}
+                  className="m-0 px-3 py-[9px] rounded-sm border border-accent bg-accent text-surface cursor-pointer font-[550] text-[0.95rem] disabled:opacity-55 disabled:cursor-not-allowed"
+                >
+                  {registering ? t.cardIdentificationRegistering : t.cardIdentificationRegister}
+                </button>
+              </div>
+            )}
+
+            {/* Error and loading states */}
             <div aria-live="polite">
               {action.error ? (
                 <p className="text-owe text-[0.9rem] m-0" role="alert">
                   {action.error}
                 </p>
               ) : null}
+              {!defaultListId && !card.needsRegistration ? (
+                <p className="text-muted text-[0.8rem] m-0">{t.individualReviewNoDefaultList}</p>
+              ) : null}
+              {lists !== null && lists.length === 0 ? (
+                <p className="text-muted text-[0.85rem] m-0">{t.individualReviewNoLists}</p>
+              ) : null}
             </div>
 
-            <div className="flex flex-col gap-3">
+            {/* Primary action for choosing list if no default */}
+            {!defaultListId && lists !== null && lists.length > 0 ? (
               <PrimaryButton
                 disabled={!canAcceptChosen || action.pending || dismiss.pending}
                 onClick={() => action.submit({ kind: "acceptChosen" })}
@@ -316,27 +412,17 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
                       chosenListName || t.individualReviewChooseList,
                     )}
               </PrimaryButton>
-              <button
-                type="button"
-                disabled={!canAcceptDefault || action.pending || dismiss.pending}
-                onClick={() => action.submit({ kind: "acceptDefault" })}
-                className="m-0 px-3 py-[9px] rounded-sm border border-border bg-surface text-foreground cursor-pointer font-[550] text-[0.95rem] disabled:opacity-55 disabled:cursor-not-allowed"
-              >
-                {action.pending
-                  ? t.individualReviewCommitting
-                  : defaultListName
-                    ? t.individualReviewAcceptDefault.replace("{list}", defaultListName)
-                    : t.individualReviewNoDefaultListShort}
-              </button>
-              <button
-                type="button"
-                disabled={!canSkip || action.pending || dismiss.pending}
-                onClick={() => action.submit({ kind: "skip" })}
-                className="m-0 px-3 py-[9px] rounded-sm border-none bg-transparent text-foreground cursor-pointer font-[550] text-[0.95rem] disabled:opacity-55 disabled:cursor-not-allowed"
-              >
-                {action.pending ? t.individualReviewSkipping : t.individualReviewSkip}
-              </button>
-            </div>
+            ) : null}
+
+            {/* Skip button */}
+            <button
+              type="button"
+              disabled={!canSkip || action.pending || dismiss.pending}
+              onClick={() => action.submit({ kind: "skip" })}
+              className="m-0 px-3 py-[9px] rounded-sm border-none bg-transparent text-foreground cursor-pointer font-[550] text-[0.95rem] disabled:opacity-55 disabled:cursor-not-allowed"
+            >
+              {action.pending ? t.individualReviewSkipping : t.individualReviewSkip}
+            </button>
           </>
         ) : !session ? (
           <p className="text-muted text-[0.85rem] m-0">{t.individualReviewLoadingSession}</p>
