@@ -6,7 +6,7 @@ baseline_commit: 7721e9a4b811c884b5140b06afb26015dde91b9a
 
 Status: done
 
-> **⚠️ Superseded by Stories 4.12–4.16 (Sprint Change Proposal 2026-08-20).**
+> **⚠️ Superseded by Stories 4.10, 4.11, 4.13, 4.14 and 4.15 (Sprint Change Proposal 2026-08-20).**
 > This story shipped and satisfied the acceptance criteria below, which specify statement-level
 > routing ("when I act on a statement"). That granularity was a specification defect: it makes
 > individual review functionally identical to bulk review. The criteria below describe

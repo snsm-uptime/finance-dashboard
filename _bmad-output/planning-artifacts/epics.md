@@ -295,8 +295,22 @@ Users register cards by IBAN, set optional manual-expense origin (card / Cash / 
 **FRs covered:** FR-11, FR-12, FR-13, FR-14, FR-15, FR-16, FR-17, FR-18, FR-19 (import), FR-20, FR-21 (origin + no-origin filter), FR-31, FR-32, FR-33, FR-34, FR-35, FR-36, FR-37
 **Demo gate:** J1 climax on Soft-Ledger strip
 **Sequencing note:** Do not start Epic 4 until Epic 3.5 demo gate passes.
-**Scope change (2026-08-20):** Stories 4.12–4.16 replace Story 4.8's statement-level individual review with per-transaction routing. FR-17 and FR-18 are amended by Sprint Change Proposal 2026-08-20; 4.8 stays `done` and is annotated as superseded. AD-4's batch boundary must be amended before 4.12 starts.
-**Revised sequence:** 4.11 → 4.12 → 4.13 → 4.9 → 4.14 → 4.15. Story 4.9 is no longer buildable in numeric order — its amended per-transaction ACs depend on 4.12/4.13. Story 4.16 parallelizes after 4.13; Story 4.10 is independent of review granularity and can run at any point.
+**Scope change (2026-08-20):** Stories 4.10, 4.11, 4.13, 4.14 and 4.15 replace Story 4.8's statement-level individual review with per-transaction routing; Story 4.12's ACs are amended by the same change. FR-17, FR-18, AD-4 and AD-9 are amended by Sprint Change Proposal 2026-08-20; 4.8 stays `done` and is annotated as superseded. AD-4's batch boundary must be amended before 4.10 starts.
+
+**Build order = numeric order:** 4.9 → 4.10 → 4.11 → 4.12 → 4.13 → 4.14. Story 4.15 parallelizes any time after 4.11; Story 4.16 is independent of review granularity and can run at any point.
+
+**Renumbered 2026-08-20** so numeric order matches build order. Stories 4.1–4.8 were untouched. Story files and `sprint-status.yaml` keys were renamed to match; **completed story files (4.1–4.8) were deliberately left as written**, so a "Story 4.9" reference inside one of them means what is now 4.12, and a range like "Stories 4.4–4.9" describes the original import pipeline. Decode with this table:
+
+| Was | Now | Story |
+| --- | --- | --- |
+| 4.11 | **4.9** | BAC credit real-statement compatibility fix |
+| 4.12 | **4.10** | Row-level review data model + per-row commit |
+| 4.13 | **4.11** | Row-level review API |
+| 4.9 | **4.12** | Commit batch, dedup summary, land on settle strip |
+| 4.14 | **4.13** | Individual review card |
+| 4.15 | **4.14** | Resume entry point + completion summary |
+| 4.16 | **4.15** | "New" badge on freshly imported rows |
+| 4.10 | **4.16** | Multi-file upload |
 
 ### Epic 5: Import resilience (then settle polish)
 Ordered: parse failure/quarantine/hand-fix → wire FR-43 on strip → reassign/rollback → same-price + aliases → then simplify (FR-41) + statement-cycle selector (FR-39).
@@ -1086,7 +1100,7 @@ So that multi-statement files are detected and split before I commit anything.
 **When** I upload a PDF through the web UI (phone or desktop)
 **Then** the file is accepted and stored temporarily on the operator PDF volume with a path reference in Postgres — not in git (FR-13, AD-3)
 **And** non-PDF formats are rejected with a clear error
-**And** the path is ephemeral: cleared with the file after successful clean commit (Story 4.9) or when no longer needed for quarantine/review
+**And** the path is ephemeral: cleared with the file after successful clean commit (Story 4.12) or when no longer needed for quarantine/review
 
 **Given** a valid upload
 **When** detect and split run in-process on `api`
@@ -1132,7 +1146,7 @@ So that I can finish a multi-statement file in one assignment when I’m not rev
 
 ### Story 4.8: Individual review (swipe / desktop buttons)
 
-> **⚠️ Superseded by Stories 4.12–4.16 (Sprint Change Proposal 2026-08-20).**
+> **⚠️ Superseded by Stories 4.10, 4.11, 4.13, 4.14 and 4.15 (Sprint Change Proposal 2026-08-20).**
 > This story shipped and satisfied its own acceptance criteria, which specify statement-level
 > routing ("When I act on a statement"). That granularity was a specification defect: it makes
 > individual review functionally identical to bulk review. The ACs below describe delivered-then-
@@ -1169,68 +1183,7 @@ So that I can route each statement deliberately (J1).
 **When** I accept
 **Then** comparison UI does not appear — failures are Epic 5
 
-### Story 4.9: Commit batch, dedup summary, land on settle strip
-
-As a user finishing an import,
-I want commits to dedupe silently, summarize imported/skipped counts, and land on the Soft-Ledger settle strip,
-So that I see the number I came to update (J1 climax).
-
-**Acceptance Criteria:**
-
-**Given** I assign a cleanly parsed transaction to a list
-**When** commit runs
-**Then** an Import Batch is journaled for that commit action and its ledger row is written with domain identity dedup (FR-20, FR-34, AD-4)
-**And** payer defaults to me and remains editable (FR-19)
-**And** FX materialization from Epic 3 applies to non-CRC lines
-
-**Given** overlapping re-import of parsed rows
-**When** commit finishes
-**Then** duplicates are skipped without mid-import interruption
-**And** imported-new and skipped-duplicate counts are exposed for the completion summary, which Story 4.15 renders (FR-20, UX-DR22)
-
-**Given** the session completes (no Epic 5 conflicts yet)
-**When** the review queue is exhausted
-**Then** I land on shared-expenses for the list that received the most rows this session — the completion summary itself is Story 4.15's surface, not this story's
-**And** the Soft-Ledger settle strip reflects the new committed purchases — same strip as Epic 3, no parallel settle UI
-**And** when Epic 5 same-price conflicts exist, Story 5.7 inserts conflict review after this summary and before Soft-Ledger land — do not land on a confident strip then interrupt (UX-DR22)
-
-**Given** a statement parsed correctly and committed with no unresolved quarantine
-**When** the Import Batch commit succeeds
-**Then** the statement PDF file is deleted from the operator volume and its Postgres path reference is cleared (AD-3) — ledger rows in SQL are the durable record
-**And** clean PDF delete is skipped if the statement is incomplete or still has unresolved quarantine (Epic 5 Stories 5.2–5.3 own retain-until-resolved)
-
-**And** same-price / quarantine flows are out of scope for this story (Epic 5); Epic 5 retains the PDF while quarantine needs it, then clears when resolved
-
-### Story 4.10: Multi-file upload — pending queue, per-item removal, duplicate detection
-
-As a user uploading statements,
-I want to select multiple PDFs at once, remove one from the batch before it's processed, and be warned if I pick a file I've already queued or staged,
-So that I can queue several statements in one pass instead of uploading them one at a time.
-
-**Acceptance Criteria:**
-
-**Given** the Upload page
-**When** I open the file picker
-**Then** I can select more than one PDF at once, and each selected file appears as its own pending entry before any upload request is sent for it
-
-**Given** a pending (not-yet-processed) entry in the queue
-**When** I remove it
-**Then** it is dropped from the queue with no API call ever made for that file
-
-**Given** a file I select
-**When** its content duplicates a file already pending in this queue, or an already-staged (undiscarded) Import Session's statement from this browser session
-**Then** the duplicate is rejected with a clear inline error and is not queued
-
-**Given** a queued batch with no duplicates
-**When** processing runs
-**Then** each file is uploaded and staged as its own Import Session — a single file's rejection does not block or discard the others in the batch, and each entry in the queue view shows its own outcome (staged / failed / rejected)
-
-**Given** v1's adopted ingest architecture (synchronous, in-process, no job queue — `architecture-finance-helper-2026-08-03/.memlog.md`)
-**When** this story processes a queued batch
-**Then** each file's detect/split/parse still runs synchronously in-process, one file at a time — this story only shapes the API/UI boundary (one upload call per file, independent per-file status) so that a later move to concurrent/background processing per file is additive
-**And** actual concurrent or background ("separate threads") processing is explicitly out of scope for this story and requires its own architecture decision (correct-course) before being adopted — it is not decided or implemented here
-
-### Story 4.11: BAC credit real-statement compatibility fix
+### Story 4.9: BAC credit real-statement compatibility fix
 
 As a developer maintaining the BAC credit adapter,
 I want BacCreditAdapter to recognize real BAC statement sections and data rows instead of the synthetic-fixture-only pipe format,
@@ -1262,7 +1215,7 @@ So that real BAC credit uploads parse successfully instead of silently yielding 
 **When** a future bank/product needs SIGN_VARIANT (e.g. a BAC debit adapter)
 **Then** that remains out of scope — this story implements only the CURRENCY_VARIANT path (see ARCHITECTURE-SPINE.md Deferred table)
 
-### Story 4.12: Row-level review data model + per-row commit
+### Story 4.10: Row-level review data model + per-row commit
 
 As a developer enabling per-transaction routing,
 I want import_candidate_rows to carry independent status and resolution, and commits to operate on one row at a time,
@@ -1309,13 +1262,13 @@ So that a statement's rows can be routed to different lists instead of committin
 
 **Given** bulk review runs against a session
 **When** it commits
-**Then** it skips excluded_zero_amount rows and marks every row it touches committed, and rejects any statement already carrying non-pending rows with import_row_not_available — a backstop, since Story 4.15 makes that state unreachable from the UI
+**Then** it skips excluded_zero_amount rows and marks every row it touches committed, and rejects any statement already carrying non-pending rows with import_row_not_available — a backstop, since Story 4.14 makes that state unreachable from the UI
 
 **Given** statement-level individual review is retired
 **When** this story lands
 **Then** AssignIndividualImportService, SkipStatementService, validate_individual_accept_eligible, validate_individual_skip_eligible, and the commit_individual_statement / skip_individual_statement routes are deleted, not left as unused parallel paths
 
-### Story 4.13: Row-level review API — rows, assign, delete, undo, edit
+### Story 4.11: Row-level review API — rows, assign, delete, undo, edit
 
 As a client rendering per-transaction review,
 I want the session payload to carry individual rows and endpoints to resolve them one at a time,
@@ -1354,7 +1307,39 @@ So that the review UI can act on a transaction instead of a file.
 **When** an operation cannot proceed
 **Then** import_row_not_found, import_row_not_available, and import_nothing_to_undo are returned following the existing code convention consumed by mapIndividualReviewError
 
-### Story 4.14: Individual review card — four-direction actions + inline title edit
+### Story 4.12: Commit batch, dedup summary, land on settle strip
+
+As a user finishing an import,
+I want commits to dedupe silently, summarize imported/skipped counts, and land on the Soft-Ledger settle strip,
+So that I see the number I came to update (J1 climax).
+
+**Acceptance Criteria:**
+
+**Given** I assign a cleanly parsed transaction to a list
+**When** commit runs
+**Then** an Import Batch is journaled for that commit action and its ledger row is written with domain identity dedup (FR-20, FR-34, AD-4)
+**And** payer defaults to me and remains editable (FR-19)
+**And** FX materialization from Epic 3 applies to non-CRC lines
+
+**Given** overlapping re-import of parsed rows
+**When** commit finishes
+**Then** duplicates are skipped without mid-import interruption
+**And** imported-new and skipped-duplicate counts are exposed for the completion summary, which Story 4.14 renders (FR-20, UX-DR22)
+
+**Given** the session completes (no Epic 5 conflicts yet)
+**When** the review queue is exhausted
+**Then** I land on shared-expenses for the list that received the most rows this session — the completion summary itself is Story 4.14's surface, not this story's
+**And** the Soft-Ledger settle strip reflects the new committed purchases — same strip as Epic 3, no parallel settle UI
+**And** when Epic 5 same-price conflicts exist, Story 5.7 inserts conflict review after this summary and before Soft-Ledger land — do not land on a confident strip then interrupt (UX-DR22)
+
+**Given** a statement parsed correctly and committed with no unresolved quarantine
+**When** the Import Batch commit succeeds
+**Then** the statement PDF file is deleted from the operator volume and its Postgres path reference is cleared (AD-3) — ledger rows in SQL are the durable record
+**And** clean PDF delete is skipped if the statement is incomplete or still has unresolved quarantine (Epic 5 Stories 5.2–5.3 own retain-until-resolved)
+
+**And** same-price / quarantine flows are out of scope for this story (Epic 5); Epic 5 retains the PDF while quarantine needs it, then clears when resolved
+
+### Story 4.13: Individual review card — four-direction actions + inline title edit
 
 As a user reviewing transactions one at a time,
 I want a focused card with four directional actions and an editable title,
@@ -1403,7 +1388,7 @@ So that routing each transaction is deliberate but fast.
 **When** the PATCH returns import_row_not_available
 **Then** the card refreshes from the next GET rather than showing a stale edit
 
-### Story 4.15: Resume entry point + session completion summary
+### Story 4.14: Resume entry point + session completion summary
 
 As a user who closed the app mid-review,
 I want to resume where I left off instead of re-uploading,
@@ -1435,10 +1420,10 @@ So that a long review survives interruption and never leaves a half-reviewed ses
 
 **Given** the review queue is exhausted
 **When** the session completes
-**Then** a summary reports rows committed by destination list, rows deleted, zero-amount rows excluded across all statements, statements that failed to parse, and the imported-new / skipped-duplicate counts Story 4.9 exposes — the failed-statement report replaces Story 4.8's per-statement skip card (FR-18)
-**And** this story owns the completion summary surface; Story 4.9 owns commit correctness and the post-summary landing
+**Then** a summary reports rows committed by destination list, rows deleted, zero-amount rows excluded across all statements, statements that failed to parse, and the imported-new / skipped-duplicate counts Story 4.12 exposes — the failed-statement report replaces Story 4.8's per-statement skip card (FR-18)
+**And** this story owns the completion summary surface; Story 4.12 owns commit correctness and the post-summary landing
 
-### Story 4.16: "New" badge on freshly imported rows
+### Story 4.15: "New" badge on freshly imported rows
 
 As a user who just imported transactions,
 I want newly imported rows marked in the destination list,
@@ -1465,6 +1450,35 @@ So that I can find them to adjust splits without hunting through history.
 **Given** this story's scope
 **When** the badge points the user at adjusting a split
 **Then** wiring an actual split-edit control into ReceiptRow remains out of scope — ReceiptRowMenu's Edit item is currently non-persisting, and that gap is tracked separately
+
+### Story 4.16: Multi-file upload — pending queue, per-item removal, duplicate detection
+
+As a user uploading statements,
+I want to select multiple PDFs at once, remove one from the batch before it's processed, and be warned if I pick a file I've already queued or staged,
+So that I can queue several statements in one pass instead of uploading them one at a time.
+
+**Acceptance Criteria:**
+
+**Given** the Upload page
+**When** I open the file picker
+**Then** I can select more than one PDF at once, and each selected file appears as its own pending entry before any upload request is sent for it
+
+**Given** a pending (not-yet-processed) entry in the queue
+**When** I remove it
+**Then** it is dropped from the queue with no API call ever made for that file
+
+**Given** a file I select
+**When** its content duplicates a file already pending in this queue, or an already-staged (undiscarded) Import Session's statement from this browser session
+**Then** the duplicate is rejected with a clear inline error and is not queued
+
+**Given** a queued batch with no duplicates
+**When** processing runs
+**Then** each file is uploaded and staged as its own Import Session — a single file's rejection does not block or discard the others in the batch, and each entry in the queue view shows its own outcome (staged / failed / rejected)
+
+**Given** v1's adopted ingest architecture (synchronous, in-process, no job queue — `architecture-finance-helper-2026-08-03/.memlog.md`)
+**When** this story processes a queued batch
+**Then** each file's detect/split/parse still runs synchronously in-process, one file at a time — this story only shapes the API/UI boundary (one upload call per file, independent per-file status) so that a later move to concurrent/background processing per file is additive
+**And** actual concurrent or background ("separate threads") processing is explicitly out of scope for this story and requires its own architecture decision (correct-course) before being adopted — it is not decided or implemented here
 
 ## Epic 5: Import resilience (then settle polish)
 
@@ -1543,8 +1557,8 @@ So that partial data only enters the ledger after an explicit decision in front 
 
 **Given** accept-with-quarantine committed
 **When** unresolved quarantine remains
-**Then** the statement PDF is retained on the operator volume — not deleted on this commit (AD-3 continuity from Story 4.9)
-**And** PDF deletion (Story 4.9 clean-commit path) applies only when the statement has no unresolved quarantine and commit succeeded
+**Then** the statement PDF is retained on the operator volume — not deleted on this commit (AD-3 continuity from Story 4.12)
+**And** PDF deletion (Story 4.12 clean-commit path) applies only when the statement has no unresolved quarantine and commit succeeded
 
 **Given** EN/ES locale
 **When** quarantine / dismiss copy is shown
@@ -1694,7 +1708,7 @@ So that I never auto-merge or double-count without an explicit choice (J7).
 **Given** a parsed line and an existing unresolved manual entry with the same price (equal amount + currency) on related lists within the date window
 **When** import commit finishes
 **Then** collisions are not auto-merged; they are collected and shown at end of import after the imported N / skipped M summary (FR-22, UX-DR22)
-**And** conflict review runs before landing on Soft-Ledger as the trusted climax — do not land on a confident strip then interrupt (UX-DR22, Story 4.9 handoff)
+**And** conflict review runs before landing on Soft-Ledger as the trusted climax — do not land on a confident strip then interrupt (UX-DR22, Story 4.12 handoff)
 **And** same-price window is list-configurable with product default ±3 calendar days, inclusive, in America/Costa_Rica (AD-10)
 **And** related lists = lists where both the manual entry and the parsed commit’s destination share at least one common member with the acting user (user-visible membership)
 

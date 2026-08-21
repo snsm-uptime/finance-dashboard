@@ -28,15 +28,15 @@ Net effect: per-row assignment is not reachable by any UI change. The whole revi
 **Story impact:**
 
 - **Story 4.8 (`done`) — status unchanged, annotated as superseded.** It shipped and satisfied its own ACs; `done` remains factually accurate. `sprint-status.yaml` is **not** edited for 4.8. An annotation in `epics.md` and in its implementation-artifacts file records that its ACs no longer describe the product. Reopening it would both misattribute a spec defect to the implementation and erase the shipped-then-changed history this proposal exists to record. The status vocabulary has no `superseded` value, and inventing one risks breaking `bmad-sprint-status` and `bmad-create-story`, which parse that file.
-- **Story 4.9 (`backlog`) — ACs amended** (Section 4). Two of its criteria collide with per-row commits: it journals "an Import Batch **for that statement**," and its completion summary reports only imported/skipped-duplicate counts. Because 4.9 is unstarted, amending it in place is cleaner than adding a contradicting story.
-- **New Stories 4.12–4.16** added to Epic 4 (Section 4).
+- **Story 4.12 (`backlog`) — ACs amended** (Section 4). Two of its criteria collide with per-row commits: it journals "an Import Batch **for that statement**," and its completion summary reports only imported/skipped-duplicate counts. Because 4.12 is unstarted, amending it in place is cleaner than adding a contradicting story.
+- **New Stories 4.10, 4.11, 4.13, 4.14 and 4.15** added to Epic 4 (Section 4).
 - No other existing story's ACs change.
 
 **Artifact conflicts:**
 
 - **PRD: yes — FR-17 and FR-18 both need amendment.** This differs from the 2026-08-19 proposal, which had no PRD impact. FR-17 (`prd.md:474-475`) states "statements are reviewed one at a time" and fixes the gesture map as `right → chosen list, left → default, down → skip`. FR-18 (`prd.md:477-485`) is written entirely in statement units and defines Skip as the negative outcome. Under row-level review the unit becomes a transaction, `down` is reassigned from skip to undo, and delete (`up`) replaces skip. Leaving these unamended would leave the PRD contradicting shipped behavior. Proposed replacement text in Section 4.
 - **Architecture: AD-4 must be amended — resolved in architecture review this session.** `uq_import_batches_statement_id` is not an incidental constraint; it is the schema encoding of AD-4 (`ARCHITECTURE-SPINE.md:95`), which states the v1 batch boundary is *"one Statement's accept/commit (stable `batch_id` per statement)"*. Dropping it while AD-4 stands would leave the spine asserting a guarantee the database no longer makes. Three deltas: (1) batch boundary becomes "one commit action"; (2) the *"Prevents: partial-commit vs batch fights"* clause needs rewriting, since row-level review makes partial commit the normal case; (3) rollback granularity for FR-30 / Epic 5 Story 5.6 silently becomes per-row — arguably an improvement, but it must not happen by accident. AD-1 (domain purity) and AD-3 (PDF lifecycle) are unaffected.
-- **Architecture: AD-9 must also be amended.** `ARCHITECTURE-SPINE.md:137` (AD-9 — Individual review gestures, ADOPTED) mandates the exact vectors *"right → chosen list, left → configurable default list, **down → skip**"* over a statement, and lists *"divergent L/R/D mappings across stories"* under Prevents. Row-level review changes the reviewed unit to a transaction, replaces skip with `up → delete`, and makes undo button-only on every platform. AD-9 is binding on Story 4.14, so it must be amended or 4.14 ships in violation of an adopted decision.
+- **Architecture: AD-9 must also be amended.** `ARCHITECTURE-SPINE.md:137` (AD-9 — Individual review gestures, ADOPTED) mandates the exact vectors *"right → chosen list, left → configurable default list, **down → skip**"* over a statement, and lists *"divergent L/R/D mappings across stories"* under Prevents. Row-level review changes the reviewed unit to a transaction, replaces skip with `up → delete`, and makes undo button-only on every platform. AD-9 is binding on Story 4.13, so it must be amended or 4.13 ships in violation of an adopted decision.
 - **Constraint replacement, not removal.** Review found the original plan understated this risk. Today's commit path is two-layered: `validate_bulk_commit_eligible` (application) plus `uq_import_batches_statement_id` (database backstop) — and `test_import_sessions_integration.py:316` says so explicitly, calling the constraint *"the real backstop"* because two concurrent requests can both pass validation before either persists. The constraint was a Story 4.7 review finding; the guarded UPDATE was a Story 4.8 review finding. Both were added deliberately, at different layers, in response to review. A guarded-UPDATE-only design collapses them into one layer whose correctness depends on statement ordering inside a transaction that no schema enforces. `ledger_entries` carries no `__table_args__` at all, so that constraint is the only DB-enforced guard in the entire commit path. **Resolution:** add `ledger_entries.import_candidate_row_id` (nullable, UNIQUE, FK) so a candidate row yields at most one ledger entry, keeping the two-layer structure intact. Verified viable: ledger entries are hard-deleted (`repositories.py:284,672`, no soft-delete column) so undo-then-reassign reuses the value cleanly, and manual entries keep NULL under a UNIQUE that permits unlimited NULLs, so no backfill.
 - **UI/UX:** the design contract added this session (see Section 1) is the authority. No conflict with the existing `ux-finance-dashboard-2026-08-09` spine — this extends it.
 - **Other artifacts:** `IndividualReviewPanel.test.tsx` is written against statement-level actions and needs a full rewrite alongside the panel.
@@ -97,7 +97,7 @@ Rationale: makes the transaction the unit, replaces Skip with Delete, introduces
 Insert immediately below the `### Story 4.8: Individual review (swipe / desktop buttons)` heading (`epics.md:1130`), before the "As a user" line:
 
 ```
-> **⚠️ Superseded by Stories 4.12–4.16 (Sprint Change Proposal 2026-08-20).**
+> **⚠️ Superseded by Stories 4.10, 4.11, 4.13, 4.14 and 4.15 (Sprint Change Proposal 2026-08-20).**
 > This story shipped and satisfied its own acceptance criteria, which specify statement-level
 > routing ("When I act on a statement"). That granularity was a specification defect: it makes
 > individual review functionally identical to bulk review. The ACs below describe delivered-then-
@@ -107,7 +107,7 @@ Insert immediately below the `### Story 4.8: Individual review (swipe / desktop 
 
 Rationale: preserves the audit trail while making it impossible to read 4.8's ACs as current. Keeps the status machine untouched.
 
-### epics.md — amend Story 4.9 acceptance criteria
+### epics.md — amend Story 4.12 acceptance criteria
 
 Two criteria collide with per-row commits. Replace the first AC block (`epics.md:1170-1174`):
 
@@ -130,12 +130,12 @@ Replace the third AC block (`epics.md:1181-1185`):
 **And** when Epic 5 same-price conflicts exist, Story 5.7 inserts conflict review after this summary and before Soft-Ledger land — do not land on a confident strip then interrupt (UX-DR22)
 ```
 
-Rationale: a batch is now one commit *action* rather than one statement; "the list I mostly fed" needs a definition once one session feeds several lists; and the completion summary is the only place zero-amount exclusions and parse failures are surfaced, so it must be in the AC that owns the summary. Story 4.9 is `backlog`, so this is an edit, not a rework.
+Rationale: a batch is now one commit *action* rather than one statement; "the list I mostly fed" needs a definition once one session feeds several lists; and the completion summary is the only place zero-amount exclusions and parse failures are surfaced, so it must be in the AC that owns the summary. Story 4.12 is `backlog`, so this is an edit, not a rework.
 
-### epics.md — new Story 4.12
+### epics.md — new Story 4.10
 
 ```
-### Story 4.12: Row-level review data model + per-row commit
+### Story 4.10: Row-level review data model + per-row commit
 
 As a developer enabling per-transaction routing,
 I want import_candidate_rows to carry independent status and resolution, and commits to operate on one row at a time,
@@ -182,7 +182,7 @@ So that a statement's rows can be routed to different lists instead of committin
 
 **Given** bulk review runs against a session
 **When** it commits
-**Then** it skips excluded_zero_amount rows and marks every row it touches committed, and rejects any statement already carrying non-pending rows with import_row_not_available — a backstop, since Story 4.15 makes that state unreachable from the UI
+**Then** it skips excluded_zero_amount rows and marks every row it touches committed, and rejects any statement already carrying non-pending rows with import_row_not_available — a backstop, since Story 4.14 makes that state unreachable from the UI
 
 **Given** statement-level individual review is retired
 **When** this story lands
@@ -191,10 +191,10 @@ So that a statement's rows can be routed to different lists instead of committin
 
 Rationale: isolates the highest-risk change — dropping a database-enforced invariant — into one story with an explicit ordering requirement (guard before drop). Retiring the dead services here prevents two commit paths coexisting.
 
-### epics.md — new Story 4.13
+### epics.md — new Story 4.11
 
 ```
-### Story 4.13: Row-level review API — rows, assign, delete, undo, edit
+### Story 4.11: Row-level review API — rows, assign, delete, undo, edit
 
 As a client rendering per-transaction review,
 I want the session payload to carry individual rows and endpoints to resolve them one at a time,
@@ -236,10 +236,10 @@ So that the review UI can act on a transaction instead of a file.
 
 Rationale: undo is session-scoped rather than row-scoped because the button targets "what I just did," not a visible row. Server-persisted so it survives the app closing mid-review, which is the same requirement resumability imposes.
 
-### epics.md — new Story 4.14
+### epics.md — new Story 4.13
 
 ```
-### Story 4.14: Individual review card — four-direction actions + inline title edit
+### Story 4.13: Individual review card — four-direction actions + inline title edit
 
 As a user reviewing transactions one at a time,
 I want a focused card with four directional actions and an editable title,
@@ -291,10 +291,10 @@ So that routing each transaction is deliberate but fast.
 
 Rationale: matches Story 4.8's granularity precedent (one story for the review surface). The title-edit ACs are explicit about mirroring `ListsPanel` because reimplementing that state machine from scratch is the likely failure mode.
 
-### epics.md — new Story 4.15
+### epics.md — new Story 4.14
 
 ```
-### Story 4.15: Resume entry point + session completion summary
+### Story 4.14: Resume entry point + session completion summary
 
 As a user who closed the app mid-review,
 I want to resume where I left off instead of re-uploading,
@@ -329,12 +329,12 @@ So that a long review survives interruption and never leaves a half-reviewed ses
 **Then** a summary reports rows committed by destination list, rows deleted, zero-amount rows excluded across all statements, and statements that failed to parse — the failed-statement report replaces Story 4.8's per-statement skip card (FR-18)
 ```
 
-Rationale: resumable data without a way back in is not a feature. This story is also what makes the bulk-vs-partial conflict unreachable from the UI, which is why Story 4.12's bulk guard is only a backstop.
+Rationale: resumable data without a way back in is not a feature. This story is also what makes the bulk-vs-partial conflict unreachable from the UI, which is why Story 4.10's bulk guard is only a backstop.
 
-### epics.md — new Story 4.16
+### epics.md — new Story 4.15
 
 ```
-### Story 4.16: "New" badge on freshly imported rows
+### Story 4.15: "New" badge on freshly imported rows
 
 As a user who just imported transactions,
 I want newly imported rows marked in the destination list,
@@ -368,35 +368,48 @@ Rationale: the badge is buildable now and independently useful. Its scope bounda
 ### sprint-status.yaml — new backlog entries
 
 ```yaml
-  4-12-row-level-review-data-model-per-row-commit: backlog
-  4-13-row-level-review-api-rows-assign-delete-undo-edit: backlog
-  4-14-individual-review-card-four-direction-actions-inline-title-edit: backlog
-  4-15-resume-entry-point-session-completion-summary: backlog
-  4-16-new-badge-on-freshly-imported-rows: backlog
+  4-10-row-level-review-data-model-per-row-commit: backlog
+  4-11-row-level-review-api-rows-assign-delete-undo-edit: backlog
+  4-13-individual-review-card-four-direction-actions-inline-title-edit: backlog
+  4-14-resume-entry-point-session-completion-summary: backlog
+  4-15-new-badge-on-freshly-imported-rows: backlog
 ```
 
-Inserted after `4-11-bac-credit-real-statement-compatibility-fix`, before `epic-4-retrospective`. `epic-4` stays `in-progress` (unchanged). **`4-8-individual-review-swipe-desktop-buttons` stays `done` — not edited.**
+Inserted after `4-9-bac-credit-real-statement-compatibility-fix`, before `epic-4-retrospective`. `epic-4` stays `in-progress` (unchanged). **`4-8-individual-review-swipe-desktop-buttons` stays `done` — not edited.**
 
 ## 5. Implementation Handoff
 
 **Scope classification:** Major — backlog reorganization (this proposal) plus a multi-story implementation spanning migration, service layer, and a near-full panel rewrite. Not a same-session direct edit.
 
-**Sequencing:** **4.11 → 4.12 → 4.13 → 4.9 → 4.14 → 4.15.**
+**Sequencing — Epic 4 was renumbered 2026-08-20 so numeric order is build order:** **4.9 → 4.10 → 4.11 → 4.12 → 4.13 → 4.14**, then 4.15 and 4.16 whenever convenient.
 
-- **4.11 first** (already in `review`). Without a working BAC adapter, real uploads yield `candidate_row_count == 0` — there are no real rows to review, so nothing downstream is verifiable against a real statement.
-- **4.9 moved.** It was next in line before this proposal, but amending its ACs to per-transaction semantics made it depend on 4.12/4.13: its batch journaling, dedup, and PDF-cleanup criteria all attach to a per-row commit path that does not exist until then. It is no longer buildable in numeric order.
-- **4.16** depends only on 4.13 (entries must be created with a null `import_reviewed_at`) and can run in parallel with 4.14–4.15.
-- **4.10** (multi-file upload) is independent — entirely upload-stage, never touching review granularity — and can run at any point.
+| Was | Now | Story |
+| --- | --- | --- |
+| 4.11 | **4.9** | BAC credit real-statement compatibility fix |
+| 4.12 | **4.10** | Row-level review data model + per-row commit |
+| 4.13 | **4.11** | Row-level review API |
+| 4.9 | **4.12** | Commit batch, dedup summary, land on settle strip |
+| 4.14 | **4.13** | Individual review card |
+| 4.15 | **4.14** | Resume entry point + completion summary |
+| 4.16 | **4.15** | "New" badge on freshly imported rows |
+| 4.10 | **4.16** | Multi-file upload |
 
-**Story ownership boundary (4.9 vs 4.15):** Story 4.15 owns the completion summary surface. Story 4.9 owns commit correctness (dedup, FX, batch journaling, PDF cleanup) and the post-summary landing, and exposes its imported-new / skipped-duplicate counts for 4.15 to render. Both stories originally specified the summary; that duplication was corrected.
+- **4.9 first** (already in `review`). Without a working BAC adapter, real uploads yield `candidate_row_count == 0` — there are no real rows to review, so nothing downstream is verifiable against a real statement.
+- **4.12 (commit batch) sits mid-sequence, not first.** Under its old number 4.9 it was next in line, but amending its ACs to per-transaction semantics made it depend on 4.10/4.11: its batch journaling, dedup, and PDF-cleanup criteria all attach to a per-row commit path that does not exist until then. The renumber is what puts it back in buildable order.
+- **4.15** (badge) depends only on 4.11 — entries must be created with a null `import_reviewed_at` — and can run in parallel with 4.13–4.14.
+- **4.16** (multi-file upload) is independent — entirely upload-stage, never touching review granularity — and can run at any point.
+- **Story files renamed** to match: `4-11-bac-credit-…` → `4-9-bac-credit-…`, `4-10-multi-file-…` → `4-16-multi-file-…`. Story 4.9's shipped branches and PRs (#61, #62, #63) still carry `4-11` in their names; that is recorded inside the story file rather than rewritten.
+- **Completed story files (4.1–4.8) were deliberately left unedited.** They carry range expressions like *"Stories 4.4–4.9"* describing the original import pipeline; renumbering those would make historical statements false in a new way. A decode table lives in `epics.md` under Epic 4.
+
+**Story ownership boundary (4.12 vs 4.14):** Story 4.14 owns the completion summary surface. Story 4.12 owns commit correctness (dedup, FX, batch journaling, PDF cleanup) and the post-summary landing, and exposes its imported-new / skipped-duplicate counts for 4.14 to render. Both stories originally specified the summary; that duplication was corrected.
 
 **Handoff:**
 
 1. **Product Owner** — ✅ FR-17 and FR-18 amendments landed in `prd.md` this session, with dated amendment notes retaining the superseded wording. The mirrored copies in `epics.md`'s Requirements Inventory and UX-DR11 were updated to match. Unlike the 2026-08-19 proposal, this one did change the PRD.
 2. **Architect** — ✅ resolved and landed this session. AD-4 and AD-9 are both amended in `ARCHITECTURE-SPINE.md` (dated amendment notes retain the superseded wording). No new AD was needed. The constraint is translated to row grain rather than dropped outright.
 3. **Product Owner / Developer** — land this proposal's edits to `prd.md`, `epics.md`, and `sprint-status.yaml`.
-4. **Developer agent** — run `bmad-create-story` against `4-12-row-level-review-data-model-per-row-commit`, then `bmad-dev-story`. Proceed in the sequence above.
+4. **Developer agent** — run `bmad-create-story` against `4-10-row-level-review-data-model-per-row-commit`, then `bmad-dev-story`. Proceed in the sequence above.
 
 **Success criteria:** a real multi-transaction statement can be reviewed one transaction at a time with different transactions routed to different lists; closing the app mid-review and returning resumes at the next unreviewed transaction with undo still available; discarding a partially reviewed session retains already-committed rows; zero-amount rows never appear in review but are reported at completion; bulk review behavior for untouched sessions is unchanged.
 
-**Rollback posture:** Story 4.12's migration is the one-way door — once rows carry mixed statuses, restoring `uq_import_batches_statement_id` requires resolving statements that legitimately span multiple batches. Both protection layers — the guarded UPDATE and the new `ledger_entries.import_candidate_row_id` UNIQUE backstop — must be in place and covered by a row-grain race test before the old constraint is dropped.
+**Rollback posture:** Story 4.10's migration is the one-way door — once rows carry mixed statuses, restoring `uq_import_batches_statement_id` requires resolving statements that legitimately span multiple batches. Both protection layers — the guarded UPDATE and the new `ledger_entries.import_candidate_row_id` UNIQUE backstop — must be in place and covered by a row-grain race test before the old constraint is dropped.

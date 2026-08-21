@@ -2,9 +2,15 @@
 baseline_commit: c04e29c95b54728af1ce6898356b59f5ad44f5df
 ---
 
-# Story 4.10: Multi-file upload — pending queue, per-item removal, duplicate detection
+# Story 4.16: Multi-file upload — pending queue, per-item removal, duplicate detection
 
 Status: ready-for-dev
+
+> **Renumbered 2026-08-20: was Story 4.10.** Epic 4 was reordered so numeric order matches build
+> order (Sprint Change Proposal 2026-08-20). This story is independent of review granularity and
+> can be built at any point. `sprint-change-proposal-2026-08-19.md` still refers to it by its old
+> key `4-10-multi-file-upload-pending-queue-dedup` — that proposal is a historical record and was
+> deliberately left unedited.
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -40,7 +46,7 @@ So that I can queue several statements in one pass instead of uploading them one
 - **No concurrent/background processing.** See Origin note. The existing single-file `POST /import/sessions` endpoint (Story 4.6) is reused unchanged, called once per queued file, sequentially.
 - **No batch-level API endpoint.** This is a client-side orchestration story, not a new bulk-upload route. (Do not confuse this with Story 4.7 "Bulk review" — 4.7 is about assigning an *already-staged* session's statements to one list; this story is about queuing multiple *uploads* before staging. They are unrelated and do not conflict: 4.7 already operates per `session_id` and has no assumption that only one session exists at a time.)
 - **No cap/limit UI beyond a simple default.** This story assumes a soft client-side cap of 10 files per batch (no PRD/NFR number exists for this — see Dev Notes) to keep a naive "select 200 files" case from hammering the single synchronous API worker. Treat this as a starting default, not a hard product requirement — flag if the user wants a different number.
-- **No dedup of parsed *ledger rows*.** That's Story 4.9's domain-identity dedup at commit time (AD-18) and is untouched by this story. This story's duplicate check is purely "is this the same PDF file, before it's even parsed" — a different, earlier gate.
+- **No dedup of parsed *ledger rows*.** That's Story 4.12's domain-identity dedup at commit time (AD-18) and is untouched by this story. This story's duplicate check is purely "is this the same PDF file, before it's even parsed" — a different, earlier gate.
 
 ## Tasks / Subtasks
 
@@ -93,10 +99,10 @@ Quoting `project-context.md` verbatim because it is easy to over-read "multiple 
 
 Sequential client-side processing (Task 5.4) is a deliberate choice, not a placeholder for "do it properly later inside this story." If a future story wants real concurrency, it goes through `bmad-correct-course` first (this reverses an ADOPTED decision, not just extends one) — this story's job is only to make that reversal *additive* (stable per-file request shape, independent per-file status) rather than a redesign.
 
-### What "duplicate" means here vs. Story 4.9
+### What "duplicate" means here vs. Story 4.12
 
 - **This story (upload-time):** byte-identical PDF content, checked before parsing even starts, scoped to `(user_id, content_hash)` among the user's *active* (non-discarded) sessions. Purely mechanical — no statement parsing involved.
-- **Story 4.9 (commit-time):** `compute_canonical_identity` (`domain/canonical_line.py`, Story 4.4) dedups *parsed ledger rows* by domain identity (external_ref or a fallback tuple), independent of which file they came from. A user could legitimately re-upload a statement covering an overlapping date range from a different export — same ledger rows, different file bytes — and 4.9's dedup (not this story's) is what catches that. Do not conflate the two; this story's check is strictly narrower and earlier in the pipeline.
+- **Story 4.12 (commit-time):** `compute_canonical_identity` (`domain/canonical_line.py`, Story 4.4) dedups *parsed ledger rows* by domain identity (external_ref or a fallback tuple), independent of which file they came from. A user could legitimately re-upload a statement covering an overlapping date range from a different export — same ledger rows, different file bytes — and 4.9's dedup (not this story's) is what catches that. Do not conflate the two; this story's check is strictly narrower and earlier in the pipeline.
 
 ### Hexagonal placement (AD-1)
 
@@ -130,13 +136,13 @@ Per `_bmad-output/implementation-artifacts/story-close-overview-checklist.md`, p
 
 ### References
 
-- [Source: _bmad-output/planning-artifacts/epics.md#Story 4.10: Multi-file upload — pending queue, per-item removal, duplicate detection] — ACs, story statement (added alongside this story file).
+- [Source: _bmad-output/planning-artifacts/epics.md#Story 4.16: Multi-file upload — pending queue, per-item removal, duplicate detection] — ACs, story statement (added alongside this story file).
 - [Source: _bmad-output/planning-artifacts/architecture/architecture-finance-helper-2026-08-03/.memlog.md] — "Ingest runtime v1 = in-process synchronous... no job queue in v1 [ADOPTED]" — the binding constraint on Task 5.4 and the Origin note.
 - [Source: _bmad-output/project-context.md#Compose / AD-2] — "Do not add Redis, workers, or a fourth app service in v1 unless a measured NFR-12 failure forces it"; "Never... add Redis/worker 'just in case'".
 - [Source: _bmad-output/implementation-artifacts/4-6-upload-pdf-detect-split-import-session.md] — the service/repository/route/UI shapes this story extends; its own code-review pass (2026-08-19) is the direct predecessor of every file this story touches.
 - [Source: _bmad-output/implementation-artifacts/4-7-bulk-review-assign-commit-path.md] — per 4.7's still-unimplemented draft (status: `ready-for-dev`, not `done` — written before Story 4.6 existed, full of `[VERIFY AGAINST 4.6 SCHEMA]` placeholders), its design is `session_id`-scoped with no single-active-session assumption, so no conflict with this story is expected — re-verify once 4.7 actually lands and those placeholders are resolved against real code.
 - [Source: _bmad-output/planning-artifacts/ux-designs/ux-finance-helper-2026-08-03/EXPERIENCE.md] line 167 — J1 only narrates a single-PDF pick; no multi-file/queue UX is specified anywhere in DESIGN.md/EXPERIENCE.md, confirmed by grep — this story's UI shape is new, keep it minimal.
-- [Source: _bmad-output/planning-artifacts/prds/prd-finance-helper-2026-08-02/prd.md#FR-13, FR-14, FR-15] — no FR covers multi-file selection or upload-time duplicate detection; closest is FR-20's post-*commit* dedup summary, which is a different mechanism (see Dev Notes "What 'duplicate' means here vs. Story 4.9").
+- [Source: _bmad-output/planning-artifacts/prds/prd-finance-helper-2026-08-02/prd.md#FR-13, FR-14, FR-15] — no FR covers multi-file selection or upload-time duplicate detection; closest is FR-20's post-*commit* dedup summary, which is a different mechanism (see Dev Notes "What 'duplicate' means here vs. Story 4.12").
 
 ## Dev Agent Record
 
