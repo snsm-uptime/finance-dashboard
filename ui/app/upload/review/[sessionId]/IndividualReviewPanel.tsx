@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useDrag } from "@use-gesture/react";
 
@@ -74,12 +74,15 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     errorUnauthorized: t.errorUnauthorized,
   };
 
-  const cardMessages: CardIdentificationMessages = {
-    errorCardAlreadyRegistered: t.errorCardAlreadyRegistered,
-    errorInvalidCardLabel: t.errorInvalidCardLabel,
-    errorGeneric: t.errorGeneric,
-    errorUnauthorized: t.errorUnauthorized,
-  };
+  const cardMessages: CardIdentificationMessages = useMemo(
+    () => ({
+      errorCardAlreadyRegistered: t.errorCardAlreadyRegistered,
+      errorInvalidCardLabel: t.errorInvalidCardLabel,
+      errorGeneric: t.errorGeneric,
+      errorUnauthorized: t.errorUnauthorized,
+    }),
+    [t.errorCardAlreadyRegistered, t.errorInvalidCardLabel, t.errorGeneric, t.errorUnauthorized],
+  );
 
   const dismissMessages: UploadMessages = {
     errorUnsupportedFileType: t.errorUnsupportedFileType,
