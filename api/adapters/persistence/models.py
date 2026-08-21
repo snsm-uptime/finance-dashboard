@@ -403,6 +403,9 @@ class ImportStatementModel(Base):
     product_id is a String adapter id (e.g. "bac_credit") — a different
     type than the speculative UUID ledger_entries.product_id from Story 3.2;
     see this story's Completion Notes for the forward note to Story 4.9.
+
+    iban is the normalized statement-level IBAN extracted from the PDF header
+    (Story 4.8.1); nullable for backward compatibility with pre-IBAN uploads.
     """
 
     __tablename__ = "import_statements"
@@ -416,6 +419,7 @@ class ImportStatementModel(Base):
     )
     product_id: Mapped[str] = mapped_column(String(64), nullable=False)
     pdf_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    iban: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

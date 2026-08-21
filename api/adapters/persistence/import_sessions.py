@@ -55,6 +55,7 @@ def _session_record(row: ImportSessionModel) -> ImportSessionRecord:
                 status=statement.status,
                 candidate_row_count=len(statement.candidate_rows),
                 pdf_path=statement.pdf_path,
+                iban=statement.iban,  # Story 4.8.1: carry IBAN through record
                 candidate_rows=[
                     _candidate_line(candidate, statement) for candidate in statement.candidate_rows
                 ],
@@ -101,6 +102,7 @@ class SqlAlchemyImportSessionRepository:
                 session_id=session_id,
                 product_id=detected.product_id,
                 pdf_path=pdf_paths[index],
+                iban=detected.iban,  # Story 4.8.1: persist IBAN
                 status=detected.status,
             )
             self._session.add(statement_row)

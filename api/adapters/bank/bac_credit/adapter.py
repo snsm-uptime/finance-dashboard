@@ -98,6 +98,9 @@ _ISSUANCE_DATE_RE = re.compile(
     r"Fecha de emisi[oó]n:\s*(\d{1,2}-[A-ZÁÉÍÓÚÑ]{3}-\d{2})",
     re.IGNORECASE,
 )
+# IBAN extraction for CRC (colones) account; fallback to USD if CRC is absent (Story 4.8.1)
+_IBAN_CRC_RE = re.compile(r"Cuenta IBAN colones:\s*([CR0-9\s]+)", re.IGNORECASE)
+_IBAN_USD_RE = re.compile(r"Cuenta IBAN d[óo]lares:\s*([A-Z0-9\s]+)", re.IGNORECASE)
 
 
 def _signed_amount(amount: Decimal, line_type: str) -> Decimal:
@@ -127,6 +130,31 @@ def parse_printed_issuance_date(lines: list[str]) -> date | None:
             continue
         iso = parse_statement_date(match.group(1), date_format=_DATE_FORMAT)
         return date.fromisoformat(iso)
+    return None
+
+
+def extract_iban_from_statement(lines: list[str]) -> str | None:
+    """Extract IBAN from statement header (Story 4.8.1, AC #1).
+
+    Tries "Cuenta IBAN colones" (CRC, preferred) first; falls back to
+    "Cuenta IBAN dólares" (USD) if CRC is absent. Whitespace-only IBANs
+    are treated as absent (returns None).
+
+    Note: Assumes the IBAN value is on the same line as the field label
+    (e.g., "Cuenta IBAN colones: CR03 0102..."). This matches real BAC
+    statement structure; if a future BAC version splits this across lines,
+    re-parsing may be needed (see Story 4.11 for real-PDF compatibility).
+    """
+    for line in lines:
+        match = _IBAN_CRC_RE.search(line)
+        if match is not None:
+            iban = match.group(1).strip()
+            return iban if iban else None
+    for line in lines:
+        match = _IBAN_USD_RE.search(line)
+        if match is not None:
+            iban = match.group(1).strip()
+            return iban if iban else None
     return None
 
 
@@ -215,6 +243,27 @@ class BacCreditAdapter:
             dst.save(buf)
             chunks.append(buf.getvalue())
         return chunks
+
+    def extract_iban(self, statement_bytes: bytes) -> str | None:
+        """Extract statement IBAN for card identification (Story 4.8.1, AC #1).
+
+        Returns raw (not normalized) IBAN string if found; None otherwise.
+        Normalization happens in the application layer using normalize_iban().
+        """
+        try:
+            lines: list[str] = []
+            with pdfplumber.open(io.BytesIO(statement_bytes)) as doc:
+                for page in doc.pages:
+                    text = page.extract_text() or ""
+                    lines.extend(text.splitlines())
+        except Exception as e:
+            # If we can't read the PDF, return None gracefully
+            # (parse() will fail with a proper error later)
+            _logger.debug("iban_extraction_failed pdf_read_error=%s", e)
+            return None
+
+        stripped_lines = [raw.strip() for raw in lines if raw.strip()]
+        return extract_iban_from_statement(stripped_lines)
 
     def parse(self, statement_bytes: bytes) -> list[CanonicalLine]:
         try:

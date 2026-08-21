@@ -11,9 +11,11 @@ from __future__ import annotations
 import logging
 import uuid
 
+from adapters.persistence.cards import SqlAlchemyCardRepository
 from adapters.persistence.import_sessions import SqlAlchemyImportSessionRepository
 from adapters.persistence.repositories import SqlAlchemyListRepository
 from application.bank_adapters import BankAdapter
+from application.cards import MatchCardByIbanService, RegisterCardCommand, RegisterCardService
 from application.fx_service import MaterializeFxService
 from application.import_session import (
     AssignBulkImportCommand,
@@ -24,14 +26,18 @@ from application.import_session import (
     DiscardImportSessionCommand,
     DiscardImportSessionService,
     ImportSessionRecord,
+    MatchStatementCardCommand,
+    MatchStatementCardService,
     SkipStatementCommand,
     SkipStatementService,
     UploadStatementPdfCommand,
     UploadStatementPdfService,
+    _find_statement,
 )
 from application.ports import PdfStorage
 from domain.errors import (
     AmbiguousBankAdapterError,
+    CardIbanAlreadyRegisteredError,
     FxAuthenticationError,
     FxCurrencyNotSupportedError,
     FxFutureDateError,
@@ -43,6 +49,8 @@ from domain.errors import (
     ImportStatementNotAvailableError,
     ImportStatementNotFoundError,
     InvalidCanonicalLineError,
+    InvalidCardIbanError,
+    InvalidCardLabelError,
     NoCleanStatementsToCommitError,
     NotListMemberError,
     UnknownBankAdapterError,
@@ -62,6 +70,8 @@ from api.deps import (
 from api.schemas.import_sessions import (
     BulkCommitBody,
     BulkCommitResponse,
+    CardIdentificationResponse,
+    IdentifyCardBody,
     ImportBatchResponse,
     ImportSessionResponse,
     IndividualCommitBody,
@@ -397,3 +407,138 @@ def skip_individual_statement(
         user_id,
     )
     return _session_response(result)
+
+
+@router.post(
+    "/{session_id}/statements/{statement_id}/identify-card",
+    response_model=CardIdentificationResponse,
+)
+def identify_card_for_statement(
+    session_id: uuid.UUID,
+    statement_id: uuid.UUID,
+    body: IdentifyCardBody,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> CardIdentificationResponse | JSONResponse:
+    """Card identification for individual review (Story 4.8.1, AC #2/#3/#5).
+
+    Given a statement IBAN:
+    - If matched to a known card → return card_id + label (auto-assign, no prompt)
+    - If IBAN unknown + label provided → register new card + return card_id
+    - If IBAN missing or unknown without label → return matched=False (graceful degrade)
+
+    Raises 404 if session or statement not found, 409 if session discarded,
+    or 422 if card label/IBAN validation fails.
+    """
+    session_repo = SqlAlchemyImportSessionRepository(db)
+    session = session_repo.get_session(session_id, user_id)
+    if session is None:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": "Import session not found.", "code": "import_session_not_found"},
+        )
+
+    try:
+        statement = _find_statement(session, statement_id)
+    except ImportStatementNotFoundError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": str(exc), "code": "import_statement_not_found"},
+        )
+
+    if session.discarded_at is not None:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"detail": "Session discarded.", "code": "import_session_discarded"},
+        )
+
+    # Statement has no IBAN → return unknown gracefully (AC #5).
+    # Note: both None (missing field) and empty string (whitespace-only normalized)
+    # are treated as "no IBAN"; iban=None in response for both cases.
+    if not statement.iban:
+        return CardIdentificationResponse(matched=False, iban=None)
+
+    # Try to match IBAN to existing card
+    card_repo = SqlAlchemyCardRepository(db)
+    card_match_service = MatchCardByIbanService(card_repo)
+    statement_card_service = MatchStatementCardService(card_match_service)
+
+    match_result = statement_card_service.execute(
+        MatchStatementCardCommand(actor_user_id=user_id, iban=statement.iban)
+    )
+
+    # Known card → auto-assign silently (AC #2, no prompt required)
+    if match_result.matched_card is not None:
+        return CardIdentificationResponse(
+            matched=True,
+            card_id=match_result.matched_card.id,
+            card_label=match_result.matched_card.label,
+            iban=statement.iban,
+        )
+
+    # Unknown IBAN
+    if body.label:
+        # AC #3: Register new card with provided label
+        try:
+            register_service = RegisterCardService(card_repo)
+            new_card = register_service.execute(
+                RegisterCardCommand(
+                    actor_user_id=user_id,
+                    label=body.label,
+                    iban=statement.iban,
+                )
+            )
+            logger.info(
+                "card_registered_from_import session_id=%s statement_id=%s card_id=%s user_id=%s",
+                session_id,
+                statement_id,
+                new_card.id,
+                user_id,
+            )
+            return CardIdentificationResponse(
+                matched=True,
+                card_id=new_card.id,
+                card_label=new_card.label,
+                iban=statement.iban,
+            )
+        except InvalidCardLabelError as exc:
+            return JSONResponse(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                content={"detail": str(exc), "code": "invalid_card_label"},
+            )
+        except InvalidCardIbanError as exc:
+            return JSONResponse(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                content={"detail": str(exc), "code": "invalid_card_iban"},
+            )
+        except CardIbanAlreadyRegisteredError as exc:
+            # Race condition: concurrent request registered the same IBAN.
+            # Re-check to see if the card is now available to use.
+            recheck_result = statement_card_service.execute(
+                MatchStatementCardCommand(
+                    actor_user_id=user_id,
+                    iban=statement.iban,
+                )
+            )
+            if recheck_result.matched_card is not None:
+                logger.info(
+                    "card_concurrent_registration_resolved "
+                    "session_id=%s statement_id=%s card_id=%s",
+                    session_id,
+                    statement_id,
+                    recheck_result.matched_card.id,
+                )
+                return CardIdentificationResponse(
+                    matched=True,
+                    card_id=recheck_result.matched_card.id,
+                    card_label=recheck_result.matched_card.label,
+                    iban=statement.iban,
+                )
+            # Still can't match, return original conflict error
+            return JSONResponse(
+                status_code=status.HTTP_409_CONFLICT,
+                content={"detail": str(exc), "code": "card_iban_already_registered"},
+            )
+    else:
+        # No label provided → return unknown, UI will prompt
+        return CardIdentificationResponse(matched=False, iban=statement.iban)
