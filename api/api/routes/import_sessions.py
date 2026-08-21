@@ -301,6 +301,7 @@ def commit_individual_statement(
                 session_id=session_id,
                 statement_id=statement_id,
                 list_id=body.list_id,
+                card_id=body.card_id,
             )
         )
     except ImportSessionNotFoundError as exc:

@@ -23,7 +23,7 @@ from domain.errors import (
     InvalidCanonicalLineError,
     InvalidCardIbanError,
 )
-from domain.expenses import ManualExpenseDraft
+from domain.expenses import ORIGIN_KIND_CARD, ManualExpenseDraft
 from domain.import_session import (
     STATEMENT_STATUS_FAILED,
     STATEMENT_STATUS_STAGED,
@@ -215,6 +215,7 @@ class ImportSessionRepository(Protocol):
         list_id: UUID,
         actor_user_id: UUID,
         rows: list[tuple[ManualExpenseDraft, MaterializedFx]],
+        card_id: UUID | None = None,
     ) -> ImportBatchRecord:
         """Persist one Import Batch atomically (Story 4.7, AD-4): the batch
         row, one ledger entry per row, and flips the statement to
@@ -461,6 +462,7 @@ class AssignIndividualImportCommand:
     session_id: UUID
     statement_id: UUID
     list_id: UUID
+    card_id: UUID | None = None  # Story 4.8.1: optional card ID for origin assignment
 
 
 class AssignIndividualImportService:
@@ -521,6 +523,8 @@ class AssignIndividualImportService:
                 line_type=candidate.line_type,
                 posted_date=candidate.posted_date,
                 external_ref=candidate.external_ref,
+                origin_kind=ORIGIN_KIND_CARD if command.card_id else None,
+                origin_card_id=command.card_id,
             )
             fx = self._fx_service.materialize_fx_for_entry(
                 amount=draft.amount,
@@ -536,6 +540,7 @@ class AssignIndividualImportService:
             list_id=command.list_id,
             actor_user_id=command.actor_user_id,
             rows=rows,
+            card_id=command.card_id,
         )
         updated = self._session_repo.get_session(command.session_id, command.actor_user_id)
         if updated is not None:

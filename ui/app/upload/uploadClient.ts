@@ -318,6 +318,7 @@ export async function commitIndividualStatement(
   sessionId: string,
   statementId: string,
   listId: string,
+  cardId: string | undefined,
   messages: IndividualReviewMessages,
 ): Promise<OkSession | ErrorResult> {
   let response: Response;
@@ -328,7 +329,7 @@ export async function commitIndividualStatement(
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ list_id: listId }),
+        body: JSON.stringify({ list_id: listId, card_id: cardId || null }),
       },
     );
   } catch {

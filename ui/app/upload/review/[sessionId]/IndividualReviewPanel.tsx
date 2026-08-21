@@ -168,7 +168,14 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
 
     const listId = act.kind === "acceptChosen" ? pickedListId : defaultListId;
     if (!listId) return { ok: false, error: t.errorGeneric };
-    const result = await commitIndividualStatement(sessionId, current.id, listId, messages);
+    // Story 4.8.2: Pass identified card ID to commit (will be set as origin)
+    const result = await commitIndividualStatement(
+      sessionId,
+      current.id,
+      listId,
+      card.cardId,
+      messages,
+    );
     if (result.ok) {
       setLastAcceptedListId(listId);
       setPickedListId("");

@@ -32,6 +32,7 @@ class BulkCommitBody(BaseModel):
 
 class IndividualCommitBody(BaseModel):
     list_id: UUID
+    card_id: UUID | None = None  # Story 4.8.1: optional card ID for origin assignment
 
 
 class ImportBatchResponse(BaseModel):

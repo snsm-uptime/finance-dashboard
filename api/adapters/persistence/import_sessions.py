@@ -176,6 +176,7 @@ class SqlAlchemyImportSessionRepository:
         list_id: UUID,
         actor_user_id: UUID,
         rows: list[tuple[ManualExpenseDraft, MaterializedFx]],
+        card_id: UUID | None = None,
     ) -> ImportBatchRecord:
         # Batch row is flushed before any ledger entry references it via
         # import_batch_id (FK ordering) — a mid-loop failure rolls back the
