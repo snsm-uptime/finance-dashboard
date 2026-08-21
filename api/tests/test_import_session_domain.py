@@ -8,19 +8,22 @@ from decimal import Decimal
 
 import pytest
 from domain.errors import (
-    ImportSessionAlreadyCommittedError,
     ImportSessionDiscardedError,
-    ImportStatementNotAvailableError,
     InvalidCanonicalLineError,
     NoCleanStatementsToCommitError,
     UnsupportedFileTypeError,
 )
 from domain.import_session import (
+    ROW_STATUS_COMMITTED,
+    ROW_STATUS_DELETED,
+    ROW_STATUS_EXCLUDED_ZERO_AMOUNT,
+    ROW_STATUS_PENDING,
+    ROW_STATUSES,
+    row_is_zero_amount,
     session_needs_source_pdf,
+    statement_is_fully_resolved,
     validate_bulk_candidate_row,
     validate_bulk_commit_eligible,
-    validate_individual_accept_eligible,
-    validate_individual_skip_eligible,
     validate_pdf_upload,
 )
 
@@ -62,10 +65,10 @@ def test_validate_bulk_commit_eligible_rejects_discarded_session() -> None:
         validate_bulk_commit_eligible(discarded_at=datetime.now(UTC), statement_statuses=["staged"])
 
 
-def test_validate_bulk_commit_eligible_rejects_already_committed_session() -> None:
-    """No double-commit (AD-4) — even one committed statement blocks a second Bulk pass."""
-    with pytest.raises(ImportSessionAlreadyCommittedError):
-        validate_bulk_commit_eligible(discarded_at=None, statement_statuses=["committed", "staged"])
+def test_validate_bulk_commit_eligible_accepts_staged_with_committed_sibling() -> None:
+    """Amended AD-4: an all-zero statement may already be committed at create
+    time while siblings are still staged — that mix is Bulk-eligible."""
+    validate_bulk_commit_eligible(discarded_at=None, statement_statuses=["committed", "staged"])
 
 
 def test_validate_bulk_commit_eligible_rejects_all_failed_statements() -> None:
@@ -126,58 +129,61 @@ def test_validate_bulk_candidate_row_rejects_description_over_max_length() -> No
         validate_bulk_candidate_row(amount=Decimal("10.00"), normalized_description="x" * 501)
 
 
-# --- Story 4.8 Task 1.2/1.3: validate_individual_accept_eligible / _skip_eligible ---
+# --- Story 4.10 Task 1: row status, zero-amount, fully-resolved --------------------
 
 
-def test_validate_individual_accept_eligible_accepts_staged() -> None:
-    validate_individual_accept_eligible(discarded_at=None, statement_status="staged")
+def test_row_status_constants_include_excluded_zero_amount_at_twenty_chars() -> None:
+    assert ROW_STATUS_EXCLUDED_ZERO_AMOUNT == "excluded_zero_amount"
+    assert len(ROW_STATUS_EXCLUDED_ZERO_AMOUNT) == 20
+    assert ROW_STATUSES == frozenset(
+        {
+            ROW_STATUS_PENDING,
+            ROW_STATUS_COMMITTED,
+            ROW_STATUS_DELETED,
+            ROW_STATUS_EXCLUDED_ZERO_AMOUNT,
+        }
+    )
 
 
-def test_validate_individual_accept_eligible_rejects_failed() -> None:
-    """AC #6: no comparison UI yet — a failed statement cannot be accepted."""
-    with pytest.raises(ImportStatementNotAvailableError):
-        validate_individual_accept_eligible(discarded_at=None, statement_status="failed")
+def test_row_is_zero_amount_exact_zero_only() -> None:
+    assert row_is_zero_amount(Decimal("0")) is True
+    assert row_is_zero_amount(Decimal("0.00")) is True
+    assert row_is_zero_amount(Decimal("0.01")) is False
+    assert row_is_zero_amount(Decimal("-60000.00")) is False
 
 
-def test_validate_individual_accept_eligible_rejects_committed() -> None:
-    with pytest.raises(ImportStatementNotAvailableError):
-        validate_individual_accept_eligible(discarded_at=None, statement_status="committed")
+def test_statement_is_fully_resolved_true_for_all_committed() -> None:
+    assert statement_is_fully_resolved([ROW_STATUS_COMMITTED, ROW_STATUS_COMMITTED]) is True
 
 
-def test_validate_individual_accept_eligible_rejects_skipped() -> None:
-    with pytest.raises(ImportStatementNotAvailableError):
-        validate_individual_accept_eligible(discarded_at=None, statement_status="skipped")
+def test_statement_is_fully_resolved_true_for_all_deleted() -> None:
+    assert statement_is_fully_resolved([ROW_STATUS_DELETED, ROW_STATUS_DELETED]) is True
 
 
-def test_validate_individual_accept_eligible_rejects_discarded_session() -> None:
-    with pytest.raises(ImportSessionDiscardedError):
-        validate_individual_accept_eligible(
-            discarded_at=datetime.now(UTC), statement_status="staged"
+def test_statement_is_fully_resolved_true_for_all_excluded() -> None:
+    assert statement_is_fully_resolved([ROW_STATUS_EXCLUDED_ZERO_AMOUNT]) is True
+
+
+def test_statement_is_fully_resolved_true_for_committed_and_deleted_mix() -> None:
+    assert statement_is_fully_resolved([ROW_STATUS_COMMITTED, ROW_STATUS_DELETED]) is True
+
+
+def test_statement_is_fully_resolved_false_if_any_non_excluded_pending() -> None:
+    assert (
+        statement_is_fully_resolved(
+            [ROW_STATUS_COMMITTED, ROW_STATUS_PENDING, ROW_STATUS_EXCLUDED_ZERO_AMOUNT]
         )
+        is False
+    )
 
 
-def test_validate_individual_skip_eligible_accepts_staged() -> None:
-    validate_individual_skip_eligible(discarded_at=None, statement_status="staged")
-
-
-def test_validate_individual_skip_eligible_accepts_failed() -> None:
-    """A failed statement can be skipped — how review moves past it pre-Epic-5."""
-    validate_individual_skip_eligible(discarded_at=None, statement_status="failed")
-
-
-def test_validate_individual_skip_eligible_rejects_committed() -> None:
-    with pytest.raises(ImportStatementNotAvailableError):
-        validate_individual_skip_eligible(discarded_at=None, statement_status="committed")
-
-
-def test_validate_individual_skip_eligible_rejects_already_skipped() -> None:
-    with pytest.raises(ImportStatementNotAvailableError):
-        validate_individual_skip_eligible(discarded_at=None, statement_status="skipped")
-
-
-def test_validate_individual_skip_eligible_rejects_discarded_session() -> None:
-    with pytest.raises(ImportSessionDiscardedError):
-        validate_individual_skip_eligible(discarded_at=datetime.now(UTC), statement_status="staged")
+def test_statement_is_fully_resolved_ignores_excluded_when_others_resolved() -> None:
+    assert (
+        statement_is_fully_resolved(
+            [ROW_STATUS_COMMITTED, ROW_STATUS_EXCLUDED_ZERO_AMOUNT, ROW_STATUS_DELETED]
+        )
+        is True
+    )
 
 
 def test_session_needs_source_pdf_while_staged_or_failed() -> None:

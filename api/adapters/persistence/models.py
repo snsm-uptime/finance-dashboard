@@ -12,6 +12,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     Numeric,
     String,
     Text,
@@ -255,6 +256,11 @@ class LedgerEntryModel(Base):
     """LEDGER_ENTRY — hand-row subset for manual create (Story 3.2); parser fills later."""
 
     __tablename__ = "ledger_entries"
+    __table_args__ = (
+        UniqueConstraint(
+            "import_candidate_row_id", name="uq_ledger_entries_import_candidate_row_id"
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     list_id: Mapped[uuid.UUID] = mapped_column(
@@ -302,6 +308,14 @@ class LedgerEntryModel(Base):
         ForeignKey("import_batches.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
+    )
+    # Candidate row this ledger entry was committed from (Story 4.10, AD-4).
+    # Null for hand-entered expenses. UNIQUE (NULLs distinct) is the
+    # double-commit backstop — do not set postgresql_nulls_not_distinct.
+    import_candidate_row_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("import_candidate_rows.id", ondelete="SET NULL"),
+        nullable=True,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -427,18 +441,27 @@ class ImportStatementModel(Base):
 
     session: Mapped[ImportSessionModel] = relationship(back_populates="statements")
     candidate_rows: Mapped[list[ImportCandidateRowModel]] = relationship(
-        back_populates="statement", cascade="all, delete-orphan"
+        back_populates="statement",
+        cascade="all, delete-orphan",
+        order_by="ImportCandidateRowModel.sequence",
     )
 
 
 class ImportCandidateRowModel(Base):
-    """One parsed CanonicalLine row for a staged statement (Story 4.6, AD-16).
+    """One parsed CanonicalLine plus session review fields (Story 4.10, AD-16).
 
     product_id is not duplicated here — identical to the parent statement's
-    product_id, read from there when needed.
+    product_id, read from there when needed. Review status/sequence/resolution
+    live here, not on CanonicalLine. There is no resolved_ledger_entry_id —
+    the link is the reverse FK on ledger_entries.import_candidate_row_id.
     """
 
     __tablename__ = "import_candidate_rows"
+    __table_args__ = (
+        UniqueConstraint(
+            "statement_id", "sequence", name="uq_import_candidate_rows_statement_sequence"
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     statement_id: Mapped[uuid.UUID] = mapped_column(
@@ -455,6 +478,14 @@ class ImportCandidateRowModel(Base):
     external_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
     ref_quality: Mapped[str | None] = mapped_column(String(16), nullable=True)
     provenance: Mapped[str] = mapped_column(String(16), nullable=False, server_default="parser")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="pending")
+    resolved_list_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("lists.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -463,15 +494,15 @@ class ImportCandidateRowModel(Base):
 
 
 class ImportBatchModel(Base):
-    """One committed Import Batch (Story 4.7, AD-4) — one Statement's accept.
+    """One committed Import Batch (Story 4.10, amended AD-4) — one commit action.
 
-    `statement_id` is unique: a statement can be committed at most once, ever
-    (no double-commit). Ledger rows created under this batch reference it via
-    `ledger_entries.import_batch_id`.
+    Under bulk review a commit action covers a whole statement; under
+    row-level individual review it covers a single candidate row, so one
+    statement may produce many batches. `statement_id` is a non-unique FK.
+    Double-commit protection lives on `ledger_entries.import_candidate_row_id`.
     """
 
     __tablename__ = "import_batches"
-    __table_args__ = (UniqueConstraint("statement_id", name="uq_import_batches_statement_id"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     session_id: Mapped[uuid.UUID] = mapped_column(

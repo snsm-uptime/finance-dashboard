@@ -90,7 +90,7 @@ describe("cards / import BFF smoke (coverage floor)", () => {
     ).toBe(200);
   });
 
-  it("bulk-commit, statement commit, and skip forward", async () => {
+  it("bulk-commit forwards cookie", async () => {
     const bulk = await import("@/app/api/import/sessions/[sessionId]/bulk-commit/route");
     expect(
       (
@@ -101,42 +101,6 @@ describe("cards / import BFF smoke (coverage floor)", () => {
             body: JSON.stringify({ statement_ids: ["st1"] }),
           }),
           { params: Promise.resolve({ sessionId: "s1" }) },
-        )
-      ).status,
-    ).toBe(200);
-
-    const stmtCtx = {
-      params: Promise.resolve({ sessionId: "s1", statementId: "st1" }),
-    };
-    const commit = await import(
-      "@/app/api/import/sessions/[sessionId]/statements/[statementId]/commit/route"
-    );
-    expect(
-      (
-        await commit.POST(
-          cookieRequest(
-            "http://localhost/api/import/sessions/s1/statements/st1/commit",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ list_id: "l1" }),
-            },
-          ),
-          stmtCtx,
-        )
-      ).status,
-    ).toBe(200);
-
-    const skip = await import(
-      "@/app/api/import/sessions/[sessionId]/statements/[statementId]/skip/route"
-    );
-    expect(
-      (
-        await skip.POST(
-          cookieRequest("http://localhost/api/import/sessions/s1/statements/st1/skip", {
-            method: "POST",
-          }),
-          stmtCtx,
         )
       ).status,
     ).toBe(200);
