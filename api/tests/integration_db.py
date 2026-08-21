@@ -68,8 +68,15 @@ def make_client(
         # Do not rollback here: this session is the shared outer test transaction.
         # RequestValidationError (422) is thrown into the generator and must not
         # wipe registration/session rows for later assertions in the same test.
+        #
+        # Commit on normal return, mirroring production get_db. Under the
+        # fixture's join_transaction_mode="create_savepoint" this releases the
+        # per-request SAVEPOINT and opens a fresh one, so a later app-level
+        # rollback() (bulk commit error path, Story 4.10) undoes only that
+        # request instead of every row written since the test began. The outer
+        # test transaction still rolls everything back at teardown.
         yield db_session
-        db_session.flush()
+        db_session.commit()
 
     app.dependency_overrides[get_db] = _override_db
     if bccr_client is not None:
