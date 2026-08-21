@@ -16,6 +16,7 @@ services:
   api:
     environment:
       DEV_RELOAD: "true"
+      LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
     volumes:
       - ./api/domain:/app/domain
       - ./api/application:/app/application
