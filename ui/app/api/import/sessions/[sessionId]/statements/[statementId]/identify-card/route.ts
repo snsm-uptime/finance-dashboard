@@ -19,8 +19,10 @@ function forwardCookie(request: NextRequest): Headers {
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { sessionId: string; statementId: string } },
+  { params }: { params: Promise<{ sessionId: string; statementId: string }> },
 ) {
+  const { sessionId, statementId } = await params;
+
   let body: unknown;
   try {
     body = await request.json();
@@ -35,8 +37,8 @@ export async function POST(
   try {
     upstream = await fetch(
       `${getApiInternalUrl()}/import/sessions/${encodeURIComponent(
-        params.sessionId,
-      )}/statements/${encodeURIComponent(params.statementId)}/identify-card`,
+        sessionId,
+      )}/statements/${encodeURIComponent(statementId)}/identify-card`,
       {
         method: "POST",
         headers: forwardCookie(request),
