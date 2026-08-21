@@ -164,7 +164,13 @@ describe("IndividualReviewPanel", () => {
       await Promise.resolve();
     });
 
-    expect(commitIndividualStatement).toHaveBeenCalledWith("s1", "st1", "l1", expect.anything());
+    expect(commitIndividualStatement).toHaveBeenCalledWith(
+      "s1",
+      "st1",
+      "l1",
+      undefined,
+      expect.anything(),
+    );
   });
 
   it("default-list Add commits with default_import_list_id without requiring a picker selection", async () => {
@@ -202,7 +208,13 @@ describe("IndividualReviewPanel", () => {
       await Promise.resolve();
     });
 
-    expect(commitIndividualStatement).toHaveBeenCalledWith("s1", "st1", "l2", expect.anything());
+    expect(commitIndividualStatement).toHaveBeenCalledWith(
+      "s1",
+      "st1",
+      "l2",
+      undefined,
+      expect.anything(),
+    );
   });
 
   it("Skip advances without calling commit", async () => {
@@ -257,13 +269,19 @@ describe("IndividualReviewPanel", () => {
       await Promise.resolve();
     });
 
-    const acceptButton = selectByText(container, "Accept to Choose list");
     const defaultButton = Array.from(container.querySelectorAll("button")).find((b) =>
       b.textContent?.startsWith("Add to"),
     ) as HTMLButtonElement;
     const skipButton = selectByText(container, "Skip");
 
-    expect(acceptButton.disabled).toBe(true);
+    // With a default list configured the panel renders "Add to {list}" plus a
+    // picker; the explicit "Accept to {list}" button only appears when there is
+    // no default. Assert on the accept affordance that is actually rendered,
+    // whichever it is: none of them may be usable for a failed statement.
+    const enabledAccepts = Array.from(container.querySelectorAll("button")).filter(
+      (b) => /^(Add|Accept) to/.test(b.textContent?.trim() ?? "") && !b.disabled,
+    );
+    expect(enabledAccepts).toHaveLength(0);
     expect(defaultButton.disabled).toBe(true);
     expect(skipButton.disabled).toBe(false);
   });
@@ -367,7 +385,13 @@ describe("IndividualReviewPanel", () => {
     await act(async () => {
       await Promise.resolve();
     });
-    expect(commitIndividualStatement).toHaveBeenCalledWith("s1", "st1", "l1", expect.anything());
+    expect(commitIndividualStatement).toHaveBeenCalledWith(
+      "s1",
+      "st1",
+      "l1",
+      undefined,
+      expect.anything(),
+    );
 
     // Swipe left past the threshold: accept to the default list.
     await act(async () => {
@@ -376,7 +400,13 @@ describe("IndividualReviewPanel", () => {
     await act(async () => {
       await Promise.resolve();
     });
-    expect(commitIndividualStatement).toHaveBeenCalledWith("s1", "st1", "l2", expect.anything());
+    expect(commitIndividualStatement).toHaveBeenCalledWith(
+      "s1",
+      "st1",
+      "l2",
+      undefined,
+      expect.anything(),
+    );
 
     // Swipe down past the threshold: skip.
     await act(async () => {

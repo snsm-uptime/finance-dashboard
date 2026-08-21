@@ -22,17 +22,14 @@ export function useCardIdentification(
   const [error, setError] = useState<string | null>(null);
   const [needsRegistration, setNeedsRegistration] = useState(false);
 
+  // A statement is identifiable only while it is staged and carries an IBAN.
+  // When it is not, the hook reports the empty result below rather than
+  // resetting state from inside the effect (react-hooks/set-state-in-effect).
+  const identifiable = Boolean(statement?.iban && statement.status === "staged");
+
   // Auto-identify card when statement changes
   useEffect(() => {
-    if (!statement || !statement.iban || statement.status !== "staged") {
-      setCardMatched(false);
-      setCardId(undefined);
-      setCardLabel(undefined);
-      setIban(undefined);
-      setNeedsRegistration(false);
-      setError(null);
-      return;
-    }
+    if (!identifiable) return;
 
     let cancelled = false;
 
@@ -79,7 +76,7 @@ export function useCardIdentification(
     return () => {
       cancelled = true;
     };
-  }, [sessionId, statement, messages]);
+  }, [sessionId, statement, identifiable, messages]);
 
   // Register new card and re-identify
   async function registerCard(label: string): Promise<{ ok: boolean; error?: string }> {
@@ -102,6 +99,19 @@ export function useCardIdentification(
     setCardLabel(result.cardLabel);
     setNeedsRegistration(!result.matched);
     return { ok: result.matched };
+  }
+
+  if (!identifiable) {
+    return {
+      cardMatched: false,
+      cardId: undefined,
+      cardLabel: undefined,
+      iban: undefined,
+      loading: false,
+      error: null,
+      needsRegistration: false,
+      registerCard,
+    };
   }
 
   return {

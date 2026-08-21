@@ -35,6 +35,8 @@ from domain.import_session import (
     session_needs_source_pdf,
     validate_bulk_candidate_row,
     validate_bulk_commit_eligible,
+    validate_individual_accept_eligible,
+    validate_individual_skip_eligible,
     validate_pdf_upload,
 )
 
@@ -277,6 +279,14 @@ class ImportSessionRepository(Protocol):
         not pending."""
         ...
 
+    def skip_statement(
+        self, *, session_id: UUID, statement_id: UUID, user_id: UUID
+    ) -> ImportSessionRecord:
+        """Guarded staged|failed→skipped UPDATE on the targeted statement.
+        No ledger writes. Raises ImportStatementNotAvailableError when the
+        statement is already committed or skipped (Story 4.8, FR-18)."""
+        ...
+
     def clear_statement_pdf_paths(self, session_id: UUID, user_id: UUID) -> None:
         """Null out path references after the source PDF has been deleted (AD-3)."""
         ...
@@ -333,7 +343,8 @@ class UploadStatementPdfService:
                     if matched_card:
                         card_id = matched_card.id
                         logger.debug(
-                            "upload_statement_card_identified session_filename=%s iban=%r card_id=%s",
+                            "upload_statement_card_identified session_filename=%s "
+                            "iban=%r card_id=%s",
                             command.filename,
                             statement.iban,
                             matched_card.id,
@@ -650,6 +661,45 @@ class AssignIndividualImportService:
                 pdf_storage=self._pdf_storage,
             )
         return batch
+
+
+@dataclass(frozen=True, slots=True)
+class SkipStatementCommand:
+    actor_user_id: UUID
+    session_id: UUID
+    statement_id: UUID
+
+
+class SkipStatementService:
+    """Individual review skip (Story 4.8, AC #5, FR-18): no ledger rows —
+    only flips the targeted statement's own status."""
+
+    def __init__(self, session_repo: ImportSessionRepository, pdf_storage: PdfStorage) -> None:
+        self._session_repo = session_repo
+        self._pdf_storage = pdf_storage
+
+    def execute(self, command: SkipStatementCommand) -> ImportSessionRecord:
+        session = self._session_repo.get_session(command.session_id, command.actor_user_id)
+        if session is None:
+            raise ImportSessionNotFoundError()
+
+        statement = _find_statement(session, command.statement_id)
+
+        validate_individual_skip_eligible(
+            discarded_at=session.discarded_at, statement_status=statement.status
+        )
+
+        updated = self._session_repo.skip_statement(
+            session_id=command.session_id,
+            statement_id=command.statement_id,
+            user_id=command.actor_user_id,
+        )
+        _release_source_pdf_if_idle(
+            session=updated,
+            session_repo=self._session_repo,
+            pdf_storage=self._pdf_storage,
+        )
+        return updated
 
 
 @dataclass(frozen=True, slots=True)

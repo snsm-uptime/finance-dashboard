@@ -39,9 +39,11 @@ vi.mock("@/components/PreferencesProvider", () => ({
   usePreferences: () => ({ locale: "en" as const }),
 }));
 
+type MockSubmitFn = (data: unknown) => Promise<{ ok: boolean; error?: string }>;
+
 vi.mock("@/hooks", () => ({
-  useFormSubmission: (fn: any) => ({
-    submit: vi.fn((arg) => {
+  useFormSubmission: (fn: MockSubmitFn) => ({
+    submit: vi.fn((arg: unknown) => {
       fn(arg);
       return Promise.resolve({ ok: true });
     }),

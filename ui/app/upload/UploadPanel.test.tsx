@@ -38,20 +38,22 @@ vi.mock("@/hooks/useCardIdentification", () => ({
   }),
 }));
 
+type MockSubmitFn = (data: unknown) => Promise<{ ok: boolean; error?: string }>;
+
 vi.mock("@/hooks", async () => {
   const React = await import("react");
   return {
-    useFormSubmission: (fn: any) => {
+    useFormSubmission: (fn: MockSubmitFn) => {
       const [error, setError] = React.useState<string | null>(null);
       const [pending, setPending] = React.useState(false);
 
       const submit = React.useCallback(
-        async (arg: any) => {
+        async (arg: unknown) => {
           setPending(true);
           try {
             const result = await fn(arg);
             if (!result.ok) {
-              setError(result.error);
+              setError(result.error ?? null);
             } else {
               setError(null);
             }
