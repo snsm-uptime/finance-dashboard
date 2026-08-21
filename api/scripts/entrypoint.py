@@ -38,6 +38,17 @@ def main() -> None:
         logger.error("Alembic failed with code %s", result.returncode)
         raise SystemExit(result.returncode)
 
+    if _env_truthy("SEED_DEV_USER"):
+        # Dev/worktree convenience only: a pre-verified account with lists so the
+        # stack is testable without going through signup.
+        from scripts.seed_dev_user import seed
+
+        logger.info("Seeding dev user (SEED_DEV_USER)")
+        try:
+            seed()
+        except Exception:  # never block boot on seed failure
+            logger.exception("Dev user seed failed")
+
     reload = _env_truthy("DEV_RELOAD")
     # Local/dev: do not trust arbitrary X-Forwarded-* until a reverse proxy is in front.
     uvicorn.run(

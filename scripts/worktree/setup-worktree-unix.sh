@@ -152,7 +152,7 @@ if [[ -f "$WT_ROOT/.env" ]]; then
     $0 == "# --- cursor worktree overrides (generated) ---" { skip=1; next }
     $0 == "# --- end cursor worktree overrides ---" { skip=0; next }
     skip { next }
-    /^(FH_COMPOSE_NAME|API_HOST_PORT|UI_HOST_PORT|FINANCE_HELPER_DATA|PUBLIC_APP_URL)=/ { next }
+    /^(FH_COMPOSE_NAME|API_HOST_PORT|UI_HOST_PORT|FINANCE_HELPER_DATA|PUBLIC_APP_URL|SEED_DEV_USER)=/ { next }
     { print }
   ' "$WT_ROOT/.env" >"$tmp_keys"
   mv "$tmp_keys" "$WT_ROOT/.env"
@@ -173,6 +173,7 @@ if [[ -f "$WT_ROOT/.env" ]]; then
     echo "UI_HOST_PORT=${UI_HOST_PORT}"
     echo "FINANCE_HELPER_DATA=${DATA_DIR}"
     echo "PUBLIC_APP_URL=${PUBLIC_APP_URL}"
+    echo "SEED_DEV_USER=${SEED_DEV_USER:-1}"
     echo "$MARKER_END"
   } >"$WT_ROOT/.env"
   rm -f "$tmp"
