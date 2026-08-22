@@ -11,6 +11,7 @@ export { HomeIcon } from "./HomeIcon";
 export { UploadIcon } from "./UploadIcon";
 export { FileIcon } from "./FileIcon";
 export { FileImportIcon } from "./FileImportIcon";
+export { FileImportMorphIcon } from "./FileImportMorphIcon";
 export { SpinnerIcon } from "./SpinnerIcon";
 export { UserIcon } from "./UserIcon";
 
