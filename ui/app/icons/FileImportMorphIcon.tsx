@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, type SVGProps } from "react";
 
+import { MOTION_DURATION_MS } from "./motion";
 import { ICON_STROKE } from "./stroke";
 
 /**
@@ -25,8 +26,6 @@ import { ICON_STROKE } from "./stroke";
  * These shapes are cheap closed-form templates -- no path parsing involved.
  */
 
-const DURATION_MS = 500;
-
 /** Trim float noise so the emitted `d` stays readable in devtools. */
 const n = (v: number) => String(Math.round(v * 1000) / 1000);
 
@@ -48,7 +47,11 @@ type Props = Omit<SVGProps<SVGSVGElement>, "ref"> & {
   active?: boolean;
 };
 
-export function FileImportMorphIcon({ active = false, className, ...props }: Props) {
+export function FileImportMorphIcon({
+  active = false,
+  className,
+  ...props
+}: Props) {
   const body = useRef<SVGPathElement>(null);
   const shaft = useRef<SVGPathElement>(null);
   const head = useRef<SVGPathElement>(null);
@@ -78,7 +81,7 @@ export function FileImportMorphIcon({ active = false, className, ...props }: Pro
     const span = Math.abs(to - from);
     const start = performance.now();
     const step = (now: number) => {
-      const p = Math.min(1, (now - start) / (DURATION_MS * span));
+      const p = Math.min(1, (now - start) / (MOTION_DURATION_MS * span));
       progress.current = from + (to - from) * ease(p);
       apply(progress.current);
       if (p < 1) frame.current = requestAnimationFrame(step);

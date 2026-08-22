@@ -3,6 +3,7 @@
 import { useState, type ButtonHTMLAttributes, type PointerEvent } from "react";
 
 import { FileImportMorphIcon, SpinnerIcon } from "@/app/icons";
+import { MOTION_DURATION_MS } from "@/app/icons/motion";
 import { ICON_STROKE } from "@/app/icons/stroke";
 import { IconButton } from "@/components/IconButton";
 import styles from "./UploadButton.module.scss";
@@ -18,7 +19,13 @@ type UploadButtonProps = Omit<
 
 const glyphClass = "col-start-1 row-start-1 size-14";
 
-function UploadGlyph({ pending, active }: { pending: boolean; active: boolean }) {
+function UploadGlyph({
+  pending,
+  active,
+}: {
+  pending: boolean;
+  active: boolean;
+}) {
   return (
     <span className="grid size-14 place-items-center">
       {pending ? (
@@ -35,8 +42,10 @@ function UploadGlyph({ pending, active }: { pending: boolean; active: boolean })
 /**
  * Square outlined upload control. Composes IconButton for focus, disabled,
  * and accessible name. Idle: muted outline (SVG stroke width) + File glyph.
- * Hover: accent fill, accent outline at 2× stroke, and the glyph's two text
- * lines animate into the import arrow. Pending: filled + spinner.
+ * Hover: accent fill, accent outline at 2× stroke, a lifted card shadow (M3
+ * elevation level 3), and the glyph's two text lines animate into the import
+ * arrow — chrome and glyph share MOTION_DURATION_MS so they move as one piece.
+ * Pending: filled + spinner.
  *
  * The morph is driven from here rather than from CSS `:hover`, because the
  * glyph animates its `d` attributes in JS (see FileImportMorphIcon). Touch
@@ -59,8 +68,10 @@ export function UploadButton({
   const [engaged, setEngaged] = useState(false);
   const isBusy = pending || Boolean(disabled);
   const name = pending ? pendingLabel : label;
-  const chromeClasses = "group !size-[35vw] !p-0 box-border !border-solid";
-  const classes = [chromeClasses, styles.button, className].filter(Boolean).join(" ");
+  const chromeClasses = "group !size-[10rem] !p-0 box-border !border-solid";
+  const classes = [chromeClasses, styles.button, className]
+    .filter(Boolean)
+    .join(" ");
 
   const enter = (e: PointerEvent<HTMLButtonElement>) => {
     if (e.pointerType !== "touch") setEngaged(true);
@@ -88,6 +99,9 @@ export function UploadButton({
       style={{
         ...style,
         ["--upload-stroke" as string]: `${ICON_STROKE}px`,
+        // Beats IconButton's `duration-150` class so the chrome can never
+        // drift from the glyph; both read MOTION_DURATION_MS.
+        transitionDuration: `${MOTION_DURATION_MS}ms`,
       }}
       aria-busy={pending || undefined}
       onPointerEnter={enter}
