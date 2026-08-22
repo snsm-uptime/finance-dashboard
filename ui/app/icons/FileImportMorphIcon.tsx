@@ -25,7 +25,7 @@ import { ICON_STROKE } from "./stroke";
  * These shapes are cheap closed-form templates -- no path parsing involved.
  */
 
-const DURATION_MS = 260;
+const DURATION_MS = 500;
 
 /** Trim float noise so the emitted `d` stays readable in devtools. */
 const n = (v: number) => String(Math.round(v * 1000) / 1000);
