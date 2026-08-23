@@ -1,11 +1,26 @@
 /** Client helpers for list create/rename/open via same-origin BFF. */
 
+export type ListMember = {
+  user_id: string;
+  /** Null only while a member has not passed the alias gate yet. */
+  alias: string | null;
+};
+
+/**
+ * Person label for rosters and pickers. Email is an identity surface and is
+ * never a label, so a member still missing an alias falls back to a short id.
+ */
+export function memberLabel(member: ListMember): string {
+  return member.alias ?? `${member.user_id.slice(0, 8)}…`;
+}
+
 export type ListItem = {
   id: string;
   name: string;
   owner_id: string;
   role: string;
   balance_crc?: string;
+  members?: ListMember[];
 };
 
 export type ListsClientMessages = {
@@ -279,6 +294,17 @@ export function balanceTone(balanceCrc: string | undefined): "owe" | "owed" | "z
   return "zero";
 }
 
+/** Absolute CRC amount for card copy (“You owe ₡12.50”). */
+export function formatCardBalance(balanceCrc: string | undefined): string {
+  const parsed = Number((balanceCrc ?? "0").trim());
+  const abs = Number.isFinite(parsed) ? Math.abs(parsed) : 0;
+  const digits = abs.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+  return `₡${digits}`;
+}
+
 export type DefaultSplitShare = {
   user_id: string;
   percentage: string;
@@ -376,19 +402,6 @@ export async function saveDefaultSplit(
   return { ok: true, split: data };
 }
 
-export type ListMember = {
-  user_id: string;
-  /** Null only while a member has not passed the alias gate yet. */
-  alias: string | null;
-};
-
-/**
- * Person label for rosters and pickers. Email is an identity surface and is
- * never a label, so a member still missing an alias falls back to a short id.
- */
-export function memberLabel(member: ListMember): string {
-  return member.alias ?? `${member.user_id.slice(0, 8)}…`;
-}
 
 export type ExpenseItem = {
   id: string;

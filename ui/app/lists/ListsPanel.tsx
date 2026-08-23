@@ -3,6 +3,7 @@
 import {
   FormEvent,
   KeyboardEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
@@ -11,6 +12,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 
+import { Chip } from "@/components/Chip";
 import { IconButton } from "@/components/IconButton";
 import {
   IconButtonPopup,
@@ -25,12 +27,91 @@ import { Sheet } from "./Sheet";
 import {
   balanceTone,
   createList,
+  formatCardBalance,
   deleteList,
+  memberLabel,
   renameList,
   setLastOpenedList,
   type ListItem,
 } from "./listsClient";
 import styles from "./lists.module.scss";
+
+function rosterForCard(list: ListItem, currentUserId: string) {
+  return [...(list.members ?? [])]
+    .filter(
+      (member) =>
+        member.user_id !== currentUserId && member.user_id !== list.owner_id,
+    )
+    .sort((a, b) =>
+      memberLabel(a).localeCompare(memberLabel(b), undefined, {
+        sensitivity: "base",
+      }),
+    );
+}
+
+function ListRoleBookmark({
+  isOwner,
+  mark,
+  label,
+}: {
+  isOwner: boolean;
+  mark: string;
+  label: string;
+}) {
+  return (
+    <span
+      className={`${styles.roleBookmark} ${
+        isOwner ? styles.roleBookmarkOwner : styles.roleBookmarkMember
+      }`}
+      aria-label={label}
+    >
+      {mark}
+    </span>
+  );
+}
+
+function ListCardFace({
+  list,
+  currentUserId,
+  isOwner,
+  title,
+  balance,
+  ownedMark,
+  memberMark,
+  ownedBadge,
+  memberBadge,
+}: {
+  list: ListItem;
+  currentUserId: string;
+  isOwner: boolean;
+  title: ReactNode;
+  balance: ReactNode;
+  ownedMark: string;
+  memberMark: string;
+  ownedBadge: string;
+  memberBadge: string;
+}) {
+  const roster = rosterForCard(list, currentUserId);
+  return (
+    <>
+      <ListRoleBookmark
+        isOwner={isOwner}
+        mark={isOwner ? ownedMark : memberMark}
+        label={isOwner ? ownedBadge : memberBadge}
+      />
+      {title}
+      <span className={styles.cardMiddle}>{balance}</span>
+      <span className={styles.cardDivider} aria-hidden="true" />
+      <span className={styles.chipRow}>
+        {roster.map((member) => (
+          <Chip key={member.user_id} tone="muted">
+            {memberLabel(member)}
+          </Chip>
+        ))}
+      </span>
+    </>
+  );
+}
 
 type Props = {
   initialLists: ListItem[];
@@ -300,52 +381,59 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
               const isEditing = editingId === list.id;
               const draft = renameDrafts[list.id] ?? list.name;
               const tone = balanceTone(list.balance_crc);
-              const balanceLabel =
-                tone === "owe"
-                  ? t.balanceOwe
-                  : tone === "owed"
-                    ? t.balanceOwed
-                    : t.balanceZero;
+              const balance =
+                tone === "zero" ? null : (
+                  <span
+                    className={`${styles.balance} ${
+                      tone === "owe" ? styles.balanceOwe : styles.balanceOwed
+                    }`}
+                  >
+                    <span className={styles.balanceToken}>
+                      {tone === "owe" ? t.balanceOwe : t.balanceOwed}
+                    </span>
+                    <span className={styles.balanceAmount}>
+                      {formatCardBalance(list.balance_crc)}
+                    </span>
+                  </span>
+                );
+              const faceProps = {
+                list,
+                currentUserId,
+                isOwner,
+                balance,
+                ownedMark: t.ownedMark,
+                memberMark: t.memberMark,
+                ownedBadge: t.ownedBadge,
+                memberBadge: t.memberBadge,
+              };
               return (
                 <li key={list.id} className={styles.row}>
                   {isEditing ? (
                     <div className={styles.cardBody}>
-                      <input
-                        ref={renameInputRef}
-                        className={styles.listNameEdit}
-                        type="text"
-                        value={draft}
-                        placeholder={list.name}
-                        aria-label={t.renameAria}
-                        onChange={(e) =>
-                          setRenameDrafts((prev) => ({
-                            ...prev,
-                            [list.id]: e.target.value,
-                          }))
+                      <ListCardFace
+                        {...faceProps}
+                        title={
+                          <input
+                            ref={renameInputRef}
+                            className={styles.listNameEdit}
+                            type="text"
+                            value={draft}
+                            placeholder={list.name}
+                            aria-label={t.renameAria}
+                            onChange={(e) =>
+                              setRenameDrafts((prev) => ({
+                                ...prev,
+                                [list.id]: e.target.value,
+                              }))
+                            }
+                            onBlur={() => cancelRename(list.id)}
+                            onKeyDown={(e) => onRenameKeyDown(e, list)}
+                            maxLength={200}
+                            autoComplete="off"
+                            disabled={renamingId === list.id}
+                          />
                         }
-                        onBlur={() => cancelRename(list.id)}
-                        onKeyDown={(e) => onRenameKeyDown(e, list)}
-                        maxLength={200}
-                        autoComplete="off"
-                        disabled={renamingId === list.id}
                       />
-                      <span className={styles.badge}>
-                        {isOwner ? t.ownedBadge : t.memberBadge}
-                      </span>
-                      <span className={styles.cardDivider} aria-hidden="true" />
-                      <span
-                        className={`${styles.balance} ${tone === "owe"
-                            ? styles.balanceOwe
-                            : tone === "owed"
-                              ? styles.balanceOwed
-                              : styles.balanceZero
-                          }`}
-                      >
-                        <span className={styles.balanceToken}>{balanceLabel}</span>
-                        <span className={styles.balanceAmount}>
-                          {list.balance_crc ?? "0"}
-                        </span>
-                      </span>
                     </div>
                   ) : (
                     <>
@@ -356,24 +444,12 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
                         disabled={anyOpening}
                         aria-label={`${t.openLink}: ${list.name}`}
                       >
-                        <span className={styles.listName}>{list.name}</span>
-                        <span className={styles.badge}>
-                          {isOwner ? t.ownedBadge : t.memberBadge}
-                        </span>
-                        <span className={styles.cardDivider} aria-hidden="true" />
-                        <span
-                          className={`${styles.balance} ${tone === "owe"
-                              ? styles.balanceOwe
-                              : tone === "owed"
-                                ? styles.balanceOwed
-                                : styles.balanceZero
-                            }`}
-                        >
-                          <span className={styles.balanceToken}>{balanceLabel}</span>
-                          <span className={styles.balanceAmount}>
-                            {list.balance_crc ?? "0"}
-                          </span>
-                        </span>
+                        <ListCardFace
+                          {...faceProps}
+                          title={
+                            <span className={styles.listName}>{list.name}</span>
+                          }
+                        />
                       </button>
                       {isOwner ? (
                         <IconButtonPopup

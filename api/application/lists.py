@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from typing import Protocol
 from uuid import UUID, uuid4
@@ -277,6 +277,55 @@ class DeleteListService:
         self._repo.delete_list(command.list_id)
 
 
+def compute_viewer_balance_crc(
+    repo: object,
+    *,
+    list_id: UUID,
+    actor_user_id: UUID,
+    owner_id: UUID,
+) -> str:
+    """Viewer settle balance for a membership row — same math as the list-detail strip."""
+    list_ledger = getattr(repo, "list_ledger_entries", None)
+    list_members = getattr(repo, "list_members_with_alias", None)
+    if list_ledger is None or list_members is None:
+        return PLACEHOLDER_BALANCE_CRC
+
+    ledger_entries = list_ledger(list_id)
+    members = list_members(list_id)
+    stored_default_split = repo.get_stored_default_split(list_id)  # type: ignore[attr-defined]
+    default_mode = stored_default_split.mode if stored_default_split else MODE_EVEN
+    default_shares = stored_default_split.shares if stored_default_split else None
+
+    def get_split_override_fn(receipt_id):
+        from domain.splits import SUBJECT_RECEIPT
+
+        if receipt_id is None:
+            return None
+        stored = repo.get_split_override(list_id, SUBJECT_RECEIPT, receipt_id)  # type: ignore[attr-defined]
+        if stored is None:
+            return None
+        return SplitSpec(
+            kind=stored.kind,
+            assignee_id=stored.assignee_id,
+            amounts=stored.amounts,
+            percentages=stored.percentages,
+        )
+
+    def get_list_default_split_fn(_list_id):
+        return default_shares
+
+    balances = compute_settle_balance_for_list_members(
+        ledger_entries,
+        members,
+        owner_id,
+        compute_share_allocations,
+        get_split_override_fn,
+        get_list_default_split_fn,
+        default_mode=default_mode,
+    )
+    return str(balances.get(actor_user_id, Decimal("0")))
+
+
 class ListMembershipsService:
     """Membership-scoped list summaries for the authenticated user.
 
@@ -287,7 +336,19 @@ class ListMembershipsService:
         self._repo = repo
 
     def execute(self, command: ListMembershipsCommand) -> list[ListMembershipSummary]:
-        return self._repo.list_for_user(command.actor_user_id)
+        items = self._repo.list_for_user(command.actor_user_id)
+        return [
+            replace(
+                item,
+                balance_crc=compute_viewer_balance_crc(
+                    self._repo,
+                    list_id=item.id,
+                    actor_user_id=command.actor_user_id,
+                    owner_id=item.owner_id,
+                ),
+            )
+            for item in items
+        ]
 
 
 class GetListDetailService:
@@ -341,46 +402,15 @@ class GetListBalancesStubService:
             )
         )
         lst = self._repo.get_list_with_grant(grant, command.list_id)
-
-        ledger_entries = self._repo.list_ledger_entries(command.list_id)  # type: ignore[attr-defined]
-        members = self._repo.list_members_with_alias(command.list_id)  # type: ignore[attr-defined]
-        stored_default_split = self._repo.get_stored_default_split(command.list_id)
-
-        default_mode = stored_default_split.mode if stored_default_split else MODE_EVEN
-        default_shares = stored_default_split.shares if stored_default_split else None
-
-        def get_split_override_fn(receipt_id):
-            from domain.splits import SUBJECT_RECEIPT
-
-            if receipt_id is None:
-                return None
-            stored = self._repo.get_split_override(  # type: ignore[attr-defined]
-                command.list_id, SUBJECT_RECEIPT, receipt_id
-            )
-            if stored is None:
-                return None
-            return SplitSpec(
-                kind=stored.kind,
-                assignee_id=stored.assignee_id,
-                amounts=stored.amounts,
-                percentages=stored.percentages,
-            )
-
-        def get_list_default_split_fn(list_id):
-            return default_shares
-
-        balances = compute_settle_balance_for_list_members(
-            ledger_entries,
-            members,
-            lst.owner_id,
-            compute_share_allocations,
-            get_split_override_fn,
-            get_list_default_split_fn,
-            default_mode=default_mode,
+        return ListBalancesStub(
+            list_id=command.list_id,
+            balance_crc=compute_viewer_balance_crc(
+                self._repo,
+                list_id=command.list_id,
+                actor_user_id=command.actor_user_id,
+                owner_id=lst.owner_id,
+            ),
         )
-
-        user_balance = balances.get(command.actor_user_id, Decimal("0"))
-        return ListBalancesStub(list_id=command.list_id, balance_crc=str(user_balance))
 
 
 class SetLastOpenedListService:
