@@ -233,7 +233,7 @@
 ## Deferred from: code review of 4-11-row-level-review-api-rows-assign-delete-undo-edit.md (2026-08-21)
 
 - ~~Last-row assign/delete still runs `_release_source_pdf_if_idle` … ImportReviewSheet …~~ **Owned by Story 4.13.1** (`sprint-change-proposal-2026-08-21.md`): last-card opens the sheet; PDF stays until Save; per-row discard; one Save at the bottom.
-- Failed-statement Skip is wired to `deleteRow` on the first pending row (`IndividualReviewPanel.tsx`); leave failed-statement UX for Story 4.13.
+- ~~Failed-statement Skip is wired to `deleteRow` on the first pending row (`IndividualReviewPanel.tsx`); leave failed-statement UX for Story 4.13.~~ **Resolved by Story 4.13**: the row-level rewrite retired statement-level skip entirely — a failed statement simply carries an empty `rows` array and contributes nothing to the flattened review queue, so it never produces a card at all. Failed-statement reporting (surfacing that N statements never parsed) remains Story 4.14's completion summary, not this story's.
 
 ## Deferred from: Story 4.12 commit batch, dedup summary, land on settle strip (2026-08-23)
 
