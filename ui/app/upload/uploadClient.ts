@@ -32,6 +32,14 @@ export type ImportSession = {
   discarded_at: string | null;
   statements: StagedStatement[];
   undo: { row_id: string; action: "assign" | "delete" } | null;
+  // Story 4.12. Counts are derived server-side from row state, so an undo
+  // moves them back with the row.
+  finalized_at: string | null;
+  imported_new_count: number;
+  skipped_duplicate_count: number;
+  // Where to land when the session completes; null when the session imported
+  // nothing new — the caller stays put rather than guessing.
+  landing_list_id: string | null;
 };
 
 export type UploadMessages = {
@@ -64,6 +72,10 @@ export type IndividualReviewMessages = {
   errorRowNotFound: string;
   errorRowNotAvailable: string;
   errorNothingToUndo: string;
+  // Optional: only the individual-review finalize path (Story 4.13.1) needs
+  // this code, and requiring it would force every other caller of this
+  // shared type to supply a key it never triggers.
+  errorSessionHasPendingRows?: string;
   errorFxUnavailable: string;
   errorGeneric: string;
   errorUnauthorized: string;
@@ -133,6 +145,9 @@ function mapIndividualReviewError(
   if (code === "import_row_not_found") return messages.errorRowNotFound;
   if (code === "import_row_not_available") return messages.errorRowNotAvailable;
   if (code === "import_nothing_to_undo") return messages.errorNothingToUndo;
+  if (code === "import_session_has_pending_rows") {
+    return messages.errorSessionHasPendingRows ?? messages.errorGeneric;
+  }
   if (code === "fx_service_unavailable") return messages.errorFxUnavailable;
   return messages.errorGeneric;
 }
@@ -249,6 +264,14 @@ function asImportSession(data: unknown): ImportSession | null {
     discarded_at: typeof row.discarded_at === "string" ? row.discarded_at : null,
     statements,
     undo: asUndoPointer(row.undo),
+    // Tolerant of absence, like `rows` on a statement: making these required
+    // would reject an otherwise-valid payload from an older API.
+    finalized_at: typeof row.finalized_at === "string" ? row.finalized_at : null,
+    imported_new_count:
+      typeof row.imported_new_count === "number" ? row.imported_new_count : 0,
+    skipped_duplicate_count:
+      typeof row.skipped_duplicate_count === "number" ? row.skipped_duplicate_count : 0,
+    landing_list_id: typeof row.landing_list_id === "string" ? row.landing_list_id : null,
   };
 }
 
@@ -436,6 +459,20 @@ export async function deleteRow(
 ): Promise<OkSession | ErrorResult> {
   return postRowMutation(
     `/api/import/sessions/${encodeURIComponent(sessionId)}/rows/${encodeURIComponent(rowId)}/delete`,
+    messages,
+  );
+}
+
+/**
+ * End of review (Story 4.12): releases the source PDF and stamps finalized_at.
+ * Safe to call twice — the endpoint is idempotent.
+ */
+export async function finalizeSession(
+  sessionId: string,
+  messages: IndividualReviewMessages,
+): Promise<OkSession | ErrorResult> {
+  return postRowMutation(
+    `/api/import/sessions/${encodeURIComponent(sessionId)}/finalize`,
     messages,
   );
 }

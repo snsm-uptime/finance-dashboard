@@ -260,6 +260,11 @@ class LedgerEntryModel(Base):
         UniqueConstraint(
             "import_candidate_row_id", name="uq_ledger_entries_import_candidate_row_id"
         ),
+        # Deliberately NOT unique (Story 4.12): two genuinely distinct purchases
+        # can share a fallback identity, and the specified behavior there is
+        # skip-and-count, not a 500 on a legitimate statement. Double-commit
+        # protection is the UniqueConstraint above plus the guarded UPDATE.
+        Index("ix_ledger_entries_list_import_identity", "list_id", "import_identity"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
@@ -317,6 +322,11 @@ class LedgerEntryModel(Base):
         ForeignKey("import_candidate_rows.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # Domain-computed canonical dedup identity, version-prefixed (Story 4.12,
+    # AD-18 amended). Null for hand-entered expenses and for pre-4.12 imports —
+    # both are invisible to dedup, which is correct: a manual/parsed collision
+    # is FR-24's conflict flow, deliberately not silent dedup.
+    import_identity: Mapped[str | None] = mapped_column(String(80), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -404,6 +414,10 @@ class ImportSessionModel(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     discarded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Save (individual) / bulk commit — the moment review is over (AD-4). This,
+    # not the last pending row leaving the queue, is what unlocks the AD-3 PDF
+    # delete (Story 4.12).
+    finalized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Single-level undo pointer. A plain FK column, deliberately without a
     # relationship() — a mapped link back to ImportCandidateRowModel would
@@ -503,6 +517,13 @@ class ImportCandidateRowModel(Base):
         nullable=True,
     )
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The row resolved but wrote no ledger entry — its identity was already in
+    # the destination list (Story 4.12). "Committed" here means "this row is
+    # done", not "a ledger entry exists"; leaving it pending would hang the
+    # review queue on rows the user already handled.
+    dedup_skipped: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
     sequence: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

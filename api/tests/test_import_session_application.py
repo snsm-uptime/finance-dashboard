@@ -7,7 +7,8 @@ test_cards_application.py's _FakeCardRepo style.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from collections.abc import Sequence
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
@@ -20,6 +21,7 @@ from application.import_session import (
     AssignCandidateRowCommand,
     AssignCandidateRowService,
     CandidateRowRecord,
+    CommitOutcome,
     CommitRow,
     DeleteCandidateRowCommand,
     DeleteCandidateRowService,
@@ -28,6 +30,8 @@ from application.import_session import (
     DiscardImportSessionService,
     EditCandidateRowCommand,
     EditCandidateRowService,
+    FinalizeImportSessionCommand,
+    FinalizeImportSessionService,
     ImportBatchRecord,
     ImportSessionRecord,
     StagedStatementRecord,
@@ -37,12 +41,13 @@ from application.import_session import (
     UploadStatementPdfService,
     run_import_pipeline,
 )
-from domain.canonical_line import CanonicalLine
+from domain.canonical_line import CanonicalLine, canonical_identity_key
 from domain.errors import (
     AmbiguousBankAdapterError,
     ImportRowNotAvailableError,
     ImportRowNotFoundError,
     ImportSessionDiscardedError,
+    ImportSessionHasPendingRowsError,
     ImportSessionNotFoundError,
     ImportStatementNotFoundError,
     InvalidCanonicalLineError,
@@ -231,6 +236,11 @@ class _FakeImportSessionRepo:
     cleared_undo_pointers: list[UUID] = field(default_factory=list)
     description_edits: list[dict] = field(default_factory=list)
     undo_calls: list[UUID] = field(default_factory=list)
+    # Story 4.12: identities the destination list already holds, plus a call
+    # log so a test can assert the lookup happens once per statement.
+    existing_identities: set[str] = field(default_factory=set)
+    identity_lookups: list[dict] = field(default_factory=list)
+    finalize_calls: list[UUID] = field(default_factory=list)
 
     def create_session(
         self,
@@ -314,10 +324,8 @@ class _FakeImportSessionRepo:
             updated_statements.append(_copy_statement(statement, card_id=card_id))
         if not found:
             raise ImportStatementNotFoundError()
-        self.sessions[session_id] = ImportSessionRecord(
-            id=record.id,
-            user_id=record.user_id,
-            created_at=record.created_at,
+        self.sessions[session_id] = replace(
+            record,
             discarded_at=record.discarded_at,
             statements=updated_statements,
         )
@@ -332,9 +340,12 @@ class _FakeImportSessionRepo:
         actor_user_id: UUID,
         rows: list[CommitRow],
         undo_row_id: UUID | None = None,
-    ) -> ImportBatchRecord:
+        duplicate_row_ids: Sequence[UUID] = (),
+    ) -> CommitOutcome:
         record = self.sessions[session_id]
         targeted = {row.candidate_row_id for row in rows}
+        duplicates = set(duplicate_row_ids)
+        now = datetime.now(UTC)
         updated_statements: list[StagedStatementRecord] = []
         for statement in record.statements:
             if statement.id != statement_id:
@@ -343,22 +354,22 @@ class _FakeImportSessionRepo:
             updated_rows: list[CandidateRowRecord] = []
             pending_hits = 0
             for candidate in statement.candidate_rows:
-                if candidate.id not in targeted:
+                if candidate.id not in targeted and candidate.id not in duplicates:
                     updated_rows.append(candidate)
                     continue
                 if candidate.status != ROW_STATUS_PENDING:
                     raise ImportRowNotAvailableError()
                 pending_hits += 1
                 updated_rows.append(
-                    CandidateRowRecord(
-                        id=candidate.id,
-                        sequence=candidate.sequence,
+                    replace(
+                        candidate,
                         status=ROW_STATUS_COMMITTED,
                         resolved_list_id=list_id,
-                        line=candidate.line,
+                        resolved_at=now,
+                        dedup_skipped=candidate.id in duplicates,
                     )
                 )
-            if pending_hits != len(rows):
+            if pending_hits != len(rows) + len(duplicates):
                 raise ImportRowNotAvailableError()
             status = (
                 STATEMENT_STATUS_COMMITTED
@@ -377,25 +388,30 @@ class _FakeImportSessionRepo:
                 "actor_user_id": actor_user_id,
                 "rows": rows,
                 "undo_row_id": undo_row_id,
+                "duplicate_row_ids": list(duplicate_row_ids),
             }
         )
-        self.sessions[session_id] = ImportSessionRecord(
-            id=record.id,
-            user_id=record.user_id,
-            created_at=record.created_at,
+        self.sessions[session_id] = replace(
+            record,
             discarded_at=record.discarded_at,
             statements=updated_statements,
         )
-        ledger_entry_ids = [uuid4() for _ in rows]
-        return ImportBatchRecord(
-            id=batch_id,
-            session_id=session_id,
-            statement_id=statement_id,
-            list_id=list_id,
-            actor_user_id=actor_user_id,
-            created_at=datetime.now(UTC),
-            ledger_entry_ids=ledger_entry_ids,
+        # An all-duplicate commit action journals no batch (AD-4) — an empty
+        # batch would pollute FR-30 rollback.
+        batch = (
+            ImportBatchRecord(
+                id=batch_id,
+                session_id=session_id,
+                statement_id=statement_id,
+                list_id=list_id,
+                actor_user_id=actor_user_id,
+                created_at=now,
+                ledger_entry_ids=[uuid4() for _ in rows],
+            )
+            if rows
+            else None
         )
+        return CommitOutcome(batch=batch, imported_new=len(rows), skipped_duplicate=len(duplicates))
 
     def mark_candidate_row_deleted(
         self, *, session_id: UUID, statement_id: UUID, row_id: UUID, user_id: UUID
@@ -418,12 +434,11 @@ class _FakeImportSessionRepo:
                 if candidate.status != ROW_STATUS_PENDING:
                     raise ImportRowNotAvailableError()
                 updated_rows.append(
-                    CandidateRowRecord(
-                        id=candidate.id,
-                        sequence=candidate.sequence,
+                    replace(
+                        candidate,
                         status=ROW_STATUS_DELETED,
                         resolved_list_id=None,
-                        line=candidate.line,
+                        resolved_at=datetime.now(UTC),
                     )
                 )
             status = (
@@ -436,10 +451,8 @@ class _FakeImportSessionRepo:
             )
         if not found:
             raise ImportRowNotAvailableError()
-        updated = ImportSessionRecord(
-            id=record.id,
-            user_id=record.user_id,
-            created_at=record.created_at,
+        updated = replace(
+            record,
             discarded_at=record.discarded_at,
             statements=updated_statements,
         )
@@ -451,20 +464,23 @@ class _FakeImportSessionRepo:
         updated_statements: list[StagedStatementRecord] = []
         for statement in record.statements:
             updated_rows = [
-                CandidateRowRecord(
-                    id=candidate.id,
-                    sequence=candidate.sequence,
-                    status=status if candidate.id == row_id else candidate.status,
-                    resolved_list_id=candidate.resolved_list_id,
-                    line=candidate.line,
-                )
+                replace(candidate, status=status) if candidate.id == row_id else candidate
                 for candidate in statement.candidate_rows
             ]
-            updated_statements.append(_copy_statement(statement, candidate_rows=updated_rows))
-        self.sessions[session_id] = ImportSessionRecord(
-            id=record.id,
-            user_id=record.user_id,
-            created_at=record.created_at,
+            # Mirror the real repo's `_complete_statement_if_resolved`: a
+            # statement whose rows have all left pending is committed, and the
+            # AD-3 retain rule reads statement status, not row status.
+            updated_status = (
+                STATEMENT_STATUS_COMMITTED
+                if statement.status == STATEMENT_STATUS_STAGED
+                and statement_is_fully_resolved([row.status for row in updated_rows])
+                else statement.status
+            )
+            updated_statements.append(
+                _copy_statement(statement, status=updated_status, candidate_rows=updated_rows)
+            )
+        self.sessions[session_id] = replace(
+            record,
             discarded_at=record.discarded_at,
             statements=updated_statements,
         )
@@ -515,15 +531,27 @@ class _FakeImportSessionRepo:
         self.undo_calls.append(session_id)
         return self.sessions[session_id]
 
+    def find_existing_identities(self, *, list_id: UUID, identities: Sequence[str]) -> set[str]:
+        self.identity_lookups.append({"list_id": list_id, "identities": list(identities)})
+        if not identities:
+            return set()
+        return {identity for identity in identities if identity in self.existing_identities}
+
+    def mark_session_finalized(self, *, session_id: UUID, user_id: UUID) -> ImportSessionRecord:
+        self.finalize_calls.append(session_id)
+        record = self.sessions[session_id]
+        if record.finalized_at is None:
+            record = replace(record, finalized_at=datetime.now(UTC))
+            self.sessions[session_id] = record
+        return record
+
     def clear_statement_pdf_paths(self, session_id: UUID, user_id: UUID) -> None:
         record = self.sessions.get(session_id)
         if record is None or record.user_id != user_id:
             return
         updated_statements = [_copy_statement(s, pdf_path=None) for s in record.statements]
-        self.sessions[session_id] = ImportSessionRecord(
-            id=record.id,
-            user_id=record.user_id,
-            created_at=record.created_at,
+        self.sessions[session_id] = replace(
+            record,
             discarded_at=record.discarded_at,
             statements=updated_statements,
         )
@@ -1002,13 +1030,16 @@ def test_assign_candidate_row_writes_one_batch_sibling_stays_pending() -> None:
     session = repo.get_session(session_id, actor)
     target = session.statements[0].candidate_rows[0]
 
-    result = AssignCandidateRowService(repo, lookup, _FakeFxService(), storage).execute(
+    result = AssignCandidateRowService(repo, lookup, _FakeFxService()).execute(
         AssignCandidateRowCommand(
             actor_user_id=actor, session_id=session_id, row_id=target.id, list_id=list_id
         )
     )
 
-    assert len(result.ledger_entry_ids) == 1
+    assert result.batch is not None
+    assert len(result.batch.ledger_entry_ids) == 1
+    assert result.imported_new == 1
+    assert result.skipped_duplicate == 0
     assert len(repo.commit_calls) == 1
     assert repo.commit_calls[0]["rows"][0].candidate_row_id == target.id
     updated = repo.get_session(session_id, actor)
@@ -1030,7 +1061,7 @@ def test_assign_candidate_row_second_assign_raises_not_available() -> None:
     session_id = _multi_statement_session(repo, storage, user_id=actor, parse_results=[[_row()]])
     session = repo.get_session(session_id, actor)
     target = session.statements[0].candidate_rows[0]
-    service = AssignCandidateRowService(repo, lookup, _FakeFxService(), storage)
+    service = AssignCandidateRowService(repo, lookup, _FakeFxService())
     command = AssignCandidateRowCommand(
         actor_user_id=actor, session_id=session_id, row_id=target.id, list_id=list_id
     )
@@ -1051,7 +1082,7 @@ def test_assign_candidate_row_unknown_id_not_found() -> None:
     session_id = _multi_statement_session(repo, storage, user_id=actor, parse_results=[[_row()]])
 
     with pytest.raises(ImportRowNotFoundError):
-        AssignCandidateRowService(repo, lookup, _FakeFxService(), storage).execute(
+        AssignCandidateRowService(repo, lookup, _FakeFxService()).execute(
             AssignCandidateRowCommand(
                 actor_user_id=actor, session_id=session_id, row_id=uuid4(), list_id=list_id
             )
@@ -1068,7 +1099,7 @@ def test_delete_candidate_row_then_all_deleted_statement_commits() -> None:
     )
     session = repo.get_session(session_id, actor)
     first, second = session.statements[0].candidate_rows
-    service = DeleteCandidateRowService(repo, storage)
+    service = DeleteCandidateRowService(repo)
 
     after_first = service.execute(
         DeleteCandidateRowCommand(actor_user_id=actor, session_id=session_id, row_id=first.id)
@@ -1081,7 +1112,12 @@ def test_delete_candidate_row_then_all_deleted_statement_commits() -> None:
     )
     assert after_all.statements[0].status == STATEMENT_STATUS_COMMITTED
     assert {row.status for row in after_all.statements[0].candidate_rows} == {ROW_STATUS_DELETED}
-    assert storage.deleted == [f"/data/pdfs/{storage.saved[0][0]}/0.pdf"]
+    # Inverted by Story 4.12 (AC #7): resolving the last pending row is NOT
+    # finalization. Review includes ImportReviewSheet until Save, which calls
+    # POST /finalize — dropping the file here strands a user who still wants to
+    # compare, and is the defect 4.11 deferred.
+    assert storage.deleted == []
+    assert after_all.finalized_at is None
 
 
 def test_assign_candidate_row_discarded_session_rejected() -> None:
@@ -1099,7 +1135,7 @@ def test_assign_candidate_row_discarded_session_rejected() -> None:
     )
 
     with pytest.raises(ImportSessionDiscardedError):
-        AssignCandidateRowService(repo, lookup, _FakeFxService(), storage).execute(
+        AssignCandidateRowService(repo, lookup, _FakeFxService()).execute(
             AssignCandidateRowCommand(
                 actor_user_id=actor, session_id=session_id, row_id=target.id, list_id=list_id
             )
@@ -1195,7 +1231,6 @@ def test_bulk_assign_origin_does_not_bleed_across_statements() -> None:
 
 def test_assign_candidate_row_uses_statement_card_id_when_command_omits_it() -> None:
     repo = _FakeImportSessionRepo()
-    storage = _FakePdfStorage()
     lookup = _FakeListLookup()
     actor = uuid4()
     list_id = uuid4()
@@ -1207,7 +1242,7 @@ def test_assign_candidate_row_uses_statement_card_id_when_command_omits_it() -> 
     session = repo.get_session(session_id, actor)
     target = session.statements[0].candidate_rows[0]
 
-    AssignCandidateRowService(repo, lookup, _FakeFxService(), storage).execute(
+    AssignCandidateRowService(repo, lookup, _FakeFxService()).execute(
         AssignCandidateRowCommand(
             actor_user_id=actor, session_id=session_id, row_id=target.id, list_id=list_id
         )
@@ -1318,3 +1353,302 @@ def test_bulk_assign_clears_undo_pointer() -> None:
 
     assert repo.cleared_undo_pointers == [session_id]
     assert repo.commit_calls[0]["undo_row_id"] is None
+
+
+# --- Story 4.12: dedup filter, finalize service, PDF-release move ---
+
+
+class _CountingFxService(_FakeFxService):
+    """Records every FX call so a test can prove dedup happened *before* FX."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def materialize_fx_for_entry(
+        self, *, amount: Decimal, currency: str, posted_date
+    ) -> MaterializedFx:
+        self.calls += 1
+        return super().materialize_fx_for_entry(
+            amount=amount, currency=currency, posted_date=posted_date
+        )
+
+
+def _assign_fixture(repo: _FakeImportSessionRepo, storage: _FakePdfStorage, rows: list):
+    actor = uuid4()
+    list_id = uuid4()
+    lookup = _FakeListLookup()
+    lookup.add_member(list_id, owner_id=actor, user_id=actor)
+    session_id = _multi_statement_session(repo, storage, user_id=actor, parse_results=[rows])
+    return actor, list_id, lookup, session_id
+
+
+def test_assign_duplicate_row_skips_fx_entirely() -> None:
+    """Dedup before FX (AC #3): a re-imported statement must not burn a BCCR
+    call per duplicate row, nor 503 the whole re-import during an FX outage on
+    rows that were never going to be written."""
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    line = _row("already-here")
+    actor, list_id, lookup, session_id = _assign_fixture(repo, storage, [line])
+    repo.existing_identities.add(canonical_identity_key(line))
+    fx = _CountingFxService()
+    target = repo.get_session(session_id, actor).statements[0].candidate_rows[0]
+
+    outcome = AssignCandidateRowService(repo, lookup, fx).execute(
+        AssignCandidateRowCommand(
+            actor_user_id=actor, session_id=session_id, row_id=target.id, list_id=list_id
+        )
+    )
+
+    assert fx.calls == 0
+    assert outcome.batch is None
+    assert outcome.imported_new == 0
+    assert outcome.skipped_duplicate == 1
+    assert repo.commit_calls[0]["rows"] == []
+    assert repo.commit_calls[0]["duplicate_row_ids"] == [target.id]
+
+
+def test_assign_duplicate_row_still_resolves_and_stays_undoable() -> None:
+    """A duplicate leaves pending — otherwise the queue never empties and the
+    user is stuck on rows they already handled — and the undo pointer is still
+    written even though no batch was journaled."""
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    line = _row("already-here")
+    actor, list_id, lookup, session_id = _assign_fixture(repo, storage, [line])
+    repo.existing_identities.add(canonical_identity_key(line))
+    target = repo.get_session(session_id, actor).statements[0].candidate_rows[0]
+
+    AssignCandidateRowService(repo, lookup, _FakeFxService()).execute(
+        AssignCandidateRowCommand(
+            actor_user_id=actor, session_id=session_id, row_id=target.id, list_id=list_id
+        )
+    )
+
+    updated = repo.get_session(session_id, actor)
+    row = updated.statements[0].candidate_rows[0]
+    assert row.status == ROW_STATUS_COMMITTED
+    assert row.dedup_skipped is True
+    # The pointer is written even though no batch was journaled — an
+    # all-duplicate assign is still undoable. (The derived counts themselves
+    # live in the real repo's `_session_record`; the fake stores records
+    # verbatim, so they are asserted in the integration tests.)
+    assert repo.commit_calls[0]["undo_row_id"] == target.id
+
+
+def test_assign_non_duplicate_row_calls_fx_and_carries_identity() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    line = _row("fresh")
+    actor, list_id, lookup, session_id = _assign_fixture(repo, storage, [line])
+    fx = _CountingFxService()
+    target = repo.get_session(session_id, actor).statements[0].candidate_rows[0]
+
+    AssignCandidateRowService(repo, lookup, fx).execute(
+        AssignCandidateRowCommand(
+            actor_user_id=actor, session_id=session_id, row_id=target.id, list_id=list_id
+        )
+    )
+
+    assert fx.calls == 1
+    assert repo.commit_calls[0]["rows"][0].identity == canonical_identity_key(line)
+
+
+def test_assign_and_delete_no_longer_touch_pdf_storage() -> None:
+    """Task 5.4 — both services dropped the pdf_storage dependency entirely, so
+    there is no path by which a row-grain action can release the file."""
+    import inspect
+
+    for service in (AssignCandidateRowService, DeleteCandidateRowService):
+        assert "pdf_storage" not in inspect.signature(service.__init__).parameters
+
+
+def test_bulk_assign_resolves_identities_once_per_statement() -> None:
+    """One query per statement, not one per row (AC #3)."""
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    lookup = _FakeListLookup()
+    actor = uuid4()
+    list_id = uuid4()
+    lookup.add_member(list_id, owner_id=actor, user_id=actor)
+    session_id = _multi_statement_session(
+        repo,
+        storage,
+        user_id=actor,
+        parse_results=[[_row("a"), _row("b"), _row("c")], [_row("d")]],
+    )
+
+    AssignBulkImportService(repo, lookup, _FakeFxService(), storage).execute(
+        AssignBulkImportCommand(actor_user_id=actor, session_id=session_id, list_id=list_id)
+    )
+
+    assert len(repo.identity_lookups) == 2
+    assert len(repo.identity_lookups[0]["identities"]) == 3
+    assert repo.identity_lookups[0]["list_id"] == list_id
+
+
+def test_bulk_assign_dedupes_identical_rows_within_one_statement() -> None:
+    """A bulk statement can legitimately carry two byte-identical rows, and the
+    database lookup only catches rows already committed — so identities claimed
+    earlier in the same loop must count too (AC #3)."""
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    lookup = _FakeListLookup()
+    actor = uuid4()
+    list_id = uuid4()
+    lookup.add_member(list_id, owner_id=actor, user_id=actor)
+    session_id = _multi_statement_session(
+        repo, storage, user_id=actor, parse_results=[[_row("twin"), _row("twin")]]
+    )
+
+    result = AssignBulkImportService(repo, lookup, _FakeFxService(), storage).execute(
+        AssignBulkImportCommand(actor_user_id=actor, session_id=session_id, list_id=list_id)
+    )
+
+    assert result.imported_new == 1
+    assert result.skipped_duplicate == 1
+    assert len(result.batches) == 1
+    assert len(result.batches[0].ledger_entry_ids) == 1
+
+
+def test_bulk_assign_all_duplicate_statement_journals_no_batch() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    lookup = _FakeListLookup()
+    actor = uuid4()
+    list_id = uuid4()
+    lookup.add_member(list_id, owner_id=actor, user_id=actor)
+    line = _row("seen-before")
+    session_id = _multi_statement_session(repo, storage, user_id=actor, parse_results=[[line]])
+    repo.existing_identities.add(canonical_identity_key(line))
+
+    result = AssignBulkImportService(repo, lookup, _FakeFxService(), storage).execute(
+        AssignBulkImportCommand(actor_user_id=actor, session_id=session_id, list_id=list_id)
+    )
+
+    assert result.batches == []
+    assert result.imported_new == 0
+    assert result.skipped_duplicate == 1
+
+
+def test_bulk_assign_stamps_finalized_at() -> None:
+    """AD-4: bulk commit is a finalize — there is no ImportReviewSheet in that
+    flow, so the commit is the end of review."""
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    lookup = _FakeListLookup()
+    actor = uuid4()
+    list_id = uuid4()
+    lookup.add_member(list_id, owner_id=actor, user_id=actor)
+    session_id = _multi_statement_session(repo, storage, user_id=actor, parse_results=[[_row()]])
+
+    AssignBulkImportService(repo, lookup, _FakeFxService(), storage).execute(
+        AssignBulkImportCommand(actor_user_id=actor, session_id=session_id, list_id=list_id)
+    )
+
+    assert repo.finalize_calls == [session_id]
+    assert repo.get_session(session_id, actor).finalized_at is not None
+
+
+def _finalizable_session(repo, storage, actor) -> UUID:
+    session_id = _multi_statement_session(repo, storage, user_id=actor, parse_results=[[_row("a")]])
+    row = repo.get_session(session_id, actor).statements[0].candidate_rows[0]
+    repo.set_row_status(session_id, row.id, ROW_STATUS_COMMITTED)
+    return session_id
+
+
+def test_finalize_unknown_session_not_found() -> None:
+    repo = _FakeImportSessionRepo()
+    service = FinalizeImportSessionService(repo, _FakePdfStorage())
+
+    with pytest.raises(ImportSessionNotFoundError):
+        service.execute(FinalizeImportSessionCommand(actor_user_id=uuid4(), session_id=uuid4()))
+
+
+def test_finalize_rejects_a_discarded_session() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    actor = uuid4()
+    session_id = _finalizable_session(repo, storage, actor)
+    repo.discard_session(session_id, actor)
+    service = FinalizeImportSessionService(repo, storage)
+
+    with pytest.raises(ImportSessionDiscardedError):
+        service.execute(FinalizeImportSessionCommand(actor_user_id=actor, session_id=session_id))
+
+
+def test_finalize_with_pending_rows_raises_and_keeps_the_pdf() -> None:
+    """AC #8: dropping the PDF mid-review would strand a user with rows still
+    to compare."""
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    actor = uuid4()
+    session_id = _multi_statement_session(
+        repo, storage, user_id=actor, parse_results=[[_row("a"), _row("b")]]
+    )
+    service = FinalizeImportSessionService(repo, storage)
+
+    with pytest.raises(ImportSessionHasPendingRowsError):
+        service.execute(FinalizeImportSessionCommand(actor_user_id=actor, session_id=session_id))
+    assert storage.deleted == []
+    assert repo.get_session(session_id, actor).finalized_at is None
+
+
+def test_finalize_releases_pdf_and_stamps_finalized_at() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    actor = uuid4()
+    session_id = _finalizable_session(repo, storage, actor)
+
+    result = FinalizeImportSessionService(repo, storage).execute(
+        FinalizeImportSessionCommand(actor_user_id=actor, session_id=session_id)
+    )
+
+    assert storage.deleted == [f"/data/pdfs/{actor}/0.pdf"]
+    assert result.finalized_at is not None
+    assert all(s.pdf_path is None for s in result.statements)
+
+
+def test_finalize_is_idempotent_and_does_not_redelete() -> None:
+    """AC #8 — Save is double-clickable, and the second call must not re-run a
+    delete against paths that are already gone."""
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    actor = uuid4()
+    session_id = _finalizable_session(repo, storage, actor)
+    service = FinalizeImportSessionService(repo, storage)
+    first = service.execute(
+        FinalizeImportSessionCommand(actor_user_id=actor, session_id=session_id)
+    )
+
+    second = service.execute(
+        FinalizeImportSessionCommand(actor_user_id=actor, session_id=session_id)
+    )
+
+    assert len(storage.deleted) == 1
+    assert second.finalized_at == first.finalized_at
+    assert repo.finalize_calls == [session_id]
+
+
+def test_finalize_retains_pdf_while_a_statement_failed() -> None:
+    """Incomplete/unresolved-quarantine retention is Epic 5's and reuses today's
+    `session_needs_source_pdf` rule unchanged — finalize still stamps, but the
+    file stays."""
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    actor = uuid4()
+    session_id = _multi_statement_session(
+        repo,
+        storage,
+        user_id=actor,
+        parse_results=[[_row("a")], InvalidCanonicalLineError("unreadable")],
+    )
+    row = repo.get_session(session_id, actor).statements[0].candidate_rows[0]
+    repo.set_row_status(session_id, row.id, ROW_STATUS_COMMITTED)
+
+    result = FinalizeImportSessionService(repo, storage).execute(
+        FinalizeImportSessionCommand(actor_user_id=actor, session_id=session_id)
+    )
+
+    assert storage.deleted == []
+    assert result.finalized_at is not None

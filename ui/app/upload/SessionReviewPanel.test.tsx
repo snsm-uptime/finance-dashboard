@@ -66,6 +66,10 @@ const mockSession: ImportSession = {
   created_at: "2026-08-20T10:00:00Z",
   discarded_at: null,
   undo: null,
+  finalized_at: null,
+  imported_new_count: 0,
+  skipped_duplicate_count: 0,
+  landing_list_id: null,
   statements: [
     {
       id: "st1",

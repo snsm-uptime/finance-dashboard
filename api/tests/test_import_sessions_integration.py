@@ -37,7 +37,7 @@ from application.import_session import (
     DeleteCandidateRowService,
     DetectedStatement,
 )
-from domain.canonical_line import CanonicalLine
+from domain.canonical_line import CanonicalLine, canonical_identity_key
 from domain.errors import ImportRowNotAvailableError
 from domain.expenses import ManualExpenseDraft
 from domain.import_session import (
@@ -46,6 +46,7 @@ from domain.import_session import (
     ROW_STATUS_EXCLUDED_ZERO_AMOUNT,
     ROW_STATUS_PENDING,
     STATEMENT_STATUS_COMMITTED,
+    STATEMENT_STATUS_FAILED,
     STATEMENT_STATUS_STAGED,
 )
 from fastapi.testclient import TestClient
@@ -379,6 +380,7 @@ def test_bulk_commit_duplicate_row_insert_raises_not_available_not_integrity_err
                         fx_rate_date=already.posted_date,
                         fx_fallback=False,
                     ),
+                    identity=canonical_identity_key(_line_of(already)),
                 )
             ],
         )
@@ -472,6 +474,7 @@ def test_bulk_commit_ledger_unique_backstop_raises_not_available(
                         fx_rate_date=pending.posted_date,
                         fx_fallback=False,
                     ),
+                    identity=canonical_identity_key(_line_of(pending)),
                 )
             ],
         )
@@ -568,6 +571,23 @@ def test_get_foreign_session_not_found(client: TestClient) -> None:
     response = client.get(f"/import/sessions/{session_id}")
     assert response.status_code == 404
     assert response.json()["code"] == "import_session_not_found"
+
+
+def _line_of(candidate: ImportCandidateRowModel) -> CanonicalLine:
+    """The CanonicalLine a persisted candidate row came from — needed wherever a
+    test builds a CommitRow by hand and must supply the same identity the
+    services would compute (Story 4.12)."""
+    return CanonicalLine(
+        posted_date=candidate.posted_date.isoformat(),
+        amount=Decimal(str(candidate.amount)),
+        currency=candidate.currency,
+        product_id=candidate.statement.product_id,
+        line_type=candidate.line_type,
+        normalized_description=candidate.normalized_description,
+        provenance=candidate.provenance,
+        external_ref=candidate.external_ref,
+        ref_quality=candidate.ref_quality,
+    )
 
 
 def _services(db_session: Session):
@@ -682,12 +702,13 @@ def test_assign_candidate_row_one_batch_siblings_pending_pdf_retained(
     assert len(candidates) >= 2
     first, second = candidates[0], candidates[1]
 
-    result = AssignCandidateRowService(repo, lookup, fx, storage).execute(
+    result = AssignCandidateRowService(repo, lookup, fx).execute(
         AssignCandidateRowCommand(
             actor_user_id=actor_id, session_id=session_id, row_id=first.id, list_id=list_id
         )
     )
-    assert len(result.ledger_entry_ids) == 1
+    assert result.batch is not None
+    assert len(result.batch.ledger_entry_ids) == 1
     db_session.expire_all()
     refreshed = db_session.get(ImportCandidateRowModel, first.id)
     sibling = db_session.get(ImportCandidateRowModel, second.id)
@@ -713,7 +734,7 @@ def test_delete_all_pending_rows_commits_statement(client: TestClient, db_sessio
             )
         )
     )
-    service = DeleteCandidateRowService(repo, storage)
+    service = DeleteCandidateRowService(repo)
     for candidate in candidates:
         service.execute(
             DeleteCandidateRowCommand(
@@ -752,7 +773,7 @@ def test_dismiss_after_partial_row_commit_leaves_committed_ledger_untouched(
         .order_by(ImportCandidateRowModel.sequence)
     ).first()
     assert first is not None
-    AssignCandidateRowService(repo, lookup, fx, storage).execute(
+    AssignCandidateRowService(repo, lookup, fx).execute(
         AssignCandidateRowCommand(
             actor_user_id=actor_id, session_id=session_id, row_id=first.id, list_id=list_id
         )
@@ -1137,3 +1158,394 @@ def test_assign_already_committed_row_not_available(client_with_fx: TestClient) 
     )
     assert second.status_code == 409
     assert second.json()["code"] == "import_row_not_available"
+
+
+# --- Story 4.12: dedup identity, derived counts, finalize ---
+
+
+def _assign(client: TestClient, session_id, row_id, list_id):
+    return client.post(
+        f"/import/sessions/{session_id}/rows/{row_id}/assign", json={"list_id": list_id}
+    )
+
+
+def _first_pending(client: TestClient, session_id) -> dict:
+    return _pending_rows(client.get(f"/import/sessions/{session_id}").json())[0]
+
+
+def _identity_of(db_session: Session, row_id) -> str:
+    candidate = db_session.get(ImportCandidateRowModel, UUID(str(row_id)))
+    assert candidate is not None
+    return canonical_identity_key(_line_of(candidate))
+
+
+def test_assigned_row_carries_a_non_null_import_identity(
+    client_with_fx: TestClient, db_session: Session
+) -> None:
+    client = client_with_fx
+    _register(client, "identitywritten@example.com")
+    session_id = _upload_bac_session(client)
+    list_id = _own_list_id(client)
+    row = _first_pending(client, session_id)
+
+    assert _assign(client, session_id, row["id"], list_id).status_code == 200
+
+    db_session.expire_all()
+    ledger = db_session.scalars(
+        select(LedgerEntryModel).where(LedgerEntryModel.import_candidate_row_id == UUID(row["id"]))
+    ).one()
+    assert ledger.import_identity is not None
+    assert ledger.import_identity.startswith("v1:")
+
+
+def test_reimport_into_same_list_skips_silently_with_200_and_no_second_ledger_row(
+    client_with_fx: TestClient, db_session: Session
+) -> None:
+    """AC #3's core promise: no mid-import interruption. The duplicate assign is
+    a 200, not an error — the row still leaves pending so review progresses, but
+    no second ledger row and no batch are written."""
+    client = client_with_fx
+    _register(client, "reimportsame@example.com")
+    list_id = _own_list_id(client)
+    first_session = _upload_bac_session(client)
+    first_row = _first_pending(client, first_session)
+    identity = _identity_of(db_session, first_row["id"])
+    assert _assign(client, first_session, first_row["id"], list_id).status_code == 200
+
+    second_session = _upload_bac_session(client)
+    duplicate = next(
+        item
+        for item in _pending_rows(client.get(f"/import/sessions/{second_session}").json())
+        if _identity_of(db_session, item["id"]) == identity
+    )
+    batches_before = db_session.scalars(
+        select(ImportBatchModel).where(ImportBatchModel.session_id == UUID(second_session))
+    ).all()
+
+    response = _assign(client, second_session, duplicate["id"], list_id)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert all(item["id"] != duplicate["id"] for item in body["statements"][0]["rows"])
+    assert body["skipped_duplicate_count"] == 1
+    assert body["imported_new_count"] == 0
+
+    db_session.expire_all()
+    candidate = db_session.get(ImportCandidateRowModel, UUID(duplicate["id"]))
+    assert candidate is not None
+    assert candidate.status == ROW_STATUS_COMMITTED
+    assert candidate.dedup_skipped is True
+    assert (
+        db_session.scalars(
+            select(LedgerEntryModel).where(
+                LedgerEntryModel.import_candidate_row_id == UUID(duplicate["id"])
+            )
+        ).first()
+        is None
+    )
+    assert (
+        len(
+            db_session.scalars(
+                select(LedgerEntryModel).where(
+                    LedgerEntryModel.list_id == UUID(list_id),
+                    LedgerEntryModel.import_identity == identity,
+                )
+            ).all()
+        )
+        == 1
+    )
+    assert batches_before == []
+    assert (
+        db_session.scalars(
+            select(ImportBatchModel).where(ImportBatchModel.session_id == UUID(second_session))
+        ).all()
+        == []
+    )
+
+
+def test_same_identity_into_a_different_list_does_commit(
+    client_with_fx: TestClient, db_session: Session
+) -> None:
+    """Dedup is scoped to the destination list — a duplicate in list A cannot
+    corrupt list B's balance, and re-import is currently the only informal way
+    to repair a misrouted statement (revisit after 5.5 / 5.6)."""
+    client = client_with_fx
+    _register(client, "dedupperlist@example.com")
+    list_a = _own_list_id(client)
+    created = client.post("/lists", json={"name": "Second list"})
+    assert created.status_code in (200, 201), created.text
+    list_b = created.json()["id"]
+
+    first_session = _upload_bac_session(client)
+    first_row = _first_pending(client, first_session)
+    identity = _identity_of(db_session, first_row["id"])
+    assert _assign(client, first_session, first_row["id"], list_a).status_code == 200
+
+    second_session = _upload_bac_session(client)
+    twin = next(
+        item
+        for item in _pending_rows(client.get(f"/import/sessions/{second_session}").json())
+        if _identity_of(db_session, item["id"]) == identity
+    )
+    response = _assign(client, second_session, twin["id"], list_b)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["imported_new_count"] == 1
+    db_session.expire_all()
+    candidate = db_session.get(ImportCandidateRowModel, UUID(twin["id"]))
+    assert candidate is not None and candidate.dedup_skipped is False
+    assert (
+        db_session.scalars(
+            select(LedgerEntryModel).where(
+                LedgerEntryModel.list_id == UUID(list_b),
+                LedgerEntryModel.import_identity == identity,
+            )
+        ).first()
+        is not None
+    )
+
+
+def test_bulk_commit_collapses_two_identical_rows_in_one_statement(
+    client_with_fx: TestClient, db_session: Session
+) -> None:
+    """The database lookup only catches rows already committed, so identities
+    claimed earlier in the same commit action must count too (AC #3)."""
+    client = client_with_fx
+    _register(client, "bulktwins@example.com")
+    user_id = UUID(client.get("/auth/me").json()["user_id"])
+    list_id = _own_list_id(client)
+    repo = SqlAlchemyImportSessionRepository(db_session)
+    record = repo.create_session(
+        session_id=uuid4(),
+        user_id=user_id,
+        statements=[
+            DetectedStatement(
+                product_id="fake_product",
+                status=STATEMENT_STATUS_STAGED,
+                candidate_rows=[_crc_line("twin"), _crc_line("twin")],
+            )
+        ],
+        pdf_paths={0: None},
+    )
+    db_session.commit()
+
+    response = client.post(f"/import/sessions/{record.id}/bulk-commit", json={"list_id": list_id})
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["imported_new_count"] == 1
+    assert body["skipped_duplicate_count"] == 1
+    db_session.expire_all()
+    entries = db_session.scalars(
+        select(LedgerEntryModel).where(LedgerEntryModel.list_id == UUID(list_id))
+    ).all()
+    assert len(entries) == 1
+
+
+def test_undo_of_a_duplicate_skipped_assign_moves_the_counts_back(
+    client_with_fx: TestClient, db_session: Session
+) -> None:
+    """The interaction between 4.11's undo and this story's new state: an undone
+    duplicate must return to pending *and* clear dedup_skipped, or it keeps
+    counting against skipped_duplicate_count forever."""
+    client = client_with_fx
+    _register(client, "undoduplicate@example.com")
+    list_id = _own_list_id(client)
+    first_session = _upload_bac_session(client)
+    first_row = _first_pending(client, first_session)
+    identity = _identity_of(db_session, first_row["id"])
+    assert _assign(client, first_session, first_row["id"], list_id).status_code == 200
+
+    second_session = _upload_bac_session(client)
+    duplicate = next(
+        item
+        for item in _pending_rows(client.get(f"/import/sessions/{second_session}").json())
+        if _identity_of(db_session, item["id"]) == identity
+    )
+    skipped = _assign(client, second_session, duplicate["id"], list_id)
+    assert skipped.json()["skipped_duplicate_count"] == 1
+    assert skipped.json()["undo"] == {"row_id": duplicate["id"], "action": "assign"}
+
+    undone = client.post(f"/import/sessions/{second_session}/undo")
+
+    assert undone.status_code == 200, undone.text
+    body = undone.json()
+    assert body["skipped_duplicate_count"] == 0
+    assert body["imported_new_count"] == 0
+    restored = next(item for item in body["statements"][0]["rows"] if item["id"] == duplicate["id"])
+    assert restored["status"] == ROW_STATUS_PENDING
+    db_session.expire_all()
+    candidate = db_session.get(ImportCandidateRowModel, UUID(duplicate["id"]))
+    assert candidate is not None and candidate.dedup_skipped is False
+
+
+def test_assigning_the_last_pending_row_keeps_the_pdf_and_does_not_finalize(
+    client_with_fx: TestClient, db_session: Session
+) -> None:
+    """AC #7 inverted from pre-4.12 behavior: the last pending assign is NOT
+    finalization. Review includes ImportReviewSheet until Save."""
+    client = client_with_fx
+    _register(client, "lastrowkeepspdf@example.com")
+    user_id = UUID(client.get("/auth/me").json()["user_id"])
+    list_id = _own_list_id(client)
+    session_id = _upload_bac_session(client)
+    for row in _pending_rows(client.get(f"/import/sessions/{session_id}").json()):
+        assert _assign(client, session_id, row["id"], list_id).status_code == 200
+
+    payload = client.get(f"/import/sessions/{session_id}").json()
+    assert payload["finalized_at"] is None
+    db_session.expire_all()
+    statements = db_session.scalars(
+        select(ImportStatementModel).where(ImportStatementModel.session_id == UUID(session_id))
+    ).all()
+    assert all(row.pdf_path is not None for row in statements)
+    leftover = list((_pdf_storage_base() / str(user_id)).glob("*.pdf"))
+    assert leftover != []
+
+
+def test_finalize_with_pending_rows_is_409_and_leaves_the_pdf(
+    client: TestClient, db_session: Session
+) -> None:
+    _register(client, "finalizepending@example.com")
+    session_id = _upload_bac_session(client)
+    user_id = client.get("/auth/me").json()["user_id"]
+
+    response = client.post(f"/import/sessions/{session_id}/finalize")
+
+    assert response.status_code == 409, response.text
+    assert response.json()["code"] == "import_session_has_pending_rows"
+    leftover = list((_pdf_storage_base() / user_id).glob("*.pdf"))
+    assert leftover != []
+    db_session.expire_all()
+    statements = db_session.scalars(
+        select(ImportStatementModel).where(ImportStatementModel.session_id == UUID(session_id))
+    ).all()
+    assert all(row.pdf_path is not None for row in statements)
+
+
+def test_finalize_on_a_resolved_session_releases_the_pdf_and_is_idempotent(
+    client_with_fx: TestClient, db_session: Session
+) -> None:
+    client = client_with_fx
+    _register(client, "finalizeclean@example.com")
+    user_id = client.get("/auth/me").json()["user_id"]
+    list_id = _own_list_id(client)
+    session_id = _upload_bac_session(client)
+    for row in _pending_rows(client.get(f"/import/sessions/{session_id}").json()):
+        assert _assign(client, session_id, row["id"], list_id).status_code == 200
+
+    finalized = client.post(f"/import/sessions/{session_id}/finalize")
+
+    assert finalized.status_code == 200, finalized.text
+    assert finalized.json()["finalized_at"] is not None
+    _assert_source_pdf_released(db_session, session_id=session_id, user_id=user_id)
+
+    again = client.post(f"/import/sessions/{session_id}/finalize")
+    assert again.status_code == 200, again.text
+    assert again.json()["finalized_at"] == finalized.json()["finalized_at"]
+
+
+def test_finalize_on_a_discarded_session_is_409(client: TestClient) -> None:
+    _register(client, "finalizediscarded@example.com")
+    session_id = _upload_bac_session(client)
+    assert client.delete(f"/import/sessions/{session_id}").status_code == 200
+
+    response = client.post(f"/import/sessions/{session_id}/finalize")
+
+    assert response.status_code == 409, response.text
+    assert response.json()["code"] == "import_session_discarded"
+
+
+def test_finalize_retains_the_pdf_while_a_statement_failed(
+    client: TestClient, db_session: Session
+) -> None:
+    """Incomplete/unresolved-quarantine retention is Epic 5's and reuses today's
+    `session_needs_source_pdf` rule unchanged — finalize stamps, the file stays."""
+    _register(client, "finalizefailed@example.com")
+    user_id = UUID(client.get("/auth/me").json()["user_id"])
+    repo = SqlAlchemyImportSessionRepository(db_session)
+    storage = FilesystemPdfStorage(base_dir=os.environ["PDF_STORAGE_PATH"])
+    path = storage.save(user_id=user_id, filename="failed.pdf", content=b"%PDF-1.4 stub")
+    record = repo.create_session(
+        session_id=uuid4(),
+        user_id=user_id,
+        statements=[
+            DetectedStatement(
+                product_id="fake_product",
+                status=STATEMENT_STATUS_FAILED,
+                candidate_rows=[],
+            )
+        ],
+        pdf_paths={0: path},
+    )
+    db_session.commit()
+
+    response = client.post(f"/import/sessions/{record.id}/finalize")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["finalized_at"] is not None
+    db_session.expire_all()
+    statement = db_session.scalars(
+        select(ImportStatementModel).where(ImportStatementModel.session_id == record.id)
+    ).one()
+    assert statement.pdf_path is not None
+    assert Path(path).exists()
+
+
+def test_bulk_commit_still_releases_the_pdf_and_now_stamps_finalized_at(
+    client_with_fx: TestClient, db_session: Session
+) -> None:
+    """Bulk is explicitly unchanged on PDF release (AC #5) — there is no sheet in
+    that flow, so bulk commit is the end of review, and AD-4 makes it a
+    finalize."""
+    client = client_with_fx
+    _register(client, "bulkfinalizes@example.com")
+    user_id = client.get("/auth/me").json()["user_id"]
+    list_id = _own_list_id(client)
+    session_id = _upload_bac_session(client)
+
+    committed = client.post(f"/import/sessions/{session_id}/bulk-commit", json={"list_id": list_id})
+
+    assert committed.status_code == 200, committed.text
+    assert committed.json()["imported_new_count"] > 0
+    _assert_source_pdf_released(db_session, session_id=session_id, user_id=user_id)
+    assert client.get(f"/import/sessions/{session_id}").json()["finalized_at"] is not None
+
+
+def test_landing_list_id_picks_the_list_that_received_the_most_rows(
+    client_with_fx: TestClient, db_session: Session
+) -> None:
+    client = client_with_fx
+    _register(client, "landinguneven@example.com")
+    list_a = _own_list_id(client)
+    created = client.post("/lists", json={"name": "Landing target"})
+    assert created.status_code in (200, 201), created.text
+    list_b = created.json()["id"]
+    session_id = _upload_bac_session(client)
+    rows = _pending_rows(client.get(f"/import/sessions/{session_id}").json())
+    assert len(rows) >= 3
+
+    assert _assign(client, session_id, rows[0]["id"], list_a).status_code == 200
+    for row in rows[1:3]:
+        assert _assign(client, session_id, row["id"], list_b).status_code == 200
+
+    payload = client.get(f"/import/sessions/{session_id}").json()
+    assert payload["landing_list_id"] == list_b
+    assert payload["imported_new_count"] == 3
+
+
+def test_landing_list_id_is_null_when_nothing_new_was_imported(
+    client: TestClient, db_session: Session
+) -> None:
+    """A session that imported nothing new has no honest landing target, so the
+    caller stays put rather than guessing (AC #6)."""
+    _register(client, "landingnull@example.com")
+    session_id = _upload_bac_session(client)
+    for row in _pending_rows(client.get(f"/import/sessions/{session_id}").json()):
+        deleted = client.post(f"/import/sessions/{session_id}/rows/{row['id']}/delete")
+        assert deleted.status_code == 200, deleted.text
+
+    payload = client.get(f"/import/sessions/{session_id}").json()
+    assert payload["landing_list_id"] is None
+    assert payload["imported_new_count"] == 0
+    assert payload["skipped_duplicate_count"] == 0

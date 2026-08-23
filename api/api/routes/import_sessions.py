@@ -29,6 +29,8 @@ from application.import_session import (
     DiscardImportSessionService,
     EditCandidateRowCommand,
     EditCandidateRowService,
+    FinalizeImportSessionCommand,
+    FinalizeImportSessionService,
     ImportSessionRecord,
     MatchStatementCardCommand,
     MatchStatementCardService,
@@ -52,6 +54,7 @@ from domain.errors import (
     ImportRowNotAvailableError,
     ImportRowNotFoundError,
     ImportSessionDiscardedError,
+    ImportSessionHasPendingRowsError,
     ImportSessionNotFoundError,
     ImportStatementNotFoundError,
     InvalidCanonicalLineError,
@@ -141,6 +144,12 @@ def _session_response(session: ImportSessionRecord) -> ImportSessionResponse:
         discarded_at=session.discarded_at,
         statements=[_statement_response(s) for s in session.statements],
         undo=undo,
+        # Story 4.12 — one mapper, so every route that returns a session gets
+        # these at once (AC #4).
+        finalized_at=session.finalized_at,
+        imported_new_count=session.imported_new_count,
+        skipped_duplicate_count=session.skipped_duplicate_count,
+        landing_list_id=session.landing_list_id,
     )
 
 
@@ -272,6 +281,8 @@ def _bulk_commit_response(result: AssignBulkImportResult) -> BulkCommitResponse:
             )
             for b in result.batches
         ],
+        imported_new_count=result.imported_new,
+        skipped_duplicate_count=result.skipped_duplicate,
     )
 
 
@@ -351,6 +362,11 @@ _ROW_ERROR_MAP: tuple[tuple[type[Exception], int, str | None], ...] = (
     (ImportSessionDiscardedError, status.HTTP_409_CONFLICT, "import_session_discarded"),
     (ImportRowNotAvailableError, status.HTTP_409_CONFLICT, "import_row_not_available"),
     (ImportNothingToUndoError, status.HTTP_409_CONFLICT, "import_nothing_to_undo"),
+    (
+        ImportSessionHasPendingRowsError,
+        status.HTTP_409_CONFLICT,
+        "import_session_has_pending_rows",
+    ),
     (InvalidCanonicalLineError, status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_canonical_line"),
     (FxAuthenticationError, status.HTTP_500_INTERNAL_SERVER_ERROR, None),
     (FxServiceUnavailableError, status.HTTP_503_SERVICE_UNAVAILABLE, None),
@@ -394,13 +410,12 @@ def assign_candidate_row(
     user_id: uuid.UUID = Depends(require_authenticated_user),
     db: Session = Depends(get_db),
     fx_service: MaterializeFxService = Depends(get_fx_service),
-    pdf_storage: PdfStorage = Depends(get_pdf_storage),
 ) -> ImportSessionResponse | JSONResponse:
     """One endpoint for both accept directions — the caller supplies either the
     default list or the picked one (AC #2)."""
     session_repo = SqlAlchemyImportSessionRepository(db)
     list_repo = SqlAlchemyListRepository(db)
-    service = AssignCandidateRowService(session_repo, list_repo, fx_service, pdf_storage)
+    service = AssignCandidateRowService(session_repo, list_repo, fx_service)
     try:
         service.execute(
             AssignCandidateRowCommand(
@@ -430,11 +445,10 @@ def delete_candidate_row(
     row_id: uuid.UUID,
     user_id: uuid.UUID = Depends(require_authenticated_user),
     db: Session = Depends(get_db),
-    pdf_storage: PdfStorage = Depends(get_pdf_storage),
 ) -> ImportSessionResponse | JSONResponse:
     """Soft-marks the row deleted so undo can restore it (AC #3)."""
     session_repo = SqlAlchemyImportSessionRepository(db)
-    service = DeleteCandidateRowService(session_repo, pdf_storage)
+    service = DeleteCandidateRowService(session_repo)
     try:
         result = service.execute(
             DeleteCandidateRowCommand(actor_user_id=user_id, session_id=session_id, row_id=row_id)
@@ -471,6 +485,39 @@ def undo_last_resolution(
         session_id,
         undone_row_id,
         user_id,
+    )
+    return _session_response(result)
+
+
+@router.post("/{session_id}/finalize", response_model=ImportSessionResponse)
+def finalize_import_session(
+    session_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+    pdf_storage: PdfStorage = Depends(get_pdf_storage),
+) -> ImportSessionResponse | JSONResponse:
+    """End of review — releases the source PDF and stamps finalized_at (AC #7).
+
+    ImportReviewSheet's Save calls this (Story 4.13.1). Idempotent: a second
+    call returns the session unchanged rather than erroring or re-deleting.
+    """
+    session_repo = SqlAlchemyImportSessionRepository(db)
+    service = FinalizeImportSessionService(session_repo, pdf_storage)
+    try:
+        result = service.execute(
+            FinalizeImportSessionCommand(actor_user_id=user_id, session_id=session_id)
+        )
+    except _ROW_ERROR_TYPES as exc:
+        db.rollback()
+        return _row_error_response(exc)
+    # No normalized_description and no import_identity at info level — identity
+    # is derived from statement PII.
+    logger.info(
+        "import_session_finalized session_id=%s user_id=%s imported_new=%s skipped_duplicate=%s",
+        session_id,
+        user_id,
+        result.imported_new_count,
+        result.skipped_duplicate_count,
     )
     return _session_response(result)
 

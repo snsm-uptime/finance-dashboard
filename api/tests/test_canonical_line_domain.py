@@ -10,6 +10,7 @@ from domain.canonical_line import (
     REF_QUALITY_DERIVED,
     REF_QUALITY_STABLE,
     CanonicalLine,
+    canonical_identity_key,
     compute_canonical_identity,
     normalize_dual_column_amount,
     validate_canonical_line,
@@ -115,7 +116,7 @@ def test_normalize_dual_column_amount_never_returns_float() -> None:
 
 def test_compute_canonical_identity_uses_stable_ref_when_present() -> None:
     line = _line(external_ref="AUTH-123456", ref_quality=REF_QUALITY_STABLE)
-    identity = compute_canonical_identity(line, statement_period_id="2026-01")
+    identity = compute_canonical_identity(line)
     assert identity == ("ref", "AUTH-123456")
 
 
@@ -132,9 +133,7 @@ def test_compute_canonical_identity_stable_ref_independent_of_other_fields() -> 
         amount=Decimal("999.99"),
         posted_date="2026-06-30",
     )
-    assert compute_canonical_identity(
-        line_a, statement_period_id="2026-01"
-    ) == compute_canonical_identity(line_b, statement_period_id="2026-06")
+    assert compute_canonical_identity(line_a) == compute_canonical_identity(line_b)
 
 
 @pytest.mark.parametrize("ref_quality", [REF_QUALITY_DERIVED, REF_QUALITY_ABSENT, None])
@@ -142,26 +141,103 @@ def test_compute_canonical_identity_falls_back_when_ref_quality_not_stable(
     ref_quality: str | None,
 ) -> None:
     line = _line(external_ref="AUTH-123456", ref_quality=ref_quality)
-    identity = compute_canonical_identity(line, statement_period_id="2026-01")
+    identity = compute_canonical_identity(line)
     assert identity[0] == "fallback"
 
 
 def test_compute_canonical_identity_falls_back_when_external_ref_missing() -> None:
     line = _line(external_ref=None, ref_quality=REF_QUALITY_STABLE)
-    identity = compute_canonical_identity(line, statement_period_id="2026-01")
+    identity = compute_canonical_identity(line)
     assert identity[0] == "fallback"
 
 
 def test_compute_canonical_identity_fallback_is_deterministic() -> None:
     line_a = _line()
     line_b = _line()
-    assert compute_canonical_identity(
-        line_a, statement_period_id="2026-01"
-    ) == compute_canonical_identity(line_b, statement_period_id="2026-01")
+    assert compute_canonical_identity(line_a) == compute_canonical_identity(line_b)
 
 
-def test_compute_canonical_identity_fallback_differs_on_statement_period() -> None:
-    line = _line()
-    identity_a = compute_canonical_identity(line, statement_period_id="2026-01")
-    identity_b = compute_canonical_identity(line, statement_period_id="2026-02")
-    assert identity_a != identity_b
+def test_identity_is_stable_across_overlapping_statements() -> None:
+    """Inverted from Story 4.4's `..._differs_on_statement_period` (Story 4.12).
+
+    FR-20's overlap clause exists for exactly this case: a January statement
+    and a February statement both print a purchase posted Jan 28. One
+    transaction, printed twice. While `statement_period_id` was in the tuple
+    those two got *different* identities and the duplicate committed — the
+    period id defeated the very dedup it sat inside. It is out of the tuple
+    now (AD-18 amended 2026-08-23), and this test is the permanent guard
+    against anyone putting it back: the only inputs to a fallback identity
+    are the transaction's own fields, so the statement it arrived on cannot
+    change the answer.
+    """
+    posted_on_both_statements = _line(posted_date="2026-01-28")
+    reached_via_january_statement = compute_canonical_identity(posted_on_both_statements)
+    reached_via_february_statement = compute_canonical_identity(posted_on_both_statements)
+
+    assert reached_via_january_statement == reached_via_february_statement
+    assert canonical_identity_key(posted_on_both_statements) == canonical_identity_key(
+        posted_on_both_statements
+    )
+
+
+# --- Story 4.12 Task 1.2: persisted identity key ---
+
+
+def test_canonical_identity_key_is_versioned() -> None:
+    """A later identity-rule change must be detectable rather than silently
+    breaking dedup on rows fingerprinted under the old rule."""
+    assert canonical_identity_key(_line()).startswith("v1:")
+
+
+def test_canonical_identity_key_fits_the_persisted_column() -> None:
+    # ledger_entries.import_identity is String(80); "v1:" + sha256 hex = 67.
+    assert len(canonical_identity_key(_line())) <= 80
+
+
+def test_canonical_identity_key_differs_between_stable_ref_and_fallback() -> None:
+    with_ref = _line(external_ref="AUTH-123456", ref_quality=REF_QUALITY_STABLE)
+    without_ref = _line(external_ref="AUTH-123456", ref_quality=REF_QUALITY_ABSENT)
+    assert canonical_identity_key(with_ref) != canonical_identity_key(without_ref)
+
+
+def test_canonical_identity_key_is_stable_for_equal_lines() -> None:
+    assert canonical_identity_key(_line()) == canonical_identity_key(_line())
+
+
+def test_canonical_identity_key_ignores_decimal_trailing_zeros() -> None:
+    """`str(Decimal("10.5")) != str(Decimal("10.50"))`, so a naive serializer
+    would give the *same* transaction two identities when a re-parse emits a
+    different trailing zero — and dedup would silently miss it. 4 dp matches
+    Numeric(18, 4)."""
+    assert canonical_identity_key(_line(amount=Decimal("10.5"))) == canonical_identity_key(
+        _line(amount=Decimal("10.50"))
+    )
+
+
+def test_canonical_identity_key_separates_different_amounts() -> None:
+    assert canonical_identity_key(_line(amount=Decimal("10.50"))) != canonical_identity_key(
+        _line(amount=Decimal("10.51"))
+    )
+
+
+def test_canonical_identity_key_does_not_collide_on_delimiter_in_description() -> None:
+    """A `|` join would let a description containing the delimiter collide
+    with a differently-split neighbour. JSON encoding is what prevents it."""
+    a = _line(normalized_description="SHOP|CRC", currency="USD")
+    b = _line(normalized_description="SHOP", currency="CRC")
+    assert canonical_identity_key(a) != canonical_identity_key(b)
+
+
+def test_canonical_identity_key_separates_line_types() -> None:
+    assert canonical_identity_key(_line(line_type=LINE_TYPE_PURCHASE)) != canonical_identity_key(
+        _line(line_type=LINE_TYPE_PAYMENT)
+    )
+
+
+def test_canonical_identity_key_never_routes_money_through_float() -> None:
+    """A float round-trip loses precision above 2^53 / on repeating binary
+    fractions; two amounts that differ only past the float boundary must
+    still produce different keys (AD-5)."""
+    a = _line(amount=Decimal("100000000000.0001"))
+    b = _line(amount=Decimal("100000000000.0002"))
+    assert canonical_identity_key(a) != canonical_identity_key(b)

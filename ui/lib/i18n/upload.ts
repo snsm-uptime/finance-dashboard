@@ -63,6 +63,8 @@ export const uploadMessages = {
     individualReviewErrorRowNotFound: "This transaction could not be found.",
     individualReviewErrorRowNotAvailable: "This transaction is no longer available.",
     individualReviewErrorNothingToUndo: "There is nothing to undo.",
+    individualReviewErrorSessionHasPendingRows:
+      "There are still transactions to review in this import.",
     // Card identification (Story 4.8.1)
     cardIdentificationTitle: "Identify card",
     cardIdentificationIban: "IBAN",
@@ -139,6 +141,8 @@ export const uploadMessages = {
     individualReviewErrorRowNotFound: "No se encontró esta transacción.",
     individualReviewErrorRowNotAvailable: "Esta transacción ya no está disponible.",
     individualReviewErrorNothingToUndo: "No hay nada que deshacer.",
+    individualReviewErrorSessionHasPendingRows:
+      "Todavía quedan transacciones por revisar en esta importación.",
     // Card identification (Story 4.8.1)
     cardIdentificationTitle: "Identificar tarjeta",
     cardIdentificationIban: "IBAN",

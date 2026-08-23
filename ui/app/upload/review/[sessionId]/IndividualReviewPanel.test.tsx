@@ -352,7 +352,7 @@ describe("IndividualReviewPanel", () => {
 
     assignRow.mockResolvedValue({
       ok: true,
-      session: { ...SESSION_ONE_STAGED, statements: [] },
+      session: { ...SESSION_ONE_STAGED, statements: [], landing_list_id: "l1" },
     });
 
     await act(async () => {
@@ -365,6 +365,42 @@ describe("IndividualReviewPanel", () => {
     });
 
     expect(push).toHaveBeenCalledWith("/lists/l1");
+  });
+
+  it("stays at /lists when landing_list_id is null (session imported nothing new)", async () => {
+    fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_STAGED });
+    fetchLists.mockResolvedValue({
+      ok: true,
+      lists: [{ id: "l1", name: "Groceries", owner_id: "u1", role: "owner" }],
+    });
+    stubAuthMeFetch(null);
+
+    await act(async () => {
+      root.render(<IndividualReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await openAndChoose(container, "Groceries");
+    const acceptButton = selectByText(container, "Accept to Groceries");
+
+    assignRow.mockResolvedValue({
+      ok: true,
+      session: { ...SESSION_ONE_STAGED, statements: [], landing_list_id: null },
+    });
+
+    await act(async () => {
+      acceptButton.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(push).toHaveBeenCalledWith("/lists");
   });
 
   it("real swipe handler: right accepts chosen, left accepts default, down skips, short drags are no-ops", async () => {

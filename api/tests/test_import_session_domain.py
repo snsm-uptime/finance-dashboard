@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from decimal import Decimal
+from uuid import UUID
 
 import pytest
 from domain.errors import (
@@ -24,6 +25,7 @@ from domain.import_session import (
     UNDO_ACTIONS,
     normalize_row_description,
     row_is_zero_amount,
+    select_landing_list_id,
     session_needs_source_pdf,
     statement_has_pending_rows,
     statement_is_fully_resolved,
@@ -236,3 +238,61 @@ def test_normalize_row_description_rejects_over_max_length() -> None:
 
 def test_normalize_row_description_measures_length_after_trimming() -> None:
     assert normalize_row_description(" " + "x" * 500 + " ") == "x" * 500
+
+
+# --- Story 4.12 Task 1.3: landing list selection (AC #6) ---
+
+_LIST_A = UUID("00000000-0000-4000-8000-00000000000a")
+_LIST_B = UUID("00000000-0000-4000-8000-00000000000b")
+_LIST_C = UUID("00000000-0000-4000-8000-00000000000c")
+
+
+def _at(minute: int) -> datetime:
+    return datetime(2026, 8, 23, 12, minute, tzinfo=UTC)
+
+
+def test_select_landing_list_id_returns_none_for_no_imported_rows() -> None:
+    """A session that imported nothing new — everything deleted, or every row a
+    duplicate — has no honest landing target, so the caller stays put rather
+    than guessing (AC #6)."""
+    assert select_landing_list_id([]) is None
+
+
+def test_select_landing_list_id_picks_the_list_with_the_most_rows() -> None:
+    resolved = [
+        (_LIST_A, _at(1)),
+        (_LIST_B, _at(2)),
+        (_LIST_B, _at(3)),
+    ]
+    assert select_landing_list_id(resolved) == _LIST_B
+
+
+def test_select_landing_list_id_breaks_a_count_tie_on_latest_resolution() -> None:
+    """Equal counts → the list the user was working in most recently wins;
+    that is where they expect to land."""
+    resolved = [
+        (_LIST_A, _at(1)),
+        (_LIST_A, _at(2)),
+        (_LIST_B, _at(3)),
+        (_LIST_B, _at(9)),
+    ]
+    assert select_landing_list_id(resolved) == _LIST_B
+
+
+def test_select_landing_list_id_breaks_a_full_tie_on_lowest_id() -> None:
+    """Same count *and* same latest resolution: fall through to the lowest id
+    so the answer is deterministic rather than dict-order dependent."""
+    resolved = [
+        (_LIST_C, _at(5)),
+        (_LIST_A, _at(5)),
+    ]
+    assert select_landing_list_id(resolved) == _LIST_A
+
+
+def test_select_landing_list_id_is_order_independent() -> None:
+    forward = [(_LIST_A, _at(1)), (_LIST_B, _at(2)), (_LIST_B, _at(3))]
+    assert select_landing_list_id(forward) == select_landing_list_id(list(reversed(forward)))
+
+
+def test_select_landing_list_id_single_row_returns_that_list() -> None:
+    assert select_landing_list_id([(_LIST_A, _at(1))]) == _LIST_A

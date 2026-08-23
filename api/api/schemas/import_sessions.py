@@ -50,6 +50,15 @@ class ImportSessionResponse(BaseModel):
     discarded_at: datetime | None = None
     statements: list[StagedStatementResponse] = Field(default_factory=list)
     undo: UndoPointerResponse | None = None
+    # Story 4.12. All four default so an older client parsing this payload is
+    # unaffected. The counts are derived from row state server-side, never
+    # incremented — undo moves them back with the row.
+    finalized_at: datetime | None = None
+    imported_new_count: int = 0
+    skipped_duplicate_count: int = 0
+    # Which list to land on when the session completes; null when the session
+    # imported nothing new, so the caller stays put rather than guessing.
+    landing_list_id: UUID | None = None
 
 
 class BulkCommitBody(BaseModel):
@@ -76,6 +85,10 @@ class BulkCommitResponse(BaseModel):
     session_id: UUID
     list_id: UUID
     batches: list[ImportBatchResponse] = Field(default_factory=list)
+    # Story 4.12: a fully-duplicate statement contributes no batch, so the
+    # batch list alone no longer describes what the commit did.
+    imported_new_count: int = 0
+    skipped_duplicate_count: int = 0
 
 
 class IdentifyCardBody(BaseModel):
