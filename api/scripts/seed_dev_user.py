@@ -170,12 +170,19 @@ def _seed_shared_lists(
         list_model = owned.get(shared.owner, {}).get(shared.name)
         if list_model is None:
             logger.warning(
-                "Skipping shared list %r: %s does not own it", shared.name, shared.owner.alias
+                "Skipping shared list %r: roster entry %r does not own it",
+                shared.name,
+                shared.owner.alias,
             )
             continue
         if _ensure_membership(session, list_model, user, INVITE_MEMBER_ROLE):
+            # Name the owner as seeded, which an override may have renamed.
+            owner = session.get(UserModel, list_model.owner_id)
             logger.info(
-                "Added %s to list %r owned by %s", user.email, shared.name, shared.owner.alias
+                "Added %s to list %r owned by %s",
+                user.email,
+                shared.name,
+                owner.alias if owner else list_model.owner_id,
             )
 
 
