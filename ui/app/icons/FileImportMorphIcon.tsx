@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, type SVGProps } from "react";
 
-import { MOTION_DURATION_MS } from "./motion";
+import { MOTION_DURATION_MS, motionEase } from "./motion";
 import { ICON_STROKE } from "./stroke";
 
 /**
@@ -20,10 +20,16 @@ import { ICON_STROKE } from "./stroke";
  * swings the line up and unfolds the second arm out of it. Both lines finish
  * on (12,12), so shaft end and arrow vertex meet exactly.
  *
- * Why JS and not a CSS `d` transition: the CSS `d` property is not supported
- * everywhere, and where it is missing a stylesheet can only cross-fade, which
- * is not this animation. Writing the `d` attribute works in every browser.
- * These shapes are cheap closed-form templates -- no path parsing involved.
+ * Why JS and not a CSS `d` transition: the CSS `d` property still does nothing
+ * in Safari -- it parses and is ignored (WebKit 234227, re-checked 2026-08) --
+ * and a stylesheet can only cross-fade there, which is not this animation.
+ * Writing the `d` attribute works in every browser. These shapes are cheap
+ * closed-form templates -- no path parsing involved.
+ *
+ * Mirroring obligation: the endpoints are hand-written, not derived. t=0 draws
+ * FileIcon's shape and t=1 draws FileImportIcon's, but neither icon is
+ * imported here -- the paths are re-encoded (split subpaths, round caps) so
+ * they can interpolate. Edit either glyph and these templates must follow.
  */
 
 /** Trim float noise so the emitted `d` stays readable in devtools. */
@@ -37,10 +43,6 @@ const shaftAt = (t: number) => `M${n(8 - 6 * t)} ${n(13 - t)}h${n(8 + 2 * t)}`;
 const headAt = (t: number) =>
   `M${n(8 + 1.5 * t)} ${n(17 - 7.5 * t)} ${n(13 - t)} ${n(17 - 5 * t)}` +
   `l${n(-2.5 * t)} ${n(2.5 * t)}`;
-
-/** Matches the ease-in-out feel of the button's own hover chrome. */
-const ease = (p: number) =>
-  p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
 
 type Props = Omit<SVGProps<SVGSVGElement>, "ref"> & {
   /** Drive the morph. The parent owns hover/focus, so one glyph serves both. */
@@ -82,7 +84,7 @@ export function FileImportMorphIcon({
     const start = performance.now();
     const step = (now: number) => {
       const p = Math.min(1, (now - start) / (MOTION_DURATION_MS * span));
-      progress.current = from + (to - from) * ease(p);
+      progress.current = from + (to - from) * motionEase(p);
       apply(progress.current);
       if (p < 1) frame.current = requestAnimationFrame(step);
     };
@@ -98,7 +100,7 @@ export function FileImportMorphIcon({
     strokeLinejoin: "round",
   } as const;
 
-  // Server render is t=0, i.e. exactly FileIcon -- no hydration mismatch.
+  // Server render is t=0, i.e. FileIcon's shape -- no hydration mismatch.
   return (
     <svg
       className={["file-import-morph", className].filter(Boolean).join(" ")}

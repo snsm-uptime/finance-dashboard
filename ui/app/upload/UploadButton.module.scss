@@ -12,7 +12,7 @@
      background while keeping the palette's warm cast. Dark mode goes fully
      black below: its --foreground is cream and would halo instead of shade. */
   --lift-ink: color-mix(in srgb, var(--foreground) 45%, #000);
-  --lift-key: color-mix(in srgb, var(--lift-ink) 45%, transparent);
+  --lift-key: color-mix(in srgb, var(--lift-ink) 70%, transparent);
   --lift-ambient: color-mix(in srgb, var(--lift-ink) 26%, transparent);
 
   border-width: var(--upload-border) !important;
