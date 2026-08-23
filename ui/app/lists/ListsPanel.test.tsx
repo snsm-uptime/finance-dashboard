@@ -73,28 +73,30 @@ describe("ListsPanel roster chips", () => {
     container.remove();
   });
 
-  it("uses an O bookmark and hides a settled-zero row on a solo list", () => {
+  it("omits the owner bookmark and hides a settled-zero row on a solo list", () => {
     act(() => {
       root.render(<ListsPanel initialLists={[solo]} currentUserId="owner-1" />);
     });
     const card = container.querySelector('[aria-label="Open list: Personal"]');
-    expect(card?.querySelector(".roleBookmark")?.textContent).toBe(t.ownedMark);
-    expect(card?.querySelector('[aria-label="Owner"]')).not.toBeNull();
+    expect(card?.querySelector(".roleBookmark")).toBeNull();
     expect(chipTexts(card)).toEqual([]);
     expect(card?.textContent).not.toContain("sebas");
     expect(card?.textContent).not.toContain(t.balanceZero);
   });
 
-  it("sorts other members A–Z and never chips the owner", () => {
+  it("sorts aliases A–Z and colors only the owner chip", () => {
     act(() => {
       root.render(<ListsPanel initialLists={[shared]} currentUserId="owner-1" />);
     });
     const card = container.querySelector('[aria-label="Open list: Home"]');
     expect(chipTexts(card)).toEqual(["alex", "member-3…"]);
-    expect(card?.textContent).not.toContain("sebas");
+    const chips = Array.from(card?.querySelectorAll(".chipRow span") ?? []);
+    const otherChip = chips.find((el) => el.textContent === "alex");
+    expect(chips.every((el) => !el.className.includes("accent"))).toBe(true);
+    expect(otherChip?.className).not.toContain("accent");
   });
 
-  it("uses an M bookmark and chips other members, not the owner", () => {
+  it("uses an M bookmark and still shows the owner when the viewer is a member", () => {
     act(() => {
       root.render(
         <ListsPanel
@@ -106,9 +108,11 @@ describe("ListsPanel roster chips", () => {
     const card = container.querySelector('[aria-label="Open list: Home"]');
     expect(card?.querySelector(".roleBookmark")?.textContent).toBe(t.memberMark);
     expect(card?.querySelector('[aria-label="Member"]')).not.toBeNull();
-    expect(chipTexts(card)).toEqual(["member-3…"]);
-    expect(card?.textContent).not.toContain("sebas");
-    expect(card?.textContent).not.toContain("alex");
+    expect(chipTexts(card)).toEqual(["member-3…", "sebas"]);
+    const chips = Array.from(card?.querySelectorAll(".chipRow span") ?? []);
+    const ownerChip = chips.find((el) => el.textContent === "sebas");
+    expect(ownerChip?.className).toContain("accent");
+    expect(chipTexts(card)).not.toContain("alex");
   });
 
   it("places a nonzero balance in the card middle", () => {

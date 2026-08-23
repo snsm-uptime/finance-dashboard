@@ -310,9 +310,7 @@ class SqlAlchemyListRepository:
                 .order_by(ListMembershipModel.created_at.asc())
             )
             for list_id, member_id, alias in self._session.execute(member_stmt).all():
-                members_by_list[list_id].append(
-                    ListMemberLabel(user_id=member_id, alias=alias)
-                )
+                members_by_list[list_id].append(ListMemberLabel(user_id=member_id, alias=alias))
         return [
             ListMembershipSummary(
                 id=lst.id,

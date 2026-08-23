@@ -38,10 +38,7 @@ import styles from "./lists.module.scss";
 
 function rosterForCard(list: ListItem, currentUserId: string) {
   return [...(list.members ?? [])]
-    .filter(
-      (member) =>
-        member.user_id !== currentUserId && member.user_id !== list.owner_id,
-    )
+    .filter((member) => member.user_id !== currentUserId)
     .sort((a, b) =>
       memberLabel(a).localeCompare(memberLabel(b), undefined, {
         sensitivity: "base",
@@ -49,22 +46,9 @@ function rosterForCard(list: ListItem, currentUserId: string) {
     );
 }
 
-function ListRoleBookmark({
-  isOwner,
-  mark,
-  label,
-}: {
-  isOwner: boolean;
-  mark: string;
-  label: string;
-}) {
+function ListRoleBookmark({ mark, label }: { mark: string; label: string }) {
   return (
-    <span
-      className={`${styles.roleBookmark} ${
-        isOwner ? styles.roleBookmarkOwner : styles.roleBookmarkMember
-      }`}
-      aria-label={label}
-    >
+    <span className={styles.roleBookmark} aria-label={label}>
       {mark}
     </span>
   );
@@ -76,9 +60,7 @@ function ListCardFace({
   isOwner,
   title,
   balance,
-  ownedMark,
   memberMark,
-  ownedBadge,
   memberBadge,
 }: {
   list: ListItem;
@@ -86,25 +68,24 @@ function ListCardFace({
   isOwner: boolean;
   title: ReactNode;
   balance: ReactNode;
-  ownedMark: string;
   memberMark: string;
-  ownedBadge: string;
   memberBadge: string;
 }) {
   const roster = rosterForCard(list, currentUserId);
   return (
     <>
-      <ListRoleBookmark
-        isOwner={isOwner}
-        mark={isOwner ? ownedMark : memberMark}
-        label={isOwner ? ownedBadge : memberBadge}
-      />
+      {isOwner ? null : (
+        <ListRoleBookmark mark={memberMark} label={memberBadge} />
+      )}
       {title}
       <span className={styles.cardMiddle}>{balance}</span>
       <span className={styles.cardDivider} aria-hidden="true" />
       <span className={styles.chipRow}>
         {roster.map((member) => (
-          <Chip key={member.user_id} tone="muted">
+          <Chip
+            key={member.user_id}
+            tone={member.user_id === list.owner_id ? "accent" : "muted"}
+          >
             {memberLabel(member)}
           </Chip>
         ))}
@@ -401,9 +382,7 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
                 currentUserId,
                 isOwner,
                 balance,
-                ownedMark: t.ownedMark,
                 memberMark: t.memberMark,
-                ownedBadge: t.ownedBadge,
                 memberBadge: t.memberBadge,
               };
               return (

@@ -393,14 +393,6 @@
   line-height: 1;
   pointer-events: none;
   clip-path: polygon(0 0, 100% 0, 100% 70%, 50% 100%, 0 70%);
-}
-
-.roleBookmarkOwner {
-  background: var(--accent);
-  color: var(--surface);
-}
-
-.roleBookmarkMember {
   background: var(--muted);
   color: var(--surface);
 }
