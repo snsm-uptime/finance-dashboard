@@ -78,8 +78,8 @@ function ListCardFace({
         <ListRoleBookmark mark={memberMark} label={memberBadge} />
       )}
       {title}
-      <span className={styles.cardMiddle}>{balance}</span>
       <span className={styles.cardDivider} aria-hidden="true" />
+      <span className={styles.cardMiddle}>{balance}</span>
       <span className={styles.chipRow}>
         {roster.map((member) => (
           <Chip
@@ -365,9 +365,8 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
               const balance =
                 tone === "zero" ? null : (
                   <span
-                    className={`${styles.balance} ${
-                      tone === "owe" ? styles.balanceOwe : styles.balanceOwed
-                    }`}
+                    className={`${styles.balance} ${tone === "owe" ? styles.balanceOwe : styles.balanceOwed
+                      }`}
                   >
                     <span className={styles.balanceToken}>
                       {tone === "owe" ? t.balanceOwe : t.balanceOwed}

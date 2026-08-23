@@ -17,7 +17,7 @@ services:
     environment:
       DEV_RELOAD: "true"
       LOG_LEVEL: "DEBUG"
-      # Dev default: seed a pre-verified account + lists so a fresh stack is
+      # Dev default: seed pre-verified accounts + lists so a fresh stack is
       # testable immediately. Set SEED_DEV_USER=0 in .env to opt out.
       SEED_DEV_USER: ${SEED_DEV_USER:-1}
     volumes:
