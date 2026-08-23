@@ -198,7 +198,20 @@ flowchart LR
 
 - **Binds:** FR-20, FR-34; adapter normalize; commit
 - **Prevents:** Adapter-hashed keys vs domain fallback tuple divergence
-- **Rule:** **Domain alone** computes canonical identity at commit. Primary: stable bank `external_ref` when adapter marks ref quality stable. Fallback: `(product_id, posted_date, currency, amount, normalized_description, line_type, statement_period_id)`. Adapters MUST NOT emit authoritative dedup keys (optional `ref_quality` hint only).
+- **Rule:** **Domain alone** computes canonical identity at commit. Primary: stable bank `external_ref` when adapter marks ref quality stable. Fallback: `(product_id, posted_date, currency, amount, normalized_description, line_type)`. Adapters MUST NOT emit authoritative dedup keys (optional `ref_quality` hint only). The persisted form is **version-prefixed** (`v1:<sha256>`) so a later identity-rule change is detectable rather than a silent dedup outage on rows fingerprinted under the old rule.
+
+> **Amended 2026-08-23** — Story 4.12 (commit batch, dedup summary). Originally the fallback tuple
+> ended in **`statement_period_id`**. Wiring the rule into the commit path showed that field to be
+> actively wrong, not merely unimplemented: FR-20's overlap clause exists for a transaction that
+> appears on two overlapping statements — a January and a February statement both printing a
+> purchase posted Jan 28. With the issuing statement's cycle in the tuple, that one transaction
+> gets **two** identities and the duplicate commits, defeating the dedup the tuple is for. Deriving
+> the period from `posted_date` avoids that only by being a no-op, while leaving a live footgun for
+> a later author to "fix" by wiring in the real cycle id. Only the transaction's own fields may
+> participate in identity. The pipeline also extracts no billing period today, which is why
+> `compute_canonical_identity` had never been called outside its own tests. Guarded permanently by
+> `test_identity_is_stable_across_overlapping_statements`. Superseded wording retained here for
+> history.
 
 ### AD-19 — List authorization [ADOPTED]
 

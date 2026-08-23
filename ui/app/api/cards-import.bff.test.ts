@@ -111,6 +111,57 @@ describe("cards / import BFF smoke (coverage floor)", () => {
     ).toBe(200);
   });
 
+  it("finalize forwards cookie and passes upstream status through", async () => {
+    const finalize = await import("@/app/api/import/sessions/[sessionId]/finalize/route");
+    const response = await finalize.POST(
+      cookieRequest("http://localhost/api/import/sessions/s1/finalize", {
+        method: "POST",
+      }),
+      { params: Promise.resolve({ sessionId: "s1" }) },
+    );
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test:8000/import/sessions/s1/finalize",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(cookieOnLastFetch()).toBe("fh_session=tok");
+  });
+
+  it("finalize passes a 409 through verbatim rather than flattening it", async () => {
+    fetchMock.mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ detail: "still pending", code: "import_session_has_pending_rows" }),
+          { status: 409, headers: { "Content-Type": "application/json" } },
+        ),
+      ),
+    );
+    const finalize = await import("@/app/api/import/sessions/[sessionId]/finalize/route");
+    const response = await finalize.POST(
+      cookieRequest("http://localhost/api/import/sessions/s1/finalize", { method: "POST" }),
+      { params: Promise.resolve({ sessionId: "s1" }) },
+    );
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      detail: "still pending",
+      code: "import_session_has_pending_rows",
+    });
+  });
+
+  it("finalize reports a dead upstream as 502 rather than throwing", async () => {
+    fetchMock.mockImplementation(() => Promise.reject(new Error("ECONNREFUSED")));
+    const finalize = await import("@/app/api/import/sessions/[sessionId]/finalize/route");
+    const response = await finalize.POST(
+      cookieRequest("http://localhost/api/import/sessions/s1/finalize", { method: "POST" }),
+      { params: Promise.resolve({ sessionId: "s1" }) },
+    );
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({
+      detail: "Upstream unavailable.",
+      code: "bad_gateway",
+    });
+  });
+
   it("row assign/delete/patch and session undo forward cookie", async () => {
     const assign = await import(
       "@/app/api/import/sessions/[sessionId]/rows/[rowId]/assign/route"

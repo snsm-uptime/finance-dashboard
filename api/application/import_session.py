@@ -10,17 +10,19 @@ module implements.
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from typing import Protocol
 from uuid import UUID, uuid4
 
-from domain.canonical_line import CanonicalLine
+from domain.canonical_line import CanonicalLine, canonical_identity_key
 from domain.cards import normalize_iban
 from domain.errors import (
     ImportRowNotAvailableError,
     ImportRowNotFoundError,
     ImportSessionDiscardedError,
+    ImportSessionHasPendingRowsError,
     ImportSessionNotFoundError,
     ImportStatementNotFoundError,
     InvalidCanonicalLineError,
@@ -198,6 +200,10 @@ class CandidateRowRecord:
     status: str
     resolved_list_id: UUID | None
     line: CanonicalLine
+    resolved_at: datetime | None = None
+    # Resolved without a ledger entry — the identity was already in the
+    # destination list (Story 4.12). Drives skipped_duplicate_count.
+    dedup_skipped: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -207,6 +213,9 @@ class CommitRow:
     candidate_row_id: UUID
     draft: ManualExpenseDraft
     fx: MaterializedFx
+    # Domain-computed canonical identity, persisted on the ledger entry so a
+    # later session can recognize the same transaction (Story 4.12, AD-18).
+    identity: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -220,6 +229,16 @@ class ImportSessionRecord:
     # was resolved, or None when there is nothing to undo.
     undo_row_id: UUID | None = None
     undo_action: str | None = None
+    # Save / bulk commit — what unlocks the AD-3 PDF delete (Story 4.12, AC #7).
+    finalized_at: datetime | None = None
+    # Derived from row state every time the record is built, never incremented
+    # counters (Story 4.12, AC #4): undo returns a row to pending and counters
+    # would drift, so the 4.14 summary would lie after any undo.
+    imported_new_count: int = 0
+    skipped_duplicate_count: int = 0
+    # The list that received the most newly imported rows this session, or None
+    # when the session imported nothing new (AC #6).
+    landing_list_id: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -233,6 +252,21 @@ class ImportBatchRecord:
     actor_user_id: UUID
     created_at: datetime
     ledger_entry_ids: list[UUID]
+
+
+@dataclass(frozen=True, slots=True)
+class CommitOutcome:
+    """What one commit action actually did (Story 4.12).
+
+    `batch` is None when every targeted row was a duplicate: AD-4 says a batch
+    is one commit action that *happened*, and an empty batch would pollute
+    FR-30 rollback — the same reason `_undo_assign` already deletes emptied
+    batches.
+    """
+
+    batch: ImportBatchRecord | None
+    imported_new: int
+    skipped_duplicate: int
 
 
 class ImportSessionRepository(Protocol):
@@ -267,16 +301,40 @@ class ImportSessionRepository(Protocol):
         actor_user_id: UUID,
         rows: list[CommitRow],
         undo_row_id: UUID | None = None,
-    ) -> ImportBatchRecord:
+        duplicate_row_ids: Sequence[UUID] = (),
+    ) -> CommitOutcome:
         """Persist one Import Batch atomically (Story 4.10, amended AD-4):
         guarded pending→committed UPDATE on the targeted candidate rows,
-        the batch row, one ledger entry per row (with import_candidate_row_id),
-        then complete the statement if every non-excluded row has left pending.
+        the batch row, one ledger entry per row (with import_candidate_row_id
+        and import_identity), then complete the statement if every non-excluded
+        row has left pending.
 
         `undo_row_id` records the session undo pointer for a row-grain assign.
         Bulk passes nothing: a single-row statement committed under Bulk is
         still a statement-grain action and must not become undoable per row.
+
+        `duplicate_row_ids` (Story 4.12) are rows whose identity is already in
+        the destination list. They resolve — same guarded pending→committed
+        UPDATE — but write no ledger entry and are stamped `dedup_skipped`.
+        A commit action in which *every* row is a duplicate journals no batch:
+        `rows` empty means `CommitOutcome.batch is None`.
         """
+        ...
+
+    def find_existing_identities(self, *, list_id: UUID, identities: Sequence[str]) -> set[str]:
+        """Which of `identities` already have a ledger entry in this list
+        (Story 4.12, AC #3).
+
+        Scoped to the destination list, not global: a duplicate in list A
+        cannot corrupt list B's balance, and re-import is currently the only
+        informal way to repair a misrouted statement (no reassign, no batch
+        rollback yet). Revisit after Stories 5.5 / 5.6.
+        """
+        ...
+
+    def mark_session_finalized(self, *, session_id: UUID, user_id: UUID) -> ImportSessionRecord:
+        """Stamp `finalized_at` if not already set and return the reloaded
+        record. Idempotent — Save is double-clickable (Story 4.12, AC #8)."""
         ...
 
     def mark_candidate_row_deleted(
@@ -491,6 +549,10 @@ class AssignBulkImportResult:
     session_id: UUID
     list_id: UUID
     batches: list[ImportBatchRecord]
+    # Story 4.12: a fully-duplicate statement contributes no batch, so the
+    # batch list alone can no longer tell the caller what happened.
+    imported_new: int = 0
+    skipped_duplicate: int = 0
 
 
 class AssignBulkImportService:
@@ -539,6 +601,8 @@ class AssignBulkImportService:
         )
 
         batches: list[ImportBatchRecord] = []
+        imported_new = 0
+        skipped_duplicate = 0
         for statement in session.statements:
             if statement.status != STATEMENT_STATUS_STAGED:
                 continue
@@ -550,13 +614,38 @@ class AssignBulkImportService:
             if any(candidate.status != ROW_STATUS_PENDING for candidate in non_excluded):
                 raise ImportRowNotAvailableError()
             rows: list[CommitRow] = []
+            duplicate_row_ids: list[UUID] = []
             card_id = statement.card_id
+
+            # One lookup per statement, not one per row (Story 4.12, AC #3).
+            identities = {
+                candidate.id: canonical_identity_key(candidate.line) for candidate in non_excluded
+            }
+            already_in_list = self._session_repo.find_existing_identities(
+                list_id=command.list_id, identities=list(identities.values())
+            )
+            # A bulk statement can legitimately carry two byte-identical rows,
+            # and the database lookup only catches rows already committed — so
+            # identities claimed by an earlier row in *this* loop count too.
+            claimed_in_this_action: set[str] = set()
+
             for candidate in non_excluded:
+                # Validate before the duplicate check (matches
+                # AssignCandidateRowService's order, Story 4.12 review): a row
+                # that is both invalid and a duplicate must fail loudly, not
+                # be silently absorbed into skipped_duplicate_count.
                 line = candidate.line
                 validate_bulk_candidate_row(
                     amount=line.amount,
                     normalized_description=line.normalized_description,
                 )
+
+                identity = identities[candidate.id]
+                if identity in already_in_list or identity in claimed_in_this_action:
+                    duplicate_row_ids.append(candidate.id)
+                    continue
+                claimed_in_this_action.add(identity)
+
                 draft = ManualExpenseDraft(
                     amount=line.amount,
                     currency=line.currency,
@@ -574,20 +663,26 @@ class AssignBulkImportService:
                     currency=draft.currency,
                     posted_date=date.fromisoformat(draft.posted_date),
                 )
-                rows.append(CommitRow(candidate_row_id=candidate.id, draft=draft, fx=fx))
+                rows.append(
+                    CommitRow(candidate_row_id=candidate.id, draft=draft, fx=fx, identity=identity)
+                )
 
-            if not rows:
+            if not rows and not duplicate_row_ids:
                 continue
 
-            batch = self._session_repo.commit_statement_batch(
+            outcome = self._session_repo.commit_statement_batch(
                 batch_id=uuid4(),
                 session_id=command.session_id,
                 statement_id=statement.id,
                 list_id=command.list_id,
                 actor_user_id=command.actor_user_id,
                 rows=rows,
+                duplicate_row_ids=duplicate_row_ids,
             )
-            batches.append(batch)
+            imported_new += outcome.imported_new
+            skipped_duplicate += outcome.skipped_duplicate
+            if outcome.batch is not None:
+                batches.append(outcome.batch)
 
         # A row-grain undo pointer is meaningless once a whole statement was
         # bulk-committed on top of it (AC #5, "cleared once used or superseded").
@@ -595,6 +690,9 @@ class AssignBulkImportService:
             session_id=command.session_id, user_id=command.actor_user_id
         )
 
+        # Bulk is deliberately unchanged on PDF release (Story 4.12, AC #5):
+        # there is no ImportReviewSheet in the bulk flow, so bulk commit *is*
+        # the end of review. AD-4 makes it a finalize too.
         updated = self._session_repo.get_session(command.session_id, command.actor_user_id)
         if updated is not None:
             _release_source_pdf_if_idle(
@@ -602,9 +700,16 @@ class AssignBulkImportService:
                 session_repo=self._session_repo,
                 pdf_storage=self._pdf_storage,
             )
+        self._session_repo.mark_session_finalized(
+            session_id=command.session_id, user_id=command.actor_user_id
+        )
 
         return AssignBulkImportResult(
-            session_id=command.session_id, list_id=command.list_id, batches=batches
+            session_id=command.session_id,
+            list_id=command.list_id,
+            batches=batches,
+            imported_new=imported_new,
+            skipped_duplicate=skipped_duplicate,
         )
 
 
@@ -646,14 +751,12 @@ class AssignCandidateRowService:
         session_repo: ImportSessionRepository,
         list_lookup: ListAccessLookup,
         fx_service: MaterializeFxService,
-        pdf_storage: PdfStorage,
     ) -> None:
         self._session_repo = session_repo
         self._list_lookup = list_lookup
         self._fx_service = fx_service
-        self._pdf_storage = pdf_storage
 
-    def execute(self, command: AssignCandidateRowCommand) -> ImportBatchRecord:
+    def execute(self, command: AssignCandidateRowCommand) -> CommitOutcome:
         session = self._session_repo.get_session(command.session_id, command.actor_user_id)
         if session is None:
             raise ImportSessionNotFoundError()
@@ -682,6 +785,28 @@ class AssignCandidateRowService:
         validate_bulk_candidate_row(
             amount=line.amount, normalized_description=line.normalized_description
         )
+
+        # Dedup *before* FX (Story 4.12, AC #3): a re-imported statement must
+        # not burn a BCCR call per duplicate row, and an FX outage must not 503
+        # the whole re-import on rows that were never going to be written.
+        identity = canonical_identity_key(line)
+        already_in_list = self._session_repo.find_existing_identities(
+            list_id=command.list_id, identities=[identity]
+        )
+        if identity in already_in_list:
+            # The row still resolves — it leaves pending and the queue advances
+            # — but writes no ledger entry and journals no batch.
+            return self._session_repo.commit_statement_batch(
+                batch_id=uuid4(),
+                session_id=command.session_id,
+                statement_id=statement.id,
+                list_id=command.list_id,
+                actor_user_id=command.actor_user_id,
+                rows=[],
+                undo_row_id=candidate.id,
+                duplicate_row_ids=[candidate.id],
+            )
+
         card_id = command.card_id or statement.card_id
         draft = ManualExpenseDraft(
             amount=line.amount,
@@ -700,23 +825,19 @@ class AssignCandidateRowService:
             currency=draft.currency,
             posted_date=date.fromisoformat(draft.posted_date),
         )
-        batch = self._session_repo.commit_statement_batch(
+        # No PDF release here (Story 4.12, AC #7): the last pending assign is
+        # not finalization. Review includes ImportReviewSheet until Save, which
+        # calls POST /finalize — dropping the file here would strand a user who
+        # still wants to compare, and 4.11 deferred exactly this defect.
+        return self._session_repo.commit_statement_batch(
             batch_id=uuid4(),
             session_id=command.session_id,
             statement_id=statement.id,
             list_id=command.list_id,
             actor_user_id=command.actor_user_id,
-            rows=[CommitRow(candidate_row_id=candidate.id, draft=draft, fx=fx)],
+            rows=[CommitRow(candidate_row_id=candidate.id, draft=draft, fx=fx, identity=identity)],
             undo_row_id=candidate.id,
         )
-        updated = self._session_repo.get_session(command.session_id, command.actor_user_id)
-        if updated is not None:
-            _release_source_pdf_if_idle(
-                session=updated,
-                session_repo=self._session_repo,
-                pdf_storage=self._pdf_storage,
-            )
-        return batch
 
 
 @dataclass(frozen=True, slots=True)
@@ -729,12 +850,12 @@ class DeleteCandidateRowCommand:
 class DeleteCandidateRowService:
     """Per-row delete (Story 4.10): guarded pending→deleted, no ledger writes.
 
-    HTTP lands in Story 4.11.
+    No `pdf_storage`: Story 4.12 moved PDF release behind an explicit finalize,
+    so resolving the last pending row no longer drops the source file.
     """
 
-    def __init__(self, session_repo: ImportSessionRepository, pdf_storage: PdfStorage) -> None:
+    def __init__(self, session_repo: ImportSessionRepository) -> None:
         self._session_repo = session_repo
-        self._pdf_storage = pdf_storage
 
     def execute(self, command: DeleteCandidateRowCommand) -> ImportSessionRecord:
         session = self._session_repo.get_session(command.session_id, command.actor_user_id)
@@ -746,18 +867,13 @@ class DeleteCandidateRowService:
         if session.discarded_at is not None:
             raise ImportSessionDiscardedError()
 
-        updated = self._session_repo.mark_candidate_row_deleted(
+        # No PDF release here (Story 4.12, AC #7) — see AssignCandidateRowService.
+        return self._session_repo.mark_candidate_row_deleted(
             session_id=command.session_id,
             statement_id=statement.id,
             row_id=candidate.id,
             user_id=command.actor_user_id,
         )
-        _release_source_pdf_if_idle(
-            session=updated,
-            session_repo=self._session_repo,
-            pdf_storage=self._pdf_storage,
-        )
-        return updated
 
 
 @dataclass(frozen=True, slots=True)
@@ -785,6 +901,62 @@ class UndoLastResolutionService:
             raise ImportSessionDiscardedError()
 
         return self._session_repo.undo_last_resolution(
+            session_id=command.session_id, user_id=command.actor_user_id
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class FinalizeImportSessionCommand:
+    actor_user_id: UUID
+    session_id: UUID
+
+
+class FinalizeImportSessionService:
+    """End of review — the moment the source PDF may go (Story 4.12, AC #7/#8).
+
+    Called by ImportReviewSheet's Save (Story 4.13.1). This, not the last
+    pending row leaving the queue, is what AD-3 means by "review no longer
+    needs the PDF": review includes the sheet, and a user who has emptied the
+    queue may still want to compare before saving.
+
+    Session-owner scoped through the repository (AD-19): every query filters
+    on `user_id`, so a non-owner gets `import_session_not_found` rather than a
+    403. That non-enumerating shape is deliberate.
+    """
+
+    def __init__(self, session_repo: ImportSessionRepository, pdf_storage: PdfStorage) -> None:
+        self._session_repo = session_repo
+        self._pdf_storage = pdf_storage
+
+    def execute(self, command: FinalizeImportSessionCommand) -> ImportSessionRecord:
+        session = self._session_repo.get_session(command.session_id, command.actor_user_id)
+        if session is None:
+            raise ImportSessionNotFoundError()
+
+        if session.discarded_at is not None:
+            raise ImportSessionDiscardedError()
+
+        # Idempotent: Save is double-clickable, and a second call must not
+        # re-run the delete against paths that are already gone.
+        if session.finalized_at is not None:
+            return session
+
+        if any(
+            row.status == ROW_STATUS_PENDING
+            for statement in session.statements
+            for row in statement.candidate_rows
+        ):
+            raise ImportSessionHasPendingRowsError()
+
+        # Retention while a statement is staged or failed stays exactly today's
+        # `session_needs_source_pdf` rule — unresolved-quarantine retention is
+        # Epic 5's (5.2-5.3), not this story's.
+        _release_source_pdf_if_idle(
+            session=session,
+            session_repo=self._session_repo,
+            pdf_storage=self._pdf_storage,
+        )
+        return self._session_repo.mark_session_finalized(
             session_id=command.session_id, user_id=command.actor_user_id
         )
 

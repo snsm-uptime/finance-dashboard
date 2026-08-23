@@ -56,7 +56,6 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   const [listsError, setListsError] = useState<string | null>(null);
   const [defaultListId, setDefaultListId] = useState<string>("");
   const [pickedListId, setPickedListId] = useState<string>("");
-  const [lastAcceptedListId, setLastAcceptedListId] = useState<string | null>(null);
   const [isCoarsePointer] = useState(
     () => typeof window !== "undefined" && !!window.matchMedia?.("(pointer: coarse)").matches,
   );
@@ -72,6 +71,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     errorRowNotFound: t.individualReviewErrorRowNotFound,
     errorRowNotAvailable: t.individualReviewErrorRowNotAvailable,
     errorNothingToUndo: t.individualReviewErrorNothingToUndo,
+    errorSessionHasPendingRows: t.individualReviewErrorSessionHasPendingRows,
     errorFxUnavailable: t.individualReviewErrorFxUnavailable,
     errorGeneric: t.errorGeneric,
     errorUnauthorized: t.errorUnauthorized,
@@ -176,7 +176,6 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     if (!listId) return { ok: false, error: t.errorGeneric };
     const result = await assignRow(sessionId, pendingRow.id, listId, messages);
     if (result.ok) {
-      setLastAcceptedListId(listId);
       setPickedListId("");
       setSession(result.session);
     }
@@ -193,10 +192,18 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
 
   useEffect(() => {
     if (session && !current) {
-      router.push(lastAcceptedListId ? `/lists/${encodeURIComponent(lastAcceptedListId)}` : "/lists");
+      // Story 4.12 (Task 7.5): the landing target is server-computed — the
+      // list that received the most newly imported rows this session, null
+      // when the session imported nothing new. No client-side fallback: a
+      // null landing_list_id means the caller stays put at /lists rather
+      // than guessing (AC #6). The landing *trigger* still moves to
+      // ImportReviewSheet's Save in Story 4.13.1.
+      router.push(
+        session.landing_list_id ? `/lists/${encodeURIComponent(session.landing_list_id)}` : "/lists",
+      );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, current, lastAcceptedListId]);
+  }, [session, current]);
 
   const listOptions = useMemo(
     () => (lists ?? []).map((l) => ({ value: l.id, label: l.name })),

@@ -514,6 +514,18 @@ class ImportRowNotFoundError(DomainError):
         super().__init__(self.MESSAGE)
 
 
+class ImportSessionHasPendingRowsError(DomainError):
+    """Raised when finalize is called while rows are still pending (Story
+    4.12, AC #8) — dropping the source PDF mid-review would strand the user
+    with no way to compare the rows they have left."""
+
+    MESSAGE = "This import session still has rows to review."
+    CODE = "import_session_has_pending_rows"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
 class ImportNothingToUndoError(DomainError):
     """Raised when undo is called on a session with no recorded last
     resolution (never resolved, already undone, or superseded)."""

@@ -7,6 +7,7 @@ import {
   discardSession,
   editRowDescription,
   fetchImportSession,
+  finalizeSession,
   undoLastResolution,
   uploadStatement,
 } from "./uploadClient";
@@ -41,12 +42,22 @@ const individualReviewMessages = {
   errorRowNotFound: "row-not-found",
   errorRowNotAvailable: "row-not-available",
   errorNothingToUndo: "nothing-to-undo",
+  errorSessionHasPendingRows: "session-has-pending-rows",
   errorFxUnavailable: "fx-unavailable",
   errorGeneric: "generic",
   errorUnauthorized: "unauthorized",
 };
 
 const emptyStatementFields = { rows: [], zero_amount_excluded_count: 0 };
+
+// Story 4.12 added four fields that default when the payload omits them, so the
+// exact-shape assertions below spread these rather than restating them.
+const emptySessionFields = {
+  finalized_at: null,
+  imported_new_count: 0,
+  skipped_duplicate_count: 0,
+  landing_list_id: null,
+};
 
 function fakeFile(): File {
   return new File(["%PDF-1.4"], "statement.pdf", { type: "application/pdf" });
@@ -82,6 +93,7 @@ describe("uploadClient", () => {
         created_at: "2026-08-18T00:00:00Z",
         discarded_at: null,
         undo: null,
+        ...emptySessionFields,
         statements: [
           { id: "st1", product_id: "bac_credit", status: "staged", candidate_row_count: 12, iban: null, filename: null, card_id: null, ...emptyStatementFields },
         ],
@@ -317,6 +329,7 @@ describe("uploadClient", () => {
         created_at: "2026-08-19T00:00:00Z",
         discarded_at: null,
         undo: null,
+        ...emptySessionFields,
         statements: [
           { id: "st1", product_id: "bac_credit", status: "committed", candidate_row_count: 3, iban: null, filename: null, card_id: null, ...emptyStatementFields },
           { id: "st2", product_id: "bac_credit", status: "skipped", candidate_row_count: 1, iban: null, filename: null, card_id: null, ...emptyStatementFields },
@@ -549,5 +562,78 @@ describe("uploadClient", () => {
         body: JSON.stringify({ description: "Coffee" }),
       }),
     );
+  });
+  it("finalizeSession posts to the finalize endpoint", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        id: "s1",
+        created_at: "2026-08-23T00:00:00Z",
+        discarded_at: null,
+        statements: [],
+        finalized_at: "2026-08-23T10:00:00Z",
+        imported_new_count: 3,
+        skipped_duplicate_count: 2,
+        landing_list_id: "l9",
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await finalizeSession("s1", individualReviewMessages);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/import/sessions/s1/finalize",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.session.finalized_at).toBe("2026-08-23T10:00:00Z");
+      expect(result.session.imported_new_count).toBe(3);
+      expect(result.session.skipped_duplicate_count).toBe(2);
+      expect(result.session.landing_list_id).toBe("l9");
+    }
+  });
+
+  it("finalizeSession maps import_session_has_pending_rows", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: async () => ({ code: "import_session_has_pending_rows", detail: "pending" }),
+      }),
+    );
+
+    const result = await finalizeSession("s1", individualReviewMessages);
+    expect(result).toEqual({ ok: false, error: "session-has-pending-rows" });
+  });
+
+  it("session parsing tolerates a payload missing the Story 4.12 fields", async () => {
+    // An older API omits all four; making them required would reject an
+    // otherwise-valid payload, so they default rather than failing the parse.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: "s1",
+          created_at: "2026-08-23T00:00:00Z",
+          discarded_at: null,
+          statements: [],
+        }),
+      }),
+    );
+
+    const result = await finalizeSession("s1", individualReviewMessages);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.session.finalized_at).toBeNull();
+      expect(result.session.landing_list_id).toBeNull();
+      expect(result.session.imported_new_count).toBe(0);
+      expect(result.session.skipped_duplicate_count).toBe(0);
+    }
   });
 });

@@ -6,7 +6,9 @@ Pure domain: no FastAPI / SQLAlchemy / pdfplumber imports (AD-1).
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import datetime
 from decimal import Decimal
+from uuid import UUID
 
 from domain.errors import (
     ImportSessionDiscardedError,
@@ -143,6 +145,38 @@ def validate_bulk_candidate_row(*, amount: Decimal, normalized_description: str)
         raise InvalidCanonicalLineError(
             f"Statement row description exceeds {DESCRIPTION_MAX_LENGTH} characters."
         )
+
+
+def select_landing_list_id(resolved: Sequence[tuple[UUID, datetime]]) -> UUID | None:
+    """Which list the user should land on when the session completes (Story
+    4.12, AC #6).
+
+    Input is one `(list_id, resolved_at)` pair per **newly imported** ledger
+    row — duplicates and deletes are excluded by the caller, because landing
+    on a list this session did not actually add anything to would be a lie.
+
+    Ordering: most rows wins; a count tie goes to the list whose most recent
+    row resolved latest (that is where the user was last working); a full tie
+    goes to the lowest id so the answer is deterministic rather than
+    dict-order dependent.
+
+    Empty input → None. A session that imported nothing new has no honest
+    landing target and the caller stays put rather than guessing.
+    """
+    counts: dict[UUID, int] = {}
+    latest: dict[UUID, datetime] = {}
+    for list_id, resolved_at in resolved:
+        counts[list_id] = counts.get(list_id, 0) + 1
+        known = latest.get(list_id)
+        if known is None or resolved_at > known:
+            latest[list_id] = resolved_at
+    if not counts:
+        return None
+    # Two directions in one ordering (count/recency descending, id ascending),
+    # so pick the winning (count, recency) pair first and break the remaining
+    # tie on the id — rather than fabricating a negatable form of a datetime.
+    best = max((counts[list_id], latest[list_id]) for list_id in counts)
+    return min(list_id for list_id in counts if (counts[list_id], latest[list_id]) == best)
 
 
 _PDF_RETAIN_STATUSES = frozenset({STATEMENT_STATUS_STAGED, STATEMENT_STATUS_FAILED})
