@@ -178,8 +178,9 @@ describe("UploadPanel", () => {
     await selectFile(container, fakeFile());
 
     expect(uploadStatement).toHaveBeenCalled();
-    expect(container.textContent).toContain("New card!");
-    expect(container.textContent).toContain("DE89370400440532013000");
+    const nameInput = container.querySelector('input[name="label"]') as HTMLInputElement;
+    expect(nameInput?.placeholder).toBe("New card!");
+    expect(container.textContent).toContain("IBAN: DE89 3704 0044 0532 0130 00");
     expect(container.textContent).not.toContain("bac_credit");
     expect(container.querySelector('input[type="file"]')).toBeNull();
     expect(container.querySelector('button[aria-label="Upload"]')).toBeNull();

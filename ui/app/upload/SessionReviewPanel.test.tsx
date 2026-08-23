@@ -79,7 +79,26 @@ const mockSession: ImportSession = {
       iban: "DE89370400440532013000",
       filename: "statement.pdf",
       card_id: "card1",
-      rows: [],
+      rows: [
+        {
+          id: "r1",
+          sequence: 1,
+          description: "Store",
+          amount: "10.00",
+          currency: "CRC",
+          posted_date: "2026-07-15",
+          status: "pending",
+        },
+        {
+          id: "r2",
+          sequence: 2,
+          description: "Cafe",
+          amount: "5.00",
+          currency: "CRC",
+          posted_date: "2026-08-03",
+          status: "pending",
+        },
+      ],
       zero_amount_excluded_count: 0,
     },
     {
@@ -112,47 +131,59 @@ describe("SessionReviewPanel", () => {
     document.body.removeChild(container);
   });
 
-  it("titles a matched statement with the uploaded filename, not product_id", async () => {
+  it("maps a matched statement onto the credit-card face", async () => {
     await act(async () => {
       root.render(<SessionReviewPanel session={mockSession} />);
     });
 
+    expect(container.textContent).toContain("My Visa");
     expect(container.textContent).toContain("statement.pdf");
-    expect(container.textContent).toContain("From your My Visa card");
-    expect(container.textContent).toContain("DE89370400440532013000");
+    expect(container.textContent).toContain("IBAN: DE89 3704 0044 0532 0130 00");
+    expect(container.textContent).toContain("JUL-AUG 26");
+    expect(container.textContent).toContain("Period");
+    expect(container.textContent).not.toContain("08-20");
     expect(container.textContent).not.toContain("bac_credit");
   });
 
-  it("titles an unmatched statement New card! with IBAN and a save form", async () => {
+  it("lets an unmatched statement name the card on the face", async () => {
     await act(async () => {
       root.render(<SessionReviewPanel session={mockSession} />);
     });
 
-    expect(container.textContent).toContain("New card!");
-    expect(container.textContent).toContain("ES9121000418450200051332");
-    const save = container.querySelector('button[aria-label="Register"]');
-    expect(save).not.toBeNull();
-    expect(container.querySelector('input[name="label"]')).not.toBeNull();
+    const nameInput = container.querySelector('input[name="label"]') as HTMLInputElement;
+    expect(nameInput).not.toBeNull();
+    expect(nameInput.placeholder).toBe("New card!");
+    expect(container.textContent).toContain("IBAN: ES91 2100 0418 4502 0005 1332");
+    expect(container.textContent).toContain("statement2.pdf");
+    expect(container.querySelector('button[aria-label="Register"]')).not.toBeNull();
   });
 
-  it("shows Discard and Assign to a list buttons", async () => {
+  it("puts a close control on each card and hides assign until the card is saved", async () => {
     await act(async () => {
       root.render(<SessionReviewPanel session={mockSession} />);
     });
 
-    const buttons = Array.from(container.querySelectorAll("button, a"));
-    const buttonTexts = buttons.map((b) => b.textContent);
+    const cards = Array.from(container.querySelectorAll("li"));
+    expect(cards).toHaveLength(2);
 
-    expect(buttonTexts).toContain("Discard");
-    expect(buttonTexts).toContain("Assign to a list");
+    const closeButtons = container.querySelectorAll('button[aria-label="Close"]');
+    expect(closeButtons).toHaveLength(2);
+    expect(container.textContent).not.toContain("Discard");
+
+    const matched = cards[0];
+    const unmatched = cards[1];
+    expect(matched.textContent).toContain("Assign to a list");
+    expect(unmatched.querySelector('input[name="label"]')).not.toBeNull();
+    expect(unmatched.textContent).not.toContain("Assign to a list");
   });
 
-  it("bulk review link has correct href", async () => {
+  it("bulk review link has correct href on a saved card", async () => {
     await act(async () => {
       root.render(<SessionReviewPanel session={mockSession} />);
     });
 
     const link = container.querySelector('a[href*="/upload/bulk/"]') as HTMLAnchorElement;
     expect(link?.href).toContain("/upload/bulk/sess1");
+    expect(container.querySelectorAll('a[href*="/upload/bulk/"]')).toHaveLength(1);
   });
 });
