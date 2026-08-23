@@ -48,7 +48,6 @@ export default async function SignupPage({
         }
       />
       <div className={styles.card}>
-        <p className={styles.brand}>{t.brand}</p>
         <h1 className={styles.title}>{t.title}</h1>
         {!inviteToken ? <p className={styles.subtitle}>{t.subtitle}</p> : null}
         <SignupForm locale={locale} inviteToken={inviteToken || undefined} />

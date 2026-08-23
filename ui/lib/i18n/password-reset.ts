@@ -3,7 +3,6 @@ export type Locale = "en" | "es";
 
 export const passwordResetMessages = {
   en: {
-    brand: "finance-helper",
     forgotTitle: "Forgot password",
     forgotSubtitle:
       "Enter your email and we will send a reset link if that account exists.",
@@ -32,7 +31,6 @@ export const passwordResetMessages = {
     signInLink: "Sign in",
   },
   es: {
-    brand: "finance-helper",
     forgotTitle: "Olvidé mi contraseña",
     forgotSubtitle:
       "Ingresa tu correo y te enviaremos un enlace de restablecimiento si la cuenta existe.",

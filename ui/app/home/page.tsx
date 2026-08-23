@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { AccountNavLink } from "@/components/AccountNavLink";
 import { requireAlias } from "@/lib/alias";
 import { getApiInternalUrl } from "@/lib/api";
 import { cardsCopy } from "@/lib/i18n/cards";
@@ -68,10 +67,6 @@ export default async function Home() {
   return (
     <main className={`${listsStyles.main} ${styles.page}`}>
       <div className={styles.head}>
-        <div className={listsStyles.header}>
-          <p className={listsStyles.brand}>{t.brand}</p>
-          <AccountNavLink />
-        </div>
         <h1 className={listsStyles.title}>{t.title}</h1>
         <p className={listsStyles.copy}>{t.subtitle}</p>
       </div>

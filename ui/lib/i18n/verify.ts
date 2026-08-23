@@ -3,7 +3,6 @@ export type Locale = "en" | "es";
 
 export const verifyMessages = {
   en: {
-    brand: "finance-helper",
     title: "Verify your email",
     subtitle:
       "Open the link from your email, or resend a verification message while signed in.",
@@ -29,7 +28,6 @@ export const verifyMessages = {
     listsLink: "Go to lists",
   },
   es: {
-    brand: "finance-helper",
     title: "Verifica tu correo",
     subtitle:
       "Abre el enlace de tu correo, o reenvía un mensaje de verificación si ya iniciaste sesión.",

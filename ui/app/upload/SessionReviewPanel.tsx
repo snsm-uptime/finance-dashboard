@@ -3,13 +3,13 @@
 import { FormEvent, useId, useMemo, useState } from "react";
 import Link from "next/link";
 
-import { SaveIcon } from "@/app/icons";
+import { CloseIcon, SaveIcon } from "@/app/icons";
 import { IconButton } from "@/components/IconButton";
-import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { useFormSubmission } from "@/hooks";
 import { uploadCopy } from "@/lib/i18n/upload";
 import { useCardIdentification } from "@/hooks/useCardIdentification";
+import { CreditCardFace, CreditCardMark } from "./CreditCardFace";
 import {
   discardSession,
   fetchImportSession,
@@ -25,11 +25,9 @@ type SessionReviewPanelProps = {
   onDiscarded?: () => void;
 };
 
-const statementCardClass =
-  "flex flex-col gap-2 py-[0.85rem] px-[0.85rem] rounded-[8px] border border-border bg-surface";
-const cardInfoClass = "text-[0.9rem]";
-const cardLabelClass = `${cardInfoClass} font-[550] text-foreground`;
-const cardIbanClass = `${cardInfoClass} text-[0.8rem] text-muted`;
+const statementCardClass = "relative flex flex-col gap-3 max-w-md";
+const assignPrimaryClass =
+  "inline-flex items-center justify-center self-start px-3 py-[9px] rounded-sm border-none bg-accent text-on-accent no-underline font-[550] text-[0.95rem]";
 
 export function SessionReviewPanel({
   session,
@@ -95,7 +93,10 @@ export function SessionReviewPanel({
             key={statement.id}
             statement={statement}
             sessionId={session.id}
+            assignHref={`/upload/bulk/${encodeURIComponent(session.id)}`}
             onRegistered={refreshSession}
+            onDiscard={() => discard.submit(session.id)}
+            discardPending={discard.pending}
             cardMessages={cardMessages}
             registrationError={registrationError}
             setRegistrationError={setRegistrationError}
@@ -106,20 +107,8 @@ export function SessionReviewPanel({
         ))}
       </ul>
 
-      <div className="flex gap-3 max-w-[28rem]">
-        <PrimaryButton disabled={discard.pending} onClick={() => discard.submit(session.id)}>
-          {discard.pending ? t.discarding : t.discard}
-        </PrimaryButton>
-        <Link
-          href={`/upload/bulk/${encodeURIComponent(session.id)}`}
-          className="inline-flex items-center px-3 py-[9px] rounded-sm border border-border text-foreground no-underline font-[550] text-[0.95rem]"
-        >
-          {t.assignToList}
-        </Link>
-      </div>
-
       {discard.error ? (
-        <p className="text-owe text-[0.9rem] m-0 mt-3" role="alert">
+        <p className="text-owe text-[0.9rem] m-0" role="alert">
           {discard.error}
         </p>
       ) : null}
@@ -127,10 +116,28 @@ export function SessionReviewPanel({
   );
 }
 
+function statementPeriodBounds(statement: StagedStatement): {
+  start: string | null;
+  end: string | null;
+} {
+  let start: string | null = null;
+  let end: string | null = null;
+  for (const row of statement.rows) {
+    const posted = row.posted_date;
+    if (!posted) continue;
+    if (start === null || posted < start) start = posted;
+    if (end === null || posted > end) end = posted;
+  }
+  return { start, end };
+}
+
 type StatementCardProps = {
   statement: StagedStatement;
   sessionId: string;
+  assignHref: string;
   onRegistered: () => void;
+  onDiscard: () => void;
+  discardPending: boolean;
   cardMessages: CardIdentificationMessages;
   registrationError: string | null;
   setRegistrationError: (error: string | null) => void;
@@ -142,7 +149,10 @@ type StatementCardProps = {
 function StatementCard({
   statement,
   sessionId,
+  assignHref,
   onRegistered,
+  onDiscard,
+  discardPending,
   cardMessages,
   registrationError,
   setRegistrationError,
@@ -157,9 +167,7 @@ function StatementCard({
   const needsRegistration =
     card.needsRegistration ||
     (!card.cardMatched && Boolean(statement.iban) && !statement.card_id);
-  const title = needsRegistration
-    ? t.newCardTitle
-    : statement.filename || card.cardLabel || t.cardIdentificationTitle;
+  const savedName = card.cardLabel || t.newCardTitle;
 
   async function handleRegisterCard(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -178,54 +186,84 @@ function StatementCard({
   }
 
   const canSave = cardLabelInput.trim().length > 0 && !registering && !card.loading;
+  const period = statementPeriodBounds(statement);
+
+  const nameSlot = needsRegistration ? (
+    <>
+      <CreditCardMark />
+      <label className="flex items-center gap-1.5 min-w-0 flex-1 rounded-[6px] border border-white/70 bg-white/8 py-1 px-2">
+        <span className="sr-only">{t.cardIdentificationLabel}</span>
+        <input
+          id={labelId}
+          type="text"
+          name="label"
+          value={cardLabelInput}
+          onChange={(e) => setCardLabelInput(e.target.value)}
+          placeholder={t.newCardTitle}
+          disabled={registering || card.loading}
+          autoComplete="off"
+          maxLength={200}
+          className="min-w-0 flex-1 m-0 p-0 border-0 bg-transparent text-white text-[0.78rem] font-semibold uppercase tracking-[0.04em] placeholder:text-white/55 placeholder:normal-case placeholder:tracking-normal focus:outline-none disabled:opacity-55"
+        />
+        <IconButton
+          className="w-7 h-7 min-w-7 !p-0 text-white hover:text-white"
+          type="submit"
+          disabled={!canSave}
+          label={registering || card.loading ? t.cardIdentificationRegistering : t.cardIdentificationRegister}
+          icon={<SaveIcon className="block w-4 h-4" />}
+        />
+      </label>
+    </>
+  ) : (
+    <>
+      <CreditCardMark />
+      <p className="m-0 min-w-0 truncate text-[0.78rem] font-semibold uppercase tracking-[0.06em]">
+        {savedName}
+      </p>
+    </>
+  );
+
+  const face = (
+    <CreditCardFace
+      cardName={nameSlot}
+      iban={statement.iban}
+      filename={statement.filename}
+      periodStart={period.start}
+      periodEnd={period.end}
+      periodLabel={t.cardPeriodLabel}
+      cornerAction={
+        <IconButton
+          className="w-8 h-8 min-w-8 text-white hover:text-white"
+          variant="ghost"
+          disabled={discardPending}
+          label={discardPending ? t.closing : t.close}
+          onClick={onDiscard}
+          icon={<CloseIcon className="block w-5 h-5" />}
+        />
+      }
+    />
+  );
 
   return (
     <li className={statementCardClass}>
-      <div className="flex flex-col gap-1">
-        <p className="m-0 font-[550] text-foreground text-[1rem]">{title}</p>
-
-        {statement.card_id && card.cardLabel && !needsRegistration ? (
-          <p className={cardLabelClass}>{t.cardIdentificationMatched.replace("{label}", card.cardLabel)}</p>
-        ) : null}
-
-        {statement.iban ? (
-          <p className={cardIbanClass}>
-            {t.cardIdentificationIban}: {statement.iban}
-          </p>
-        ) : null}
-      </div>
-
       {needsRegistration ? (
-        <form className="flex flex-col gap-2 pt-1" onSubmit={handleRegisterCard}>
-          <label className="flex flex-col gap-[0.35rem]">
-            <span className="sr-only">{t.cardIdentificationLabel}</span>
-            <div className="flex items-center gap-2 border border-border rounded-[8px] bg-background py-2 px-[0.65rem] overflow-hidden">
-              <input
-                id={labelId}
-                type="text"
-                name="label"
-                value={cardLabelInput}
-                onChange={(e) => setCardLabelInput(e.target.value)}
-                placeholder={t.cardIdentificationLabel}
-                disabled={registering || card.loading}
-                autoComplete="off"
-                maxLength={200}
-                className="flex-1 min-w-0 m-0 p-0 border-0 bg-transparent text-foreground text-base font-normal leading-[1.4] placeholder:text-muted placeholder:opacity-60 focus:outline-none disabled:opacity-55"
-              />
-              <IconButton
-                className="w-7 h-7 min-w-7 !p-0 !rounded-[4px] enabled:hover:!text-accent enabled:hover:!bg-transparent"
-                type="submit"
-                disabled={!canSave}
-                label={registering || card.loading ? t.cardIdentificationRegistering : t.cardIdentificationRegister}
-                icon={<SaveIcon className="block w-5 h-5" />}
-              />
-            </div>
-          </label>
-
-          {registrationError || card.error ? (
-            <p className="text-owe text-[0.85rem] m-0">{registrationError || card.error}</p>
-          ) : null}
+        <form className="m-0" onSubmit={handleRegisterCard}>
+          {face}
         </form>
+      ) : (
+        face
+      )}
+
+      {registrationError || card.error ? (
+        <p className="text-owe text-[0.85rem] m-0">{registrationError || card.error}</p>
+      ) : null}
+
+      {!needsRegistration ? (
+        <div className="flex flex-wrap gap-2">
+          <Link href={assignHref} className={assignPrimaryClass}>
+            {t.assignToList}
+          </Link>
+        </div>
       ) : null}
     </li>
   );

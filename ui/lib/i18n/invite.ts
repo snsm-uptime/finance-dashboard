@@ -2,7 +2,6 @@
 
 export const inviteMessages = {
   en: {
-    brand: "finance-helper",
     acceptTitle: "Join list",
     acceptSubtitle: "Accept this invitation to open the shared list.",
     accepting: "Joining the list…",
@@ -20,7 +19,6 @@ export const inviteMessages = {
     emailMatchHint: "Use the email this invite was sent to ({emailHint}).",
   },
   es: {
-    brand: "finance-helper",
     acceptTitle: "Unirse a la lista",
     acceptSubtitle: "Acepta esta invitación para abrir la lista compartida.",
     accepting: "Uniéndote a la lista…",

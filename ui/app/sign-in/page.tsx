@@ -41,7 +41,6 @@ export default async function SignInPage({
     <main className={styles.shell}>
       <RedirectIfAuthenticated to={hasExplicitReturn ? landing : "/"} />
       <div className={styles.card}>
-        <p className={styles.brand}>{t.brand}</p>
         <h1 className={styles.title}>{t.title}</h1>
         <p className={styles.subtitle}>{t.subtitle}</p>
         <SignInForm locale={locale} returnTo={rawReturnTo} />

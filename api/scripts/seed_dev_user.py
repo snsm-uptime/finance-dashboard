@@ -39,11 +39,11 @@ OWNER_ROLE = "owner"
 class SharedList:
     """A list owned by another roster member that this user joins as a member.
 
-    ``owner_alias`` is the owner's *declared* alias (the roster key), so the
-    link survives a SEED_DEV_USER_ALIAS override of the primary account.
+    ``owner`` is the roster entry as declared below, not its env-resolved copy,
+    so the link survives a SEED_DEV_USER_ALIAS/EMAIL override of that account.
     """
 
-    owner_alias: str
+    owner: MockUser
     name: str
 
 
@@ -85,19 +85,22 @@ default_user_monchis = MockUser(
     alias="monchis",
     # "Home" belongs to cejas — monchis joins it rather than owning a namesake.
     default_lists=("Macarena", "Personal"),
-    shared_lists=(SharedList(owner_alias="cejas", name="Home"),),
+    shared_lists=(SharedList(owner=default_user_cejas, name="Home"),),
 )
 
 # First entry is the primary account: the one SEED_DEV_USER_* overrides target.
 DEV_USERS: tuple[MockUser, ...] = (default_user_cejas, default_user_monchis)
 
 
-def _resolve_roster() -> dict[str, MockUser]:
-    """Roster keyed by declared alias, with env overrides on the primary user."""
+def _resolve_roster() -> dict[MockUser, MockUser]:
+    """Map each declared roster entry to the spec to seed (env-resolved for the primary).
+
+    Keyed by the declared entry so SharedList.owner still resolves after an override.
+    """
     primary, *rest = DEV_USERS
-    roster = {primary.alias: primary.with_env_overrides()}
+    roster = {primary: primary.with_env_overrides()}
     for spec in rest:
-        roster[spec.alias] = spec
+        roster[spec] = spec
     return roster
 
 
@@ -160,21 +163,26 @@ def _seed_shared_lists(
     session: Session,
     spec: MockUser,
     user: UserModel,
-    owned_by_alias: dict[str, dict[str, ListModel]],
+    owned: dict[MockUser, dict[str, ListModel]],
 ) -> None:
     """Join this user to lists owned by other roster members."""
     for shared in spec.shared_lists:
-        list_model = owned_by_alias.get(shared.owner_alias, {}).get(shared.name)
+        list_model = owned.get(shared.owner, {}).get(shared.name)
         if list_model is None:
             logger.warning(
-                "Skipping shared list %r: %s does not own it",
+                "Skipping shared list %r: roster entry %r does not own it",
                 shared.name,
-                shared.owner_alias,
+                shared.owner.alias,
             )
             continue
         if _ensure_membership(session, list_model, user, INVITE_MEMBER_ROLE):
+            # Name the owner as seeded, which an override may have renamed.
+            owner = session.get(UserModel, list_model.owner_id)
             logger.info(
-                "Added %s to list %r owned by %s", user.email, shared.name, shared.owner_alias
+                "Added %s to list %r owned by %s",
+                user.email,
+                shared.name,
+                owner.alias if owner else list_model.owner_id,
             )
 
 
@@ -183,14 +191,14 @@ def seed() -> None:
 
     with session_factory() as session:
         roster = _resolve_roster()
-        users: dict[str, UserModel] = {}
-        owned_by_alias: dict[str, dict[str, ListModel]] = {}
-        for key, spec in roster.items():
-            users[key], owned_by_alias[key] = _seed_user(session, spec)
+        users: dict[MockUser, UserModel] = {}
+        owned: dict[MockUser, dict[str, ListModel]] = {}
+        for declared, spec in roster.items():
+            users[declared], owned[declared] = _seed_user(session, spec)
 
         # Second pass: every owner exists by now, so cross-account joins resolve.
-        for key, spec in roster.items():
-            _seed_shared_lists(session, spec, users[key], owned_by_alias)
+        for declared, spec in roster.items():
+            _seed_shared_lists(session, spec, users[declared], owned)
 
         session.commit()
 

@@ -4,7 +4,6 @@ export { detectLocale } from "@/lib/i18n/locale";
 
 export const signInMessages = {
   en: {
-    brand: "finance-helper",
     title: "Sign in",
     subtitle: "Use your email and password to access your lists.",
     email: "Email",
@@ -19,7 +18,6 @@ export const signInMessages = {
     forgotPassword: "Forgot password?",
   },
   es: {
-    brand: "finance-helper",
     title: "Iniciar sesión",
     subtitle: "Usa tu correo y contraseña para acceder a tus listas.",
     email: "Correo",

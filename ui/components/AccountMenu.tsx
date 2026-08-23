@@ -86,17 +86,6 @@ export function AccountMenu() {
 
   return (
     <main className="py-[2.5rem] px-[1.5rem]" style={{ fontFamily: "var(--font-ui), Manrope, system-ui, sans-serif" }}>
-      <div className="flex items-center justify-between gap-4 mb-2">
-        <p className="m-0 text-[1.25rem] font-medium text-muted tracking-[0.03rem]" style={{ fontFamily: "var(--font-brand), Georgia, serif" }}>
-          {t.brand}
-        </p>
-        <Link
-          className="text-accent font-semibold no-underline text-[0.9rem]"
-          href="/home"
-        >
-          {t.backToHome}
-        </Link>
-      </div>
       <h1 className="m-0 mb-[0.35rem] text-[1.75rem] font-[550] text-foreground">
         {t.title}
       </h1>
