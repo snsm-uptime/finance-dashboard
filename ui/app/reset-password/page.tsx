@@ -33,7 +33,6 @@ export default async function ResetPasswordPage({
   return (
     <main className={styles.shell}>
       <div className={styles.card}>
-        <p className={styles.brand}>{t.brand}</p>
         <h1 className={styles.title}>{t.resetTitle}</h1>
         <p className={styles.subtitle}>{t.resetSubtitle}</p>
         <ResetPasswordForm locale={locale} token={token} />

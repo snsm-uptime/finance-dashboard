@@ -35,7 +35,6 @@ export default async function VerifyPage({
   return (
     <main className={styles.shell}>
       <div className={styles.card}>
-        <p className={styles.brand}>{t.brand}</p>
         <h1 className={styles.title}>{t.title}</h1>
         <p className={styles.subtitle}>{t.subtitle}</p>
         <VerifyForm locale={locale} token={token} returnTo={returnTo} />

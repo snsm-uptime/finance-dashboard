@@ -44,7 +44,6 @@ export default async function AliasPage({
   return (
     <main className={styles.shell}>
       <div className={styles.card}>
-        <p className={styles.brand}>{t.brand}</p>
         <h1 className={styles.title}>{t.title}</h1>
         <p className={styles.subtitle}>{t.subtitle}</p>
         <AliasSetupForm messages={t} continueHref={continueHref} />

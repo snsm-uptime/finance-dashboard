@@ -23,7 +23,6 @@ export default async function ForgotPasswordPage() {
   return (
     <main className={styles.shell}>
       <div className={styles.card}>
-        <p className={styles.brand}>{t.brand}</p>
         <h1 className={styles.title}>{t.forgotTitle}</h1>
         <p className={styles.subtitle}>{t.forgotSubtitle}</p>
         <ForgotPasswordForm locale={locale} />

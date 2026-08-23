@@ -28,7 +28,6 @@ export default async function AcceptInvitePage({
   return (
     <main className={styles.shell}>
       <div className={styles.card}>
-        <p className={styles.brand}>{t.brand}</p>
         <h1 className={styles.title}>{t.acceptTitle}</h1>
         <p className={styles.subtitle}>{t.acceptSubtitle}</p>
         <AcceptInvitePanel

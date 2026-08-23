@@ -20,9 +20,6 @@ export default async function Home() {
   return (
     <main className="flex flex-col gap-3 max-w-[36rem] mx-auto py-16 px-6">
       <RedirectIfAuthenticated />
-      <p className="m-0 text-[0.85rem] uppercase tracking-[0.08rem] text-muted">
-        finance-helper
-      </p>
       <h1 className="m-0 text-[2rem] font-semibold leading-[1.2]">Stack is up</h1>
       <p className="m-0 text-muted leading-[1.5]">
         Compose services <code className="font-mono text-[0.95em]">db</code>,{" "}
