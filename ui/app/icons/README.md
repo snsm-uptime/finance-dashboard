@@ -102,7 +102,23 @@ Animates FileIcon into FileImportIcon. See [Animated Icons](#animated-icons) —
 - Optional prop: `active` (boolean) — drives the morph
 - Accepts: className, SVG element props
 
-> Not yet documented above: `HomeIcon`, `UploadIcon`, `SpinnerIcon`, `UserIcon`.
+### HashtagIcon
+
+A slanted hash mark. Used for exact-amount split mode.
+
+- ViewBox: `0 0 24 24`
+- Style: Stroke-based
+- Accepts: className, SVG element props
+
+### PercentageIcon
+
+Two circles and a diagonal slash. Used for percentage split mode.
+
+- ViewBox: `0 0 24 24`
+- Style: Stroke-based
+- Accepts: className, SVG element props
+
+> Not yet documented above: `HomeIcon`, `UploadIcon`, `SpinnerIcon`, `UserIcon`, `SunIcon`, `MoonIcon`, `SystemIcon`.
 
 ## Usage
 

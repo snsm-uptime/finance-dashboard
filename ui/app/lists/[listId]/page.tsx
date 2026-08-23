@@ -680,6 +680,7 @@ export default async function ListDetailPage({
                   listId={listId}
                   currentUserId={session.user_id}
                   members={members}
+                  defaultSplit={defaultSplit}
                   messages={{
                     expenseTitle: t.expenseTitle,
                     expenseAmount: t.expenseAmount,

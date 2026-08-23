@@ -4,9 +4,10 @@ import { FormEvent, useEffect, useId, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { useFormSubmission, useFormStateSync } from "@/hooks";
-import { SoftLedgerRadio } from "@/components/soft-ledger/Radio";
+import { HashtagIcon, PercentageIcon, UserIcon } from "@/app/icons";
 import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
 import { FormIconSubmit } from "@/components/FormIconSubmit";
+import { TriSwitch } from "@/components/TriSwitch";
 
 import { fetchCards, type CardItem } from "../cards/cardsClient";
 import { PercentageSplitTrack } from "./PercentageSplitTrack";
@@ -14,6 +15,7 @@ import {
   createExpense,
   memberLabel,
   type CreateExpenseBody,
+  type DefaultSplitPayload,
   type ListMember,
   type ListsClientMessages,
 } from "./listsClient";
@@ -40,6 +42,7 @@ type Props = {
   listId: string;
   currentUserId: string;
   members: ListMember[];
+  defaultSplit?: DefaultSplitPayload | null;
   messages: ManualExpenseMessages;
   /** Callback fired when expense is successfully created */
   onSuccess?: () => void;
@@ -50,10 +53,6 @@ type Props = {
 };
 
 type SplitMode = "whole_assignee" | "absolute_amounts" | "percentage";
-
-function emptyMemberMap(members: ListMember[]): Record<string, string> {
-  return Object.fromEntries(members.map((m) => [m.user_id, ""]));
-}
 
 function evenPercentMap(list: ListMember[]): Record<string, string> {
   if (list.length === 0) return {};
@@ -71,6 +70,38 @@ function evenPercentMap(list: ListMember[]): Record<string, string> {
   return map;
 }
 
+function percentMapFromDefault(
+  list: ListMember[],
+  defaultSplit: DefaultSplitPayload | null | undefined,
+): Record<string, string> {
+  if (!defaultSplit || defaultSplit.shares.length === 0) {
+    return evenPercentMap(list);
+  }
+  const byId = Object.fromEntries(
+    defaultSplit.shares.map((share) => [share.user_id, share.percentage]),
+  );
+  const map: Record<string, string> = {};
+  for (const member of list) {
+    map[member.user_id] = byId[member.user_id] ?? "0";
+  }
+  return map;
+}
+
+function percentMapsEqual(
+  left: Record<string, string>,
+  right: Record<string, string>,
+): boolean {
+  const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+  for (const key of keys) {
+    if (Number(left[key] || 0) !== Number(right[key] || 0)) return false;
+  }
+  return true;
+}
+
+function emptyMemberMap(members: ListMember[]): Record<string, string> {
+  return Object.fromEntries(members.map((m) => [m.user_id, ""]));
+}
+
 function nonEmptyEntries(map: Record<string, string>): Record<string, string> | null {
   const out: Record<string, string> = {};
   for (const [key, raw] of Object.entries(map)) {
@@ -85,6 +116,7 @@ export function ManualExpenseForm({
   listId,
   currentUserId,
   members,
+  defaultSplit = null,
   messages,
   onSuccess,
   formRef,
@@ -104,14 +136,13 @@ export function ManualExpenseForm({
   const [payerId, setPayerId] = useState(currentUserId);
   const [originValue, setOriginValue] = useState("");
   const [cards, setCards] = useState<CardItem[]>([]);
-  const [adjustOpen, setAdjustOpen] = useState(false);
-  const [mode, setMode] = useState<SplitMode>("whole_assignee");
+  const [mode, setMode] = useState<SplitMode>("percentage");
   const [assigneeId, setAssigneeId] = useState(currentUserId);
   const [absoluteAmounts, setAbsoluteAmounts] = useState<Record<string, string>>(() =>
     emptyMemberMap(members),
   );
   const [percentages, setPercentages] = useState<Record<string, string>>(() =>
-    evenPercentMap(members),
+    percentMapFromDefault(members, defaultSplit),
   );
 
   useEffect(() => {
@@ -134,17 +165,15 @@ export function ManualExpenseForm({
   }, []);
 
   function resetAdjustFields() {
-    setAdjustOpen(false);
-    setMode("whole_assignee");
+    setMode("percentage");
     setAssigneeId(currentUserId);
     setAbsoluteAmounts(emptyMemberMap(members));
-    setPercentages(evenPercentMap(members));
+    setPercentages(percentMapFromDefault(members, defaultSplit));
   }
 
   function buildSplitOverride():
     | { ok: true; value: CreateExpenseBody["split_override"] | undefined }
     | { ok: false; error: string } {
-    if (!adjustOpen) return { ok: true, value: undefined };
     if (mode === "whole_assignee") {
       return { ok: true, value: { kind: "whole_assignee", assignee_id: assigneeId } };
     }
@@ -154,6 +183,10 @@ export function ManualExpenseForm({
         return { ok: false, error: messages.errorGeneric };
       }
       return { ok: true, value: { kind: "absolute_amounts", amounts } };
+    }
+    const baseline = percentMapFromDefault(members, defaultSplit);
+    if (percentMapsEqual(percentages, baseline)) {
+      return { ok: true, value: undefined };
     }
     const pct = nonEmptyEntries(percentages);
     if (!pct) {
@@ -304,104 +337,88 @@ export function ManualExpenseForm({
           </div>
         ) : null}
 
-        <details
-          className={styles.adjust}
-          open={adjustOpen}
-          onToggle={(e) => {
-            setAdjustOpen((e.target as HTMLDetailsElement).open);
-            clearError();
-          }}
-        >
-          <summary className={styles.adjustSummary}>{messages.expenseAdjustSplit}</summary>
-          <div className={styles.adjustBody} id={`${baseId}-adjust-panel`}>
-            <div className={styles.modeRow} role="radiogroup" aria-label={messages.expenseAdjustSplit}>
-              <SoftLedgerRadio
-                className={styles.modeOption}
-                name="split-mode"
-                value="whole_assignee"
-                checked={mode === "whole_assignee"}
-                disabled={pending}
-                onChange={() => setMode("whole_assignee")}
-              >
-                {messages.expenseModeWhole}
-              </SoftLedgerRadio>
-              <SoftLedgerRadio
-                className={styles.modeOption}
-                name="split-mode"
-                value="absolute_amounts"
-                checked={mode === "absolute_amounts"}
-                disabled={pending}
-                onChange={() => setMode("absolute_amounts")}
-              >
-                {messages.expenseModeAbsolute}
-              </SoftLedgerRadio>
-              <SoftLedgerRadio
-                className={styles.modeOption}
-                name="split-mode"
-                value="percentage"
-                checked={mode === "percentage"}
-                disabled={pending}
-                onChange={() => {
-                  setMode("percentage");
-                  setPercentages(evenPercentMap(members));
-                }}
-              >
-                {messages.expenseModePercentage}
-              </SoftLedgerRadio>
-            </div>
+        <div className={styles.splitBlock}>
+          <TriSwitch
+            aria-label={messages.expenseAdjustSplit}
+            value={mode}
+            disabled={pending}
+            onChange={(next) => {
+              setMode(next);
+              clearError();
+              if (next === "percentage") {
+                setPercentages(percentMapFromDefault(members, defaultSplit));
+              }
+            }}
+            options={[
+              {
+                value: "whole_assignee",
+                label: messages.expenseModeWhole,
+                icon: <UserIcon />,
+              },
+              {
+                value: "percentage",
+                label: messages.expenseModePercentage,
+                icon: <PercentageIcon />,
+              },
+              {
+                value: "absolute_amounts",
+                label: messages.expenseModeAbsolute,
+                icon: <HashtagIcon />,
+              },
+            ]}
+          />
 
-            {mode === "whole_assignee" ? (
-              <div className={styles.field}>
-                <span className={styles.label} id={`${baseId}-assignee-label`}>
-                  {messages.expenseAssignee}
-                </span>
-                <SoftLedgerSelect
-                  id={`${baseId}-assignee`}
-                  value={assigneeId}
-                  options={memberOptions}
-                  disabled={pending}
-                  aria-labelledby={`${baseId}-assignee-label`}
-                  onChange={setAssigneeId}
-                />
-              </div>
-            ) : null}
-
-            {mode === "absolute_amounts" ? (
-              <div className={styles.memberGrid}>
-                {members.map((m) => (
-                  <div key={m.user_id} className={styles.memberRow}>
-                    <label className={styles.label} htmlFor={`${baseId}-abs-${m.user_id}`}>
-                      {memberLabel(m)}
-                    </label>
-                    <input
-                      id={`${baseId}-abs-${m.user_id}`}
-                      className={styles.input}
-                      inputMode="decimal"
-                      value={absoluteAmounts[m.user_id] ?? ""}
-                      disabled={pending}
-                      onChange={(e) =>
-                        setAbsoluteAmounts((prev) => ({
-                          ...prev,
-                          [m.user_id]: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                ))}
-              </div>
-            ) : null}
-
-            {mode === "percentage" ? (
-              <PercentageSplitTrack
-                userIds={members.map((m) => m.user_id)}
-                members={members}
-                percents={percentages}
-                onChangePercents={setPercentages}
+          {mode === "whole_assignee" ? (
+            <div className={styles.field}>
+              <span className={styles.label} id={`${baseId}-assignee-label`}>
+                {messages.expenseAssignee}
+              </span>
+              <SoftLedgerSelect
+                id={`${baseId}-assignee`}
+                value={assigneeId}
+                options={memberOptions}
                 disabled={pending}
+                aria-labelledby={`${baseId}-assignee-label`}
+                onChange={setAssigneeId}
               />
-            ) : null}
-          </div>
-        </details>
+            </div>
+          ) : null}
+
+          {mode === "percentage" ? (
+            <PercentageSplitTrack
+              userIds={members.map((m) => m.user_id)}
+              members={members}
+              percents={percentages}
+              onChangePercents={setPercentages}
+              disabled={pending}
+            />
+          ) : null}
+
+          {mode === "absolute_amounts" ? (
+            <div className={styles.memberGrid}>
+              {members.map((m) => (
+                <div key={m.user_id} className={styles.memberRow}>
+                  <label className={styles.label} htmlFor={`${baseId}-abs-${m.user_id}`}>
+                    {memberLabel(m)}
+                  </label>
+                  <input
+                    id={`${baseId}-abs-${m.user_id}`}
+                    className={styles.input}
+                    inputMode="decimal"
+                    value={absoluteAmounts[m.user_id] ?? ""}
+                    disabled={pending}
+                    onChange={(e) =>
+                      setAbsoluteAmounts((prev) => ({
+                        ...prev,
+                        [m.user_id]: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
 
         {error ? (
           <p id={errorId} className={styles.error} role="alert">

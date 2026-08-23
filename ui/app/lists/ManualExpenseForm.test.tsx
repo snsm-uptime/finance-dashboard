@@ -147,7 +147,7 @@ describe("ManualExpenseForm", () => {
     expect(select.value).toBe("user-b");
   });
 
-  it("omits split_override when Adjust split is collapsed", async () => {
+  it("starts on percentages matching the list default and omits split_override when unchanged", async () => {
     createExpense.mockResolvedValue({
       ok: true,
       expense: {
@@ -174,6 +174,11 @@ describe("ManualExpenseForm", () => {
         />,
       );
     });
+
+    const percent = container.querySelector(
+      '[aria-label="Percentages"]',
+    ) as HTMLButtonElement;
+    expect(percent.getAttribute("aria-checked")).toBe("true");
 
     const amount = container.querySelector('input[name="amount"]') as HTMLInputElement;
     const description = container.querySelector(
@@ -208,7 +213,33 @@ describe("ManualExpenseForm", () => {
     expect(refresh).toHaveBeenCalled();
   });
 
-  it("includes whole_assignee override when Adjust split is open", async () => {
+  it("prefills the percentage track from the list default split", async () => {
+    await act(async () => {
+      root.render(
+        <ManualExpenseForm
+          listId="list-1"
+          currentUserId="user-a"
+          members={members}
+          defaultSplit={{
+            list_id: "list-1",
+            owner_id: "user-a",
+            mode: "percentage",
+            member_ids: ["user-a", "user-b"],
+            shares: [
+              { user_id: "user-a", percentage: "70" },
+              { user_id: "user-b", percentage: "30" },
+            ],
+          }}
+          messages={messages}
+        />,
+      );
+    });
+
+    expect(container.textContent).toContain("70%");
+    expect(container.textContent).toContain("30%");
+  });
+
+  it("includes whole_assignee override when that split mode is selected", async () => {
     createExpense.mockResolvedValue({
       ok: true,
       expense: {
@@ -236,10 +267,11 @@ describe("ManualExpenseForm", () => {
       );
     });
 
-    const details = container.querySelector("details") as HTMLDetailsElement;
+    const whole = container.querySelector(
+      '[aria-label="Whole line to one person"]',
+    ) as HTMLButtonElement;
     await act(async () => {
-      details.open = true;
-      details.dispatchEvent(new Event("toggle", { bubbles: true }));
+      whole.click();
     });
 
     const amount = container.querySelector('input[name="amount"]') as HTMLInputElement;
@@ -319,10 +351,11 @@ describe("ManualExpenseForm", () => {
       );
     });
 
-    const details = container.querySelector("details") as HTMLDetailsElement;
+    const whole = container.querySelector(
+      '[aria-label="Whole line to one person"]',
+    ) as HTMLButtonElement;
     await act(async () => {
-      details.open = true;
-      details.dispatchEvent(new Event("toggle", { bubbles: true }));
+      whole.click();
     });
 
     const optionLabels = Array.from(container.querySelectorAll("option")).map(

@@ -140,6 +140,7 @@ export function ListDetailMobileActions({
               listId={listId}
               currentUserId={currentUserId}
               members={members}
+              defaultSplit={defaultSplit}
               messages={expenseMessages}
               formRef={expenseFormRef}
               onSuccess={close}

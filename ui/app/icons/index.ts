@@ -14,3 +14,8 @@ export { FileImportIcon } from "./FileImportIcon";
 export { FileImportMorphIcon } from "./FileImportMorphIcon";
 export { SpinnerIcon } from "./SpinnerIcon";
 export { UserIcon } from "./UserIcon";
+export { SunIcon } from "./SunIcon";
+export { MoonIcon } from "./MoonIcon";
+export { SystemIcon } from "./SystemIcon";
+export { HashtagIcon } from "./HashtagIcon";
+export { PercentageIcon } from "./PercentageIcon";

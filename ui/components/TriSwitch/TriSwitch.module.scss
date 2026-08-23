@@ -1,0 +1,102 @@
+.root {
+  --tri-switch-radius: var(--rounded-sm, 8px);
+  --tri-switch-pad: 0.2rem;
+
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  align-items: stretch;
+  width: fit-content;
+  min-width: 7.5rem;
+  padding: var(--tri-switch-pad);
+  border: 1px solid var(--border);
+  border-radius: var(--tri-switch-radius);
+  background: var(--surface);
+  isolation: isolate;
+}
+
+.thumb {
+  position: absolute;
+  top: var(--tri-switch-pad);
+  bottom: var(--tri-switch-pad);
+  z-index: 0;
+  width: calc((100% - 2 * var(--tri-switch-pad)) / 3);
+  border-radius: var(--tri-switch-radius);
+  background: var(--accent);
+  color: var(--on-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  inset-inline-start: var(--tri-switch-pad);
+  transition: inset-inline-start 180ms ease;
+
+  svg {
+    display: block;
+    width: 1.15rem;
+    height: 1.15rem;
+  }
+}
+
+.thumb[data-index="1"] {
+  inset-inline-start: calc(
+    var(--tri-switch-pad) + (100% - 2 * var(--tri-switch-pad)) / 3
+  );
+}
+
+.thumb[data-index="2"] {
+  inset-inline-start: calc(
+    var(--tri-switch-pad) + 2 * ((100% - 2 * var(--tri-switch-pad)) / 3)
+  );
+}
+
+.option {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0.45rem 0.7rem;
+  border: 0;
+  border-radius: var(--tri-switch-radius);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 0;
+  appearance: none;
+  font: inherit;
+}
+
+.option:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.option:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 2px;
+}
+
+.optionIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.optionIcon svg {
+  display: block;
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+/* Hide the slot glyph when it sits under the moving thumb so the thumb icon wins. */
+.option[aria-checked="true"] .optionIcon {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thumb {
+    transition: none;
+  }
+}

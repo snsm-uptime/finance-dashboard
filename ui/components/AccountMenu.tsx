@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import { MoonIcon, SunIcon, SystemIcon } from "@/app/icons";
 import {
   clearPrefsCache,
   usePreferences,
 } from "@/components/PreferencesProvider";
+import { TriSwitch } from "@/components/TriSwitch";
 import { accountCopy } from "@/lib/i18n/account";
 import type { Locale, ThemePreference } from "@/lib/i18n/locale";
 
@@ -137,26 +139,17 @@ export function AccountMenu() {
         <h2 id="account-theme" className="m-0 mb-[0.6rem] text-[0.72rem] font-[550] text-muted tracking-[0.02rem]">
           {t.theme}
         </h2>
-        <div className="flex flex-wrap gap-2" role="group" aria-label={t.theme}>
-          {(
-            [
-              ["light", t.light],
-              ["dark", t.dark],
-              ["system", t.system],
-            ] as const
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              className={theme === value ? choiceButtonActiveClass : choiceButtonClass}
-              aria-pressed={theme === value}
-              disabled={controlsDisabled}
-              onClick={() => void onTheme(value)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <TriSwitch
+          aria-label={t.theme}
+          value={theme}
+          disabled={controlsDisabled}
+          onChange={(next) => void onTheme(next)}
+          options={[
+            { value: "light", label: t.light, icon: <SunIcon /> },
+            { value: "system", label: t.system, icon: <SystemIcon /> },
+            { value: "dark", label: t.dark, icon: <MoonIcon /> },
+          ]}
+        />
       </section>
 
       <section className="mb-6">

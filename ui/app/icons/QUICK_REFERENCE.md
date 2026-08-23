@@ -12,6 +12,8 @@
 | **ShareIcon** | Invite/share actions | `import { ShareIcon } from "@/app/icons"` | Connected circles network |
 | **PieChartIcon** | Analytics/split settings | `import { PieChartIcon } from "@/app/icons"` | Pie chart visualization |
 | **EyeIcon** | Password visibility | `import { EyeIcon } from "@/app/icons"` | Requires `open` prop (bool) |
+| **HashtagIcon** | Exact-amount split | `import { HashtagIcon } from "@/app/icons"` | Slanted hash |
+| **PercentageIcon** | Percentage split | `import { PercentageIcon } from "@/app/icons"` | Two circles + slash |
 
 ## Common Patterns
 

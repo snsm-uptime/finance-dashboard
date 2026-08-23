@@ -88,9 +88,9 @@ describe("AccountMenu", () => {
     expect(host.textContent).toContain("Theme");
     expect(host.textContent).toContain("Password reset");
     expect(host.textContent).toContain("Sign out");
-    expect(host.textContent).toContain("Light");
-    expect(host.textContent).toContain("Dark");
-    expect(host.textContent).toContain("System");
+    expect(host.querySelector('[aria-label="Light"]')).toBeTruthy();
+    expect(host.querySelector('[aria-label="Dark"]')).toBeTruthy();
+    expect(host.querySelector('[aria-label="System"]')).toBeTruthy();
     expect(findButton(host, "Password reset")).toBeTruthy();
     unmount();
   });
@@ -153,10 +153,10 @@ describe("AccountMenu", () => {
 
     const { host, unmount } = renderAccount();
     await waitForDom(() => {
-      const btn = findButton(host, "Dark");
+      const btn = host.querySelector('[aria-label="Dark"]') as HTMLButtonElement | null;
       return Boolean(btn && !btn.disabled);
     });
-    const darkBtn = findButton(host, "Dark");
+    const darkBtn = host.querySelector('[aria-label="Dark"]') as HTMLButtonElement | null;
     expect(darkBtn).toBeTruthy();
     await act(async () => {
       darkBtn!.click();
@@ -206,8 +206,8 @@ describe("AccountMenu", () => {
 
     const { host, unmount } = renderAccount();
     await waitForDom(() => {
-      const btn = findButton(host, "System");
-      return Boolean(btn && !btn.disabled && btn.getAttribute("aria-pressed") === "true");
+      const btn = host.querySelector('[aria-label="System"]') as HTMLButtonElement | null;
+      return Boolean(btn && !btn.disabled && btn.getAttribute("aria-checked") === "true");
     });
 
     expect(document.documentElement.classList.contains("dark")).toBe(false);
