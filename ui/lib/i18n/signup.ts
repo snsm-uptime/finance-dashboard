@@ -2,14 +2,12 @@
 
 export const signupMessages = {
   en: {
-    brand: "finance-helper",
     title: "Create account",
     subtitle: "Sign up with email and password to get your personal list.",
     email: "Email",
     password: "Password",
     submit: "Sign up",
     submitting: "Creating account…",
-    successRedirect: "Account created. Opening your lists…",
     errorGeneric: "Something went wrong. Try again.",
     errorDuplicate: "An account with this email already exists.",
     errorInvalid: "Check your email and password and try again.",
@@ -23,14 +21,12 @@ export const signupMessages = {
     loadingInvite: "Loading invite…",
   },
   es: {
-    brand: "finance-helper",
     title: "Crear cuenta",
     subtitle: "Regístrate con correo y contraseña para obtener tu lista personal.",
     email: "Correo",
     password: "Contraseña",
     submit: "Registrarse",
     submitting: "Creando cuenta…",
-    successRedirect: "Cuenta creada. Abriendo tus listas…",
     errorGeneric: "Algo salió mal. Inténtalo de nuevo.",
     errorDuplicate: "Ya existe una cuenta con este correo.",
     errorInvalid: "Revisa tu correo y contraseña e inténtalo de nuevo.",

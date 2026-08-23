@@ -2,7 +2,6 @@
 
 export const listsMessages = {
   en: {
-    brand: "finance-helper",
     title: "Home",
     subtitle:
       "Your lists and cards, all in one place. Open a list, create another, or manage your cards.",
@@ -11,9 +10,6 @@ export const listsMessages = {
     creating: "Creating…",
     renameLabel: "Rename",
     renameAria: "Rename list",
-    renameSubmit: "Save name",
-    saving: "Saving…",
-    ownedBadge: "Owner",
     memberBadge: "Member",
     memberMark: "M",
     emptyHint: "No lists yet.",
@@ -32,7 +28,6 @@ export const listsMessages = {
     detailReceiptsEmpty: "No receipts yet.",
     incompleteDisclosureLabel:
       "Balances may be incomplete. Check unresolved items to confirm the total.",
-    incompleteDisclosureResolve: "Resolve incomplete",
     backToLists: "Home",
     detailNotFound: "This list is unavailable.",
     inviteTitle: "Invite someone",
@@ -95,7 +90,6 @@ export const listsMessages = {
     receiptDelete: "Delete",
   },
   es: {
-    brand: "finance-helper",
     title: "Inicio",
     subtitle:
       "Tus listas y tarjetas, todo en un solo lugar. Abre una lista, crea otra o administra tus tarjetas.",
@@ -104,9 +98,6 @@ export const listsMessages = {
     creating: "Creando…",
     renameLabel: "Renombrar",
     renameAria: "Renombrar lista",
-    renameSubmit: "Guardar nombre",
-    saving: "Guardando…",
-    ownedBadge: "Propietario",
     memberBadge: "Miembro",
     memberMark: "M",
     emptyHint: "Aún no hay listas.",
@@ -125,7 +116,6 @@ export const listsMessages = {
     detailReceiptsEmpty: "Aún no hay recibos.",
     incompleteDisclosureLabel:
       "Los saldos podrían estar incompletos. Revisa los pendientes para confirmar el total.",
-    incompleteDisclosureResolve: "Resolver lo incompleto",
     backToLists: "Inicio",
     detailNotFound: "Esta lista no está disponible.",
     inviteTitle: "Invitar a alguien",

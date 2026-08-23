@@ -2,7 +2,6 @@
 
 export const aliasMessages = {
   en: {
-    brand: "finance-helper",
     title: "Choose your alias",
     subtitle:
       "This is the name your lists show for you. Your email stays private.",
@@ -18,7 +17,6 @@ export const aliasMessages = {
     errorGeneric: "Something went wrong. Try again.",
   },
   es: {
-    brand: "finance-helper",
     title: "Elige tu alias",
     subtitle:
       "Este es el nombre que tus listas muestran por ti. Tu correo se mantiene privado.",

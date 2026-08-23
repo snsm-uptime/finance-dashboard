@@ -57,3 +57,4 @@ docker-compose.override.yml
 # Cursor worktree bootstrap (override common global **/.cursor/ ignores)
 !.cursor/
 !.cursor/worktrees.json
+pdfs/
