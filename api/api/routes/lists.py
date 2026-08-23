@@ -271,6 +271,10 @@ def list_memberships(
                 owner_id=item.owner_id,
                 role=item.role,
                 balance_crc=item.balance_crc,
+                members=[
+                    ListMemberItem(user_id=member.user_id, alias=member.alias)
+                    for member in item.members
+                ],
             )
             for item in items
         ]

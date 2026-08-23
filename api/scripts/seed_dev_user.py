@@ -14,6 +14,7 @@ import logging
 import os
 from datetime import UTC, datetime
 from uuid import uuid4
+from pydantic.dataclasses import dataclass
 
 from adapters.persistence.db import get_session_factory
 from adapters.persistence.models import ListMembershipModel, ListModel, UserModel
@@ -24,10 +25,21 @@ from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_EMAIL = "snsmtel@gmail.com"
-DEFAULT_PASSWORD = "05111012"
-DEFAULT_ALIAS = "snsm"
-DEFAULT_LISTS = ("ECO", "Walmart", "Home")
+
+@dataclass
+class MockUser:
+    email: str
+    password: str
+    alias: str
+    default_lists: list
+
+
+default_user = MockUser(
+    email="snsmtel@gmail.com",
+    password="05111012",
+    alias="snsm",
+    default_lists=("ECO", "Walmart", "Home"),
+)
 
 
 def _lists_from_env() -> tuple[str, ...]:

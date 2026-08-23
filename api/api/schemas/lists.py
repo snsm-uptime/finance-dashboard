@@ -28,12 +28,20 @@ class ListResponse(BaseModel):
     owner_id: UUID
 
 
+class ListMemberItem(BaseModel):
+    """Roster label is the alias — email never leaves the invite/auth surfaces."""
+
+    user_id: UUID
+    alias: str | None = None
+
+
 class ListMembershipItem(BaseModel):
     id: UUID
     name: str
     owner_id: UUID
     role: str
     balance_crc: str = "0"
+    members: list[ListMemberItem] = Field(default_factory=list)
 
 
 class ListMembershipsResponse(BaseModel):
@@ -110,13 +118,6 @@ class CreateExpenseResponse(BaseModel):
 class UpdateExpenseOriginBody(BaseModel):
     origin_kind: Literal["card", "cash"] | None = None
     origin_card_id: UUID | None = None
-
-
-class ListMemberItem(BaseModel):
-    """Roster label is the alias — email never leaves the invite/auth surfaces."""
-
-    user_id: UUID
-    alias: str | None = None
 
 
 class ListMembersResponse(BaseModel):

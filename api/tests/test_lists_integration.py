@@ -59,6 +59,10 @@ def test_create_owned_list_membership_and_multi_own(
     assert listed.status_code == 200
     names = {item["name"] for item in listed.json()["lists"]}
     assert names == {"Personal", "Household"}
+    for item in listed.json()["lists"]:
+        assert len(item["members"]) == 1
+        assert item["members"][0]["user_id"] == item["owner_id"]
+        assert item["members"][0]["alias"] == "owner"
 
     list_id = body["id"]
     row = db_session.get(ListModel, list_id)

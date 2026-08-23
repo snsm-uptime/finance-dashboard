@@ -51,12 +51,21 @@ class MembershipRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class ListMemberLabel:
+    """Roster label on membership summaries — alias only, never email."""
+
+    user_id: UUID
+    alias: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class ListMembershipSummary:
     id: UUID
     name: str
     owner_id: UUID
     role: str
     balance_crc: str = PLACEHOLDER_BALANCE_CRC
+    members: tuple[ListMemberLabel, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

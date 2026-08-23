@@ -9,7 +9,7 @@ from domain.settle import (
     ListMemberView,
     ShareAllocation,
     compute_settle_balance_for_list_members,
-)  # noqa: I001
+)
 
 
 class MockAllocationResult:

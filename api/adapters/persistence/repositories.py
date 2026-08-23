@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 from application.cards import CardRecord
 from application.lists import (
     PLACEHOLDER_BALANCE_CRC,
+    ListMemberLabel,
     ListMembershipSummary,
     ListRecord,
     MembershipRecord,
@@ -295,6 +296,23 @@ class SqlAlchemyListRepository:
             .order_by(ListModel.created_at.asc())
         )
         rows = self._session.execute(stmt).all()
+        list_ids = [lst.id for lst, _ in rows]
+        members_by_list: dict[UUID, list[ListMemberLabel]] = {lid: [] for lid in list_ids}
+        if list_ids:
+            member_stmt = (
+                select(
+                    ListMembershipModel.list_id,
+                    ListMembershipModel.user_id,
+                    UserModel.alias,
+                )
+                .join(UserModel, UserModel.id == ListMembershipModel.user_id)
+                .where(ListMembershipModel.list_id.in_(list_ids))
+                .order_by(ListMembershipModel.created_at.asc())
+            )
+            for list_id, member_id, alias in self._session.execute(member_stmt).all():
+                members_by_list[list_id].append(
+                    ListMemberLabel(user_id=member_id, alias=alias)
+                )
         return [
             ListMembershipSummary(
                 id=lst.id,
@@ -302,6 +320,7 @@ class SqlAlchemyListRepository:
                 owner_id=lst.owner_id,
                 role=role,
                 balance_crc=PLACEHOLDER_BALANCE_CRC,
+                members=tuple(members_by_list.get(lst.id, ())),
             )
             for lst, role in rows
         ]
