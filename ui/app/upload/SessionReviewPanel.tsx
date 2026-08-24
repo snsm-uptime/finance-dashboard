@@ -10,6 +10,8 @@ import { useFormSubmission } from "@/hooks";
 import { uploadCopy } from "@/lib/i18n/upload";
 import { useCardIdentification } from "@/hooks/useCardIdentification";
 import { CreditCardFace, CreditCardMark } from "./CreditCardFace";
+import { classifyActiveImportSession } from "./classifyActiveImportSession";
+import { DiscardConfirmDialog } from "./DiscardConfirmDialog";
 import {
   discardSession,
   fetchImportSession,
@@ -40,6 +42,9 @@ export function SessionReviewPanel({
   const t = uploadCopy(locale);
   const [registrationError, setRegistrationError] = useState<string | null>(null);
   const [cardLabelInput, setCardLabelInput] = useState<string>("");
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const kind = classifyActiveImportSession(session);
+  const needsRetentionWarning = kind === "partial" || kind === "sheet-waiting";
 
   const messages: UploadMessages = {
     errorUnsupportedFileType: t.errorUnsupportedFileType,
@@ -87,6 +92,59 @@ export function SessionReviewPanel({
     }
   }
 
+  function requestDiscard() {
+    if (needsRetentionWarning) {
+      setConfirmDiscard(true);
+      return;
+    }
+    discard.submit(session.id);
+  }
+
+  const reviewHref = `/upload/review/${encodeURIComponent(session.id)}`;
+
+  if (kind !== "untouched") {
+    return (
+      <section
+        aria-label={t.cardIdentificationTitle}
+        className="flex min-h-full w-full flex-1 flex-col items-center justify-center"
+      >
+        <div className="flex w-full max-w-[26rem] flex-col items-stretch gap-3">
+          <div className="flex flex-wrap justify-center gap-2">
+            <Link href={reviewHref} className={assignPrimaryClass}>
+              {t.resumeReview}
+            </Link>
+            <button
+              type="button"
+              className={reviewSecondaryClass}
+              disabled={discard.pending}
+              onClick={requestDiscard}
+            >
+              {discard.pending ? t.closing : t.close}
+            </button>
+          </div>
+          {discard.error ? (
+            <p className="text-owe text-[0.9rem] m-0" role="alert">
+              {discard.error}
+            </p>
+          ) : null}
+        </div>
+        <DiscardConfirmDialog
+          open={confirmDiscard}
+          title={t.discardConfirmTitle}
+          body={t.discardConfirmBody}
+          confirmLabel={t.discardConfirmAction}
+          cancelLabel={t.discardCancel}
+          pending={discard.pending}
+          onCancel={() => setConfirmDiscard(false)}
+          onConfirm={() => {
+            setConfirmDiscard(false);
+            discard.submit(session.id);
+          }}
+        />
+      </section>
+    );
+  }
+
   return (
     <section
       aria-label={t.cardIdentificationTitle}
@@ -99,9 +157,9 @@ export function SessionReviewPanel({
             statement={statement}
             sessionId={session.id}
             assignHref={`/upload/bulk/${encodeURIComponent(session.id)}`}
-            reviewHref={`/upload/review/${encodeURIComponent(session.id)}`}
+            reviewHref={reviewHref}
             onRegistered={refreshSession}
-            onDiscard={() => discard.submit(session.id)}
+            onDiscard={requestDiscard}
             discardPending={discard.pending}
             cardMessages={cardMessages}
             registrationError={registrationError}
@@ -118,6 +176,19 @@ export function SessionReviewPanel({
           {discard.error}
         </p>
       ) : null}
+      <DiscardConfirmDialog
+        open={confirmDiscard}
+        title={t.discardConfirmTitle}
+        body={t.discardConfirmBody}
+        confirmLabel={t.discardConfirmAction}
+        cancelLabel={t.discardCancel}
+        pending={discard.pending}
+        onCancel={() => setConfirmDiscard(false)}
+        onConfirm={() => {
+          setConfirmDiscard(false);
+          discard.submit(session.id);
+        }}
+      />
     </section>
   );
 }

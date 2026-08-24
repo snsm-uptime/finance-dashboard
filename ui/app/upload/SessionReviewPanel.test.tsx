@@ -70,12 +70,16 @@ const mockSession: ImportSession = {
   imported_new_count: 0,
   skipped_duplicate_count: 0,
   landing_list_id: null,
+  deleted_count: 0,
+  zero_amount_excluded_count: 0,
+  failed_statements: [],
+  committed_by_list: [],
   statements: [
     {
       id: "st1",
       product_id: "bac_credit",
       status: "staged",
-      candidate_row_count: 10,
+      candidate_row_count: 2,
       iban: "DE89370400440532013000",
       filename: "statement.pdf",
       card_id: "card1",
@@ -105,8 +109,8 @@ const mockSession: ImportSession = {
     {
       id: "st2",
       product_id: "bac_credit",
-      status: "staged",
-      candidate_row_count: 5,
+      status: "failed",
+      candidate_row_count: 0,
       iban: "ES9121000418450200051332",
       filename: "statement2.pdf",
       card_id: null,
@@ -223,5 +227,45 @@ describe("SessionReviewPanel", () => {
     const link = container.querySelector('a[href*="/upload/review/"]') as HTMLAnchorElement;
     expect(link?.href).toContain("/upload/review/sess1");
     expect(container.querySelectorAll('a[href*="/upload/review/"]')).toHaveLength(1);
+  });
+
+  it("hides Bulk and offers Resume for a partial session", async () => {
+    const partial: ImportSession = {
+      ...mockSession,
+      imported_new_count: 1,
+      statements: [
+        {
+          ...mockSession.statements[0],
+          candidate_row_count: 2,
+          rows: [mockSession.statements[0].rows[0]],
+        },
+      ],
+    };
+    await act(async () => {
+      root.render(<SessionReviewPanel session={partial} />);
+    });
+
+    expect(container.textContent).toContain("Resume review");
+    expect(container.querySelector('a[href*="/upload/review/sess1"]')).not.toBeNull();
+    expect(container.querySelector('a[href*="/upload/bulk/"]')).toBeNull();
+    expect(container.textContent).not.toContain("Assign to a list");
+  });
+
+  it("Resume for a sheet-waiting session still goes to the review route", async () => {
+    const waiting: ImportSession = {
+      ...mockSession,
+      statements: mockSession.statements.map((statement) => ({
+        ...statement,
+        rows: [],
+        candidate_row_count: statement.candidate_row_count,
+      })),
+    };
+    await act(async () => {
+      root.render(<SessionReviewPanel session={waiting} />);
+    });
+
+    const resume = container.querySelector('a[href*="/upload/review/"]') as HTMLAnchorElement;
+    expect(resume?.href).toContain("/upload/review/sess1");
+    expect(container.querySelector('a[href*="/upload/bulk/"]')).toBeNull();
   });
 });
