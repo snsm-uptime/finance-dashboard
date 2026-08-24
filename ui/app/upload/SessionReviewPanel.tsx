@@ -28,6 +28,8 @@ type SessionReviewPanelProps = {
 const statementCardClass = "relative flex flex-col gap-3 max-w-md";
 const assignPrimaryClass =
   "inline-flex items-center justify-center self-start px-3 py-[9px] rounded-sm border-none bg-accent text-on-accent no-underline font-[550] text-[0.95rem]";
+const reviewSecondaryClass =
+  "inline-flex items-center justify-center self-start px-3 py-[9px] rounded-sm border border-accent bg-transparent text-accent no-underline font-[550] text-[0.95rem]";
 
 export function SessionReviewPanel({
   session,
@@ -94,6 +96,7 @@ export function SessionReviewPanel({
             statement={statement}
             sessionId={session.id}
             assignHref={`/upload/bulk/${encodeURIComponent(session.id)}`}
+            reviewHref={`/upload/review/${encodeURIComponent(session.id)}`}
             onRegistered={refreshSession}
             onDiscard={() => discard.submit(session.id)}
             discardPending={discard.pending}
@@ -135,6 +138,7 @@ type StatementCardProps = {
   statement: StagedStatement;
   sessionId: string;
   assignHref: string;
+  reviewHref: string;
   onRegistered: () => void;
   onDiscard: () => void;
   discardPending: boolean;
@@ -150,6 +154,7 @@ function StatementCard({
   statement,
   sessionId,
   assignHref,
+  reviewHref,
   onRegistered,
   onDiscard,
   discardPending,
@@ -262,6 +267,9 @@ function StatementCard({
         <div className="flex flex-wrap gap-2">
           <Link href={assignHref} className={assignPrimaryClass}>
             {t.assignToList}
+          </Link>
+          <Link href={reviewHref} className={reviewSecondaryClass}>
+            {t.reviewIndividually}
           </Link>
         </div>
       ) : null}

@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { IndividualReviewPanel, nextReviewableRow } from "./IndividualReviewPanel";
+import { formatIbanGroups } from "../../CreditCardFace";
 import type { CandidateRow, ImportSession, StagedStatement } from "../../uploadClient";
 
 const push = vi.fn();
@@ -123,6 +124,21 @@ function selectByText(container: HTMLElement, text: string): HTMLButtonElement {
   ) as HTMLButtonElement;
 }
 
+// The left/right accept buttons show only the list name + an icon visually
+// (truncation fix), but keep the full sentence as their accessible name —
+// select by that instead of visible text.
+function selectByLabel(container: HTMLElement, label: string): HTMLButtonElement {
+  return container.querySelector(`button[aria-label="${label}"]`) as HTMLButtonElement;
+}
+
+// Left/right accept now flings the card (a fixed-delay animation) before the
+// actual assign/delete call fires — real timers, so just outlast the delay.
+async function waitOutThrow() {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 260));
+  });
+}
+
 async function openAndChoose(container: HTMLElement, label: string) {
   const trigger = container.querySelector('button[aria-haspopup="listbox"]') as HTMLButtonElement;
   await act(async () => {
@@ -222,6 +238,43 @@ describe("IndividualReviewPanel", () => {
     vi.unstubAllGlobals();
   });
 
+  it("has no full-screen dark overlay", async () => {
+    fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
+    fetchLists.mockResolvedValue({ ok: true, lists: [] });
+    stubAuthMeFetch(null);
+
+    await act(async () => {
+      root.render(<IndividualReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const main = container.querySelector("main")!;
+    expect(main.className).not.toMatch(/bg-black/);
+    expect(main.className).not.toMatch(/fixed/);
+  });
+
+  it("reuses CreditCardFace for the card-identification block when the statement has an IBAN", async () => {
+    const statement = makeStatement({ iban: "CR00000000000000000000" });
+    const session = makeSession({ statements: [statement] });
+    fetchImportSession.mockResolvedValue({ ok: true, session });
+    fetchLists.mockResolvedValue({ ok: true, lists: [] });
+    stubAuthMeFetch(null);
+
+    await act(async () => {
+      root.render(<IndividualReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain(`IBAN: ${formatIbanGroups(statement.iban!)}`);
+  });
+
   it("chosen-list Accept is disabled until a list is picked, then commits and advances", async () => {
     fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
     fetchLists.mockResolvedValue({
@@ -238,11 +291,11 @@ describe("IndividualReviewPanel", () => {
       await Promise.resolve();
     });
 
-    const acceptButton = selectByText(container, "Accept to Choose list");
+    const acceptButton = selectByLabel(container, "Accept to Choose list");
     expect(acceptButton.disabled).toBe(true);
 
     await openAndChoose(container, "Groceries");
-    const acceptButtonAfterPick = selectByText(container, "Accept to Groceries");
+    const acceptButtonAfterPick = selectByLabel(container, "Accept to Groceries");
     expect(acceptButtonAfterPick.disabled).toBe(false);
 
     assignRow.mockResolvedValue({
@@ -253,6 +306,7 @@ describe("IndividualReviewPanel", () => {
     await act(async () => {
       acceptButtonAfterPick.click();
     });
+    await waitOutThrow();
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
@@ -281,12 +335,13 @@ describe("IndividualReviewPanel", () => {
       await Promise.resolve();
     });
 
-    const defaultButton = selectByText(container, "Add to Household");
+    const defaultButton = selectByLabel(container, "Add to Household");
     expect(defaultButton.disabled).toBe(false);
 
     await act(async () => {
       defaultButton.click();
     });
+    await waitOutThrow();
     await act(async () => {
       await Promise.resolve();
     });
@@ -400,8 +455,8 @@ describe("IndividualReviewPanel", () => {
 
     await openAndChoose(container, "Groceries");
 
-    const defaultButton = selectByText(container, "Add to Groceries");
-    const chosenButton = selectByText(container, "Accept to Groceries");
+    const defaultButton = selectByLabel(container, "Add to Groceries");
+    const chosenButton = selectByLabel(container, "Accept to Groceries");
     const deleteButton = selectByText(container, "Delete");
 
     expect(defaultButton.disabled).toBe(true);
@@ -452,7 +507,7 @@ describe("IndividualReviewPanel", () => {
     });
 
     await openAndChoose(container, "Groceries");
-    const acceptButton = selectByText(container, "Accept to Groceries");
+    const acceptButton = selectByLabel(container, "Accept to Groceries");
 
     assignRow.mockResolvedValue({
       ok: true,
@@ -462,6 +517,7 @@ describe("IndividualReviewPanel", () => {
     await act(async () => {
       acceptButton.click();
     });
+    await waitOutThrow();
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
@@ -496,10 +552,11 @@ describe("IndividualReviewPanel", () => {
       session: makeSession({ statements: [makeStatement({ rows: [ROW_2] })] }),
     });
 
-    const acceptButton = selectByText(container, "Accept to Groceries");
+    const acceptButton = selectByLabel(container, "Accept to Groceries");
     await act(async () => {
       acceptButton.click();
     });
+    await waitOutThrow();
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
@@ -511,7 +568,7 @@ describe("IndividualReviewPanel", () => {
     // behavior reset it to "" after every action.
     const trigger = container.querySelector('button[aria-haspopup="listbox"]') as HTMLButtonElement;
     expect(trigger.textContent).toContain("Groceries");
-    const chosenButtonForNextRow = selectByText(container, "Accept to Groceries");
+    const chosenButtonForNextRow = selectByLabel(container, "Accept to Groceries");
     expect(chosenButtonForNextRow.disabled).toBe(false);
   });
 
@@ -545,10 +602,12 @@ describe("IndividualReviewPanel", () => {
     expect(assignRow).not.toHaveBeenCalled();
     expect(deleteRow).not.toHaveBeenCalled();
 
-    // Swipe right past the threshold: accept to the chosen list.
+    // Swipe right past the threshold: accept to the chosen list (fling delay
+    // before the actual call, same as the button path).
     await act(async () => {
       capturedDragHandler!({ last: true, movement: [120, 0], velocity: [2, 0], direction: [1, 0] });
     });
+    await waitOutThrow();
     await act(async () => {
       await Promise.resolve();
     });
@@ -558,6 +617,7 @@ describe("IndividualReviewPanel", () => {
     await act(async () => {
       capturedDragHandler!({ last: true, movement: [-120, 0], velocity: [2, 0], direction: [-1, 0] });
     });
+    await waitOutThrow();
     await act(async () => {
       await Promise.resolve();
     });
@@ -583,6 +643,120 @@ describe("IndividualReviewPanel", () => {
     });
     expect(assignRow).not.toHaveBeenCalled();
     expect(deleteRow).not.toHaveBeenCalled();
+  });
+
+  it("ArrowRight key accepts to the chosen list", async () => {
+    fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
+    fetchLists.mockResolvedValue({
+      ok: true,
+      lists: [{ id: "l1", name: "Groceries", owner_id: "u1", role: "owner" }],
+    });
+    stubAuthMeFetch(null);
+    assignRow.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
+
+    await act(async () => {
+      root.render(<IndividualReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await openAndChoose(container, "Groceries");
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    });
+    await waitOutThrow();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(assignRow).toHaveBeenCalledWith("s1", "r1", "l1", expect.anything());
+  });
+
+  it("ArrowLeft key accepts to the default list", async () => {
+    fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
+    fetchLists.mockResolvedValue({ ok: true, lists: [] });
+    stubAuthMeFetch("l2");
+    assignRow.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
+
+    await act(async () => {
+      root.render(<IndividualReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    });
+    await waitOutThrow();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(assignRow).toHaveBeenCalledWith("s1", "r1", "l2", expect.anything());
+  });
+
+  it("arrow keys are ignored while the title input is focused", async () => {
+    fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
+    fetchLists.mockResolvedValue({ ok: true, lists: [] });
+    stubAuthMeFetch("l2");
+
+    await act(async () => {
+      root.render(<IndividualReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const clickable = (
+      Array.from(container.querySelectorAll("div")).find(
+        (el) => el.textContent === "Coffee",
+      ) as HTMLElement
+    ).closest("div")!;
+    await act(async () => {
+      clickable.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await act(async () => {
+      clickable.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    const input = container.querySelector("input") as HTMLInputElement;
+
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    });
+    await waitOutThrow();
+
+    expect(assignRow).not.toHaveBeenCalled();
+  });
+
+  it("arrow keys are ignored while the list picker trigger is focused (not a native <select>)", async () => {
+    fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
+    fetchLists.mockResolvedValue({
+      ok: true,
+      lists: [{ id: "l1", name: "Groceries", owner_id: "u1", role: "owner" }],
+    });
+    stubAuthMeFetch("l2");
+
+    await act(async () => {
+      root.render(<IndividualReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const trigger = container.querySelector('button[aria-haspopup="listbox"]') as HTMLButtonElement;
+    await act(async () => {
+      trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    });
+    await waitOutThrow();
+
+    expect(assignRow).not.toHaveBeenCalled();
   });
 
   describe("inline title edit", () => {

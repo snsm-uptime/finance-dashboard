@@ -83,6 +83,35 @@ describe("IconButton", () => {
     expect(classList).toContain("flex-shrink-0");
   });
 
+  it("renders an optional caption under the icon without changing the accessible name", async () => {
+    await act(async () => {
+      root.render(
+        <IconButton
+          icon={<span data-testid="icon" />}
+          label="Add to Personal"
+          caption="Personal"
+          variant="ghost"
+        />,
+      );
+    });
+    const button = container.querySelector("button") as HTMLButtonElement;
+    const classList = button.className.split(/\s+/);
+
+    expect(button.getAttribute("aria-label")).toBe("Add to Personal");
+    expect(button.textContent).toContain("Personal");
+    expect(classList).toContain("flex-col");
+    expect(container.querySelector("[aria-hidden]")?.textContent).toBe("Personal");
+  });
+
+  it("omits caption layout when caption is not passed", async () => {
+    await act(async () => {
+      root.render(<IconButton icon={<span />} label="Close" />);
+    });
+    const button = container.querySelector("button") as HTMLButtonElement;
+    expect(button.className.split(/\s+/)).not.toContain("flex-col");
+    expect(button.querySelector("[aria-hidden]")).toBeNull();
+  });
+
   it("applies the ghost variant class for icon-only chrome", async () => {
     await act(async () => {
       root.render(<IconButton icon={<span />} label="Add expense" variant="ghost" />);

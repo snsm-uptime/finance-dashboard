@@ -1,15 +1,27 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 import { useRouter } from "next/navigation";
 import { useDrag } from "@use-gesture/react";
 
 import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
+import { IconButton } from "@/components/IconButton";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { useFormSubmission } from "@/hooks";
 import { fetchLists, type ListItem } from "@/app/lists/listsClient";
+import { ArrowIcon, SaveIcon } from "@/app/icons";
 import { uploadCopy } from "@/lib/i18n/upload";
+import type { Locale } from "@/lib/i18n/locale";
 import { useCardIdentification } from "@/hooks/useCardIdentification";
+import { CreditCardFace, CreditCardMark } from "../../CreditCardFace";
 import {
   assignRow,
   deleteRow,
@@ -38,6 +50,10 @@ type Action =
 type TitleState = "idle" | "primed" | "editing";
 
 const SWIPE_DISTANCE_THRESHOLD = 80;
+// Left/right throw animation (default-list / chosen-list accept only — up
+// (delete) and down (undo) stay button-primary and un-animated, per scope).
+const THROW_DISTANCE = 480;
+const THROW_ANIMATION_MS = 220;
 // Mirrors api/domain/expenses.py:20 (normalize_row_description) — display-side
 // guard only, the server is the actual enforcement point.
 const DESCRIPTION_MAX_LENGTH = 500;
@@ -60,6 +76,23 @@ export function nextReviewableRow(
   return null;
 }
 
+// Mirrors SessionReviewPanel.tsx's statementPeriodBounds — same StagedStatement
+// shape, kept local per this codebase's co-located-pure-function convention.
+function statementPeriodBounds(statement: StagedStatement): {
+  start: string | null;
+  end: string | null;
+} {
+  let start: string | null = null;
+  let end: string | null = null;
+  for (const row of statement.rows) {
+    const posted = row.posted_date;
+    if (!posted) continue;
+    if (start === null || posted < start) start = posted;
+    if (end === null || posted > end) end = posted;
+  }
+  return { start, end };
+}
+
 // No utility formats a raw (amount, currency) pair for arbitrary currencies —
 // display-only, mirrors the existing `formatCardBalance` use of `Number()` for
 // rendering (never for computation, comparison, or the assign/PATCH payloads).
@@ -69,6 +102,39 @@ function formatRowAmount(amount: string, currency: string): string {
     ? parsed.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     : amount;
   return `${currency} ${display}`;
+}
+
+const DAY_NAMES: Record<Locale, readonly string[]> = {
+  en: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+  es: ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"],
+};
+
+const ROW_MONTH_ABBR: Record<Locale, readonly string[]> = {
+  en: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+  es: ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"],
+};
+
+// Sakamoto's algorithm — pure integer math, no JS `Date`, so no local-timezone
+// shift risk on a date-only string (project-context's date-string rule).
+function dayOfWeek(year: number, month: number, day: number): number {
+  const t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
+  const y = month < 3 ? year - 1 : year;
+  return (
+    (y + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) + t[month - 1] + day) % 7
+  );
+}
+
+// The year is already known from context, so it's dropped here — display-only,
+// mirrors formatRowAmount's Number()-for-display carve-out.
+function formatRowDate(iso: string, locale: Locale): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!match) return iso;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const dayName = DAY_NAMES[locale][dayOfWeek(year, month, day)];
+  const monthAbbr = ROW_MONTH_ABBR[locale][month - 1];
+  return locale === "es" ? `${dayName}, ${day} ${monthAbbr}` : `${dayName}, ${monthAbbr} ${day}`;
 }
 
 /**
@@ -94,6 +160,11 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   );
   const [cardLabelInput, setCardLabelInput] = useState<string>("");
   const [registering, setRegistering] = useState(false);
+  // Left/right throw animation: live drag offset (1:1 finger-follow, no
+  // transition) or the final thrown/snap-back offset (transition applies).
+  const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const flingLockRef = useRef(false);
 
   const titleContainerRef = useRef<HTMLDivElement | null>(null);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
@@ -245,28 +316,73 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   // deletable, since delete never touches a list (Task 3.4).
   const canDelete = !!current;
   const canUndo = !!session?.undo;
+  const throwing = dragOffset !== null;
+
+  // Left/right only (up/delete and down/undo stay button-primary, unanimated,
+  // per AD-9 and this round's scoped ask). The card visually flies off before
+  // the actual submit fires, so the outgoing card is always seen in motion
+  // regardless of how fast the request resolves.
+  //
+  // flingLockRef is a synchronous guard: `throwing` (derived from state) only
+  // reflects reality after React commits a render, so two triggers dispatched
+  // in the same tick (e.g. a click immediately followed by a keydown) could
+  // both read stale throwing=false and both schedule a submit. The ref closes
+  // that gap immediately, independent of render timing.
+  function flingAndSubmit(offset: { x: number; y: number }, act: Action) {
+    if (flingLockRef.current) return;
+    flingLockRef.current = true;
+    setIsDragging(false);
+    setDragOffset(offset);
+    window.setTimeout(() => {
+      void action.submit(act).finally(() => {
+        setDragOffset(null);
+        flingLockRef.current = false;
+      });
+    }, THROW_ANIMATION_MS);
+  }
 
   useDrag(
-    ({ last, movement: [mx, my], velocity: [vx, vy], direction: [dx, dy] }) => {
-      if (!last || !isCoarsePointer || action.pending || dismiss.pending) return;
+    ({ first, active, last, movement: [mx, my], velocity: [vx, vy], direction: [dx, dy] }) => {
+      if (!isCoarsePointer || action.pending || dismiss.pending) return;
+      // Block a brand-new gesture from starting while a previous fling/undo
+      // snap-back is still resolving — but once a gesture is under way, its
+      // own live dragOffset updates must not block its own continuation.
+      if (first && throwing) return;
+
+      if (active && !last) {
+        // Live 1:1 follow, horizontal only — the vertical (up/delete) axis
+        // keeps its existing invisible-until-release behavior, unchanged.
+        setIsDragging(true);
+        setDragOffset({ x: mx, y: 0 });
+        return;
+      }
+      if (!last) return;
+      setIsDragging(false);
+
       const absX = Math.abs(mx);
       const absY = Math.abs(my);
-      if (absX < SWIPE_DISTANCE_THRESHOLD && absY < SWIPE_DISTANCE_THRESHOLD) return;
+      if (absX < SWIPE_DISTANCE_THRESHOLD && absY < SWIPE_DISTANCE_THRESHOLD) {
+        setDragOffset(null); // below threshold — snap back
+        return;
+      }
 
       // AD-9 amended 2026-08-20: vertical swipe axis is up → delete; down is
       // never a gesture (undo is button-only on every platform), so there is
       // no branch mapping a downward drag to anything.
       if (absY > absX && dy < 0 && vy > 0) {
+        setDragOffset(null);
         if (canDelete) action.submit({ kind: "delete" });
         return;
       }
-      if (dx > 0 && vx > 0) {
-        if (canAcceptChosen) action.submit({ kind: "acceptChosen" });
+      if (dx > 0 && vx > 0 && canAcceptChosen) {
+        flingAndSubmit({ x: THROW_DISTANCE, y: 0 }, { kind: "acceptChosen" });
         return;
       }
-      if (dx < 0 && vx > 0) {
-        if (canAcceptDefault) action.submit({ kind: "acceptDefault" });
+      if (dx < 0 && vx > 0 && canAcceptDefault) {
+        flingAndSubmit({ x: -THROW_DISTANCE, y: 0 }, { kind: "acceptDefault" });
+        return;
       }
+      setDragOffset(null);
     },
     // touch-none + passive: false: the card must recognize its own vertical
     // (up → delete) and horizontal (left/right → accept) gestures, so native
@@ -274,6 +390,37 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     // to compete with useDrag on any axis (Story 4.8 review finding).
     { target: cardRef, eventOptions: { passive: false } },
   );
+
+  // Desktop: ← → keys mirror the left/right buttons (default/chosen accept
+  // only — delete/undo stay button-only). Ignored while a text input/select
+  // or the SoftLedgerSelect combobox (a custom listbox, not a native
+  // <select>) has focus, so it doesn't fight the title-edit field or the
+  // list picker's own arrow-key navigation.
+  useEffect(() => {
+    function onKeyDown(event: globalThis.KeyboardEvent) {
+      if (!current || throwing || action.pending || dismiss.pending) return;
+      const target = event.target;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        (target instanceof Element &&
+          target.closest('[role="listbox"], [aria-haspopup="listbox"]'))
+      ) {
+        return;
+      }
+      if (event.key === "ArrowLeft" && canAcceptDefault) {
+        event.preventDefault();
+        flingAndSubmit({ x: -THROW_DISTANCE, y: 0 }, { kind: "acceptDefault" });
+      } else if (event.key === "ArrowRight" && canAcceptChosen) {
+        event.preventDefault();
+        flingAndSubmit({ x: THROW_DISTANCE, y: 0 }, { kind: "acceptChosen" });
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current?.row.id, canAcceptDefault, canAcceptChosen, throwing, action.pending, dismiss.pending]);
 
   // Title edit state resets whenever the reviewed row changes — by any of
   // assign/delete/undo resolving, or a session refresh (AC #8). Adjusted
@@ -387,9 +534,26 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
       ? t.individualReviewProgress.replace("{count}", String(remainingCount))
       : "";
 
+  // Mirrors SessionReviewPanel.tsx's StatementCard `needsRegistration` — same
+  // statement shape, same OR'd fallback for a matched-but-not-yet-flagged card.
+  const needsCardRegistration =
+    card.needsRegistration ||
+    (!card.cardMatched && Boolean(current?.statement.iban) && !current?.statement.card_id);
+  const savedCardName = card.cardLabel || t.newCardTitle;
+  const period = current ? statementPeriodBounds(current.statement) : { start: null, end: null };
+
+  async function handleRegisterCard(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!cardLabelInput.trim()) return;
+    setRegistering(true);
+    const result = await card.registerCard(cardLabelInput.trim());
+    setRegistering(false);
+    if (result.ok) setCardLabelInput("");
+  }
+
   return (
     <main
-      className="fixed inset-0 z-10 flex justify-center overflow-y-auto bg-black/40 px-[1.5rem] py-[2.5rem]"
+      className="min-h-full flex justify-center px-[1.5rem] py-[2.5rem]"
       style={{ fontFamily: "var(--font-ui), Manrope, system-ui, sans-serif" }}
     >
       <div className="flex w-full max-w-[26rem] flex-col gap-4">
@@ -428,7 +592,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
               <div />
               <button
                 type="button"
-                disabled={!canDelete || action.pending || dismiss.pending}
+                disabled={!canDelete || action.pending || dismiss.pending || throwing}
                 onClick={() => action.submit({ kind: "delete" })}
                 className="col-start-2 row-start-1 justify-self-center m-0 px-3 py-[6px] rounded-sm border border-border bg-transparent text-foreground cursor-pointer font-[550] text-[0.8rem] disabled:opacity-55 disabled:cursor-not-allowed"
               >
@@ -436,22 +600,45 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
               </button>
               <div />
 
-              <button
-                type="button"
-                disabled={!canAcceptDefault || action.pending || dismiss.pending}
-                onClick={() => action.submit({ kind: "acceptDefault" })}
-                className="col-start-1 row-start-2 self-center m-0 px-2 py-[8px] rounded-sm border border-accent bg-accent text-surface cursor-pointer font-[550] text-[0.75rem] disabled:opacity-55 disabled:cursor-not-allowed"
-              >
-                {action.pending
-                  ? t.individualReviewCommitting
-                  : defaultListId
+              <IconButton
+                className="col-start-1 row-start-2 self-center"
+                variant="ghost"
+                disabled={!canAcceptDefault || action.pending || dismiss.pending || throwing}
+                onClick={() =>
+                  flingAndSubmit({ x: -THROW_DISTANCE, y: 0 }, { kind: "acceptDefault" })
+                }
+                label={
+                  defaultListId
                     ? t.individualReviewAcceptDefault.replace("{list}", defaultListName)
-                    : t.individualReviewNoDefaultListShort}
-              </button>
+                    : t.individualReviewNoDefaultListShort
+                }
+                caption={
+                  action.pending && !throwing
+                    ? t.individualReviewCommitting
+                    : defaultListId
+                      ? defaultListName
+                      : t.individualReviewNoDefaultListShort
+                }
+                icon={<ArrowIcon className="w-4 h-4" />}
+              />
 
               <div
                 ref={cardRef}
                 className="col-start-2 row-start-2 flex min-h-[11rem] flex-col justify-between rounded-[12px] border border-border bg-surface p-[1.25rem] shadow-lg touch-none"
+                style={{
+                  transform: dragOffset
+                    ? `translateX(${dragOffset.x}px) rotate(${dragOffset.x / 20}deg)`
+                    : undefined,
+                  // Only fade out once committed to a fling (post-release,
+                  // isDragging false) — never during a live, uncommitted drag,
+                  // or dragging far past the threshold and back below it
+                  // makes the card vanish/reappear mid-gesture.
+                  opacity:
+                    !isDragging && dragOffset && Math.abs(dragOffset.x) >= THROW_DISTANCE * 0.9
+                      ? 0
+                      : 1,
+                  transition: isDragging ? "none" : "transform 220ms ease, opacity 220ms ease",
+                }}
               >
                 <div
                   ref={titleContainerRef}
@@ -493,29 +680,34 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
                     {formatRowAmount(current.row.amount, current.row.currency)}
                   </p>
                   <p className="m-0 mt-[0.5rem] text-[0.8rem] text-muted">
-                    {current.row.posted_date}
+                    {formatRowDate(current.row.posted_date, locale)}
                   </p>
                 </div>
               </div>
 
-              <button
-                type="button"
-                disabled={!canAcceptChosen || action.pending || dismiss.pending}
-                onClick={() => action.submit({ kind: "acceptChosen" })}
-                className="col-start-3 row-start-2 self-center m-0 px-2 py-[8px] rounded-sm border border-accent bg-accent text-surface cursor-pointer font-[550] text-[0.75rem] disabled:opacity-55 disabled:cursor-not-allowed"
-              >
-                {action.pending
-                  ? t.individualReviewCommitting
-                  : t.individualReviewAcceptChosen.replace(
-                      "{list}",
-                      chosenListName || t.individualReviewChooseList,
-                    )}
-              </button>
+              <IconButton
+                className="col-start-3 row-start-2 self-center"
+                variant="ghost"
+                disabled={!canAcceptChosen || action.pending || dismiss.pending || throwing}
+                onClick={() =>
+                  flingAndSubmit({ x: THROW_DISTANCE, y: 0 }, { kind: "acceptChosen" })
+                }
+                label={t.individualReviewAcceptChosen.replace(
+                  "{list}",
+                  chosenListName || t.individualReviewChooseList,
+                )}
+                caption={
+                  action.pending && !throwing
+                    ? t.individualReviewCommitting
+                    : chosenListName || t.individualReviewChooseList
+                }
+                icon={<ArrowIcon className="w-4 h-4 rotate-180" />}
+              />
 
               <div />
               <button
                 type="button"
-                disabled={!canUndo || action.pending || dismiss.pending}
+                disabled={!canUndo || action.pending || dismiss.pending || throwing}
                 onClick={() => action.submit({ kind: "undo" })}
                 className="col-start-2 row-start-3 justify-self-center m-0 px-3 py-[6px] rounded-sm border border-border bg-transparent text-foreground cursor-pointer font-[550] text-[0.8rem] disabled:opacity-55 disabled:cursor-not-allowed"
               >
@@ -524,67 +716,80 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
               <div />
             </div>
 
+            <p className="m-0 text-center text-muted text-[0.68rem]">
+              {isCoarsePointer
+                ? t.individualReviewDirectionHintTouch
+                : t.individualReviewDirectionHintKeyboard}
+            </p>
+
             {/* Card identification / registration (Story 4.8.1) — subordinate
                 to the four-direction card, only relevant when the row's
-                parent statement carries an IBAN. */}
+                parent statement carries an IBAN. Reuses CreditCardFace, same
+                as SessionReviewPanel's StatementCard renders it. */}
             {current.statement.iban ? (
-              <>
-                <div className="py-[1rem] px-[1.1rem] rounded-[10px] border border-border bg-surface">
-                  <p className="m-0 text-[0.7rem] uppercase tracking-[0.05rem] font-[550] text-muted mb-[0.25rem]">
-                    {t.cardIdentificationTitle}
-                  </p>
-                  {card.loading ? (
-                    <p className="m-0 text-[0.85rem] text-muted">{t.cardIdentificationTitle}…</p>
-                  ) : card.cardMatched && card.cardLabel ? (
-                    <p className="m-0 text-[0.9rem] text-foreground font-[550]">
-                      {card.cardLabel}
-                    </p>
-                  ) : card.needsRegistration ? (
-                    <p className="m-0 text-[0.9rem] text-foreground font-[550]">
-                      {t.newCardTitle}
-                    </p>
-                  ) : null}
-                  {card.iban ? (
-                    <p className="m-0 mt-[0.5rem] text-[0.8rem] text-muted font-mono">
-                      {t.cardIdentificationIban}: {card.iban}
-                    </p>
-                  ) : null}
-                </div>
-
-                {card.needsRegistration && card.iban ? (
-                  <div className="flex flex-col gap-2 py-[1rem] px-[1.1rem] rounded-[10px] border border-border bg-surface">
-                    <label htmlFor="card-label" className="text-[0.9rem] font-[550] text-foreground">
-                      {t.cardIdentificationLabel}
-                    </label>
-                    <input
-                      id="card-label"
-                      type="text"
-                      value={cardLabelInput}
-                      onChange={(e) => setCardLabelInput(e.currentTarget.value)}
-                      placeholder="e.g., My Visa"
-                      disabled={registering || card.loading}
-                      className="m-0 px-3 py-[9px] rounded-sm border border-border bg-surface text-foreground font-[450] text-[0.95rem] placeholder-muted disabled:opacity-55"
+              <div className="flex justify-center">
+                {card.loading ? (
+                  <p className="m-0 text-[0.85rem] text-muted">{t.cardIdentificationTitle}…</p>
+                ) : needsCardRegistration ? (
+                  <form className="m-0" onSubmit={handleRegisterCard}>
+                    <CreditCardFace
+                      cardName={
+                        <>
+                          <CreditCardMark />
+                          <label className="flex items-center gap-1.5 min-w-0 flex-1 rounded-[6px] border border-white/70 bg-white/8 py-1 px-2">
+                            <span className="sr-only">{t.cardIdentificationLabel}</span>
+                            <input
+                              type="text"
+                              name="label"
+                              value={cardLabelInput}
+                              onChange={(e) => setCardLabelInput(e.target.value)}
+                              placeholder={t.newCardTitle}
+                              disabled={registering || card.loading}
+                              autoComplete="off"
+                              maxLength={200}
+                              className="min-w-0 flex-1 m-0 p-0 border-0 bg-transparent text-white text-[0.78rem] font-semibold uppercase tracking-[0.04em] placeholder:text-white/55 placeholder:normal-case placeholder:tracking-normal focus:outline-none disabled:opacity-55"
+                            />
+                            <IconButton
+                              className="w-7 h-7 min-w-7 !p-0 text-white hover:text-white"
+                              type="submit"
+                              disabled={!cardLabelInput.trim() || registering || card.loading}
+                              label={
+                                registering || card.loading
+                                  ? t.cardIdentificationRegistering
+                                  : t.cardIdentificationRegister
+                              }
+                              icon={<SaveIcon className="block w-4 h-4" />}
+                            />
+                          </label>
+                        </>
+                      }
+                      iban={current.statement.iban}
+                      filename={current.statement.filename}
+                      periodStart={period.start}
+                      periodEnd={period.end}
+                      periodLabel={t.cardPeriodLabel}
                     />
-                    {card.error && <p className="m-0 text-owe text-[0.85rem]">{card.error}</p>}
-                    <button
-                      type="button"
-                      disabled={!cardLabelInput.trim() || registering || card.loading}
-                      onClick={async () => {
-                        setRegistering(true);
-                        const result = await card.registerCard(cardLabelInput.trim());
-                        setRegistering(false);
-                        if (result.ok) {
-                          setCardLabelInput("");
-                        }
-                      }}
-                      className="m-0 px-3 py-[9px] rounded-sm border border-accent bg-accent text-surface cursor-pointer font-[550] text-[0.95rem] disabled:opacity-55 disabled:cursor-not-allowed"
-                    >
-                      {registering ? t.cardIdentificationRegistering : t.cardIdentificationRegister}
-                    </button>
-                  </div>
-                ) : null}
-              </>
+                  </form>
+                ) : (
+                  <CreditCardFace
+                    cardName={
+                      <>
+                        <CreditCardMark />
+                        <p className="m-0 min-w-0 truncate text-[0.78rem] font-semibold uppercase tracking-[0.06em]">
+                          {savedCardName}
+                        </p>
+                      </>
+                    }
+                    iban={current.statement.iban}
+                    filename={current.statement.filename}
+                    periodStart={period.start}
+                    periodEnd={period.end}
+                    periodLabel={t.cardPeriodLabel}
+                  />
+                )}
+              </div>
             ) : null}
+            {card.error ? <p className="m-0 text-owe text-[0.85rem]">{card.error}</p> : null}
 
             <div aria-live="polite">
               {action.error ? (
