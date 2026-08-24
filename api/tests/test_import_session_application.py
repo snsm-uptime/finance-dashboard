@@ -782,7 +782,7 @@ def test_discard_another_users_session_not_found() -> None:
         )
 
 
-def test_discard_own_session_sets_discarded_at_and_deletes_pdf() -> None:
+def test_discard_own_session_sets_discarded_at_and_keeps_pdf_while_staged() -> None:
     repo = _FakeImportSessionRepo()
     storage = _FakePdfStorage()
     owner = uuid4()
@@ -794,7 +794,53 @@ def test_discard_own_session_sets_discarded_at_and_deletes_pdf() -> None:
     )
 
     assert result.discarded_at is not None
+    assert storage.deleted == []
+
+
+def test_discard_releases_pdf_when_statements_are_idle() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    owner = uuid4()
+    session_id = _upload_session(repo, storage, user_id=owner)
+    record = repo.sessions[session_id]
+    repo.sessions[session_id] = replace(
+        record,
+        statements=[
+            _copy_statement(s, status=STATEMENT_STATUS_COMMITTED) for s in record.statements
+        ],
+    )
+    storage.deleted.clear()
+
+    DiscardImportSessionService(repo, storage).execute(
+        DiscardImportSessionCommand(actor_user_id=owner, session_id=session_id)
+    )
+
     assert len(storage.deleted) == 1
+
+
+def test_discard_keeps_failed_statement_pdf() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    owner = uuid4()
+    session_id = _direct_session(
+        repo,
+        user_id=owner,
+        statements=[
+            DetectedStatement(
+                product_id="fake_product",
+                status=STATEMENT_STATUS_FAILED,
+                candidate_rows=[],
+            )
+        ],
+    )
+    storage.saved.append((owner, "failed.pdf", PDF_BYTES))
+    storage.deleted.clear()
+
+    DiscardImportSessionService(repo, storage).execute(
+        DiscardImportSessionCommand(actor_user_id=owner, session_id=session_id)
+    )
+
+    assert storage.deleted == []
 
 
 def test_get_active_session_none_when_empty() -> None:

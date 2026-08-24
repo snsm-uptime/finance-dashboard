@@ -551,17 +551,12 @@ class DiscardImportSessionService:
             raise ImportSessionNotFoundError()
 
         updated = self._session_repo.discard_session(command.session_id, command.actor_user_id)
-
-        distinct_paths = {
-            statement.pdf_path for statement in updated.statements if statement.pdf_path
-        }
-        for path in distinct_paths:
-            try:
-                self._pdf_storage.delete(path)
-            except OSError:
-                logger.warning("import_session_discard_cleanup_failed pdf_path=%s", path)
-
-        return updated
+        _release_source_pdf_if_idle(
+            session=updated,
+            session_repo=self._session_repo,
+            pdf_storage=self._pdf_storage,
+        )
+        return self._session_repo.get_session(command.session_id, command.actor_user_id) or updated
 
 
 def _release_source_pdf_if_idle(

@@ -1741,6 +1741,37 @@ def test_session_summary_fields_mix_and_undo(
     assert after["committed_by_list"] == []
 
 
+def test_discard_retains_failed_statement_pdf(client: TestClient, db_session: Session) -> None:
+    _register(client, "discardfailed@example.com")
+    user_id = UUID(client.get("/auth/me").json()["user_id"])
+    repo = SqlAlchemyImportSessionRepository(db_session)
+    storage = FilesystemPdfStorage(base_dir=os.environ["PDF_STORAGE_PATH"])
+    path = storage.save(user_id=user_id, filename="failed.pdf", content=b"%PDF-1.4 stub")
+    record = repo.create_session(
+        session_id=uuid4(),
+        user_id=user_id,
+        statements=[
+            DetectedStatement(
+                product_id="fake_product",
+                status=STATEMENT_STATUS_FAILED,
+                candidate_rows=[],
+                original_filename="failed.pdf",
+            )
+        ],
+        pdf_paths={0: path},
+    )
+    db_session.commit()
+
+    response = client.delete(f"/import/sessions/{record.id}")
+    assert response.status_code == 200, response.text
+    db_session.expire_all()
+    statement = db_session.scalars(
+        select(ImportStatementModel).where(ImportStatementModel.session_id == record.id)
+    ).one()
+    assert statement.pdf_path is not None
+    assert Path(path).exists()
+
+
 # --- Story 4.13.1: assigned_rows payload + per-row unassign (ImportReviewSheet) ---
 
 
