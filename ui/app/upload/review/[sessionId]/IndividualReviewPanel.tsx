@@ -582,16 +582,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
 
         {current ? (
           <>
-            {listOptions.length > 0 ? (
-              <SoftLedgerSelect
-                id={selectId}
-                value={pickedListId}
-                options={[{ value: "", label: t.individualReviewChooseList }, ...listOptions]}
-                onChange={setPickedListId}
-              />
-            ) : null}
-
-            <div className="grid grid-cols-[5.5rem_1fr_5.5rem] grid-rows-[auto_auto] items-center gap-3">
+            <div className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[auto_auto] items-center gap-3">
               <IconButton
                 className="col-start-1 row-start-1 self-center"
                 variant="ghost"
@@ -616,7 +607,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
 
               <div
                 ref={cardRef}
-                className="relative col-start-2 row-start-1 flex min-h-[11rem] min-w-0 flex-col justify-between rounded-[12px] border border-border bg-surface p-[1.25rem] shadow-lg touch-none"
+                className="relative col-start-2 row-start-1 flex min-h-[11rem] min-w-0 w-full flex-col justify-between rounded-[12px] border border-border bg-surface p-[1.25rem] shadow-lg touch-none"
                 style={{
                   transform: dragOffset
                     ? `translateX(${dragOffset.x}px) rotate(${dragOffset.x / 20}deg)`
@@ -724,16 +715,25 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
                 : t.individualReviewDirectionHintKeyboard}
             </p>
 
+            {listOptions.length > 0 ? (
+              <SoftLedgerSelect
+                id={selectId}
+                value={pickedListId}
+                options={[{ value: "", label: t.individualReviewChooseList }, ...listOptions]}
+                onChange={setPickedListId}
+              />
+            ) : null}
+
             {/* Card identification / registration (Story 4.8.1) — subordinate
                 to the four-direction card, only relevant when the row's
                 parent statement carries an IBAN. Reuses CreditCardFace, same
                 as SessionReviewPanel's StatementCard renders it. */}
             {current.statement.iban ? (
-              <div className="flex justify-center">
+              <div className="w-full">
                 {card.loading ? (
                   <p className="m-0 text-[0.85rem] text-muted">{t.cardIdentificationTitle}…</p>
                 ) : needsCardRegistration ? (
-                  <form className="m-0" onSubmit={handleRegisterCard}>
+                  <form className="m-0 w-full" onSubmit={handleRegisterCard}>
                     <CreditCardFace
                       cardName={
                         <>

@@ -128,7 +128,7 @@ export function CreditCardFace({
 
   return (
     <article
-      className="relative isolate w-max max-w-full text-white"
+      className="relative isolate w-full max-w-full text-white"
       style={{
         borderRadius: "16px",
         background: "linear-gradient(160deg, #2a2a2a 0%, #141414 55%, #0d0d0d 100%)",

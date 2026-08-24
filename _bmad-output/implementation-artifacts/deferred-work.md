@@ -1,3 +1,11 @@
+- source_spec: `_bmad-output/implementation-artifacts/spec-individual-review-entry-point.md`
+  summary: A matched card whose `card.cardLabel` is falsy can render "New card!" copy even though it's already matched, in both SessionReviewPanel and IndividualReviewPanel
+  evidence: Both `savedName`/`savedCardName` fall back to `t.newCardTitle` whenever `card.cardLabel` is falsy, with no separate "matched but unlabeled" case; pre-existing in SessionReviewPanel's StatementCard, and this round's CreditCardFace reuse copies the same fallback onto IndividualReviewPanel rather than introducing a new bug
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-individual-review-entry-point.md`
+  summary: A failed left/right accept fling looks identical to a cancelled below-threshold drag — both animate back to center over 220ms, with only small `action.error` text distinguishing a real failure
+  evidence: `flingAndSubmit`'s `.finally(() => setDragOffset(null))` runs the same return-to-center transition on both success-then-advance and failure paths; no distinct failure animation (e.g. a shake) was built, a UX nicety rather than a correctness bug
+
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-scaffold-compose-app-with-health-checks.md`
   summary: Real statement PDFs remain reachable in git history despite untracking `bank_data/`
   evidence: Review noted prior commits still contain `bank_data/*.pdf` blobs; history rewrite was Ask First / out of this story
