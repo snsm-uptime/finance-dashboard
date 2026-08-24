@@ -22,7 +22,7 @@ const emptyHeader: ChromeHeaderConfig = {};
 
 const ChromeHeaderContext = createContext<ChromeHeaderConfig>(emptyHeader);
 const ChromeHeaderSetContext = createContext<
-  ((header: ChromeHeaderConfig | null) => void) | null
+  ((header: ChromeHeaderConfig) => void) | null
 >(null);
 
 /** Owns AppShell's top nav. Screens opt in via `useChromeHeader` or `useChromeBack`. */
