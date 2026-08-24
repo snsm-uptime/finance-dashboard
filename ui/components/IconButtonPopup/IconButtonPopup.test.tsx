@@ -10,6 +10,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { IconButton } from "@/components/IconButton";
 
+vi.mock("@/components/MenuSurface/MenuSurface.module.scss", () => ({
+  default: new Proxy(
+    {},
+    {
+      get: (_t, prop) => String(prop),
+    },
+  ),
+}));
+
 vi.mock("./IconButtonPopup.module.scss", () => ({
   default: new Proxy(
     {},
@@ -207,9 +216,7 @@ describe("IconButtonPopup.module.scss", () => {
   it("anchors the panel below the trigger with the lists menu chrome", () => {
     expect(css).toContain("top: calc(100% + 0.35rem);");
     expect(css).toContain("min-width: var(--icon-button-popup-min-width, 11rem);");
-    expect(css).toContain(
-      "box-shadow: 0 8px 20px color-mix(in srgb, var(--foreground) 12%, transparent);",
-    );
     expect(css).toContain("animation: slideDown 0.15s ease-out;");
+    expect(css).not.toContain("background: var(--surface);");
   });
 });
