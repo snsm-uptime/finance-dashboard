@@ -8,6 +8,7 @@ import {
   saveDefaultSplit,
   setDefaultImportList,
 } from "./listsClient";
+import { resetMembershipListsStore } from "./membershipListsStore";
 
 const messages = {
   errorGeneric: "generic",
@@ -21,6 +22,7 @@ const messages = {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  resetMembershipListsStore();
 });
 
 describe("listsClient", () => {

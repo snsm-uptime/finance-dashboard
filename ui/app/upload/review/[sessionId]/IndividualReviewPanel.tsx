@@ -18,12 +18,16 @@ import { IconButton } from "@/components/IconButton";
 import { useChromeHeader } from "@/components/ChromeBack";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { useFormSubmission } from "@/hooks";
-import { fetchLists, type ListItem } from "@/app/lists/listsClient";
+import { fetchLists } from "@/app/lists/listsClient";
+import { replaceMembershipLists, useMembershipLists } from "@/app/lists/membershipListsStore";
 import { ArrowIcon, SaveIcon, TrashIcon } from "@/app/icons";
 import { uploadCopy } from "@/lib/i18n/upload";
 import type { Locale } from "@/lib/i18n/locale";
 import { useCardIdentification } from "@/hooks/useCardIdentification";
 import { CreditCardFace, CreditCardMark } from "../../CreditCardFace";
+import { classifyActiveImportSession } from "../../classifyActiveImportSession";
+import { DiscardConfirmDialog } from "../../DiscardConfirmDialog";
+import { ImportCompletionSummary } from "./ImportCompletionSummary";
 import {
   assignRow,
   deleteRow,
@@ -63,6 +67,8 @@ const THROW_ANIMATION_MS = 220;
 // Mirrors api/domain/expenses.py:20 (normalize_row_description) — display-side
 // guard only, the server is the actual enforcement point.
 const DESCRIPTION_MAX_LENGTH = 500;
+/** Signup always creates this list (api/domain/signup.py PERSONAL_LIST_NAME). */
+const PERSONAL_LIST_NAME = "Personal";
 
 /**
  * Flattens statements → rows (statement order, then sequence order — the GET
@@ -183,9 +189,8 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
 
   const [session, setSession] = useState<ImportSession | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
-  const [lists, setLists] = useState<ListItem[] | null>(null);
+  const lists = useMembershipLists();
   const [listsError, setListsError] = useState<string | null>(null);
-  const [defaultListId, setDefaultListId] = useState<string>("");
   const [pickedListId, setPickedListId] = useState<string>("");
   const [isCoarsePointer] = useState(
     () => typeof window !== "undefined" && !!window.matchMedia?.("(pointer: coarse)").matches,
@@ -266,7 +271,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
         setListsError(result.error);
         return;
       }
-      setLists(result.lists);
+      replaceMembershipLists(result.lists);
     }
     load();
     return () => {
@@ -275,21 +280,10 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locale]);
 
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/auth/me", { headers: { Accept: "application/json" }, credentials: "same-origin" })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data: { default_import_list_id?: string | null } | null) => {
-        if (cancelled || !data) return;
-        setDefaultListId(data.default_import_list_id ?? "");
-      })
-      .catch(() => {
-        /* default list is a convenience — a failed read just disables that action */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const defaultListId = useMemo(
+    () => (lists ?? []).find((list) => list.name === PERSONAL_LIST_NAME)?.id ?? "",
+    [lists],
+  );
 
   const current = nextReviewableRow(session);
   const remainingCount = session
@@ -299,23 +293,45 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     session && current
       ? t.individualReviewProgress.replace("{count}", String(remainingCount))
       : "";
-  const discardMessages: UploadMessages = {
-    errorUnsupportedFileType: t.errorUnsupportedFileType,
-    errorUnknownStatement: t.errorUnknownStatement,
-    errorAmbiguousStatement: t.errorAmbiguousStatement,
-    errorUnreadableStatement: t.errorUnreadableStatement,
-    errorGeneric: t.errorGeneric,
-    errorUnauthorized: t.errorUnauthorized,
-  };
+  const discardMessages: UploadMessages = useMemo(
+    () => ({
+      errorUnsupportedFileType: t.errorUnsupportedFileType,
+      errorUnknownStatement: t.errorUnknownStatement,
+      errorAmbiguousStatement: t.errorAmbiguousStatement,
+      errorUnreadableStatement: t.errorUnreadableStatement,
+      errorGeneric: t.errorGeneric,
+      errorUnauthorized: t.errorUnauthorized,
+    }),
+    [
+      t.errorUnsupportedFileType,
+      t.errorUnknownStatement,
+      t.errorAmbiguousStatement,
+      t.errorUnreadableStatement,
+      t.errorGeneric,
+      t.errorUnauthorized,
+    ],
+  );
   const leavingRef = useRef(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const reviewKind = session ? classifyActiveImportSession(session) : "untouched";
+  const needsRetentionWarning = reviewKind === "partial" || reviewKind === "sheet-waiting";
   const onBack = useCallback(() => {
     if (leavingRef.current) return;
+    if (needsRetentionWarning) {
+      setConfirmDiscard(true);
+      return;
+    }
     leavingRef.current = true;
     void discardSession(sessionId, discardMessages).finally(() => {
       forgetOpenImportSession();
       router.push("/upload");
     });
-  }, [sessionId, router, discardMessages.errorGeneric, discardMessages.errorUnauthorized]);
+  }, [
+    sessionId,
+    router,
+    needsRetentionWarning,
+    discardMessages,
+  ]);
   useChromeHeader({
     onBack,
     title: t.individualReviewTitle,
@@ -359,9 +375,6 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   // card is identified/registered when that statement carries an IBAN.
   const cardReadyOrNoIban = !current?.statement.iban || card.cardMatched;
   const canAcceptChosen = !!current && !!pickedListId && cardReadyOrNoIban && !card.loading;
-  // `lists !== null` guards a loading race: /api/auth/me can resolve
-  // defaultListId before /api/lists resolves lists, which would otherwise
-  // render this button enabled with a blank defaultListName.
   const canAcceptDefault =
     !!current && !!defaultListId && lists !== null && cardReadyOrNoIban && !card.loading;
   // Delete has no card-identification gate — a pending row is always
@@ -887,6 +900,8 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
         <p className="mx-auto w-full max-w-[26rem] px-[1.5rem] text-muted text-[0.85rem] m-0">
           {t.individualReviewLoadingSession}
         </p>
+      ) : session.finalized_at ? (
+        <ImportCompletionSummary session={session} />
       ) : session.discarded_at ? null : (
         // Interim placeholder only — Story 4.13.1 replaces this branch with
         // ImportReviewSheet (the real "review is done, now Save" surface).
@@ -894,6 +909,23 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
           {t.individualReviewAllCaughtUp}
         </p>
       )}
+      <DiscardConfirmDialog
+        open={confirmDiscard}
+        title={t.discardConfirmTitle}
+        body={t.discardConfirmBody}
+        confirmLabel={t.discardConfirmAction}
+        cancelLabel={t.discardCancel}
+        onCancel={() => setConfirmDiscard(false)}
+        onConfirm={() => {
+          setConfirmDiscard(false);
+          if (leavingRef.current) return;
+          leavingRef.current = true;
+          void discardSession(sessionId, discardMessages).finally(() => {
+            forgetOpenImportSession();
+            router.push("/upload");
+          });
+        }}
+      />
     </main>
   );
 }

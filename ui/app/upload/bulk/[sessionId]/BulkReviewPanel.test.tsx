@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { BulkReviewPanel } from "./BulkReviewPanel";
+import { resetMembershipListsStore } from "@/app/lists/membershipListsStore";
 
 const push = vi.fn();
 let searchParamsValue = "";
@@ -75,6 +76,7 @@ describe("BulkReviewPanel", () => {
       root.unmount();
     });
     container.remove();
+    resetMembershipListsStore();
   });
 
   it("confirm is disabled until a list is chosen, then commits and navigates on success", async () => {

@@ -6,6 +6,7 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -34,6 +35,7 @@ import {
   setLastOpenedList,
   type ListItem,
 } from "./listsClient";
+import { replaceMembershipLists, useMembershipLists } from "./membershipListsStore";
 import styles from "./lists.module.scss";
 
 function rosterForCard(list: ListItem, currentUserId: string) {
@@ -103,7 +105,6 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
   const { locale } = usePreferences();
   const t = listsMessages[locale];
   const router = useRouter();
-  const [lists, setLists] = useState<ListItem[]>(initialLists);
   const [newName, setNewName] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -138,6 +139,12 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
   const canCreate = newName.trim().length > 0 && !creating;
 
   const closeInviteSheet = useCallback(() => setInvitingListId(null), []);
+
+  useLayoutEffect(() => {
+    replaceMembershipLists(initialLists);
+  }, [initialLists]);
+
+  const lists = useMembershipLists() ?? initialLists;
 
   useEffect(() => {
     if (!editingId) return;
@@ -176,16 +183,6 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
         setCreateError(result.error);
         return;
       }
-      setLists((prev) => [
-        ...prev,
-        {
-          id: result.list.id,
-          name: result.list.name,
-          owner_id: result.list.owner_id,
-          role: "owner",
-          balance_crc: "0",
-        },
-      ]);
       setNewName("");
     } finally {
       creatingRef.current = false;
@@ -243,11 +240,6 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
         setRenameErrors((prev) => ({ ...prev, [list.id]: result.error }));
         return;
       }
-      setLists((prev) =>
-        prev.map((item) =>
-          item.id === list.id ? { ...item, name: result.list.name } : item,
-        ),
-      );
       setEditingId((current) => (current === list.id ? null : current));
       setRenameDrafts((prev) => {
         const next = { ...prev };
@@ -290,7 +282,6 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
         setCreateError(result.error);
         return;
       }
-      setLists((prev) => prev.filter((item) => item.id !== list.id));
       setDeleteConfirmId(null);
     } finally {
       setDeletingId(null);

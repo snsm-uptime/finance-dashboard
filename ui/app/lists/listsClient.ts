@@ -1,5 +1,10 @@
 /** Client helpers for list create/rename/open via same-origin BFF. */
 
+import {
+  patchMembershipLists,
+  replaceMembershipLists,
+} from "./membershipListsStore";
+
 export type ListMember = {
   user_id: string;
   /** Null only while a member has not passed the alias gate yet. */
@@ -100,7 +105,9 @@ export async function fetchLists(
   if (!data || !Array.isArray(data.lists)) {
     return { ok: false, error: messages.errorGeneric };
   }
-  return { ok: true, lists: data.lists as ListItem[] };
+  const lists = data.lists as ListItem[];
+  replaceMembershipLists(lists);
+  return { ok: true, lists };
 }
 
 export async function createList(
@@ -129,7 +136,15 @@ export async function createList(
   if (!data?.id || !data.name || !data.owner_id) {
     return { ok: false, error: messages.errorGeneric };
   }
-  return { ok: true, list: { id: data.id, name: data.name, owner_id: data.owner_id } };
+  const list = { id: data.id, name: data.name, owner_id: data.owner_id };
+  patchMembershipLists((prev) => {
+    if (prev.some((item) => item.id === list.id)) return prev;
+    return [
+      ...prev,
+      { id: list.id, name: list.name, owner_id: list.owner_id, role: "owner", balance_crc: "0" },
+    ];
+  });
+  return { ok: true, list };
 }
 
 export async function renameList(
@@ -159,7 +174,11 @@ export async function renameList(
   if (!data?.id || !data.name || !data.owner_id) {
     return { ok: false, error: messages.errorGeneric };
   }
-  return { ok: true, list: { id: data.id, name: data.name, owner_id: data.owner_id } };
+  const list = { id: data.id, name: data.name, owner_id: data.owner_id };
+  patchMembershipLists((prev) =>
+    prev.map((item) => (item.id === list.id ? { ...item, name: list.name } : item)),
+  );
+  return { ok: true, list };
 }
 
 export async function deleteList(
@@ -183,6 +202,7 @@ export async function deleteList(
     } | null;
     return { ok: false, error: mapError(response.status, body, messages) };
   }
+  patchMembershipLists((prev) => prev.filter((item) => item.id !== listId));
   return { ok: true };
 }
 

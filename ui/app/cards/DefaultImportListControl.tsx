@@ -43,6 +43,12 @@ export function DefaultImportListControl({ lists, messages }: Props) {
     };
   }, []);
 
+  useEffect(() => {
+    if (listId && !lists.some((list) => list.id === listId)) {
+      setListId("");
+    }
+  }, [lists, listId]);
+
   if (lists.length === 0) return null;
 
   async function onChange(nextListId: string) {

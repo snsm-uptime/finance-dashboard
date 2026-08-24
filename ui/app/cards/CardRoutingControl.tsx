@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 import { SlideDown } from "@/components/SlideDown";
 import { useFormSubmission } from "@/hooks";
@@ -43,6 +43,12 @@ export function CardRoutingControl({ card, lists, messages, onUpdated, trailing 
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"fixed" | "review">(card.routing_mode);
   const [fixedListId, setFixedListId] = useState(card.fixed_list_id ?? "");
+
+  useEffect(() => {
+    if (fixedListId && !lists.some((list) => list.id === fixedListId)) {
+      setFixedListId("");
+    }
+  }, [lists, fixedListId]);
 
   const { pending, error, submit, clearError } = useFormSubmission(
     async (input: { mode: "fixed" | "review"; fixedListId: string }) => {
