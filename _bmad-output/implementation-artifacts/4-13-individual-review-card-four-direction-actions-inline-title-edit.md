@@ -4,7 +4,7 @@ baseline_commit: 6f490e3
 
 # Story 4.13: Individual review card — four-direction actions + inline title edit
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -26,7 +26,9 @@ so that routing each transaction is deliberate but fast.
 
 ## Acceptance Criteria
 
-1. **Given** individual review starts, **when** the panel renders, **then** the screen shows a dimmed backdrop with one medium card centered — not a scrollable list of rows. **And** the card shows the transaction description as title, the store as subtitle when a structured merchant field exists (blank today — no adapter emits one), the amount as body, and the posted date at the bottom (date only — no time exists in the pipeline).
+1. **Given** individual review starts, **when** the panel renders, **then** the screen shows one full-width card for the current transaction, in normal page flow — not a scrollable list of rows. **And** the card shows the transaction description as title, the store as subtitle when a structured merchant field exists (blank today — no adapter emits one), the amount as body, and the posted date at the bottom (date only — no time exists in the pipeline).
+
+> **Amended 2026-08-24** (code review) — originally read "the screen shows a dimmed backdrop with one medium card centered." Implementation shipped a full-width card in normal page flow instead (no scrim, not a modal); a regression test (`IndividualReviewPanel.test.tsx` — "has no full-screen dark overlay") locks this in. Reconciled here rather than reverted — see Decision #5.
 
 2. **Given** the four card actions, **when** I act, **then** left assigns to the default list, right assigns to the selected list, up deletes, and down undoes. **And** left, right, and up are available as both edge buttons and touch swipes; down is a button on all platforms including mobile, never a gesture.
 
@@ -57,7 +59,7 @@ so that routing each transaction is deliberate but fast.
 ### Task 2 — Card layout: title / subtitle / body / date (AC: 1)
 
 - [x] 2.1 Replace the statement-card block (current lines ~286-355: card name, filename, row count, IBAN block) with the four content slots from the row-level design spec: title = `row.description`, subtitle = blank today (render conditionally so it's a no-op until a future adapter emits a structured merchant field — do not hardcode "blank" as literal copy), body = `row.amount` formatted with `row.currency`, bottom = `row.posted_date` (date string as-is — never construct a JS `Date` for it, per project-context's date-string rule).
-- [x] 2.2 One card, dimmed backdrop, centered, fixed medium size — not a scrolling list. No token exists yet for the backdrop color (checked `ui/app/globals.css` — no `--overlay`/`--backdrop`/`--scrim`); pick a neutral dim consistent with Warm Balance (e.g. a low-opacity black) rather than inventing a new CSS variable for one story. Tailwind utilities co-located, no new `*.module.css` (AD-23).
+- [x] 2.2 One card, fixed medium size — not a scrolling list. **Amended 2026-08-24** (code review): shipped without the dimmed backdrop / modal centering originally specified here — one full-width card in normal page flow instead. No token exists for the backdrop color (checked `ui/app/globals.css` — no `--overlay`/`--backdrop`/`--scrim`); the full-width direction was taken instead of inventing one. Tailwind utilities co-located, no new `*.module.css` (AD-23).
 - [x] 2.3 Amount + currency display: no existing utility formats a raw `(amount: string, currency: string)` pair for arbitrary currencies (`formatCardBalance` in `listsClient.ts` is CRC-only, symbol-hardcoded, display-only). Add a small local formatter in the same display-only spirit — `Number()` for display formatting only is the accepted existing pattern here (`formatCardBalance` already does this); never round-trip the identity/dedup or PATCH payload through it. For non-CRC currencies, `{currency} {amount}` is sufficient; no requirement to build a full multi-currency formatter.
 - [x] 2.4 The `{current} of {total}` progress readout (`individualReviewProgress`, current lines 249-255) was statement-indexed; a row-indexed equivalent needs a "total" that a resumed session makes ambiguous (rows already resolved before this visit are invisible — only pending rows are ever returned). Simplest correct option: drop the "of {total}" half and show a remaining-count only (e.g. "{N} left", derived from `flattened.length`), or drop the readout entirely — ACs do not require it. Do not block on this; pick the simpler option and move on.
 
@@ -196,12 +198,23 @@ This is a genuine two-story functional gap the epics text calls out deliberately
 ```
 ui/app/upload/review/[sessionId]/IndividualReviewPanel.tsx
 ui/app/upload/review/[sessionId]/IndividualReviewPanel.test.tsx
+ui/app/upload/review/[sessionId]/page.tsx           (restores the route on row-level endpoints — necessary for the rewrite above to be reachable at all)
 ui/lib/i18n/upload.ts
 _bmad-output/implementation-artifacts/deferred-work.md   (Task 11.4 — close out the 4.13 note)
 _bmad-output/implementation-artifacts/sprint-status.yaml
 ```
 
-**Do not touch:** anything under `api/` (verified nothing is needed — see above); `ui/app/upload/UploadPanel.tsx`, `ui/app/upload/SessionReviewPanel.tsx`, `ui/app/upload/bulk/**` (Bulk review, Story 4.7, unaffected); `ui/app/lists/**`; `ui/hooks/useCardIdentification.ts` (consumed, not modified — only its call-site argument changes); `ui/components/soft-ledger/Select.tsx`; `_bmad-output/planning-artifacts/epics.md`, `prd.md`, `ARCHITECTURE-SPINE.md` (no spine edit — AD-9 is already amended for this exact story).
+**Amended 2026-08-24** (code review, Decision #6) — the following were also modified, in violation of the original "Do not touch" list below, and confirmed in-scope during review rather than reverted:
+```
+ui/app/upload/SessionReviewPanel.tsx                 (new "Review individually" link/route into this story's rewritten panel)
+ui/app/upload/SessionReviewPanel.test.tsx
+ui/app/upload/CreditCardFace.tsx                     (light/dark gradient theming + spacing; shared with SessionReviewPanel's StatementCard)
+ui/components/IconButton/IconButton.tsx              (new optional `caption` prop, used by this story's four-direction buttons)
+ui/components/IconButton/IconButton.test.tsx
+ui/app/icons/ArrowIcon.tsx, ui/app/icons/TrashIcon.tsx, ui/app/icons/index.ts, ui/app/icons/README.md   (new icons for the four-direction buttons)
+```
+
+**Do not touch:** anything under `api/` (verified nothing is needed — see above); `ui/app/upload/UploadPanel.tsx`, `ui/app/upload/bulk/**` (Bulk review, Story 4.7, unaffected); `ui/app/lists/**`; `ui/hooks/useCardIdentification.ts` (consumed, not modified — only its call-site argument changes); `ui/components/soft-ledger/Select.tsx`; `_bmad-output/planning-artifacts/epics.md`, `prd.md`, `ARCHITECTURE-SPINE.md` (no spine edit — AD-9 is already amended for this exact story). ~~`ui/app/upload/SessionReviewPanel.tsx`~~ — struck 2026-08-24, see amendment above.
 
 ### Testing standards
 
@@ -253,6 +266,8 @@ Matches the established structure with no variance: this is a pure `ui/app/uploa
 2. **Failed statements get zero special-case handling in this rewrite** (Task 1.3) — they simply produce no rows, so no card. This matches the row-level UX doc's explicit design (§2) and resolves the `deferred-work.md:236` open note. Parse-failure UI is Epic 5's; failed-statement reporting is 4.14's completion summary.
 3. **Card identification/registration UI is preserved, re-scoped to the current row's parent statement** (Tasks 4.2-4.3, 5) — not in the ACs because it predates this story and nothing here supersedes it; dropping it would be an unauthorized regression.
 4. **No new i18n key for a compact default-list label** — `individualReviewNoDefaultListShort` already exists, unused, and reads like it was pre-staged for this exact use (Task 9.2).
+5. **(Made during code review, 2026-08-24) Full-width card layout is the accepted final design, not a deviation to revert.** AC1/Task 2.2 originally specified a dimmed backdrop with a centered modal card; implementation shipped a full-width card in normal page flow instead (see "Stretch the review card to full width" commit), with a regression test asserting the backdrop's absence. Confirmed and reconciled into AC1/Task 2.2 rather than reverting the code.
+6. **(Made during code review, 2026-08-24) `SessionReviewPanel.tsx`'s "Review individually" entry-point link and `CreditCardFace.tsx`'s light/dark theming are accepted as in-scope for this story, despite Dev Notes' original "Do not touch" listing `SessionReviewPanel.tsx`.** Confirmed as intentional — see the reconciled File List/Dev Notes below. The `deferred-work.md` entries this work generated originally cited a nonexistent `spec-individual-review-entry-point.md`; corrected to cite this story file instead.
 
 ## Dev Agent Record
 
@@ -294,13 +309,39 @@ AD-9 was amended 2026-08-20 specifically for this per-transaction, four-directio
 
 No findings — self-review during implementation surfaced the two issues logged under Debug Log References above (a lint rule violation and a test-authoring bug), both fixed before completion. No outstanding concerns.
 
+### Automated Code Review (2026-08-24)
+
+Reviewed `main...HEAD` (5 commits, 16 files, 2666 diff lines) via 3 parallel layers (Blind Hunter, Edge Case Hunter, Acceptance Auditor) against this story, the row-level UX design spec, AD-9, EXPERIENCE.md J1, and project-context.md. Findings below, verified against the live source.
+
+- [x] [Review][Decision] AC1's "dimmed backdrop" is not implemented, and a test locks in its absence — resolved by updating the spec (AC1, Task 2.2) to match the shipped full-width layout rather than reverting code; see Decision #5.
+- [x] [Review][Decision] Undeclared, out-of-scope edits bundled onto this branch (`SessionReviewPanel.tsx`, `CreditCardFace.tsx`), with phantom spec provenance in `deferred-work.md` — resolved: kept in this story as intentional (Decision #6), File List/Dev Notes reconciled, `deferred-work.md` citations corrected to point at this story file.
+- [x] [Review][Decision] `statementPeriodBounds` narrows/shifts as rows resolve within a statement [ui/app/upload/review/[sessionId]/IndividualReviewPanel.tsx:79-92,553] — deferred to a follow-up story; needs a statement-level period field from the API, out of this UI-only story's scope. Logged in `deferred-work.md` (2026-08-24 entry).
+- [x] [Review][Patch] "Dismiss file" / `discardSession` removed entirely, with no replacement path — **stale finding, superseded before it could be applied.** Between the review running and patches being applied, the branch moved forward 5 commits; `c775b8c` ("...chrome header instead of dismiss") and `d8f834f` replaced the standalone Dismiss button with a discard-on-Back flow wired through `useChromeHeader`'s `onBack` (session-storage-persisted via the new `openImportSession.ts`). Re-verified present and functionally equivalent on current HEAD — no code change needed.
+- [x] [Review][Patch] Stale closure in the ArrowLeft/ArrowRight keyboard handler assigns to a previously-picked list [ui/app/upload/review/[sessionId]/IndividualReviewPanel.tsx:444-475] — fixed: added `pickedListId`/`defaultListId` to the `useEffect` dependency array so the keydown listener re-subscribes (and rebinds `flingAndSubmit`/`action.submit`) whenever the picker selection changes, not just when `canAcceptChosen`'s boolean flips.
+- [x] [Review][Patch] `formatRowAmount` hardcodes `en-US` regardless of active locale [ui/app/upload/review/[sessionId]/IndividualReviewPanel.tsx:105-112] — fixed: `formatRowAmount` now takes `locale` and formats with `es-CR` in Spanish, matching `formatRowDate`'s existing locale branching.
+- [x] [Review][Patch] Default-list accept button can render enabled with a blank list name during a loading race [ui/app/upload/review/[sessionId]/IndividualReviewPanel.tsx:358-362] — fixed: `canAcceptDefault` now also requires `lists !== null`, closing the window where `/api/auth/me` resolves before `/api/lists`. (`canAcceptChosen` was not reachable via this race — `pickedListId` can only be set once `listOptions` renders, which itself requires `lists` loaded — so left unchanged.)
+- [x] [Review][Patch] Touch-drag inside the mounted title `<input>` is captured as a card swipe [ui/app/upload/review/[sessionId]/IndividualReviewPanel.tsx:389-393] — fixed: `useDrag`'s handler now bails whenever `titleState !== "idle"`, so no swipe gesture fires while the title is primed or being edited.
+- [x] [Review][Patch] Title-edit trigger has no keyboard-activation path [ui/app/upload/review/[sessionId]/IndividualReviewPanel.tsx:685-698] — fixed: the title container now gets `role="button"`, `tabIndex={0}`, and an Enter/Space `onKeyDown` handler while not in the `editing` state (the mounted `<input>` is already independently keyboard-operable).
+- [x] [Review][Patch] Outside-click during an in-flight title PATCH can orphan a later error [ui/app/upload/review/[sessionId]/IndividualReviewPanel.tsx:489-506,536-549] — fixed: the outside-`pointerdown` handler now bails while `titleSubmittingRef.current` is true, and the `import_row_not_available` refetch-failure branch now also resets title-edit state to idle instead of leaving it stuck on a now-resolved row.
+- [x] [Review][Patch] Global ArrowLeft/ArrowRight shortcut still fires while focus is on Delete/Undo (or any other button) [ui/app/upload/review/[sessionId]/IndividualReviewPanel.tsx:448-457] — fixed: the keydown handler's exclusion check now also bails on `target instanceof HTMLButtonElement`.
+
+Verified after patching: `ui` typecheck (only a pre-existing, unrelated error in `ChromeBack.tsx` from the branch's newest commits — confirmed present before these patches too, out of this pass's scope), `eslint` on the patched file (0 errors, 1 pre-existing unrelated warning), `vitest run` on `IndividualReviewPanel.test.tsx` (31/31 passed, no regressions).
+
 ### File List
 
 - `ui/app/upload/review/[sessionId]/IndividualReviewPanel.tsx` (modified — near-full rewrite)
 - `ui/app/upload/review/[sessionId]/IndividualReviewPanel.test.tsx` (modified — near-full rewrite)
+- `ui/app/upload/review/[sessionId]/page.tsx` (modified — restores the route on row-level endpoints)
 - `ui/lib/i18n/upload.ts` (modified — EN+ES key additions/removals)
-- `_bmad-output/implementation-artifacts/deferred-work.md` (modified — closed out the 4.13 note)
+- `_bmad-output/implementation-artifacts/deferred-work.md` (modified — closed out the 4.13 note; corrected 2026-08-24)
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` (modified — status transitions)
+
+**Added 2026-08-24 (code review reconciliation — see Decision #6):**
+
+- `ui/app/upload/SessionReviewPanel.tsx` / `.test.tsx` (modified — "Review individually" entry-point link)
+- `ui/app/upload/CreditCardFace.tsx` (modified — light/dark theming + spacing)
+- `ui/components/IconButton/IconButton.tsx` / `.test.tsx` (modified — new `caption` prop)
+- `ui/app/icons/ArrowIcon.tsx`, `ui/app/icons/TrashIcon.tsx`, `ui/app/icons/index.ts`, `ui/app/icons/README.md` (new)
 
 ## Change Log
 

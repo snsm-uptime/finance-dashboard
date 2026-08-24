@@ -1,10 +1,14 @@
-- source_spec: `_bmad-output/implementation-artifacts/spec-individual-review-entry-point.md`
+- source_spec: `_bmad-output/implementation-artifacts/4-13-individual-review-card-four-direction-actions-inline-title-edit.md`
   summary: A matched card whose `card.cardLabel` is falsy can render "New card!" copy even though it's already matched, in both SessionReviewPanel and IndividualReviewPanel
   evidence: Both `savedName`/`savedCardName` fall back to `t.newCardTitle` whenever `card.cardLabel` is falsy, with no separate "matched but unlabeled" case; pre-existing in SessionReviewPanel's StatementCard, and this round's CreditCardFace reuse copies the same fallback onto IndividualReviewPanel rather than introducing a new bug
 
-- source_spec: `_bmad-output/implementation-artifacts/spec-individual-review-entry-point.md`
+- source_spec: `_bmad-output/implementation-artifacts/4-13-individual-review-card-four-direction-actions-inline-title-edit.md`
   summary: A failed left/right accept fling looks identical to a cancelled below-threshold drag — both animate back to center over 220ms, with only small `action.error` text distinguishing a real failure
   evidence: `flingAndSubmit`'s `.finally(() => setDragOffset(null))` runs the same return-to-center transition on both success-then-advance and failure paths; no distinct failure animation (e.g. a shake) was built, a UX nicety rather than a correctness bug
+
+- source_spec: `_bmad-output/implementation-artifacts/4-13-individual-review-card-four-direction-actions-inline-title-edit.md`
+  summary: Individual review card's displayed statement period (`statementPeriodBounds`) narrows/shifts as rows are resolved within a multi-row statement, instead of staying fixed to the statement's true date range
+  evidence: Computed from `current.statement.rows`, which per the 4.11 `GET` contract only ever contains pending rows; as the user resolves rows one at a time, the min/max over the shrinking `rows` array visibly changes card-to-card. A correct fix needs a statement-level period field from the API independent of row status — out of this UI-only story's scope (code review, 2026-08-24)
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-scaffold-compose-app-with-health-checks.md`
   summary: Real statement PDFs remain reachable in git history despite untracking `bank_data/`

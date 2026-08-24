@@ -102,10 +102,13 @@ function statementPeriodBounds(statement: StagedStatement): {
 // No utility formats a raw (amount, currency) pair for arbitrary currencies —
 // display-only, mirrors the existing `formatCardBalance` use of `Number()` for
 // rendering (never for computation, comparison, or the assign/PATCH payloads).
-function formatRowAmount(amount: string, currency: string): string {
+function formatRowAmount(amount: string, currency: string, locale: Locale): string {
   const parsed = Number(amount);
   const display = Number.isFinite(parsed)
-    ? parsed.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    ? parsed.toLocaleString(locale === "es" ? "es-CR" : "en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
     : amount;
   return `${currency} ${display}`;
 }
@@ -356,7 +359,11 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   // card is identified/registered when that statement carries an IBAN.
   const cardReadyOrNoIban = !current?.statement.iban || card.cardMatched;
   const canAcceptChosen = !!current && !!pickedListId && cardReadyOrNoIban && !card.loading;
-  const canAcceptDefault = !!current && !!defaultListId && cardReadyOrNoIban && !card.loading;
+  // `lists !== null` guards a loading race: /api/auth/me can resolve
+  // defaultListId before /api/lists resolves lists, which would otherwise
+  // render this button enabled with a blank defaultListName.
+  const canAcceptDefault =
+    !!current && !!defaultListId && lists !== null && cardReadyOrNoIban && !card.loading;
   // Delete has no card-identification gate — a pending row is always
   // deletable, since delete never touches a list (Task 3.4).
   const canDelete = !!current;
@@ -388,7 +395,10 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
 
   useDrag(
     ({ first, active, last, movement: [mx, my], velocity: [vx, vy], direction: [dx, dy] }) => {
-      if (!isCoarsePointer || action.pending) return;
+      // titleState !== "idle": the title container sits inside cardRef, so
+      // without this guard a touch drag to place a cursor or select text in
+      // the primed/mounted title would be captured as a card swipe instead.
+      if (!isCoarsePointer || action.pending || titleState !== "idle") return;
       // Block a brand-new gesture from starting while a previous fling/undo
       // snap-back is still resolving — but once a gesture is under way, its
       // own live dragOffset updates must not block its own continuation.
@@ -449,6 +459,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
         target instanceof HTMLInputElement ||
         target instanceof HTMLTextAreaElement ||
         target instanceof HTMLSelectElement ||
+        target instanceof HTMLButtonElement ||
         (target instanceof Element &&
           target.closest('[role="listbox"], [aria-haspopup="listbox"]'))
       ) {
@@ -465,7 +476,15 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current?.row.id, canAcceptDefault, canAcceptChosen, throwing, action.pending]);
+  }, [
+    current?.row.id,
+    canAcceptDefault,
+    canAcceptChosen,
+    throwing,
+    action.pending,
+    pickedListId,
+    defaultListId,
+  ]);
 
   // Title edit state resets whenever the reviewed row changes — by any of
   // assign/delete/undo resolving, or a session refresh (AC #8). Adjusted
@@ -493,6 +512,11 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
       if (container && event.target instanceof Node && container.contains(event.target)) {
         return;
       }
+      // Don't cancel out from under an in-flight commit — an outside click
+      // while the PATCH is pending would otherwise reset to idle immediately,
+      // leaving a later failure's titleError orphaned with no visible editing
+      // state to attach to.
+      if (titleSubmittingRef.current) return;
       setTitleState("idle");
       setTitleDraft("");
       setTitleError(null);
@@ -541,6 +565,9 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
             setSession(refreshed.session);
           } else {
             setSessionError(refreshed.error);
+            setTitleState("idle");
+            setTitleDraft("");
+            setTitleError(null);
           }
           return;
         }
@@ -685,6 +712,18 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
               <div
                 ref={titleContainerRef}
                 onClick={handleTitleClick}
+                role={titleState !== "editing" ? "button" : undefined}
+                tabIndex={titleState !== "editing" ? 0 : undefined}
+                onKeyDown={
+                  titleState !== "editing"
+                    ? (event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          handleTitleClick();
+                        }
+                      }
+                    : undefined
+                }
                 className={`cursor-text rounded-sm -mx-1 -my-1 min-w-0 py-1 pl-1 pr-8 ${titleState === "primed" ? "border border-accent" : ""
                   }`}
               >
@@ -718,7 +757,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
                   className="m-0 mt-[0.75rem] text-[1.3rem] font-[500] text-foreground"
                   style={{ fontFamily: "var(--font-brand), 'Times New Roman', serif" }}
                 >
-                  {formatRowAmount(current.row.amount, current.row.currency)}
+                  {formatRowAmount(current.row.amount, current.row.currency, locale)}
                 </p>
                 <p className="m-0 mt-[0.5rem] text-[0.8rem] text-muted">
                   {formatRowDate(current.row.posted_date, locale)}
