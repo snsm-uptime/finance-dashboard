@@ -76,7 +76,6 @@ const THROW_ANIMATION_MS = 220;
 const DESCRIPTION_MAX_LENGTH = 500;
 /** Signup always creates this list (api/domain/signup.py PERSONAL_LIST_NAME). */
 const PERSONAL_LIST_NAME = "Personal";
-
 const TITLE_TEXT_CLASS =
   "m-0 w-full min-w-0 text-[1.05rem] leading-snug font-[550] text-foreground break-words";
 
