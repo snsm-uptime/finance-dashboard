@@ -189,6 +189,30 @@ describe("SessionReviewPanel", () => {
     expect(container.querySelectorAll('a[href*="/upload/bulk/"]')).toHaveLength(1);
   });
 
+  it("centers the statement column at the individual-review max width", async () => {
+    await act(async () => {
+      root.render(<SessionReviewPanel session={mockSession} />);
+    });
+
+    const section = container.querySelector("section");
+    expect(section?.className).toContain("items-center");
+    expect(section?.className).toContain("justify-center");
+
+    const list = container.querySelector("ul");
+    expect(list?.className).toContain("max-w-[26rem]");
+    expect(list?.className).not.toContain("max-w-[28rem]");
+
+    const cards = Array.from(container.querySelectorAll("li"));
+    expect(cards).toHaveLength(2);
+    for (const card of cards) {
+      expect(card.className).toContain("max-w-[26rem]");
+      expect(card.className).not.toContain("max-w-md");
+    }
+
+    const actions = cards[0].querySelector("div.flex.flex-wrap");
+    expect(actions?.className).toContain("justify-center");
+  });
+
   it("individual review link has correct href on a saved card", async () => {
     await act(async () => {
       root.render(<SessionReviewPanel session={mockSession} />);

@@ -25,11 +25,11 @@ type SessionReviewPanelProps = {
   onDiscarded?: () => void;
 };
 
-const statementCardClass = "relative flex flex-col gap-3 max-w-md";
+const statementCardClass = "relative flex w-full max-w-[26rem] flex-col items-stretch gap-3";
 const assignPrimaryClass =
-  "inline-flex items-center justify-center self-start px-3 py-[9px] rounded-sm border-none bg-accent text-on-accent no-underline font-[550] text-[0.95rem]";
+  "inline-flex items-center justify-center px-3 py-[9px] rounded-sm border-none bg-accent text-on-accent no-underline font-[550] text-[0.95rem]";
 const reviewSecondaryClass =
-  "inline-flex items-center justify-center self-start px-3 py-[9px] rounded-sm border border-accent bg-transparent text-accent no-underline font-[550] text-[0.95rem]";
+  "inline-flex items-center justify-center px-3 py-[9px] rounded-sm border border-accent bg-transparent text-accent no-underline font-[550] text-[0.95rem]";
 
 export function SessionReviewPanel({
   session,
@@ -88,8 +88,11 @@ export function SessionReviewPanel({
   }
 
   return (
-    <section aria-label={t.cardIdentificationTitle}>
-      <ul className="list-none m-0 p-0 flex flex-col gap-3 mb-4 max-w-[28rem]">
+    <section
+      aria-label={t.cardIdentificationTitle}
+      className="flex min-h-full w-full flex-1 flex-col items-center justify-center"
+    >
+      <ul className="m-0 mb-4 flex w-full max-w-[26rem] list-none flex-col items-stretch gap-3 p-0">
         {session.statements.map((statement) => (
           <StatementCard
             key={statement.id}
@@ -264,7 +267,7 @@ function StatementCard({
       ) : null}
 
       {!needsRegistration ? (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap justify-center gap-2">
           <Link href={assignHref} className={assignPrimaryClass}>
             {t.assignToList}
           </Link>

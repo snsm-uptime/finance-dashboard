@@ -55,7 +55,7 @@ export function UploadPanel() {
       <h1 className="sr-only">{t.title}</h1>
 
       {session ? (
-        <div className="py-[2.5rem] px-[1.5rem]">
+        <div className="flex flex-1 flex-col items-center justify-center px-[1.5rem] py-[2.5rem]">
           <SessionReviewPanel
             session={session}
             onSessionChanged={setSession}
