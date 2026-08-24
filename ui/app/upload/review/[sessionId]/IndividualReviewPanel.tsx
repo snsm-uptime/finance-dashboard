@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -24,9 +25,9 @@ import { uploadCopy } from "@/lib/i18n/upload";
 import type { Locale } from "@/lib/i18n/locale";
 import { useCardIdentification } from "@/hooks/useCardIdentification";
 import { CreditCardFace, CreditCardMark } from "../../CreditCardFace";
+import { ImportReviewSheet } from "./ImportReviewSheet";
 import {
   assignRow,
-  deleteRow,
   discardSession,
   editRowDescription,
   fetchImportSession,
@@ -42,6 +43,12 @@ import {
   forgetOpenImportSession,
   rememberOpenImportSession,
 } from "../../openImportSession";
+import {
+  clearLastCardStagedDiscard,
+  restoreStagedDiscard,
+  stageCardDiscard,
+  useStagedImportDiscards,
+} from "../../stagedImportDiscards";
 
 type IndividualReviewPanelProps = {
   sessionId: string;
@@ -63,6 +70,19 @@ const THROW_ANIMATION_MS = 220;
 // Mirrors api/domain/expenses.py:20 (normalize_row_description) — display-side
 // guard only, the server is the actual enforcement point.
 const DESCRIPTION_MAX_LENGTH = 500;
+const TITLE_TEXT_CLASS =
+  "m-0 w-full min-w-0 text-[1.05rem] leading-snug font-[550] text-foreground break-words";
+
+/** Grow a title field in whole line-height steps, never below `minHeight`. */
+export function titleTextareaHeightPx(
+  scrollHeight: number,
+  lineHeight: number,
+  minHeight: number,
+): number {
+  const step = lineHeight > 0 ? lineHeight : 1;
+  const raw = Math.max(scrollHeight, minHeight, step);
+  return Math.max(1, Math.ceil(raw / step - 1e-9)) * step;
+}
 
 /**
  * Flattens statements → rows (statement order, then sequence order — the GET
@@ -72,15 +92,18 @@ const DESCRIPTION_MAX_LENGTH = 500;
  */
 export function nextReviewableRow(
   session: ImportSession | null,
+  skippedIds: ReadonlySet<string> = EMPTY_SKIPPED,
 ): { row: CandidateRow; statement: StagedStatement } | null {
   if (!session || session.discarded_at) return null;
   for (const statement of session.statements) {
-    if (statement.rows.length > 0) {
-      return { row: statement.rows[0], statement };
+    for (const row of statement.rows) {
+      if (!skippedIds.has(row.id)) return { row, statement };
     }
   }
   return null;
 }
+
+const EMPTY_SKIPPED: ReadonlySet<string> = new Set();
 
 // Mirrors SessionReviewPanel.tsx's statementPeriodBounds — same StagedStatement
 // shape, kept local per this codebase's co-located-pure-function convention.
@@ -102,7 +125,9 @@ function statementPeriodBounds(statement: StagedStatement): {
 // No utility formats a raw (amount, currency) pair for arbitrary currencies —
 // display-only, mirrors the existing `formatCardBalance` use of `Number()` for
 // rendering (never for computation, comparison, or the assign/PATCH payloads).
-function formatRowAmount(amount: string, currency: string, locale: Locale): string {
+// Exported for ImportReviewSheet (Story 4.13.1), which renders the same
+// CandidateRow shape.
+export function formatRowAmount(amount: string, currency: string, locale: Locale): string {
   const parsed = Number(amount);
   const display = Number.isFinite(parsed)
     ? parsed.toLocaleString(locale === "es" ? "es-CR" : "en-US", {
@@ -134,8 +159,9 @@ function dayOfWeek(year: number, month: number, day: number): number {
 }
 
 // The year is already known from context, so it's dropped here — display-only,
-// mirrors formatRowAmount's Number()-for-display carve-out.
-function formatRowDate(iso: string, locale: Locale): string {
+// mirrors formatRowAmount's Number()-for-display carve-out. Exported for
+// ImportReviewSheet (Story 4.13.1).
+export function formatRowDate(iso: string, locale: Locale): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
   if (!match) return iso;
   const year = Number(match[1]);
@@ -180,6 +206,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   const router = useRouter();
   const selectId = useId();
   const cardRef = useRef<HTMLDivElement>(null);
+  const { staged, discardedIds } = useStagedImportDiscards(sessionId);
 
   const [session, setSession] = useState<ImportSession | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
@@ -199,9 +226,11 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   const flingLockRef = useRef(false);
 
   const titleContainerRef = useRef<HTMLDivElement | null>(null);
-  const titleInputRef = useRef<HTMLInputElement | null>(null);
+  const titleInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const titleMinHeightRef = useRef(0);
   const titleSubmittingRef = useRef(false);
   const lastRowIdRef = useRef<string | undefined>(undefined);
+  const lastTitleUndoRef = useRef<{ rowId: string; previousDescription: string } | null>(null);
   const [titleState, setTitleState] = useState<TitleState>("idle");
   const [titleDraft, setTitleDraft] = useState("");
   const [titleError, setTitleError] = useState<string | null>(null);
@@ -291,9 +320,13 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     };
   }, []);
 
-  const current = nextReviewableRow(session);
+  const current = nextReviewableRow(session, discardedIds);
   const remainingCount = session
-    ? session.statements.reduce((sum, statement) => sum + statement.rows.length, 0)
+    ? session.statements.reduce(
+        (sum, statement) =>
+          sum + statement.rows.filter((row) => !discardedIds.has(row.id)).length,
+        0,
+      )
     : 0;
   const remainingLabel =
     session && current
@@ -328,11 +361,14 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     const { row } = current;
 
     if (act.kind === "delete") {
-      const result = await deleteRow(sessionId, row.id, messages);
-      if (result.ok) setSession(result.session);
-      return result;
+      stageCardDiscard(sessionId, row.id);
+      return { ok: true };
     }
     if (act.kind === "undo") {
+      if (staged.lastCardStagedId) {
+        restoreStagedDiscard(sessionId, staged.lastCardStagedId);
+        return { ok: true };
+      }
       const result = await undoLastResolution(sessionId, messages);
       if (result.ok) setSession(result.session);
       return result;
@@ -341,7 +377,10 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     const listId = act.kind === "acceptChosen" ? pickedListId : defaultListId;
     if (!listId) return { ok: false, error: t.errorGeneric };
     const result = await assignRow(sessionId, row.id, listId, messages);
-    if (result.ok) setSession(result.session);
+    if (result.ok) {
+      clearLastCardStagedDiscard(sessionId);
+      setSession(result.session);
+    }
     return result;
   });
 
@@ -367,7 +406,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   // Delete has no card-identification gate — a pending row is always
   // deletable, since delete never touches a list (Task 3.4).
   const canDelete = !!current;
-  const canUndo = !!session?.undo;
+  const canUndo = !!session?.undo || !!staged.lastCardStagedId;
   const throwing = dragOffset !== null;
 
   // Left/right only (up/delete and down/undo stay button-primary, unanimated,
@@ -453,7 +492,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   // list picker's own arrow-key navigation.
   useEffect(() => {
     function onKeyDown(event: globalThis.KeyboardEvent) {
-      if (!current || throwing || action.pending) return;
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
       const target = event.target;
       if (
         target instanceof HTMLInputElement ||
@@ -465,11 +504,14 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
       ) {
         return;
       }
+      // Arrow keys otherwise scroll the page. Always consume them on this
+      // screen — including while a throw is in flight, when a flung card can
+      // briefly widen the layout and make ArrowLeft pan horizontally.
+      event.preventDefault();
+      if (!current || throwing || action.pending) return;
       if (event.key === "ArrowLeft" && canAcceptDefault) {
-        event.preventDefault();
         flingAndSubmit({ x: -THROW_DISTANCE, y: 0 }, { kind: "acceptDefault" });
       } else if (event.key === "ArrowRight" && canAcceptChosen) {
-        event.preventDefault();
         flingAndSubmit({ x: THROW_DISTANCE, y: 0 }, { kind: "acceptChosen" });
       }
     }
@@ -489,7 +531,9 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   // Title edit state resets whenever the reviewed row changes — by any of
   // assign/delete/undo resolving, or a session refresh (AC #8). Adjusted
   // during render (not in an effect) per React's "reset state when a prop
-  // changes" pattern — avoids an extra commit-then-reset render pass.
+  // changes" pattern — avoids an extra commit-then-reset render pass. Only
+  // `lastRowIdRef` (this pattern's own "previous value" ref) is written here;
+  // any other ref write must happen in an effect (react-hooks/refs).
   if (lastRowIdRef.current !== current?.row.id) {
     lastRowIdRef.current = current?.row.id;
     setTitleState("idle");
@@ -498,44 +542,15 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   }
 
   useEffect(() => {
-    if (titleState !== "editing") return;
-    const input = titleInputRef.current;
-    if (!input) return;
-    input.focus();
-    input.select();
-  }, [titleState]);
+    lastTitleUndoRef.current = null;
+  }, [current?.row.id]);
 
-  useEffect(() => {
-    if (titleState === "idle") return;
-    function onPointerDown(event: PointerEvent) {
-      const container = titleContainerRef.current;
-      if (container && event.target instanceof Node && container.contains(event.target)) {
-        return;
-      }
-      // Don't cancel out from under an in-flight commit — an outside click
-      // while the PATCH is pending would otherwise reset to idle immediately,
-      // leaving a later failure's titleError orphaned with no visible editing
-      // state to attach to.
-      if (titleSubmittingRef.current) return;
-      setTitleState("idle");
-      setTitleDraft("");
-      setTitleError(null);
-    }
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [titleState]);
-
-  function handleTitleClick() {
-    if (!current) return;
-    if (titleState === "idle") {
-      setTitleDraft(current.row.description);
-      setTitleError(null);
-      setTitleState("primed");
-      return;
-    }
-    if (titleState === "primed") {
-      setTitleState("editing");
-    }
+  function resizeTitleTextarea() {
+    const el = titleInputRef.current;
+    if (!el) return;
+    el.style.height = "0px";
+    const lineHeight = Number.parseFloat(getComputedStyle(el).lineHeight) || 21;
+    el.style.height = `${titleTextareaHeightPx(el.scrollHeight, lineHeight, titleMinHeightRef.current)}px`;
   }
 
   async function commitTitleEdit() {
@@ -551,11 +566,13 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
       setTitleError(null);
       return;
     }
+    const previousDescription = current.row.description;
+    const rowId = current.row.id;
     setTitleError(null);
     titleSubmittingRef.current = true;
     setTitleSubmitting(true);
     try {
-      const result = await editRowDescription(sessionId, current.row.id, trimmed, messages);
+      const result = await editRowDescription(sessionId, rowId, trimmed, messages);
       if (!result.ok) {
         if (result.error === messages.errorRowNotAvailable) {
           // Concurrent resolution between prime and commit (AC #9) — refresh
@@ -574,6 +591,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
         setTitleError(result.error);
         return;
       }
+      lastTitleUndoRef.current = { rowId, previousDescription };
       setSession(result.session);
       setTitleState("idle");
       setTitleDraft("");
@@ -584,7 +602,98 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     }
   }
 
-  function onTitleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+  const commitTitleEditRef = useRef(commitTitleEdit);
+  useEffect(() => {
+    commitTitleEditRef.current = commitTitleEdit;
+  });
+
+  useLayoutEffect(() => {
+    if (titleState !== "editing") return;
+    resizeTitleTextarea();
+  }, [titleState, titleDraft]);
+
+  useEffect(() => {
+    if (titleState !== "editing") return;
+    titleInputRef.current?.focus();
+  }, [titleState]);
+
+  useEffect(() => {
+    if (titleState === "idle") return;
+    function onPointerDown(event: PointerEvent) {
+      const container = titleContainerRef.current;
+      if (container && event.target instanceof Node && container.contains(event.target)) {
+        return;
+      }
+      if (titleSubmittingRef.current) return;
+      if (titleState === "primed") {
+        setTitleState("idle");
+        setTitleDraft("");
+        setTitleError(null);
+        return;
+      }
+      void commitTitleEditRef.current();
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [titleState]);
+
+  useEffect(() => {
+    function onKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key !== "z" && event.key !== "Z") return;
+      if (!event.metaKey && !event.ctrlKey) return;
+      if (event.shiftKey || event.altKey) return;
+      const target = event.target;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement
+      ) {
+        return;
+      }
+      const pending = lastTitleUndoRef.current;
+      if (!pending || pending.rowId !== current?.row.id || titleSubmittingRef.current) return;
+      event.preventDefault();
+      titleSubmittingRef.current = true;
+      setTitleSubmitting(true);
+      void editRowDescription(sessionId, pending.rowId, pending.previousDescription, messages)
+        .then((result) => {
+          if (result.ok) {
+            lastTitleUndoRef.current = null;
+            setSession(result.session);
+            setTitleState("idle");
+            setTitleDraft("");
+            setTitleError(null);
+            return;
+          }
+          setTitleError(result.error);
+        })
+        .finally(() => {
+          titleSubmittingRef.current = false;
+          setTitleSubmitting(false);
+        });
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, current?.row.id]);
+
+  function handleTitleClick() {
+    if (!current) return;
+    if (titleState === "idle") {
+      setTitleDraft(current.row.description);
+      setTitleError(null);
+      setTitleState("primed");
+      return;
+    }
+    if (titleState === "primed") {
+      const heading = titleContainerRef.current?.querySelector("h2");
+      titleMinHeightRef.current =
+        heading instanceof HTMLElement ? heading.offsetHeight : 0;
+      setTitleState("editing");
+    }
+  }
+
+  function onTitleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter") {
       event.preventDefault();
       void commitTitleEdit();
@@ -617,7 +726,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
 
   return (
     <main
-      className="min-h-full flex flex-col gap-4 pb-[2.5rem] pt-3"
+      className="min-h-full flex flex-col gap-4 overflow-x-hidden pb-[2.5rem] pt-3"
       style={{ fontFamily: "var(--font-ui), Manrope, system-ui, sans-serif" }}
     >
       {sessionError || listsError ? (
@@ -658,7 +767,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
             </div>
           </div>
 
-          <div className="grid w-full grid-cols-[minmax(0,1fr)_minmax(0,14rem)_minmax(0,1fr)] grid-rows-[auto_auto] items-center gap-3 px-2 md:grid-cols-[minmax(0,1fr)_minmax(0,26rem)_minmax(0,1fr)]">
+          <div className="grid w-full overflow-x-hidden grid-cols-[minmax(0,1fr)_minmax(0,14rem)_minmax(0,1fr)] grid-rows-[auto_auto] items-center gap-3 px-2 md:grid-cols-[minmax(0,1fr)_minmax(0,26rem)_minmax(0,1fr)]">
             <IconButton
               className="col-start-1 row-start-1 w-full min-w-0 justify-center self-center"
               variant="ghost"
@@ -724,23 +833,24 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
                       }
                     : undefined
                 }
-                className={`cursor-text rounded-sm -mx-1 -my-1 min-w-0 py-1 pl-1 pr-8 ${titleState === "primed" ? "border border-accent" : ""
+                className={`cursor-text rounded-sm -mx-1 -my-1 min-w-0 py-1 pl-1 pr-8 ${titleState !== "idle" ? "border border-accent" : ""
                   }`}
               >
                 {titleState === "editing" ? (
-                  <input
+                  <textarea
                     ref={titleInputRef}
                     value={titleDraft}
+                    rows={1}
                     onChange={(e) => setTitleDraft(e.currentTarget.value)}
                     onKeyDown={onTitleKeyDown}
                     maxLength={DESCRIPTION_MAX_LENGTH}
                     disabled={titleSubmitting}
                     autoComplete="off"
                     aria-label={t.individualReviewTitleFieldLabel}
-                    className="w-full min-w-0 m-0 px-2 py-1 -mx-2 -my-1 rounded-sm border border-accent bg-surface text-foreground font-[550] text-[1.05rem] break-words whitespace-normal disabled:opacity-55"
+                    className={`${TITLE_TEXT_CLASS} block resize-none overflow-hidden border-0 bg-transparent p-0 outline-none disabled:opacity-55`}
                   />
                 ) : (
-                  <h2 className="m-0 min-w-0 text-[1.05rem] font-[550] text-foreground break-words whitespace-normal overflow-visible">
+                  <h2 className={`${TITLE_TEXT_CLASS} whitespace-normal overflow-visible`}>
                     {current.row.description}
                   </h2>
                 )}
@@ -887,9 +997,21 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
         <p className="mx-auto w-full max-w-[26rem] px-[1.5rem] text-muted text-[0.85rem] m-0">
           {t.individualReviewLoadingSession}
         </p>
-      ) : session.discarded_at ? null : (
-        // Interim placeholder only — Story 4.13.1 replaces this branch with
-        // ImportReviewSheet (the real "review is done, now Save" surface).
+      ) : session.discarded_at ? null : !session.finalized_at ? (
+        // Zero pending + not finalized → the confirm gate (Story 4.13.1,
+        // replacing 4.12's land-on-empty-queue redirect per this story's
+        // Dev Notes). Discarding a row back to pending closes the sheet and
+        // `current` above resumes the card queue in original sequence.
+        <ImportReviewSheet
+          sessionId={sessionId}
+          session={session}
+          lists={lists}
+          onSessionUpdate={setSession}
+          onClose={() => router.push("/upload")}
+        />
+      ) : (
+        // Defensive fallback only: Save navigates away on success, so this
+        // finalized-but-still-here state should not normally be reachable.
         <p className="mx-auto w-full max-w-[26rem] px-[1.5rem] text-muted text-[0.9rem] m-0 py-[2rem] text-center">
           {t.individualReviewAllCaughtUp}
         </p>

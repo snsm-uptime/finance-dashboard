@@ -340,9 +340,11 @@ class ImportSessionRepository(Protocol):
     def mark_candidate_row_deleted(
         self, *, session_id: UUID, statement_id: UUID, row_id: UUID, user_id: UUID
     ) -> ImportSessionRecord:
-        """Guarded pending→deleted UPDATE; complete the statement if resolved.
-        No ledger writes. Raises ImportRowNotAvailableError when the row is
-        not pending."""
+        """Guarded pending→deleted or committed→deleted UPDATE; complete the
+        statement if resolved. Pending delete writes no ledger. Assigned
+        (committed) delete reverses the assign-time ledger entry so the row
+        is neither pending nor assigned. Raises ImportRowNotAvailableError
+        when the row is already deleted or excluded."""
         ...
 
     def update_candidate_row_description(
@@ -381,6 +383,20 @@ class ImportSessionRepository(Protocol):
 
     def clear_statement_pdf_paths(self, session_id: UUID, user_id: UUID) -> None:
         """Null out path references after the source PDF has been deleted (AD-3)."""
+        ...
+
+    def unassign_candidate_row(
+        self, *, session_id: UUID, user_id: UUID, row_id: UUID
+    ) -> ImportSessionRecord:
+        """ImportReviewSheet per-row discard (Story 4.13.1): reverse a
+        committed row back to pending via the same ledger/batch-delete path
+        `_undo_assign` already uses for card undo. Raises
+        ImportRowNotAvailableError when the row is not committed and
+        ImportRowNotDiscardableError when it is `dedup_skipped` (re-assigning
+        it would skip forever). Clears the session's undo pointer — a sheet
+        discard is not a card action and must not become undoable by the
+        next card down/undo.
+        """
         ...
 
 
@@ -848,10 +864,11 @@ class DeleteCandidateRowCommand:
 
 
 class DeleteCandidateRowService:
-    """Per-row delete (Story 4.10): guarded pending→deleted, no ledger writes.
+    """Per-row delete: pending→deleted (card trash, Story 4.10) or
+    committed→deleted with ledger reversal (ImportReviewSheet Save discard).
 
-    No `pdf_storage`: Story 4.12 moved PDF release behind an explicit finalize,
-    so resolving the last pending row no longer drops the source file.
+    Assigned delete must not return the row to pending — that would 409
+    finalize. No `pdf_storage`: Story 4.12 moved PDF release behind finalize.
     """
 
     def __init__(self, session_repo: ImportSessionRepository) -> None:
@@ -873,6 +890,49 @@ class DeleteCandidateRowService:
             statement_id=statement.id,
             row_id=candidate.id,
             user_id=command.actor_user_id,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class UnassignCandidateRowCommand:
+    actor_user_id: UUID
+    session_id: UUID
+    row_id: UUID
+
+
+class UnassignCandidateRowService:
+    """ImportReviewSheet per-row discard (Story 4.13.1): reverses a single
+    committed row back to pending. Not `POST /undo` — undo is single-level and
+    last-action-only, and the sheet must be able to discard an arbitrary
+    assigned row, not just the most recent one.
+
+    Not-found / discarded checks mirror every other row-endpoint service; the
+    pending-only guard and the `dedup_skipped` block both live in the
+    repository, same as `DeleteCandidateRowService` leans on the repo's
+    guarded UPDATE rather than duplicating the check here.
+
+    No FX, no PDF release: discard makes the session less resolved, never
+    more, so AD-3's retain rule can only move toward keeping the file (same
+    rationale as `UndoLastResolutionService`).
+    """
+
+    def __init__(self, session_repo: ImportSessionRepository) -> None:
+        self._session_repo = session_repo
+
+    def execute(self, command: UnassignCandidateRowCommand) -> ImportSessionRecord:
+        session = self._session_repo.get_session(command.session_id, command.actor_user_id)
+        if session is None:
+            raise ImportSessionNotFoundError()
+
+        _find_candidate_row(session, command.row_id)
+
+        if session.discarded_at is not None:
+            raise ImportSessionDiscardedError()
+
+        return self._session_repo.unassign_candidate_row(
+            session_id=command.session_id,
+            user_id=command.actor_user_id,
+            row_id=command.row_id,
         )
 
 

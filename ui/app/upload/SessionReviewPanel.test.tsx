@@ -100,6 +100,7 @@ const mockSession: ImportSession = {
         },
       ],
       zero_amount_excluded_count: 0,
+      assigned_rows: [],
     },
     {
       id: "st2",
@@ -111,6 +112,7 @@ const mockSession: ImportSession = {
       card_id: null,
       rows: [],
       zero_amount_excluded_count: 0,
+      assigned_rows: [],
     },
   ],
 };

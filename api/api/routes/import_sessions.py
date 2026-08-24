@@ -35,6 +35,8 @@ from application.import_session import (
     MatchStatementCardCommand,
     MatchStatementCardService,
     StagedStatementRecord,
+    UnassignCandidateRowCommand,
+    UnassignCandidateRowService,
     UndoLastResolutionCommand,
     UndoLastResolutionService,
     UploadStatementPdfCommand,
@@ -52,6 +54,7 @@ from domain.errors import (
     FxServiceUnavailableError,
     ImportNothingToUndoError,
     ImportRowNotAvailableError,
+    ImportRowNotDiscardableError,
     ImportRowNotFoundError,
     ImportSessionDiscardedError,
     ImportSessionHasPendingRowsError,
@@ -65,7 +68,11 @@ from domain.errors import (
     UnknownBankAdapterError,
     UnsupportedFileTypeError,
 )
-from domain.import_session import ROW_STATUS_EXCLUDED_ZERO_AMOUNT, ROW_STATUS_PENDING
+from domain.import_session import (
+    ROW_STATUS_COMMITTED,
+    ROW_STATUS_EXCLUDED_ZERO_AMOUNT,
+    ROW_STATUS_PENDING,
+)
 from fastapi import APIRouter, Depends, File, UploadFile, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -104,6 +111,13 @@ def _statement_response(statement: StagedStatementRecord) -> StagedStatementResp
         (row for row in statement.candidate_rows if row.status == ROW_STATUS_PENDING),
         key=lambda row: row.sequence,
     )
+    # Story 4.13.1: committed rows (assign survivors + dedup_skipped), also
+    # sequence-ordered, for ImportReviewSheet. Deleted / excluded rows never
+    # appear in either array.
+    assigned = sorted(
+        (row for row in statement.candidate_rows if row.status == ROW_STATUS_COMMITTED),
+        key=lambda row: row.sequence,
+    )
     return StagedStatementResponse(
         id=statement.id,
         product_id=statement.product_id,
@@ -129,6 +143,20 @@ def _statement_response(statement: StagedStatementRecord) -> StagedStatementResp
         zero_amount_excluded_count=sum(
             1 for row in statement.candidate_rows if row.status == ROW_STATUS_EXCLUDED_ZERO_AMOUNT
         ),
+        assigned_rows=[
+            CandidateRowResponse(
+                id=row.id,
+                sequence=row.sequence,
+                description=row.line.normalized_description,
+                amount=str(row.line.amount),
+                currency=row.line.currency,
+                posted_date=row.line.posted_date,
+                status=row.status,
+                resolved_list_id=row.resolved_list_id,
+                dedup_skipped=row.dedup_skipped,
+            )
+            for row in assigned
+        ],
     )
 
 
@@ -361,6 +389,7 @@ _ROW_ERROR_MAP: tuple[tuple[type[Exception], int, str | None], ...] = (
     (NotListMemberError, status.HTTP_403_FORBIDDEN, "not_list_member"),
     (ImportSessionDiscardedError, status.HTTP_409_CONFLICT, "import_session_discarded"),
     (ImportRowNotAvailableError, status.HTTP_409_CONFLICT, "import_row_not_available"),
+    (ImportRowNotDiscardableError, status.HTTP_409_CONFLICT, "import_row_not_discardable"),
     (ImportNothingToUndoError, status.HTTP_409_CONFLICT, "import_nothing_to_undo"),
     (
         ImportSessionHasPendingRowsError,
@@ -446,7 +475,9 @@ def delete_candidate_row(
     user_id: uuid.UUID = Depends(require_authenticated_user),
     db: Session = Depends(get_db),
 ) -> ImportSessionResponse | JSONResponse:
-    """Soft-marks the row deleted so undo can restore it (AC #3)."""
+    """Soft-marks the row deleted. Pending rows (card trash) stay undoable;
+    committed assigned rows reverse the assign-time ledger and do not return
+    to pending (ImportReviewSheet Save discard)."""
     session_repo = SqlAlchemyImportSessionRepository(db)
     service = DeleteCandidateRowService(session_repo)
     try:
@@ -460,6 +491,34 @@ def delete_candidate_row(
         "import_row_deleted session_id=%s row_id=%s user_id=%s", session_id, row_id, user_id
     )
     return _session_response(result)
+
+
+@router.post("/{session_id}/rows/{row_id}/unassign", response_model=ImportSessionResponse)
+def unassign_candidate_row(
+    session_id: uuid.UUID,
+    row_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> ImportSessionResponse | JSONResponse:
+    """ImportReviewSheet per-row discard (Story 4.13.1, AC #4/#5): reverses a
+    single committed row back to pending. Not `POST /undo` — that is
+    single-level and last-action-only; this targets an arbitrary assigned
+    row. 409s with `import_row_not_discardable` for a `dedup_skipped` row."""
+    session_repo = SqlAlchemyImportSessionRepository(db)
+    service = UnassignCandidateRowService(session_repo)
+    try:
+        service.execute(
+            UnassignCandidateRowCommand(
+                actor_user_id=user_id, session_id=session_id, row_id=row_id
+            )
+        )
+    except _ROW_ERROR_TYPES as exc:
+        db.rollback()
+        return _row_error_response(exc)
+    logger.info(
+        "import_row_unassigned session_id=%s row_id=%s user_id=%s", session_id, row_id, user_id
+    )
+    return _fresh_session_response(session_repo, session_id, user_id)
 
 
 @router.post("/{session_id}/undo", response_model=ImportSessionResponse)
