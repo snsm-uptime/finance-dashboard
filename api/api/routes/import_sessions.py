@@ -508,9 +508,7 @@ def unassign_candidate_row(
     service = UnassignCandidateRowService(session_repo)
     try:
         service.execute(
-            UnassignCandidateRowCommand(
-                actor_user_id=user_id, session_id=session_id, row_id=row_id
-            )
+            UnassignCandidateRowCommand(actor_user_id=user_id, session_id=session_id, row_id=row_id)
         )
     except _ROW_ERROR_TYPES as exc:
         db.rollback()
