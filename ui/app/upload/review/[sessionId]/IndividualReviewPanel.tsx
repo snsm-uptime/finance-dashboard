@@ -556,10 +556,10 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
 
   return (
     <main
-      className="min-h-full flex justify-center px-[1.5rem] py-[2.5rem]"
+      className="min-h-full flex flex-col gap-4 py-[2.5rem]"
       style={{ fontFamily: "var(--font-ui), Manrope, system-ui, sans-serif" }}
     >
-      <div className="flex w-full max-w-[26rem] flex-col gap-4">
+      <div className="mx-auto flex w-full max-w-[26rem] flex-col gap-4 px-[1.5rem]">
         <div className="flex items-center justify-between">
           <h1 className="m-0 text-[1.5rem] font-[550] text-foreground">
             {t.individualReviewTitle}
@@ -579,12 +579,13 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
             {listsError}
           </p>
         ) : null}
+      </div>
 
         {current ? (
           <>
-            <div className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[auto_auto] items-center gap-3">
+            <div className="grid w-full grid-cols-[minmax(0,1fr)_minmax(0,26rem)_minmax(0,1fr)] grid-rows-[auto_auto] items-center gap-3 px-2">
               <IconButton
-                className="col-start-1 row-start-1 self-center"
+                className="col-start-1 row-start-1 w-full min-w-0 justify-center self-center"
                 variant="ghost"
                 disabled={!canAcceptDefault || action.pending || dismiss.pending || throwing}
                 onClick={() =>
@@ -679,7 +680,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
               </div>
 
               <IconButton
-                className="col-start-3 row-start-1 self-center"
+                className="col-start-3 row-start-1 w-full min-w-0 justify-center self-center"
                 variant="ghost"
                 disabled={!canAcceptChosen || action.pending || dismiss.pending || throwing}
                 onClick={() =>
@@ -709,6 +710,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
               <div />
             </div>
 
+            <div className="mx-auto flex w-full max-w-[26rem] flex-col gap-4 px-[1.5rem]">
             <p className="m-0 text-center text-muted text-[0.68rem]">
               {isCoarsePointer
                 ? t.individualReviewDirectionHintTouch
@@ -806,18 +808,21 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
                 <p className="text-muted text-[0.85rem] m-0">{t.individualReviewNoLists}</p>
               ) : null}
             </div>
+            </div>
           </>
         ) : !session ? (
-          <p className="text-muted text-[0.85rem] m-0">{t.individualReviewLoadingSession}</p>
+          <p className="mx-auto w-full max-w-[26rem] px-[1.5rem] text-muted text-[0.85rem] m-0">
+            {t.individualReviewLoadingSession}
+          </p>
         ) : session.discarded_at ? null : (
           // Interim placeholder only — Story 4.13.1 replaces this branch with
           // ImportReviewSheet (the real "review is done, now Save" surface).
-          <p className="text-muted text-[0.9rem] m-0 py-[2rem] text-center">
+          <p className="mx-auto w-full max-w-[26rem] px-[1.5rem] text-muted text-[0.9rem] m-0 py-[2rem] text-center">
             {t.individualReviewAllCaughtUp}
           </p>
         )}
 
-        <div className="mt-2">
+        <div className="mx-auto mt-2 w-full max-w-[26rem] px-[1.5rem]">
           <button
             type="button"
             disabled={dismiss.pending || action.pending}
@@ -832,7 +837,6 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
             </p>
           ) : null}
         </div>
-      </div>
     </main>
   );
 }

@@ -128,11 +128,17 @@ export function CreditCardFace({
 
   return (
     <article
-      className="relative isolate w-full max-w-full text-white"
+      className={[
+        "relative isolate w-full max-w-full text-white",
+        // Light: dark forest plastic from --foreground/--accent so white type stays readable.
+        "[background:linear-gradient(160deg,color-mix(in_srgb,var(--foreground)_55%,var(--accent)_45%)_0%,color-mix(in_srgb,var(--foreground)_80%,var(--accent)_20%)_55%,color-mix(in_srgb,var(--foreground)_92%,var(--accent)_8%)_100%)]",
+        "shadow-[0_12px_28px_color-mix(in_srgb,var(--foreground)_22%,transparent)]",
+        // Dark: lifted olive-sage card vs --background (#17140f), not charcoal.
+        "dark:[background:linear-gradient(160deg,color-mix(in_srgb,var(--surface)_58%,var(--accent)_42%)_0%,color-mix(in_srgb,var(--surface)_76%,var(--accent)_24%)_48%,color-mix(in_srgb,var(--background)_82%,var(--accent)_18%)_100%)]",
+        "dark:shadow-[0_14px_32px_color-mix(in_srgb,black_42%,transparent),inset_0_1px_0_color-mix(in_srgb,var(--accent)_18%,transparent)]",
+      ].join(" ")}
       style={{
         borderRadius: "16px",
-        background: "linear-gradient(160deg, #2a2a2a 0%, #141414 55%, #0d0d0d 100%)",
-        boxShadow: "0 12px 28px rgba(20, 16, 10, 0.24)",
         padding: "0.85rem 1rem 0.8rem",
       }}
     >
