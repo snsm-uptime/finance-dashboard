@@ -1,16 +1,22 @@
 "use client";
 
-import { ChangeEvent, useId, useRef, useState } from "react";
+import { ChangeEvent, useEffect, useId, useRef, useState } from "react";
 
 import { usePreferences } from "@/components/PreferencesProvider";
 import { useFormSubmission } from "@/hooks";
 import { uploadCopy } from "@/lib/i18n/upload";
 import { UploadButton } from "./UploadButton";
 import {
+  fetchImportSession,
   uploadStatement,
   type ImportSession,
   type UploadMessages,
 } from "./uploadClient";
+import {
+  forgetOpenImportSession,
+  peekOpenImportSessionId,
+  rememberOpenImportSession,
+} from "./openImportSession";
 import { SessionReviewPanel } from "./SessionReviewPanel";
 
 export function UploadPanel() {
@@ -35,9 +41,41 @@ export function UploadPanel() {
     if (result.ok) {
       setSession(result.session);
       setDiscarded(false);
+      rememberOpenImportSession(result.session.id);
     }
     return result;
   });
+
+  useEffect(() => {
+    const openId = peekOpenImportSessionId();
+    if (!openId) return;
+    let cancelled = false;
+    void fetchImportSession(openId, {
+      errorForbidden: t.errorGeneric,
+      errorSessionNotFound: t.errorGeneric,
+      errorStatementNotFound: t.errorGeneric,
+      errorSessionDiscarded: t.errorGeneric,
+      errorStatementNotAvailable: t.errorGeneric,
+      errorRowNotFound: t.errorGeneric,
+      errorRowNotAvailable: t.errorGeneric,
+      errorNothingToUndo: t.errorGeneric,
+      errorSessionHasPendingRows: t.errorGeneric,
+      errorFxUnavailable: t.errorGeneric,
+      errorGeneric: t.errorGeneric,
+      errorUnauthorized: t.errorUnauthorized,
+    }).then((result) => {
+      if (cancelled) return;
+      if (result.ok && !result.session.discarded_at) {
+        setSession(result.session);
+        return;
+      }
+      forgetOpenImportSession();
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function onFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -55,11 +93,12 @@ export function UploadPanel() {
       <h1 className="sr-only">{t.title}</h1>
 
       {session ? (
-        <div className="py-[2.5rem] px-[1.5rem]">
+        <div className="flex flex-1 flex-col items-center justify-center px-[1.5rem] py-[2.5rem]">
           <SessionReviewPanel
             session={session}
             onSessionChanged={setSession}
             onDiscarded={() => {
+              forgetOpenImportSession();
               setSession(null);
               setDiscarded(true);
             }}

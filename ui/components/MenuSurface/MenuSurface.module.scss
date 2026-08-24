@@ -1,0 +1,49 @@
+/* Shared dropdown chrome. Mix accent into --surface so --foreground stays readable
+   in light and dark. Hover is a lighter tint than the selected/active row. */
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--rounded-sm);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--foreground) 12%, transparent);
+  color: var(--foreground);
+  overflow: auto;
+}
+
+.item {
+  margin: 0;
+  padding: 0.5rem 0.65rem;
+  border: none;
+  border-radius: var(--rounded-sm);
+  background: transparent;
+  color: var(--foreground);
+  font-family: var(--font-ui), system-ui, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.item:hover:not(:disabled):not([aria-selected="true"]):not(.itemSelected),
+.item:focus-visible:not(:disabled):not([aria-selected="true"]):not(.itemSelected) {
+  background: var(--menu-item-hover);
+  outline: none;
+}
+
+.itemSelected,
+.item[aria-selected="true"] {
+  background: var(--menu-item-selected);
+  font-weight: 550;
+}
+
+.itemSelected:hover,
+.item[aria-selected="true"]:hover,
+.itemSelected:focus-visible,
+.item[aria-selected="true"]:focus-visible {
+  background: var(--menu-item-selected);
+  outline: none;
+}
+
+.item:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

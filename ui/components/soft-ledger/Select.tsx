@@ -9,6 +9,8 @@ import {
   type KeyboardEvent,
 } from "react";
 
+import { menuSurface } from "@/components/MenuSurface";
+
 export type SoftLedgerSelectOption = {
   value: string;
   label: string;
@@ -153,10 +155,7 @@ export function SoftLedgerSelect({
       {open ? (
         <ul
           id={listboxId}
-          className="absolute z-20 top-[calc(100%_+_0.25rem)] left-0 right-0 m-0 p-1 list-none max-h-56 overflow-auto border border-border rounded-sm bg-surface"
-          style={{
-            boxShadow: "0 8px 20px rgba(var(--foreground), 0.12)",
-          }}
+          className={`${menuSurface.panel} absolute z-20 top-[calc(100%_+_0.25rem)] left-0 right-0 m-0 p-1 list-none max-h-56`}
           role="listbox"
           tabIndex={-1}
           aria-activedescendant={`${listboxId}-opt-${selectedIndex}`}
@@ -170,15 +169,7 @@ export function SoftLedgerSelect({
                 id={`${listboxId}-opt-${index}`}
                 role="option"
                 aria-selected={isSelected}
-                className={`m-0 px-[0.65rem] py-2 rounded-sm font-semibold cursor-pointer ${
-                  isSelected ? "bg-accent bg-opacity-18" : "hover:bg-accent hover:bg-opacity-12 focus-visible:bg-accent focus-visible:bg-opacity-12"
-                }`}
-                style={{
-                  fontFamily: "var(--font-ui), system-ui, sans-serif",
-                  fontSize: "0.95rem",
-                  fontWeight: isSelected ? "550" : "500",
-                  color: "var(--foreground)",
-                }}
+                className={`${menuSurface.item}${isSelected ? ` ${menuSurface.itemSelected}` : ""}`}
                 onMouseDown={(event) => {
                   event.preventDefault();
                   choose(option.value);

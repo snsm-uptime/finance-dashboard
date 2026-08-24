@@ -118,7 +118,7 @@ Two circles and a diagonal slash. Used for percentage split mode.
 - Style: Stroke-based
 - Accepts: className, SVG element props
 
-> Not yet documented above: `HomeIcon`, `UploadIcon`, `SpinnerIcon`, `UserIcon`, `SunIcon`, `MoonIcon`, `SystemIcon`.
+> Not yet documented above: `HomeIcon`, `UploadIcon`, `SpinnerIcon`, `UserIcon`, `SunIcon`, `MoonIcon`, `SystemIcon`, `ArrowIcon`, `TrashIcon`.
 
 ## Usage
 

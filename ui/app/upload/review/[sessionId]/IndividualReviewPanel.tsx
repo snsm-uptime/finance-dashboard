@@ -1,47 +1,178 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 import { useRouter } from "next/navigation";
 import { useDrag } from "@use-gesture/react";
 
-import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
+import { IconButton } from "@/components/IconButton";
+import { useChromeHeader } from "@/components/ChromeBack";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { useFormSubmission } from "@/hooks";
 import { fetchLists, type ListItem } from "@/app/lists/listsClient";
+import { ArrowIcon, SaveIcon, TrashIcon } from "@/app/icons";
 import { uploadCopy } from "@/lib/i18n/upload";
+import type { Locale } from "@/lib/i18n/locale";
 import { useCardIdentification } from "@/hooks/useCardIdentification";
+import { CreditCardFace, CreditCardMark } from "../../CreditCardFace";
 import {
   assignRow,
   deleteRow,
   discardSession,
+  editRowDescription,
   fetchImportSession,
+  undoLastResolution,
+  type CandidateRow,
   type CardIdentificationMessages,
   type ImportSession,
   type IndividualReviewMessages,
   type StagedStatement,
   type UploadMessages,
 } from "../../uploadClient";
+import {
+  forgetOpenImportSession,
+  rememberOpenImportSession,
+} from "../../openImportSession";
 
 type IndividualReviewPanelProps = {
   sessionId: string;
 };
 
-type Action = { kind: "acceptChosen" } | { kind: "acceptDefault" } | { kind: "skip" };
+type Action =
+  | { kind: "acceptChosen" }
+  | { kind: "acceptDefault" }
+  | { kind: "delete" }
+  | { kind: "undo" };
+
+type TitleState = "idle" | "primed" | "editing";
 
 const SWIPE_DISTANCE_THRESHOLD = 80;
+// Left/right throw animation (default-list / chosen-list accept only — up
+// (delete) and down (undo) stay button-primary and un-animated, per scope).
+const THROW_DISTANCE = 480;
+const THROW_ANIMATION_MS = 220;
+// Mirrors api/domain/expenses.py:20 (normalize_row_description) — display-side
+// guard only, the server is the actual enforcement point.
+const DESCRIPTION_MAX_LENGTH = 500;
 
-function nextReviewable(session: ImportSession | null): StagedStatement | null {
+/**
+ * Flattens statements → rows (statement order, then sequence order — the GET
+ * contract already returns rows pending-only and sequence-ordered, so no
+ * client-side filter/sort is needed) and returns the first pair. A `failed`
+ * statement carries an empty `rows` array and so simply contributes nothing.
+ */
+export function nextReviewableRow(
+  session: ImportSession | null,
+): { row: CandidateRow; statement: StagedStatement } | null {
   if (!session || session.discarded_at) return null;
+  for (const statement of session.statements) {
+    if (statement.rows.length > 0) {
+      return { row: statement.rows[0], statement };
+    }
+  }
+  return null;
+}
+
+// Mirrors SessionReviewPanel.tsx's statementPeriodBounds — same StagedStatement
+// shape, kept local per this codebase's co-located-pure-function convention.
+function statementPeriodBounds(statement: StagedStatement): {
+  start: string | null;
+  end: string | null;
+} {
+  let start: string | null = null;
+  let end: string | null = null;
+  for (const row of statement.rows) {
+    const posted = row.posted_date;
+    if (!posted) continue;
+    if (start === null || posted < start) start = posted;
+    if (end === null || posted > end) end = posted;
+  }
+  return { start, end };
+}
+
+// No utility formats a raw (amount, currency) pair for arbitrary currencies —
+// display-only, mirrors the existing `formatCardBalance` use of `Number()` for
+// rendering (never for computation, comparison, or the assign/PATCH payloads).
+function formatRowAmount(amount: string, currency: string, locale: Locale): string {
+  const parsed = Number(amount);
+  const display = Number.isFinite(parsed)
+    ? parsed.toLocaleString(locale === "es" ? "es-CR" : "en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+    : amount;
+  return `${currency} ${display}`;
+}
+
+const DAY_NAMES: Record<Locale, readonly string[]> = {
+  en: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+  es: ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"],
+};
+
+const ROW_MONTH_ABBR: Record<Locale, readonly string[]> = {
+  en: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+  es: ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"],
+};
+
+// Sakamoto's algorithm — pure integer math, no JS `Date`, so no local-timezone
+// shift risk on a date-only string (project-context's date-string rule).
+function dayOfWeek(year: number, month: number, day: number): number {
+  const t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
+  const y = month < 3 ? year - 1 : year;
   return (
-    session.statements.find((s) => s.status === "staged" || s.status === "failed") ?? null
+    (y + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) + t[month - 1] + day) % 7
+  );
+}
+
+// The year is already known from context, so it's dropped here — display-only,
+// mirrors formatRowAmount's Number()-for-display carve-out.
+function formatRowDate(iso: string, locale: Locale): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!match) return iso;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const dayName = DAY_NAMES[locale][dayOfWeek(year, month, day)];
+  const monthAbbr = ROW_MONTH_ABBR[locale][month - 1];
+  return locale === "es" ? `${dayName}, ${day} ${monthAbbr}` : `${dayName}, ${monthAbbr} ${day}`;
+}
+
+function ArrowKeyKbd({ arrow }: { arrow: "←" | "→" }) {
+  return (
+    <kbd
+      aria-hidden
+      className="inline-flex box-border h-[1.25rem] min-h-[1.25rem] min-w-[1.25rem] shrink-0 items-center justify-center rounded-[4px] border border-border bg-surface px-1 align-middle text-[0.75rem] leading-none font-[550] !text-accent"
+    >
+      {arrow}
+    </kbd>
+  );
+}
+
+function DirectionHint({ template }: { template: string }) {
+  return (
+    <p className="m-0 inline-flex w-full items-center justify-center gap-1 text-center text-muted text-[0.68rem]">
+      {template.split(/(\{left\}|\{right\})/g).map((part, index) => {
+        if (part === "{left}") return <ArrowKeyKbd key={index} arrow="←" />;
+        if (part === "{right}") return <ArrowKeyKbd key={index} arrow="→" />;
+        return <span key={index}>{part}</span>;
+      })}
+    </p>
   );
 }
 
 /**
- * Individual review — phone swipe / desktop buttons (Story 4.8, AC #1-#6).
- * Server (GET session) is the source of truth for which statement is next —
- * client state is never trusted across a reload.
+ * Individual review — one transaction at a time, four directional actions
+ * (Story 4.13). Server (GET session) is the source of truth for which row is
+ * next — client state is never trusted across a reload.
  */
 export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps) {
   const { locale } = usePreferences();
@@ -61,6 +192,20 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   );
   const [cardLabelInput, setCardLabelInput] = useState<string>("");
   const [registering, setRegistering] = useState(false);
+  // Left/right throw animation: live drag offset (1:1 finger-follow, no
+  // transition) or the final thrown/snap-back offset (transition applies).
+  const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const flingLockRef = useRef(false);
+
+  const titleContainerRef = useRef<HTMLDivElement | null>(null);
+  const titleInputRef = useRef<HTMLInputElement | null>(null);
+  const titleSubmittingRef = useRef(false);
+  const lastRowIdRef = useRef<string | undefined>(undefined);
+  const [titleState, setTitleState] = useState<TitleState>("idle");
+  const [titleDraft, setTitleDraft] = useState("");
+  const [titleError, setTitleError] = useState<string | null>(null);
+  const [titleSubmitting, setTitleSubmitting] = useState(false);
 
   const messages: IndividualReviewMessages = {
     errorForbidden: t.individualReviewErrorForbidden,
@@ -87,15 +232,6 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     [t.errorCardAlreadyRegistered, t.errorInvalidCardLabel, t.errorGeneric, t.errorUnauthorized],
   );
 
-  const dismissMessages: UploadMessages = {
-    errorUnsupportedFileType: t.errorUnsupportedFileType,
-    errorUnknownStatement: t.errorUnknownStatement,
-    errorAmbiguousStatement: t.errorAmbiguousStatement,
-    errorUnreadableStatement: t.errorUnreadableStatement,
-    errorGeneric: t.errorGeneric,
-    errorUnauthorized: t.errorUnauthorized,
-  };
-
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -107,6 +243,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
       }
       setSessionError(null);
       setSession(result.session);
+      rememberOpenImportSession(sessionId);
     }
     load();
     return () => {
@@ -154,243 +291,582 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     };
   }, []);
 
-  const current = nextReviewable(session);
-  const card = useCardIdentification(sessionId, current, cardMessages);
+  const current = nextReviewableRow(session);
+  const remainingCount = session
+    ? session.statements.reduce((sum, statement) => sum + statement.rows.length, 0)
+    : 0;
+  const remainingLabel =
+    session && current
+      ? t.individualReviewProgress.replace("{count}", String(remainingCount))
+      : "";
+  const discardMessages: UploadMessages = {
+    errorUnsupportedFileType: t.errorUnsupportedFileType,
+    errorUnknownStatement: t.errorUnknownStatement,
+    errorAmbiguousStatement: t.errorAmbiguousStatement,
+    errorUnreadableStatement: t.errorUnreadableStatement,
+    errorGeneric: t.errorGeneric,
+    errorUnauthorized: t.errorUnauthorized,
+  };
+  const leavingRef = useRef(false);
+  const onBack = useCallback(() => {
+    if (leavingRef.current) return;
+    leavingRef.current = true;
+    void discardSession(sessionId, discardMessages).finally(() => {
+      forgetOpenImportSession();
+      router.push("/upload");
+    });
+  }, [sessionId, router, discardMessages.errorGeneric, discardMessages.errorUnauthorized]);
+  useChromeHeader({
+    onBack,
+    title: t.individualReviewTitle,
+    details: remainingLabel || null,
+  });
+  const card = useCardIdentification(sessionId, current?.statement ?? null, cardMessages);
 
   const action = useFormSubmission(async (act: Action) => {
     if (!current) return { ok: false, error: t.errorGeneric };
+    const { row } = current;
 
-    const pendingRow = current.rows.find((row) => row.status === "pending") ?? current.rows[0];
-    if (!pendingRow) return { ok: false, error: t.errorGeneric };
-
-    if (act.kind === "skip") {
-      const result = await deleteRow(sessionId, pendingRow.id, messages);
-      if (result.ok) {
-        setSession(result.session);
-        setPickedListId("");
-      }
+    if (act.kind === "delete") {
+      const result = await deleteRow(sessionId, row.id, messages);
+      if (result.ok) setSession(result.session);
+      return result;
+    }
+    if (act.kind === "undo") {
+      const result = await undoLastResolution(sessionId, messages);
+      if (result.ok) setSession(result.session);
       return result;
     }
 
     const listId = act.kind === "acceptChosen" ? pickedListId : defaultListId;
     if (!listId) return { ok: false, error: t.errorGeneric };
-    const result = await assignRow(sessionId, pendingRow.id, listId, messages);
-    if (result.ok) {
-      setPickedListId("");
-      setSession(result.session);
-    }
+    const result = await assignRow(sessionId, row.id, listId, messages);
+    if (result.ok) setSession(result.session);
     return result;
   });
-
-  const dismiss = useFormSubmission(async () => {
-    const result = await discardSession(sessionId, dismissMessages);
-    if (result.ok) {
-      router.push("/upload");
-    }
-    return result;
-  });
-
-  useEffect(() => {
-    if (session && !current) {
-      // Story 4.12 (Task 7.5): the landing target is server-computed — the
-      // list that received the most newly imported rows this session, null
-      // when the session imported nothing new. No client-side fallback: a
-      // null landing_list_id means the caller stays put at /lists rather
-      // than guessing (AC #6). The landing *trigger* still moves to
-      // ImportReviewSheet's Save in Story 4.13.1.
-      router.push(
-        session.landing_list_id ? `/lists/${encodeURIComponent(session.landing_list_id)}` : "/lists",
-      );
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, current]);
 
   const listOptions = useMemo(
-    () => (lists ?? []).map((l) => ({ value: l.id, label: l.name })),
-    [lists],
+    () =>
+      (lists ?? [])
+        .filter((l) => l.id !== defaultListId)
+        .map((l) => ({ value: l.id, label: l.name })),
+    [lists, defaultListId],
   );
   const defaultListName = (lists ?? []).find((l) => l.id === defaultListId)?.name ?? "";
   const chosenListName = (lists ?? []).find((l) => l.id === pickedListId)?.name ?? "";
 
-  // Story 4.8.1: Block accept until card is identified (if IBAN present)
-  const cardReadyOrNoIban = !current?.iban || card.cardMatched;
-  const canAcceptChosen =
-    !!current && current.status === "staged" && !!pickedListId && cardReadyOrNoIban && !card.loading;
+  // Story 4.8.1 (preserved): block accept until the row's parent statement's
+  // card is identified/registered when that statement carries an IBAN.
+  const cardReadyOrNoIban = !current?.statement.iban || card.cardMatched;
+  const canAcceptChosen = !!current && !!pickedListId && cardReadyOrNoIban && !card.loading;
+  // `lists !== null` guards a loading race: /api/auth/me can resolve
+  // defaultListId before /api/lists resolves lists, which would otherwise
+  // render this button enabled with a blank defaultListName.
   const canAcceptDefault =
-    !!current && current.status === "staged" && !!defaultListId && cardReadyOrNoIban && !card.loading;
-  const canSkip = !!current && (current.status === "staged" || current.status === "failed");
+    !!current && !!defaultListId && lists !== null && cardReadyOrNoIban && !card.loading;
+  // Delete has no card-identification gate — a pending row is always
+  // deletable, since delete never touches a list (Task 3.4).
+  const canDelete = !!current;
+  const canUndo = !!session?.undo;
+  const throwing = dragOffset !== null;
+
+  // Left/right only (up/delete and down/undo stay button-primary, unanimated,
+  // per AD-9 and this round's scoped ask). The card visually flies off before
+  // the actual submit fires, so the outgoing card is always seen in motion
+  // regardless of how fast the request resolves.
+  //
+  // flingLockRef is a synchronous guard: `throwing` (derived from state) only
+  // reflects reality after React commits a render, so two triggers dispatched
+  // in the same tick (e.g. a click immediately followed by a keydown) could
+  // both read stale throwing=false and both schedule a submit. The ref closes
+  // that gap immediately, independent of render timing.
+  function flingAndSubmit(offset: { x: number; y: number }, act: Action) {
+    if (flingLockRef.current) return;
+    flingLockRef.current = true;
+    setIsDragging(false);
+    setDragOffset(offset);
+    window.setTimeout(() => {
+      void action.submit(act).finally(() => {
+        setDragOffset(null);
+        flingLockRef.current = false;
+      });
+    }, THROW_ANIMATION_MS);
+  }
 
   useDrag(
-    ({ last, movement: [mx, my], velocity: [vx, vy], direction: [dx, dy] }) => {
-      if (!last || !isCoarsePointer || action.pending || dismiss.pending) return;
+    ({ first, active, last, movement: [mx, my], velocity: [vx, vy], direction: [dx, dy] }) => {
+      // titleState !== "idle": the title container sits inside cardRef, so
+      // without this guard a touch drag to place a cursor or select text in
+      // the primed/mounted title would be captured as a card swipe instead.
+      if (!isCoarsePointer || action.pending || titleState !== "idle") return;
+      // Block a brand-new gesture from starting while a previous fling/undo
+      // snap-back is still resolving — but once a gesture is under way, its
+      // own live dragOffset updates must not block its own continuation.
+      if (first && throwing) return;
+
+      if (active && !last) {
+        // Live 1:1 follow, horizontal only — the vertical (up/delete) axis
+        // keeps its existing invisible-until-release behavior, unchanged.
+        setIsDragging(true);
+        setDragOffset({ x: mx, y: 0 });
+        return;
+      }
+      if (!last) return;
+      setIsDragging(false);
+
       const absX = Math.abs(mx);
       const absY = Math.abs(my);
-      if (absX < SWIPE_DISTANCE_THRESHOLD && absY < SWIPE_DISTANCE_THRESHOLD) return;
+      if (absX < SWIPE_DISTANCE_THRESHOLD && absY < SWIPE_DISTANCE_THRESHOLD) {
+        setDragOffset(null); // below threshold — snap back
+        return;
+      }
 
-      if (absY > absX && dy > 0 && vy > 0) {
-        if (canSkip) action.submit({ kind: "skip" });
+      // AD-9 amended 2026-08-20: vertical swipe axis is up → delete; down is
+      // never a gesture (undo is button-only on every platform), so there is
+      // no branch mapping a downward drag to anything.
+      if (absY > absX && dy < 0 && vy > 0) {
+        setDragOffset(null);
+        if (canDelete) action.submit({ kind: "delete" });
         return;
       }
-      if (dx > 0 && vx > 0) {
-        if (canAcceptChosen) action.submit({ kind: "acceptChosen" });
+      if (dx > 0 && vx > 0 && canAcceptChosen) {
+        flingAndSubmit({ x: THROW_DISTANCE, y: 0 }, { kind: "acceptChosen" });
         return;
       }
-      if (dx < 0 && vx > 0) {
-        if (canAcceptDefault) action.submit({ kind: "acceptDefault" });
+      if (dx < 0 && vx > 0 && canAcceptDefault) {
+        flingAndSubmit({ x: -THROW_DISTANCE, y: 0 }, { kind: "acceptDefault" });
+        return;
       }
+      setDragOffset(null);
     },
     // touch-none + passive: false: the card must recognize its own vertical
-    // (down → skip) and horizontal (left/right → accept) gestures, so native
+    // (up → delete) and horizontal (left/right → accept) gestures, so native
     // browser touch-action handling is fully disabled here rather than left
     // to compete with useDrag on any axis (Story 4.8 review finding).
     { target: cardRef, eventOptions: { passive: false } },
   );
 
-  const progressIndex = session ? session.statements.findIndex((s) => s.id === current?.id) : -1;
-  const progressLabel =
-    session && current
-      ? t.individualReviewProgress
-          .replace("{current}", String(progressIndex + 1))
-          .replace("{total}", String(session.statements.length))
-      : "";
+  // Desktop: ← → keys mirror the left/right buttons (default/chosen accept
+  // only — delete/undo stay button-only). Ignored while a text input/select
+  // or the SoftLedgerSelect combobox (a custom listbox, not a native
+  // <select>) has focus, so it doesn't fight the title-edit field or the
+  // list picker's own arrow-key navigation.
+  useEffect(() => {
+    function onKeyDown(event: globalThis.KeyboardEvent) {
+      if (!current || throwing || action.pending) return;
+      const target = event.target;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        target instanceof HTMLButtonElement ||
+        (target instanceof Element &&
+          target.closest('[role="listbox"], [aria-haspopup="listbox"]'))
+      ) {
+        return;
+      }
+      if (event.key === "ArrowLeft" && canAcceptDefault) {
+        event.preventDefault();
+        flingAndSubmit({ x: -THROW_DISTANCE, y: 0 }, { kind: "acceptDefault" });
+      } else if (event.key === "ArrowRight" && canAcceptChosen) {
+        event.preventDefault();
+        flingAndSubmit({ x: THROW_DISTANCE, y: 0 }, { kind: "acceptChosen" });
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    current?.row.id,
+    canAcceptDefault,
+    canAcceptChosen,
+    throwing,
+    action.pending,
+    pickedListId,
+    defaultListId,
+  ]);
+
+  // Title edit state resets whenever the reviewed row changes — by any of
+  // assign/delete/undo resolving, or a session refresh (AC #8). Adjusted
+  // during render (not in an effect) per React's "reset state when a prop
+  // changes" pattern — avoids an extra commit-then-reset render pass.
+  if (lastRowIdRef.current !== current?.row.id) {
+    lastRowIdRef.current = current?.row.id;
+    setTitleState("idle");
+    setTitleDraft("");
+    setTitleError(null);
+  }
+
+  useEffect(() => {
+    if (titleState !== "editing") return;
+    const input = titleInputRef.current;
+    if (!input) return;
+    input.focus();
+    input.select();
+  }, [titleState]);
+
+  useEffect(() => {
+    if (titleState === "idle") return;
+    function onPointerDown(event: PointerEvent) {
+      const container = titleContainerRef.current;
+      if (container && event.target instanceof Node && container.contains(event.target)) {
+        return;
+      }
+      // Don't cancel out from under an in-flight commit — an outside click
+      // while the PATCH is pending would otherwise reset to idle immediately,
+      // leaving a later failure's titleError orphaned with no visible editing
+      // state to attach to.
+      if (titleSubmittingRef.current) return;
+      setTitleState("idle");
+      setTitleDraft("");
+      setTitleError(null);
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [titleState]);
+
+  function handleTitleClick() {
+    if (!current) return;
+    if (titleState === "idle") {
+      setTitleDraft(current.row.description);
+      setTitleError(null);
+      setTitleState("primed");
+      return;
+    }
+    if (titleState === "primed") {
+      setTitleState("editing");
+    }
+  }
+
+  async function commitTitleEdit() {
+    if (!current || titleSubmittingRef.current) return;
+    const trimmed = titleDraft.trim();
+    if (trimmed.length === 0) {
+      setTitleError(t.individualReviewErrorEmptyTitle);
+      return;
+    }
+    if (trimmed === current.row.description) {
+      setTitleState("idle");
+      setTitleDraft("");
+      setTitleError(null);
+      return;
+    }
+    setTitleError(null);
+    titleSubmittingRef.current = true;
+    setTitleSubmitting(true);
+    try {
+      const result = await editRowDescription(sessionId, current.row.id, trimmed, messages);
+      if (!result.ok) {
+        if (result.error === messages.errorRowNotAvailable) {
+          // Concurrent resolution between prime and commit (AC #9) — refresh
+          // from the next GET rather than showing a stale edit.
+          const refreshed = await fetchImportSession(sessionId, messages);
+          if (refreshed.ok) {
+            setSession(refreshed.session);
+          } else {
+            setSessionError(refreshed.error);
+            setTitleState("idle");
+            setTitleDraft("");
+            setTitleError(null);
+          }
+          return;
+        }
+        setTitleError(result.error);
+        return;
+      }
+      setSession(result.session);
+      setTitleState("idle");
+      setTitleDraft("");
+      setTitleError(null);
+    } finally {
+      titleSubmittingRef.current = false;
+      setTitleSubmitting(false);
+    }
+  }
+
+  function onTitleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void commitTitleEdit();
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setTitleState("idle");
+      setTitleDraft("");
+      setTitleError(null);
+    }
+  }
+
+  // Mirrors SessionReviewPanel.tsx's StatementCard `needsRegistration` — same
+  // statement shape, same OR'd fallback for a matched-but-not-yet-flagged card.
+  const needsCardRegistration =
+    card.needsRegistration ||
+    (!card.cardMatched && Boolean(current?.statement.iban) && !current?.statement.card_id);
+  const savedCardName = card.cardLabel || t.newCardTitle;
+  const period = current ? statementPeriodBounds(current.statement) : { start: null, end: null };
+
+  async function handleRegisterCard(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!cardLabelInput.trim()) return;
+    setRegistering(true);
+    const result = await card.registerCard(cardLabelInput.trim());
+    setRegistering(false);
+    if (result.ok) setCardLabelInput("");
+  }
 
   return (
     <main
-      className="min-h-full py-[2.5rem] px-[1.5rem]"
+      className="min-h-full flex flex-col gap-4 pb-[2.5rem] pt-3"
       style={{ fontFamily: "var(--font-ui), Manrope, system-ui, sans-serif" }}
     >
-      <div className="flex items-center justify-between max-w-[28rem] mb-[1.75rem]">
-        <h1 className="m-0 text-[1.75rem] font-[550] text-foreground">
-          {t.individualReviewTitle}
-        </h1>
-        {progressLabel ? (
-          <span className="text-muted text-[0.85rem]">{progressLabel}</span>
-        ) : null}
-      </div>
+      {sessionError || listsError ? (
+        <div className="mx-auto flex w-full max-w-[26rem] flex-col gap-4 px-[1.5rem]">
+          {sessionError ? (
+            <p className="text-owe text-[0.9rem] m-0" role="alert">
+              {sessionError}
+            </p>
+          ) : null}
+          {listsError ? (
+            <p className="text-owe text-[0.9rem] m-0" role="alert">
+              {listsError}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
-      <div className="flex flex-col gap-4 max-w-[28rem]">
-        {sessionError ? (
-          <p className="text-owe text-[0.9rem] m-0" role="alert">
-            {sessionError}
-          </p>
-        ) : null}
-        {listsError ? (
-          <p className="text-owe text-[0.9rem] m-0" role="alert">
-            {listsError}
-          </p>
-        ) : null}
+      {current ? (
+        <>
+          <div className="w-full px-2">
+            <div className="mx-auto flex w-full max-w-[26rem] flex-col gap-4">
+              <DirectionHint
+                template={
+                  isCoarsePointer
+                    ? t.individualReviewDirectionHintTouch
+                    : t.individualReviewDirectionHintKeyboard
+                }
+              />
 
-        {current ? (
-          <>
-            {/* Story 4.8.2: Consolidated card + file info + buttons (compact layout) */}
+              {listOptions.length > 0 ? (
+                <SoftLedgerSelect
+                  id={selectId}
+                  value={pickedListId}
+                  options={[{ value: "", label: t.individualReviewChooseList }, ...listOptions]}
+                  onChange={setPickedListId}
+                />
+              ) : null}
+            </div>
+          </div>
+
+          <div className="grid w-full grid-cols-[minmax(0,1fr)_minmax(0,14rem)_minmax(0,1fr)] grid-rows-[auto_auto] items-center gap-3 px-2 md:grid-cols-[minmax(0,1fr)_minmax(0,26rem)_minmax(0,1fr)]">
+            <IconButton
+              className="col-start-1 row-start-1 w-full min-w-0 justify-center self-center"
+              variant="ghost"
+              disabled={!canAcceptDefault || action.pending || throwing}
+              onClick={() =>
+                flingAndSubmit({ x: -THROW_DISTANCE, y: 0 }, { kind: "acceptDefault" })
+              }
+              label={
+                defaultListId
+                  ? t.individualReviewAcceptDefault.replace("{list}", defaultListName)
+                  : t.individualReviewNoDefaultListShort
+              }
+              caption={
+                action.pending && !throwing
+                  ? t.individualReviewCommitting
+                  : defaultListId
+                    ? defaultListName
+                    : t.individualReviewNoDefaultListShort
+              }
+              icon={<ArrowIcon className="w-4 h-4" />}
+            />
+
             <div
               ref={cardRef}
-              className="py-[1.25rem] px-[1.1rem] rounded-[10px] border border-border bg-surface touch-none"
+              className="relative col-start-2 row-start-1 flex min-h-[11rem] min-w-0 w-full flex-col justify-between rounded-[12px] border border-border bg-surface p-[1.25rem] shadow-lg touch-none"
+              style={{
+                transform: dragOffset
+                  ? `translateX(${dragOffset.x}px) rotate(${dragOffset.x / 20}deg)`
+                  : undefined,
+                // Only fade out once committed to a fling (post-release,
+                // isDragging false) — never during a live, uncommitted drag,
+                // or dragging far past the threshold and back below it
+                // makes the card vanish/reappear mid-gesture.
+                opacity:
+                  !isDragging && dragOffset && Math.abs(dragOffset.x) >= THROW_DISTANCE * 0.9
+                    ? 0
+                    : 1,
+                transition: isDragging ? "none" : "transform 220ms ease, opacity 220ms ease",
+              }}
             >
-              {/* Card identification */}
-              <div className="mb-[0.75rem]">
-                <p className="m-0 text-[0.75rem] uppercase tracking-[0.05rem] font-[550] text-muted mb-[0.25rem]">
-                  Card
-                </p>
-                {card.loading ? (
-                  <p className="m-0 text-[0.95rem] text-muted">{t.cardIdentificationTitle}…</p>
-                ) : card.cardMatched && card.cardLabel ? (
-                  <p className="m-0 text-[1rem] text-foreground font-[550]">{card.cardLabel}</p>
-                ) : card.needsRegistration && card.iban ? (
-                  <p className="m-0 text-[1rem] text-foreground font-[550]">{t.newCardTitle}</p>
+              <IconButton
+                className="absolute top-2 right-2"
+                variant="ghost"
+                disabled={!canDelete || action.pending || throwing}
+                onClick={() => action.submit({ kind: "delete" })}
+                label={
+                  action.pending ? t.individualReviewDeleting : t.individualReviewDelete
+                }
+                icon={<TrashIcon className="w-4 h-4" />}
+              />
+              <div
+                ref={titleContainerRef}
+                onClick={handleTitleClick}
+                role={titleState !== "editing" ? "button" : undefined}
+                tabIndex={titleState !== "editing" ? 0 : undefined}
+                onKeyDown={
+                  titleState !== "editing"
+                    ? (event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          handleTitleClick();
+                        }
+                      }
+                    : undefined
+                }
+                className={`cursor-text rounded-sm -mx-1 -my-1 min-w-0 py-1 pl-1 pr-8 ${titleState === "primed" ? "border border-accent" : ""
+                  }`}
+              >
+                {titleState === "editing" ? (
+                  <input
+                    ref={titleInputRef}
+                    value={titleDraft}
+                    onChange={(e) => setTitleDraft(e.currentTarget.value)}
+                    onKeyDown={onTitleKeyDown}
+                    maxLength={DESCRIPTION_MAX_LENGTH}
+                    disabled={titleSubmitting}
+                    autoComplete="off"
+                    aria-label={t.individualReviewTitleFieldLabel}
+                    className="w-full min-w-0 m-0 px-2 py-1 -mx-2 -my-1 rounded-sm border border-accent bg-surface text-foreground font-[550] text-[1.05rem] break-words whitespace-normal disabled:opacity-55"
+                  />
                 ) : (
-                  <p className="m-0 text-[0.95rem] text-muted">{t.individualReviewLoadingSession}</p>
+                  <h2 className="m-0 min-w-0 text-[1.05rem] font-[550] text-foreground break-words whitespace-normal overflow-visible">
+                    {current.row.description}
+                  </h2>
                 )}
               </div>
-
-              {/* File information */}
-              <div className="mb-[1rem]">
-                <p className="m-0 text-[0.9rem] text-muted font-mono">
-                  {current.filename}
-                  {current.status !== "failed" && ` [${current.candidate_row_count}]`}
+              {titleError ? (
+                <p role="alert" className="m-0 mt-1 text-owe text-[0.8rem]">
+                  {titleError}
                 </p>
-                {current.status === "failed" ? (
-                  <p className="m-0 text-owe text-[0.75rem] mt-[0.25rem]">
-                    {t.individualReviewFailedStatement}
-                  </p>
-                ) : null}
+              ) : null}
+              {/* Subtitle (store) — no adapter emits a structured merchant
+                    field yet, so this slot stays blank until one does. */}
+              <div>
+                <p
+                  className="m-0 mt-[0.75rem] text-[1.3rem] font-[500] text-foreground"
+                  style={{ fontFamily: "var(--font-brand), 'Times New Roman', serif" }}
+                >
+                  {formatRowAmount(current.row.amount, current.row.currency, locale)}
+                </p>
+                <p className="m-0 mt-[0.5rem] text-[0.8rem] text-muted">
+                  {formatRowDate(current.row.posted_date, locale)}
+                </p>
               </div>
-
-              {/* Action buttons - inline */}
-              <div className="flex gap-2">
-                {defaultListId ? (
-                  <button
-                    type="button"
-                    disabled={!canAcceptDefault || action.pending || dismiss.pending}
-                    onClick={() => action.submit({ kind: "acceptDefault" })}
-                    className="flex-1 m-0 px-3 py-[8px] rounded-sm border border-accent bg-accent text-surface cursor-pointer font-[550] text-[0.85rem] disabled:opacity-55 disabled:cursor-not-allowed"
-                  >
-                    {action.pending ? t.individualReviewCommitting : t.individualReviewAcceptDefault.replace("{list}", defaultListName)}
-                  </button>
-                ) : null}
-                {lists !== null && lists.length > 0 ? (
-                  <div className="flex-1">
-                    <SoftLedgerSelect
-                      id={selectId}
-                      value={pickedListId}
-                      options={[
-                        { value: "", label: t.individualReviewChooseList },
-                        ...listOptions,
-                      ]}
-                      onChange={setPickedListId}
-                    />
-                  </div>
-                ) : null}
-              </div>
-
-              {/* IBAN display (collapsed inside card) */}
-              {card.iban && (
-                <div className="mt-[1rem] pt-[1rem] border-t border-border">
-                  <p className="m-0 text-[0.75rem] text-muted font-[550] mb-[0.25rem]">
-                    {t.cardIdentificationIban}
-                  </p>
-                  <p className="m-0 text-[0.85rem] text-foreground font-mono">{card.iban}</p>
-                </div>
-              )}
             </div>
 
-            {/* Card registration form (Story 4.8.1) - only show if card needs registration */}
-            {card.needsRegistration && card.iban && (
-              <div className="flex flex-col gap-2 py-[1rem] px-[1.1rem] rounded-[10px] border border-border bg-surface">
-                <label htmlFor="card-label" className="text-[0.9rem] font-[550] text-foreground">
-                  {t.cardIdentificationLabel}
-                </label>
-                <input
-                  id="card-label"
-                  type="text"
-                  value={cardLabelInput}
-                  onChange={(e) => setCardLabelInput(e.currentTarget.value)}
-                  placeholder="e.g., My Visa"
-                  disabled={registering || card.loading}
-                  className="m-0 px-3 py-[9px] rounded-sm border border-border bg-surface text-foreground font-[450] text-[0.95rem] placeholder-muted disabled:opacity-55"
-                />
-                {card.error && (
-                  <p className="m-0 text-owe text-[0.85rem]">{card.error}</p>
-                )}
-                <button
-                  type="button"
-                  disabled={!cardLabelInput.trim() || registering || card.loading}
-                  onClick={async () => {
-                    setRegistering(true);
-                    const result = await card.registerCard(cardLabelInput.trim());
-                    setRegistering(false);
-                    if (result.ok) {
-                      setCardLabelInput("");
-                    }
-                  }}
-                  className="m-0 px-3 py-[9px] rounded-sm border border-accent bg-accent text-surface cursor-pointer font-[550] text-[0.95rem] disabled:opacity-55 disabled:cursor-not-allowed"
-                >
-                  {registering ? t.cardIdentificationRegistering : t.cardIdentificationRegister}
-                </button>
-              </div>
-            )}
+            <IconButton
+              className="col-start-3 row-start-1 w-full min-w-0 justify-center self-center"
+              variant="ghost"
+              disabled={!canAcceptChosen || action.pending || throwing}
+              onClick={() =>
+                flingAndSubmit({ x: THROW_DISTANCE, y: 0 }, { kind: "acceptChosen" })
+              }
+              label={t.individualReviewAcceptChosen.replace(
+                "{list}",
+                chosenListName || t.individualReviewChooseList,
+              )}
+              caption={
+                action.pending && !throwing
+                  ? t.individualReviewCommitting
+                  : chosenListName || t.individualReviewChooseList
+              }
+              icon={<ArrowIcon className="w-4 h-4 rotate-180" />}
+            />
 
-            {/* Error and loading states */}
+            <div />
+            <button
+              type="button"
+              disabled={!canUndo || action.pending || throwing}
+              onClick={() => action.submit({ kind: "undo" })}
+              className="col-start-2 row-start-2 justify-self-center m-0 px-3 py-[6px] rounded-sm border border-border bg-transparent text-foreground cursor-pointer font-[550] text-[0.8rem] disabled:opacity-55 disabled:cursor-not-allowed"
+            >
+              {action.pending ? t.individualReviewUndoing : t.individualReviewUndo}
+            </button>
+            <div />
+          </div>
+
+          <div className="w-full px-2">
+            <div className="mx-auto flex w-full max-w-[26rem] flex-col gap-4">
+              {/* Card identification / registration (Story 4.8.1) — subordinate
+                  to the four-direction card, only relevant when the row's
+                  parent statement carries an IBAN. Reuses CreditCardFace, same
+                  as SessionReviewPanel's StatementCard renders it. */}
+              {current.statement.iban ? (
+              <div className="w-full">
+                {card.loading ? (
+                  <p className="m-0 text-[0.85rem] text-muted">{t.cardIdentificationTitle}…</p>
+                ) : needsCardRegistration ? (
+                  <form className="m-0 w-full" onSubmit={handleRegisterCard}>
+                    <CreditCardFace
+                      cardName={
+                        <>
+                          <CreditCardMark />
+                          <label className="flex items-center gap-1.5 min-w-0 flex-1 rounded-[6px] border border-white/70 bg-white/8 py-1 px-2">
+                            <span className="sr-only">{t.cardIdentificationLabel}</span>
+                            <input
+                              type="text"
+                              name="label"
+                              value={cardLabelInput}
+                              onChange={(e) => setCardLabelInput(e.target.value)}
+                              placeholder={t.newCardTitle}
+                              disabled={registering || card.loading}
+                              autoComplete="off"
+                              maxLength={200}
+                              className="min-w-0 flex-1 m-0 p-0 border-0 bg-transparent text-white text-[0.78rem] font-semibold uppercase tracking-[0.04em] placeholder:text-white/55 placeholder:normal-case placeholder:tracking-normal focus:outline-none disabled:opacity-55"
+                            />
+                            <IconButton
+                              className="w-7 h-7 min-w-7 p-0! text-white hover:text-white"
+                              type="submit"
+                              disabled={!cardLabelInput.trim() || registering || card.loading}
+                              label={
+                                registering || card.loading
+                                  ? t.cardIdentificationRegistering
+                                  : t.cardIdentificationRegister
+                              }
+                              icon={<SaveIcon className="block w-4 h-4" />}
+                            />
+                          </label>
+                        </>
+                      }
+                      iban={current.statement.iban}
+                      filename={current.statement.filename}
+                      periodStart={period.start}
+                      periodEnd={period.end}
+                      periodLabel={t.cardPeriodLabel}
+                    />
+                  </form>
+                ) : (
+                  <CreditCardFace
+                    cardName={
+                      <>
+                        <CreditCardMark />
+                        <p className="m-0 min-w-0 truncate text-[0.78rem] font-semibold uppercase tracking-[0.06em]">
+                          {savedCardName}
+                        </p>
+                      </>
+                    }
+                    iban={current.statement.iban}
+                    filename={current.statement.filename}
+                    periodStart={period.start}
+                    periodEnd={period.end}
+                    periodLabel={t.cardPeriodLabel}
+                  />
+                )}
+              </div>
+            ) : null}
+            {card.error ? <p className="m-0 text-owe text-[0.85rem]">{card.error}</p> : null}
+
             <div aria-live="polite">
               {action.error ? (
                 <p className="text-owe text-[0.9rem] m-0" role="alert">
@@ -404,52 +880,20 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
                 <p className="text-muted text-[0.85rem] m-0">{t.individualReviewNoLists}</p>
               ) : null}
             </div>
-
-            {/* Primary action for choosing list if no default */}
-            {!defaultListId && lists !== null && lists.length > 0 ? (
-              <PrimaryButton
-                disabled={!canAcceptChosen || action.pending || dismiss.pending}
-                onClick={() => action.submit({ kind: "acceptChosen" })}
-              >
-                {action.pending
-                  ? t.individualReviewCommitting
-                  : t.individualReviewAcceptChosen.replace(
-                      "{list}",
-                      chosenListName || t.individualReviewChooseList,
-                    )}
-              </PrimaryButton>
-            ) : null}
-
-            {/* Skip button */}
-            <button
-              type="button"
-              disabled={!canSkip || action.pending || dismiss.pending}
-              onClick={() => action.submit({ kind: "skip" })}
-              className="m-0 px-3 py-[9px] rounded-sm border-none bg-transparent text-foreground cursor-pointer font-[550] text-[0.95rem] disabled:opacity-55 disabled:cursor-not-allowed"
-            >
-              {action.pending ? t.individualReviewSkipping : t.individualReviewSkip}
-            </button>
-          </>
-        ) : !session ? (
-          <p className="text-muted text-[0.85rem] m-0">{t.individualReviewLoadingSession}</p>
-        ) : null}
-
-        <div className="mt-2">
-          <button
-            type="button"
-            disabled={dismiss.pending || action.pending}
-            onClick={() => dismiss.submit(undefined)}
-            className="m-0 px-3 py-[9px] rounded-sm border border-border bg-transparent text-foreground cursor-pointer font-[550] text-[0.95rem] disabled:opacity-55 disabled:cursor-not-allowed"
-          >
-            {t.individualReviewDismissFile}
-          </button>
-          {dismiss.error ? (
-            <p className="text-owe text-[0.9rem] mt-2 mb-0" role="alert">
-              {dismiss.error}
-            </p>
-          ) : null}
-        </div>
-      </div>
+            </div>
+          </div>
+        </>
+      ) : !session ? (
+        <p className="mx-auto w-full max-w-[26rem] px-[1.5rem] text-muted text-[0.85rem] m-0">
+          {t.individualReviewLoadingSession}
+        </p>
+      ) : session.discarded_at ? null : (
+        // Interim placeholder only — Story 4.13.1 replaces this branch with
+        // ImportReviewSheet (the real "review is done, now Save" surface).
+        <p className="mx-auto w-full max-w-[26rem] px-[1.5rem] text-muted text-[0.9rem] m-0 py-[2rem] text-center">
+          {t.individualReviewAllCaughtUp}
+        </p>
+      )}
     </main>
   );
 }

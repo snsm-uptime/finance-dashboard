@@ -46,6 +46,10 @@
   --owe: var(--wb-owe);
   --owed: var(--wb-owed);
 
+  /* Dropdown rows: tint --surface so --foreground stays readable. Hover < selected. */
+  --menu-item-hover: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  --menu-item-selected: color-mix(in srgb, var(--accent) 22%, var(--surface));
+
   /* Soft-Ledger spacing (4px rhythm + named locks) */
   --space-1: 4px;
   --space-2: 8px;

@@ -14,6 +14,8 @@ import {
   type ReactNode,
 } from "react";
 
+import { menuSurface } from "@/components/MenuSurface";
+
 import styles from "./IconButtonPopup.module.scss";
 
 const STAY_OPEN = "data-stay-open";
@@ -134,9 +136,9 @@ export function IconButtonPopup({
     setOpen(false);
   }
 
-  const panelClass = panelClassName
-    ? `${styles.panel} ${panelClassName}`
-    : styles.panel;
+  const panelClass = [menuSurface.panel, styles.panel, panelClassName]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <div ref={rootRef} className={className}>
@@ -165,7 +167,8 @@ export function IconButtonPopupItem({
   ...rest
 }: IconButtonPopupItemProps) {
   const classes = [
-    styles.item,
+    menuSurface.item,
+    styles.itemLayout,
     danger ? styles.itemDanger : null,
     className,
   ]

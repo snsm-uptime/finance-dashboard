@@ -174,7 +174,7 @@ EN + ES from v1.
 2. Starts Upload via global Upload (Individual tonight; not list-Bulk shortcut).
 3. Picks a multi-statement BAC PDF from phone files.
 4. Chooses Individual review (not Bulk).
-5. Reviews **parsed transactions** one-at-a-time on a centered card over a dimmed backdrop: list picker, then swipe-right to chosen list; swipe-left → configurable default; swipe-up → delete. Undo is a button on every platform, never a gesture. *(Amended 2026-08-20 — see below.)*
+5. Reviews **parsed transactions** one-at-a-time on a full-width card in normal page flow: list picker, then swipe-right to chosen list; swipe-left → configurable default; swipe-up → delete. Undo is a button on every platform, never a gesture. *(Amended 2026-08-20 and 2026-08-24 — see below.)*
 6. Clean parses skip comparison; failures → PDF lower half vs extracted → quarantine accept or dismiss (see J3).
 7. When the pending queue is empty, **ImportReviewSheet** opens: assigned items grouped by destination list; **per-row discard** (returns that row to the card queue); **one Save** at the bottom. Discard → card review → sheet again until Save. PDF stays until Save. *(Added 2026-08-21.)*
 8. Completion summary (rows committed by destination list, deleted, zero-amount excluded, parse failures, imported N / skipped M duplicates); same-price conflicts if any (see J7).
@@ -192,6 +192,10 @@ EN + ES from v1.
 >
 > **Amended 2026-08-21** — Sprint Change Proposal 2026-08-21 (ImportReviewSheet). Last-card is not
 > session complete; Save on the sheet is.
+>
+> **Amended 2026-08-24** — code review of Story 4.13. Step 5 originally read "on a centered card
+> over a dimmed backdrop." Story 4.13 shipped a full-width card in normal page flow instead (no
+> scrim, not a modal) — reconciled here rather than reverted; see the story's Decision #5.
 10. **Climax:** settle-up strip shows what changed — the number he came to update (`{colors.owe}` / `{colors.owed}`).
 
 → Review chrome: [`mockups/review-individual.html`](./mockups/review-individual.html).

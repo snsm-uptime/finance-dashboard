@@ -366,9 +366,17 @@ describe("Soft-Ledger primitives", () => {
     });
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
     expect(host.querySelector("[role='listbox']")).not.toBeNull();
+    const alice = Array.from(host.querySelectorAll("[role='option']")).find(
+      (el) => el.textContent === "Alice",
+    ) as HTMLElement;
     const bob = Array.from(host.querySelectorAll("[role='option']")).find(
       (el) => el.textContent === "Bob",
     ) as HTMLElement;
+    expect(alice.getAttribute("aria-selected")).toBe("true");
+    expect(alice.className).toMatch(/itemSelected/);
+    expect(alice.className).not.toContain("bg-accent");
+    expect(bob.getAttribute("aria-selected")).toBe("false");
+    expect(bob.className).not.toMatch(/itemSelected/);
     act(() => {
       bob.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     });

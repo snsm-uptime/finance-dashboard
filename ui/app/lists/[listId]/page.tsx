@@ -12,6 +12,7 @@ import { getApiInternalUrl } from "@/lib/api";
 import { listsMessages } from "@/lib/i18n/lists";
 import type { Locale } from "@/lib/i18n/locale";
 import { fetchSession } from "@/lib/session";
+import { ListDetailChrome } from "../ListDetailChrome";
 import { ListDetailMobileActions } from "../ListDetailMobileActions";
 import { ManualExpenseForm } from "../ManualExpenseForm";
 import { OriginChipPicker } from "../OriginChipPicker";
@@ -445,7 +446,6 @@ export default async function ListDetailPage({
   const listTitle = detail?.name;
   const isOwner = Boolean(detail?.owner_id && detail.owner_id === session.user_id);
   const showListDetail = Boolean(listTitle) && !notFound && !loadError;
-  const navTitle = showListDetail ? (listTitle as string) : "";
   const stripProps = balanceStripPropsFrom(
     expenses.length > 0,
     balancesLoadError,
@@ -458,7 +458,7 @@ export default async function ListDetailPage({
       <div className={styles.softBody}>
         {notFound ? (
           <>
-            <h1 className={styles.title}>{t.detailNotFound}</h1>
+            <ListDetailChrome title={t.detailNotFound} />
             <p className={`${styles.copy} ${styles.softBack}`}>
               <Link className={styles.link} href="/home">
                 {t.backToLists}
@@ -467,7 +467,7 @@ export default async function ListDetailPage({
           </>
         ) : !showListDetail ? (
           <>
-            <h1 className={styles.title}>{t.loadError}</h1>
+            <ListDetailChrome title={t.loadError} />
             <p className={`${styles.copy} ${styles.softBack}`}>
               <Link className={styles.link} href="/home">
                 {t.backToLists}
@@ -476,6 +476,7 @@ export default async function ListDetailPage({
           </>
         ) : (
           <div className={styles.detailLayout}>
+            <ListDetailChrome title={listTitle as string} />
             <div className={styles.detailPrimary}>
               <BalanceStrip
                 who={stripProps.who}
@@ -631,9 +632,6 @@ export default async function ListDetailPage({
             <aside className={styles.detailSidebar}>
               {members.length > 0 && (
                 <div>
-                  <h1 className={styles.expenseTitle}>
-                    <span>{listTitle}</span>
-                  </h1>
                   <TemporalNavigation
                     listId={listId}
                     members={members}

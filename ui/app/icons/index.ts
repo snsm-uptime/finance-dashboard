@@ -19,3 +19,6 @@ export { MoonIcon } from "./MoonIcon";
 export { SystemIcon } from "./SystemIcon";
 export { HashtagIcon } from "./HashtagIcon";
 export { PercentageIcon } from "./PercentageIcon";
+export { ArrowIcon } from "./ArrowIcon";
+export { BackIcon } from "./BackIcon";
+export { TrashIcon } from "./TrashIcon";

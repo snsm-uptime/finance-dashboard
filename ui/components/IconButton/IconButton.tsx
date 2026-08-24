@@ -9,6 +9,12 @@ type Props = Omit<
 > & {
   icon: ReactNode;
   label: string;
+  /**
+   * Optional visible name under the icon. `label` stays the accessible name
+   * (`aria-label` / `title`); this is visual-only and does not change callers
+   * that omit it.
+   */
+  caption?: string;
   variant?: "default" | "muted" | "ghost";
   /**
    * Opt-in: stretch to fill the parent's width instead of hugging content.
@@ -24,6 +30,7 @@ type Props = Omit<
 
 const baseClasses =
   "inline-flex flex-shrink-0 items-center justify-center m-0 p-1 border-0 rounded-[8px] bg-transparent text-muted cursor-pointer leading-none transition-all duration-150 disabled:text-muted disabled:opacity-45 disabled:cursor-not-allowed";
+const captionLayoutClasses = "flex-col gap-1";
 const fillClasses = "!w-full min-w-0";
 
 export const IconButton = forwardRef<HTMLButtonElement, Props>(
@@ -31,6 +38,7 @@ export const IconButton = forwardRef<HTMLButtonElement, Props>(
     {
       icon,
       label,
+      caption,
       disabled,
       onClick,
       variant = "default",
@@ -46,13 +54,10 @@ export const IconButton = forwardRef<HTMLButtonElement, Props>(
         : variant === "ghost"
           ? styles.ghost
           : "";
-    const classes = fill
-      ? className
-        ? `${baseClasses} ${fillClasses} ${variantClass} ${styles.button} ${className}`
-        : `${baseClasses} ${fillClasses} ${variantClass} ${styles.button}`
-      : className
-        ? `${baseClasses} ${variantClass} ${styles.button} ${className}`
-        : `${baseClasses} ${variantClass} ${styles.button}`;
+    const layoutClass = caption ? captionLayoutClasses : "";
+    const classes = [baseClasses, layoutClass, fill ? fillClasses : "", variantClass, styles.button, className]
+      .filter(Boolean)
+      .join(" ");
 
     return (
       <button
@@ -66,6 +71,14 @@ export const IconButton = forwardRef<HTMLButtonElement, Props>(
         {...rest}
       >
         {icon}
+        {caption ? (
+          <span
+            aria-hidden
+            className="max-w-full text-center font-[550] text-[0.7rem] leading-tight"
+          >
+            {caption}
+          </span>
+        ) : null}
       </button>
     );
   }
