@@ -46,6 +46,15 @@
   transform: translateY(0);
 }
 
+/* Opt-in: fill from the viewport bottom to the AppShell chrome header. */
+.sheetFillBelowChrome {
+  height: var(--sheet-max-height);
+}
+
+.backdropFillBelowChrome {
+  top: var(--sheet-chrome-offset, 0px);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .backdrop,
   .sheet {
@@ -104,4 +113,11 @@
 .sheetBody :global(form) {
   max-width: none;
   margin-bottom: 0;
+}
+
+.sheetFooter {
+  flex: 0 0 auto;
+  width: 100%;
+  padding-top: var(--space-4);
+  background: var(--surface);
 }

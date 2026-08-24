@@ -223,6 +223,25 @@ describe("cards / import BFF smoke (coverage floor)", () => {
     );
     expect(cookieOnLastFetch()).toBe("fh_session=tok");
 
+    const unassign = await import(
+      "@/app/api/import/sessions/[sessionId]/rows/[rowId]/unassign/route"
+    );
+    expect(
+      (
+        await unassign.POST(
+          cookieRequest("http://localhost/api/import/sessions/s1/rows/r1/unassign", {
+            method: "POST",
+          }),
+          rowCtx,
+        )
+      ).status,
+    ).toBe(200);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test:8000/import/sessions/s1/rows/r1/unassign",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(cookieOnLastFetch()).toBe("fh_session=tok");
+
     const undo = await import("@/app/api/import/sessions/[sessionId]/undo/route");
     expect(
       (

@@ -535,3 +535,15 @@ class ImportNothingToUndoError(DomainError):
 
     def __init__(self) -> None:
         super().__init__(self.MESSAGE)
+
+
+class ImportRowNotDiscardableError(DomainError):
+    """Raised when ImportReviewSheet discard targets a dedup_skipped row
+    (Story 4.13.1). Returning it to pending would re-assign the same
+    identity and skip forever — a product dead-end, not a race."""
+
+    MESSAGE = "This row is already in that list and cannot be discarded."
+    CODE = "import_row_not_discardable"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)

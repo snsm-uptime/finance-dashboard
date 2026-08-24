@@ -16,6 +16,10 @@ class CandidateRowResponse(BaseModel):
 
     amount is a string and posted_date an ISO calendar-date string — money
     never crosses the JSON boundary as a number (AD-5).
+
+    resolved_list_id / dedup_skipped (Story 4.13.1): only meaningful for a
+    committed row. Pending `rows` omit them (defaults); `assigned_rows` always
+    sends both.
     """
 
     id: UUID
@@ -25,6 +29,8 @@ class CandidateRowResponse(BaseModel):
     currency: str
     posted_date: str
     status: str
+    resolved_list_id: UUID | None = None
+    dedup_skipped: bool = False
 
 
 class UndoPointerResponse(BaseModel):
@@ -42,6 +48,10 @@ class StagedStatementResponse(BaseModel):
     card_id: UUID | None = None  # Story 4.8.3: identified card (if IBAN matched)
     rows: list[CandidateRowResponse] = Field(default_factory=list)
     zero_amount_excluded_count: int = 0
+    # Story 4.13.1: committed rows (including dedup_skipped), for
+    # ImportReviewSheet. Sibling to the pending-only `rows` above — that
+    # contract (Story 4.11 AC #1) stays unchanged.
+    assigned_rows: list[CandidateRowResponse] = Field(default_factory=list)
 
 
 class ImportSessionResponse(BaseModel):

@@ -35,6 +35,8 @@ from application.import_session import (
     ImportBatchRecord,
     ImportSessionRecord,
     StagedStatementRecord,
+    UnassignCandidateRowCommand,
+    UnassignCandidateRowService,
     UndoLastResolutionCommand,
     UndoLastResolutionService,
     UploadStatementPdfCommand,
@@ -45,6 +47,7 @@ from domain.canonical_line import CanonicalLine, canonical_identity_key
 from domain.errors import (
     AmbiguousBankAdapterError,
     ImportRowNotAvailableError,
+    ImportRowNotDiscardableError,
     ImportRowNotFoundError,
     ImportSessionDiscardedError,
     ImportSessionHasPendingRowsError,
@@ -241,6 +244,9 @@ class _FakeImportSessionRepo:
     existing_identities: set[str] = field(default_factory=set)
     identity_lookups: list[dict] = field(default_factory=list)
     finalize_calls: list[UUID] = field(default_factory=list)
+    unassign_calls: list[UUID] = field(default_factory=list)
+    # Row ids that currently have a fake ledger entry (non-duplicate assigns).
+    open_ledger_row_ids: set[UUID] = field(default_factory=set)
 
     def create_session(
         self,
@@ -411,6 +417,7 @@ class _FakeImportSessionRepo:
             if rows
             else None
         )
+        self.open_ledger_row_ids.update(row.candidate_row_id for row in rows)
         return CommitOutcome(batch=batch, imported_new=len(rows), skipped_duplicate=len(duplicates))
 
     def mark_candidate_row_deleted(
@@ -431,14 +438,25 @@ class _FakeImportSessionRepo:
                     updated_rows.append(candidate)
                     continue
                 found = True
-                if candidate.status != ROW_STATUS_PENDING:
+                if candidate.status == ROW_STATUS_PENDING:
+                    updated_rows.append(
+                        replace(
+                            candidate,
+                            status=ROW_STATUS_DELETED,
+                            resolved_list_id=None,
+                            resolved_at=datetime.now(UTC),
+                        )
+                    )
+                    continue
+                if candidate.status != ROW_STATUS_COMMITTED:
                     raise ImportRowNotAvailableError()
+                self.open_ledger_row_ids.discard(candidate.id)
+                self.cleared_undo_pointers.append(session_id)
                 updated_rows.append(
                     replace(
                         candidate,
                         status=ROW_STATUS_DELETED,
                         resolved_list_id=None,
-                        resolved_at=datetime.now(UTC),
                     )
                 )
             status = (
@@ -555,6 +573,58 @@ class _FakeImportSessionRepo:
             discarded_at=record.discarded_at,
             statements=updated_statements,
         )
+
+    def unassign_candidate_row(
+        self, *, session_id: UUID, user_id: UUID, row_id: UUID
+    ) -> ImportSessionRecord:
+        record = self.sessions[session_id]
+        if record.user_id != user_id:
+            raise ImportSessionNotFoundError()
+        self.unassign_calls.append(row_id)
+        updated_statements: list[StagedStatementRecord] = []
+        found = False
+        for statement in record.statements:
+            updated_rows: list[CandidateRowRecord] = []
+            for candidate in statement.candidate_rows:
+                if candidate.id != row_id:
+                    updated_rows.append(candidate)
+                    continue
+                found = True
+                if candidate.status != ROW_STATUS_COMMITTED:
+                    raise ImportRowNotAvailableError()
+                if candidate.dedup_skipped:
+                    raise ImportRowNotDiscardableError()
+                self.open_ledger_row_ids.discard(candidate.id)
+                updated_rows.append(
+                    replace(
+                        candidate,
+                        status=ROW_STATUS_PENDING,
+                        resolved_list_id=None,
+                        resolved_at=None,
+                        dedup_skipped=False,
+                    )
+                )
+            status = (
+                STATEMENT_STATUS_STAGED
+                if statement.status == STATEMENT_STATUS_COMMITTED
+                and any(row.status == ROW_STATUS_PENDING for row in updated_rows)
+                else statement.status
+            )
+            updated_statements.append(
+                _copy_statement(statement, status=status, candidate_rows=updated_rows)
+            )
+        if not found:
+            raise ImportRowNotAvailableError()
+        # Mirrors the real repo's `_clear_pointer_on` (Story 4.13.1): sheet
+        # discard is not card-undo, so the pointer must not survive it.
+        self.cleared_undo_pointers.append(session_id)
+        updated = replace(
+            record,
+            discarded_at=record.discarded_at,
+            statements=updated_statements,
+        )
+        self.sessions[session_id] = updated
+        return updated
 
 
 @dataclass
@@ -1120,6 +1190,46 @@ def test_delete_candidate_row_then_all_deleted_statement_commits() -> None:
     assert after_all.finalized_at is None
 
 
+def test_delete_assigned_candidate_row_drops_ledger_leaves_no_pending_finalize_ok() -> None:
+    """ImportReviewSheet Save: delete a committed row without unassigning it
+    back to pending, reverse the assign-time ledger, then finalize."""
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    actor, list_id, lookup, session_id = _assign_fixture(
+        repo, storage, [_row("keep"), _row("discard")]
+    )
+    keep, discard = repo.get_session(session_id, actor).statements[0].candidate_rows
+    assign = AssignCandidateRowService(repo, lookup, _FakeFxService())
+    assign.execute(
+        AssignCandidateRowCommand(
+            actor_user_id=actor, session_id=session_id, row_id=keep.id, list_id=list_id
+        )
+    )
+    assign.execute(
+        AssignCandidateRowCommand(
+            actor_user_id=actor, session_id=session_id, row_id=discard.id, list_id=list_id
+        )
+    )
+    assert repo.open_ledger_row_ids == {keep.id, discard.id}
+
+    deleted = DeleteCandidateRowService(repo).execute(
+        DeleteCandidateRowCommand(actor_user_id=actor, session_id=session_id, row_id=discard.id)
+    )
+
+    by_id = {row.id: row for row in deleted.statements[0].candidate_rows}
+    assert by_id[discard.id].status == ROW_STATUS_DELETED
+    assert by_id[discard.id].resolved_list_id is None
+    assert by_id[keep.id].status == ROW_STATUS_COMMITTED
+    assert all(row.status != ROW_STATUS_PENDING for row in deleted.statements[0].candidate_rows)
+    assert repo.open_ledger_row_ids == {keep.id}
+    assert session_id in repo.cleared_undo_pointers
+
+    finalized = FinalizeImportSessionService(repo, storage).execute(
+        FinalizeImportSessionCommand(actor_user_id=actor, session_id=session_id)
+    )
+    assert finalized.finalized_at is not None
+
+
 def test_assign_candidate_row_discarded_session_rejected() -> None:
     repo = _FakeImportSessionRepo()
     storage = _FakePdfStorage()
@@ -1141,6 +1251,113 @@ def test_assign_candidate_row_discarded_session_rejected() -> None:
             )
         )
     assert repo.commit_calls == []
+
+
+def test_unassign_unknown_row_id_not_found() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    actor = uuid4()
+    session_id = _multi_statement_session(repo, storage, user_id=actor, parse_results=[[_row()]])
+
+    with pytest.raises(ImportRowNotFoundError):
+        UnassignCandidateRowService(repo).execute(
+            UnassignCandidateRowCommand(actor_user_id=actor, session_id=session_id, row_id=uuid4())
+        )
+    assert repo.unassign_calls == []
+
+
+def test_unassign_discarded_session_rejected_before_repo_call() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    actor, list_id, lookup, session_id = _assign_fixture(repo, storage, [_row()])
+    target = repo.get_session(session_id, actor).statements[0].candidate_rows[0]
+    AssignCandidateRowService(repo, lookup, _FakeFxService()).execute(
+        AssignCandidateRowCommand(
+            actor_user_id=actor, session_id=session_id, row_id=target.id, list_id=list_id
+        )
+    )
+    DiscardImportSessionService(repo, storage).execute(
+        DiscardImportSessionCommand(actor_user_id=actor, session_id=session_id)
+    )
+
+    with pytest.raises(ImportSessionDiscardedError):
+        UnassignCandidateRowService(repo).execute(
+            UnassignCandidateRowCommand(
+                actor_user_id=actor, session_id=session_id, row_id=target.id
+            )
+        )
+    assert repo.unassign_calls == []
+
+
+def test_unassign_pending_row_raises_not_available() -> None:
+    """A row that was never assigned is still pending — nothing to reverse."""
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    actor = uuid4()
+    session_id = _multi_statement_session(repo, storage, user_id=actor, parse_results=[[_row()]])
+    target = repo.get_session(session_id, actor).statements[0].candidate_rows[0]
+
+    with pytest.raises(ImportRowNotAvailableError):
+        UnassignCandidateRowService(repo).execute(
+            UnassignCandidateRowCommand(
+                actor_user_id=actor, session_id=session_id, row_id=target.id
+            )
+        )
+
+
+def test_unassign_dedup_skipped_row_raises_not_discardable_and_stays_committed() -> None:
+    """Story 4.12 deferred decision, resolved here: a duplicate-skipped row
+    never had a ledger entry, so returning it to pending would just re-assign
+    the same identity and skip forever — block before any reversal."""
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    line = _row("already-here")
+    actor, list_id, lookup, session_id = _assign_fixture(repo, storage, [line])
+    repo.existing_identities.add(canonical_identity_key(line))
+    target = repo.get_session(session_id, actor).statements[0].candidate_rows[0]
+    AssignCandidateRowService(repo, lookup, _FakeFxService()).execute(
+        AssignCandidateRowCommand(
+            actor_user_id=actor, session_id=session_id, row_id=target.id, list_id=list_id
+        )
+    )
+    assert repo.get_session(session_id, actor).statements[0].candidate_rows[0].dedup_skipped is True
+
+    with pytest.raises(ImportRowNotDiscardableError):
+        UnassignCandidateRowService(repo).execute(
+            UnassignCandidateRowCommand(
+                actor_user_id=actor, session_id=session_id, row_id=target.id
+            )
+        )
+
+    unchanged = repo.get_session(session_id, actor).statements[0].candidate_rows[0]
+    assert unchanged.status == ROW_STATUS_COMMITTED
+    assert unchanged.dedup_skipped is True
+
+
+def test_unassign_committed_row_returns_to_pending_and_clears_pointer() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    actor, list_id, lookup, session_id = _assign_fixture(repo, storage, [_row()])
+    target = repo.get_session(session_id, actor).statements[0].candidate_rows[0]
+    AssignCandidateRowService(repo, lookup, _FakeFxService()).execute(
+        AssignCandidateRowCommand(
+            actor_user_id=actor, session_id=session_id, row_id=target.id, list_id=list_id
+        )
+    )
+
+    result = UnassignCandidateRowService(repo).execute(
+        UnassignCandidateRowCommand(actor_user_id=actor, session_id=session_id, row_id=target.id)
+    )
+
+    restored = result.statements[0].candidate_rows[0]
+    assert restored.status == ROW_STATUS_PENDING
+    assert restored.resolved_list_id is None
+    assert restored.dedup_skipped is False
+    assert result.statements[0].status == STATEMENT_STATUS_STAGED
+    assert repo.unassign_calls == [target.id]
+    # Sheet discard is not card-undo — the pointer must not survive it, or the
+    # next card down/undo would reverse a sheet action instead of a card one.
+    assert repo.cleared_undo_pointers == [session_id]
 
 
 def test_staged_statement_record_has_no_unchecked_routing_mode_field() -> None:

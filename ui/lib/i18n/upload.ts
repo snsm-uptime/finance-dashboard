@@ -66,6 +66,24 @@ export const uploadMessages = {
     individualReviewErrorNothingToUndo: "There is nothing to undo.",
     individualReviewErrorSessionHasPendingRows:
       "There are still transactions to review in this import.",
+    individualReviewErrorRowNotDiscardable:
+      "This transaction is already in that list and can't be discarded.",
+    // ImportReviewSheet (Story 4.13.1)
+    importReviewSheetTitle: "Confirm placements",
+    importReviewSheetSave: "Save",
+    importReviewSheetSaving: "Saving…",
+    importReviewSheetDiscard: "Discard",
+    importReviewSheetDiscarding: "Discarding…",
+    importReviewSheetDiscardSelected: "Discard selected",
+    importReviewSheetDiscardingSelected: "Discarding…",
+    importReviewSheetChangeList: "Change List",
+    importReviewSheetChangingList: "Changing…",
+    importReviewSheetAlreadyInList: "Already in this list",
+    importReviewSheetEmpty: "All routed items were deleted.",
+    importReviewSheetUnknownDate: "Unknown date",
+    importReviewSheetDiscardedHeading: "Discarded",
+    importReviewSheetRestore: "Restore",
+    importReviewSheetClose: "Close",
     // Card identification (Story 4.8.1)
     cardIdentificationTitle: "Identify card",
     cardIdentificationIban: "IBAN",
@@ -143,6 +161,24 @@ export const uploadMessages = {
     individualReviewErrorNothingToUndo: "No hay nada que deshacer.",
     individualReviewErrorSessionHasPendingRows:
       "Todavía quedan transacciones por revisar en esta importación.",
+    individualReviewErrorRowNotDiscardable:
+      "Esta transacción ya está en esa lista y no se puede descartar.",
+    // ImportReviewSheet (Story 4.13.1)
+    importReviewSheetTitle: "Confirmar asignaciones",
+    importReviewSheetSave: "Guardar",
+    importReviewSheetSaving: "Guardando…",
+    importReviewSheetDiscard: "Descartar",
+    importReviewSheetDiscarding: "Descartando…",
+    importReviewSheetDiscardSelected: "Descartar selección",
+    importReviewSheetDiscardingSelected: "Descartando…",
+    importReviewSheetChangeList: "Cambiar lista",
+    importReviewSheetChangingList: "Cambiando…",
+    importReviewSheetAlreadyInList: "Ya está en esta lista",
+    importReviewSheetEmpty: "Todos los artículos asignados fueron eliminados.",
+    importReviewSheetUnknownDate: "Fecha desconocida",
+    importReviewSheetDiscardedHeading: "Descartados",
+    importReviewSheetRestore: "Restaurar",
+    importReviewSheetClose: "Cerrar",
     // Card identification (Story 4.8.1)
     cardIdentificationTitle: "Identificar tarjeta",
     cardIdentificationIban: "IBAN",

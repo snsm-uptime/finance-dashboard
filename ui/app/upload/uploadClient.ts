@@ -12,6 +12,10 @@ export type CandidateRow = {
   currency: string;
   posted_date: string;
   status: RowStatus;
+  // Story 4.13.1: only meaningful on an `assigned_rows` entry. Pending `rows`
+  // omit these on the wire; the parser defaults them.
+  resolved_list_id?: string | null;
+  dedup_skipped?: boolean;
 };
 
 export type StagedStatement = {
@@ -24,6 +28,8 @@ export type StagedStatement = {
   card_id: string | null; // Story 4.8.3: identified card at upload time
   rows: CandidateRow[];
   zero_amount_excluded_count: number;
+  // Story 4.13.1: committed rows (incl. dedup_skipped), for ImportReviewSheet.
+  assigned_rows: CandidateRow[];
 };
 
 export type ImportSession = {
@@ -76,6 +82,9 @@ export type IndividualReviewMessages = {
   // this code, and requiring it would force every other caller of this
   // shared type to supply a key it never triggers.
   errorSessionHasPendingRows?: string;
+  // Optional: only ImportReviewSheet's per-row discard (Story 4.13.1) can
+  // trigger this code (a dedup_skipped row).
+  errorRowNotDiscardable?: string;
   errorFxUnavailable: string;
   errorGeneric: string;
   errorUnauthorized: string;
@@ -148,6 +157,9 @@ function mapIndividualReviewError(
   if (code === "import_session_has_pending_rows") {
     return messages.errorSessionHasPendingRows ?? messages.errorGeneric;
   }
+  if (code === "import_row_not_discardable") {
+    return messages.errorRowNotDiscardable ?? messages.errorGeneric;
+  }
   if (code === "fx_service_unavailable") return messages.errorFxUnavailable;
   return messages.errorGeneric;
 }
@@ -197,6 +209,8 @@ function asCandidateRow(data: unknown): CandidateRow | null {
     currency: row.currency,
     posted_date: row.posted_date,
     status: row.status,
+    resolved_list_id: typeof row.resolved_list_id === "string" ? row.resolved_list_id : null,
+    dedup_skipped: row.dedup_skipped === true,
   };
 }
 
@@ -229,6 +243,16 @@ function asStagedStatement(data: unknown): StagedStatement | null {
       if (parsed) rows.push(parsed);
     }
   }
+  // Tolerant of absence (older API payload), like `rows` above: default to
+  // empty rather than rejecting an otherwise-valid statement.
+  const assignedRowsRaw = (row as { assigned_rows?: unknown }).assigned_rows;
+  const assignedRows: CandidateRow[] = [];
+  if (Array.isArray(assignedRowsRaw)) {
+    for (const item of assignedRowsRaw) {
+      const parsed = asCandidateRow(item);
+      if (parsed) assignedRows.push(parsed);
+    }
+  }
   return {
     id: row.id,
     product_id: row.product_id,
@@ -240,6 +264,7 @@ function asStagedStatement(data: unknown): StagedStatement | null {
     rows,
     zero_amount_excluded_count:
       typeof row.zero_amount_excluded_count === "number" ? row.zero_amount_excluded_count : 0,
+    assigned_rows: assignedRows,
   };
 }
 
@@ -459,6 +484,24 @@ export async function deleteRow(
 ): Promise<OkSession | ErrorResult> {
   return postRowMutation(
     `/api/import/sessions/${encodeURIComponent(sessionId)}/rows/${encodeURIComponent(rowId)}/delete`,
+    messages,
+  );
+}
+
+/**
+ * ImportReviewSheet per-row discard (Story 4.13.1): reverses a single
+ * committed row back to pending, hard-deletes its ledger entry. Not
+ * `undoLastResolution` — that is single-level and last-action-only; this
+ * targets an arbitrary assigned row. 409s (errorRowNotDiscardable) for a
+ * dedup_skipped row.
+ */
+export async function unassignRow(
+  sessionId: string,
+  rowId: string,
+  messages: IndividualReviewMessages,
+): Promise<OkSession | ErrorResult> {
+  return postRowMutation(
+    `/api/import/sessions/${encodeURIComponent(sessionId)}/rows/${encodeURIComponent(rowId)}/unassign`,
     messages,
   );
 }

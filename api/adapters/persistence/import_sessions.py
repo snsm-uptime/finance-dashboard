@@ -20,6 +20,7 @@ from domain.canonical_line import CanonicalLine
 from domain.errors import (
     ImportNothingToUndoError,
     ImportRowNotAvailableError,
+    ImportRowNotDiscardableError,
     ImportSessionNotFoundError,
     ImportStatementNotFoundError,
     InvalidCanonicalLineError,
@@ -449,7 +450,7 @@ class SqlAlchemyImportSessionRepository:
         if statement_row is None:
             raise ImportStatementNotFoundError()
 
-        result = self._session.execute(
+        pending = self._session.execute(
             update(ImportCandidateRowModel)
             .where(
                 ImportCandidateRowModel.id == row_id,
@@ -458,13 +459,33 @@ class SqlAlchemyImportSessionRepository:
             )
             .values(status=ROW_STATUS_DELETED, resolved_at=datetime.now(UTC))
         )
-        if result.rowcount == 0:
+        if pending.rowcount == 1:
+            self._complete_statement_if_resolved(statement_id)
+            row.last_resolved_row_id = row_id
+            row.last_resolved_action = UNDO_ACTION_DELETE
+            row.last_resolved_prior_status = ROW_STATUS_PENDING
+            self._session.flush()
+            self._reload_statement(statement_row)
+            return _session_record(row)
+
+        # ImportReviewSheet Save: drop an already-assigned row without
+        # returning it to pending (that would 409 finalize). Reverse the
+        # ledger write from assign; a dedup_skipped row has none.
+        assigned = self._session.execute(
+            update(ImportCandidateRowModel)
+            .where(
+                ImportCandidateRowModel.id == row_id,
+                ImportCandidateRowModel.statement_id == statement_id,
+                ImportCandidateRowModel.status == ROW_STATUS_COMMITTED,
+            )
+            .values(status=ROW_STATUS_DELETED, resolved_list_id=None)
+        )
+        if assigned.rowcount == 0:
             raise ImportRowNotAvailableError()
 
+        self._hard_delete_ledger_for_row(row_id)
         self._complete_statement_if_resolved(statement_id)
-        row.last_resolved_row_id = row_id
-        row.last_resolved_action = UNDO_ACTION_DELETE
-        row.last_resolved_prior_status = ROW_STATUS_PENDING
+        self._clear_pointer_on(row)
         self._session.flush()
         self._reload_statement(statement_row)
         return _session_record(row)
@@ -590,6 +611,79 @@ class SqlAlchemyImportSessionRepository:
         self._reload_statement(statement_row)
         return _session_record(row)
 
+    def unassign_candidate_row(
+        self, *, session_id: UUID, user_id: UUID, row_id: UUID
+    ) -> ImportSessionRecord:
+        """ImportReviewSheet per-row discard (Story 4.13.1). Reuses
+        `_undo_assign` for the ledger/batch-delete — same reversal as card
+        undo — but is not the single-level undo pointer: it targets an
+        arbitrary committed row, and clears the pointer rather than setting
+        it, so the next card down/undo cannot reverse a sheet action."""
+        row = self._load_session(session_id, user_id)
+        if row is None:
+            raise ImportSessionNotFoundError()
+
+        statement_row = next(
+            (
+                statement
+                for statement in row.statements
+                for candidate in statement.candidate_rows
+                if candidate.id == row_id
+            ),
+            None,
+        )
+        candidate_row = (
+            next((c for c in statement_row.candidate_rows if c.id == row_id), None)
+            if statement_row is not None
+            else None
+        )
+        if statement_row is None or candidate_row is None:
+            raise ImportRowNotAvailableError()
+        if candidate_row.status != ROW_STATUS_COMMITTED:
+            raise ImportRowNotAvailableError()
+        # Duplicate-skipped rows never had a ledger entry — re-assigning would
+        # collide with the same identity and skip forever (Story 4.12 deferred
+        # decision, resolved here: block before `_undo_assign` even looks).
+        if candidate_row.dedup_skipped:
+            raise ImportRowNotDiscardableError()
+
+        self._undo_assign(row_id)
+        self._reopen_statement_if_pending(statement_row.id)
+        self._clear_pointer_on(row)
+        self._session.flush()
+        self._reload_statement(statement_row)
+        return _session_record(row)
+
+    def _hard_delete_ledger_for_row(self, row_id: UUID) -> None:
+        entry = self._session.scalar(
+            select(LedgerEntryModel)
+            .where(LedgerEntryModel.import_candidate_row_id == row_id)
+            .limit(1)
+        )
+        if entry is None:
+            return
+
+        batch_id = entry.import_batch_id
+        # Hard delete, not a soft one: ledger_entries has no deleted_at, and
+        # the UNIQUE on import_candidate_row_id must actually be freed or every
+        # later re-assign of this row would conflict forever.
+        self._session.delete(entry)
+        self._session.flush()
+
+        if batch_id is None:
+            return
+        # A batch is one commit action (AD-4). Undo / assigned-delete means
+        # that action did not happen, so an emptied batch must not linger
+        # into Epic 5's rollback.
+        remaining = self._session.scalar(
+            select(LedgerEntryModel.id).where(LedgerEntryModel.import_batch_id == batch_id).limit(1)
+        )
+        if remaining is None:
+            batch_row = self._session.get(ImportBatchModel, batch_id)
+            if batch_row is not None:
+                self._session.delete(batch_row)
+                self._session.flush()
+
     def _undo_assign(self, row_id: UUID) -> None:
         result = self._session.execute(
             update(ImportCandidateRowModel)
@@ -610,33 +704,7 @@ class SqlAlchemyImportSessionRepository:
         if result.rowcount == 0:
             raise ImportRowNotAvailableError()
 
-        entry = self._session.scalar(
-            select(LedgerEntryModel)
-            .where(LedgerEntryModel.import_candidate_row_id == row_id)
-            .limit(1)
-        )
-        if entry is None:
-            return
-
-        batch_id = entry.import_batch_id
-        # Hard delete, not a soft one: ledger_entries has no deleted_at, and
-        # the UNIQUE on import_candidate_row_id must actually be freed or every
-        # later re-assign of this row would conflict forever.
-        self._session.delete(entry)
-        self._session.flush()
-
-        if batch_id is None:
-            return
-        # A batch is one commit action (AD-4). Undo means that action did not
-        # happen, so an emptied batch must not linger into Epic 5's rollback.
-        remaining = self._session.scalar(
-            select(LedgerEntryModel.id).where(LedgerEntryModel.import_batch_id == batch_id).limit(1)
-        )
-        if remaining is None:
-            batch_row = self._session.get(ImportBatchModel, batch_id)
-            if batch_row is not None:
-                self._session.delete(batch_row)
-                self._session.flush()
+        self._hard_delete_ledger_for_row(row_id)
 
     def _reload_statement(self, statement_row: ImportStatementModel) -> None:
         # Core UPDATE() does not expire identity-map collections, so a later
