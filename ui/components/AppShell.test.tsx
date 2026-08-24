@@ -37,12 +37,14 @@ function EnableHeader({
   href,
   title,
   details,
+  onBack,
 }: {
   href?: string;
   title?: string;
   details?: string;
+  onBack?: () => void;
 }) {
-  useChromeHeader({ backHref: href, title, details });
+  useChromeHeader({ backHref: href, title, details, onBack });
   return <p>screen</p>;
 }
 
@@ -125,6 +127,24 @@ describe("AppShell chrome header", () => {
     expect(heading?.textContent).toBe("Review statements");
     expect(header!.textContent).toContain("12 left");
     expect(header!.querySelector('button[aria-label="Back"]')).toBeTruthy();
+  });
+
+  it("runs onBack instead of pushing backHref when both are set", async () => {
+    const onBack = vi.fn();
+    await act(async () => {
+      root.render(
+        <AppShell>
+          <EnableHeader href="/upload" title="Review statements" onBack={onBack} />
+        </AppShell>,
+      );
+    });
+
+    const back = container.querySelector('button[aria-label="Back"]') as HTMLButtonElement;
+    await act(async () => {
+      back.click();
+    });
+    expect(onBack).toHaveBeenCalledTimes(1);
+    expect(push).not.toHaveBeenCalled();
   });
 
   it("shows the header when a screen opts in with title only", async () => {

@@ -11,6 +11,8 @@ import {
 export type ChromeHeaderConfig = {
   /** When set, AppShell renders a ghost Back IconButton that pushes this href. */
   backHref?: string | null;
+  /** When set, Back runs this instead of pushing `backHref` (e.g. discard then navigate). */
+  onBack?: (() => void) | null;
   title?: string | null;
   details?: string | null;
   trailing?: ReactNode;
@@ -38,7 +40,9 @@ export function useChromeHeaderState(): ChromeHeaderConfig {
 }
 
 export function chromeHeaderIsActive(header: ChromeHeaderConfig): boolean {
-  return Boolean(header.backHref || header.title || header.details || header.trailing);
+  return Boolean(
+    header.backHref || header.onBack || header.title || header.details || header.trailing,
+  );
 }
 
 /**
@@ -47,12 +51,12 @@ export function chromeHeaderIsActive(header: ChromeHeaderConfig): boolean {
  */
 export function useChromeHeader(config: ChromeHeaderConfig) {
   const setHeader = useContext(ChromeHeaderSetContext);
-  const { backHref, title, details, trailing } = config;
+  const { backHref, onBack, title, details, trailing } = config;
   useEffect(() => {
     if (!setHeader) return;
-    setHeader({ backHref, title, details, trailing });
+    setHeader({ backHref, onBack, title, details, trailing });
     return () => setHeader(emptyHeader);
-  }, [setHeader, backHref, title, details, trailing]);
+  }, [setHeader, backHref, onBack, title, details, trailing]);
 }
 
 export function useChromeBackHref(): string | null {

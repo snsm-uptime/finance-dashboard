@@ -8,6 +8,7 @@ import { UploadPanel } from "./UploadPanel";
 
 const uploadStatement = vi.fn();
 const discardSession = vi.fn();
+const fetchImportSession = vi.fn();
 
 vi.mock("./uploadClient", async () => {
   const actual = await vi.importActual<typeof import("./uploadClient")>("./uploadClient");
@@ -15,6 +16,7 @@ vi.mock("./uploadClient", async () => {
     ...actual,
     uploadStatement: (...args: unknown[]) => uploadStatement(...args),
     discardSession: (...args: unknown[]) => discardSession(...args),
+    fetchImportSession: (...args: unknown[]) => fetchImportSession(...args),
   };
 });
 
@@ -141,6 +143,8 @@ describe("UploadPanel", () => {
   beforeEach(() => {
     uploadStatement.mockReset();
     discardSession.mockReset();
+    fetchImportSession.mockReset();
+    sessionStorage.clear();
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -238,5 +242,22 @@ describe("UploadPanel", () => {
 
     expect(uploadStatement).toHaveBeenCalledTimes(1);
     expect(container.querySelector('input[type="file"]')).toBeNull();
+  });
+
+  it("resumes an open import session when returning to Upload", async () => {
+    sessionStorage.setItem("finance-helper.open-import-session-id", "s1");
+    fetchImportSession.mockResolvedValue({ ok: true, session: unmatchedSession });
+
+    await act(async () => {
+      root.render(<UploadPanel />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchImportSession).toHaveBeenCalledWith("s1", expect.anything());
+    expect(container.querySelector('input[type="file"]')).toBeNull();
+    expect(container.textContent).toContain("IBAN: DE89 3704 0044 0532 0130 00");
   });
 });

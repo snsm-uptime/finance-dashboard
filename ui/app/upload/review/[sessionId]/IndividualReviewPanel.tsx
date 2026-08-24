@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useId,
   useMemo,
@@ -9,6 +10,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from "react";
+import { useRouter } from "next/navigation";
 import { useDrag } from "@use-gesture/react";
 
 import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
@@ -25,6 +27,7 @@ import { CreditCardFace, CreditCardMark } from "../../CreditCardFace";
 import {
   assignRow,
   deleteRow,
+  discardSession,
   editRowDescription,
   fetchImportSession,
   undoLastResolution,
@@ -33,7 +36,12 @@ import {
   type ImportSession,
   type IndividualReviewMessages,
   type StagedStatement,
+  type UploadMessages,
 } from "../../uploadClient";
+import {
+  forgetOpenImportSession,
+  rememberOpenImportSession,
+} from "../../openImportSession";
 
 type IndividualReviewPanelProps = {
   sessionId: string;
@@ -166,6 +174,7 @@ function DirectionHint({ template }: { template: string }) {
 export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps) {
   const { locale } = usePreferences();
   const t = uploadCopy(locale);
+  const router = useRouter();
   const selectId = useId();
   const cardRef = useRef<HTMLDivElement>(null);
 
@@ -231,6 +240,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
       }
       setSessionError(null);
       setSession(result.session);
+      rememberOpenImportSession(sessionId);
     }
     load();
     return () => {
@@ -286,8 +296,25 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     session && current
       ? t.individualReviewProgress.replace("{count}", String(remainingCount))
       : "";
+  const discardMessages: UploadMessages = {
+    errorUnsupportedFileType: t.errorUnsupportedFileType,
+    errorUnknownStatement: t.errorUnknownStatement,
+    errorAmbiguousStatement: t.errorAmbiguousStatement,
+    errorUnreadableStatement: t.errorUnreadableStatement,
+    errorGeneric: t.errorGeneric,
+    errorUnauthorized: t.errorUnauthorized,
+  };
+  const leavingRef = useRef(false);
+  const onBack = useCallback(() => {
+    if (leavingRef.current) return;
+    leavingRef.current = true;
+    void discardSession(sessionId, discardMessages).finally(() => {
+      forgetOpenImportSession();
+      router.push("/upload");
+    });
+  }, [sessionId, router, discardMessages.errorGeneric, discardMessages.errorUnauthorized]);
   useChromeHeader({
-    backHref: "/upload",
+    onBack,
     title: t.individualReviewTitle,
     details: remainingLabel || null,
   });

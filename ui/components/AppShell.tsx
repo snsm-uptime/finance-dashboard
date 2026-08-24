@@ -44,12 +44,18 @@ function AppShellFrame({ children }: { children: ReactNode }) {
         {showHeader ? (
           <header className="flex shrink-0 items-center gap-2 pt-[max(0.5rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pb-1 pl-[max(0.5rem,env(safe-area-inset-left))]">
             <div className="flex w-10 shrink-0 items-center justify-start">
-              {header.backHref ? (
+              {header.onBack || header.backHref ? (
                 <IconButton
                   variant="ghost"
                   label={t.chromeBack}
                   icon={<BackIcon className="size-6" />}
-                  onClick={() => router.push(header.backHref!)}
+                  onClick={() => {
+                    if (header.onBack) {
+                      header.onBack();
+                      return;
+                    }
+                    if (header.backHref) router.push(header.backHref);
+                  }}
                 />
               ) : null}
             </div>

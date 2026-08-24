@@ -539,10 +539,11 @@ describe("IndividualReviewPanel", () => {
     expect(container.querySelector('button[aria-haspopup="listbox"]')).toBeNull();
   });
 
-  it("chrome back navigates to /upload without discarding the session", async () => {
+  it("chrome back discards the session then navigates to /upload", async () => {
     fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
     fetchLists.mockResolvedValue({ ok: true, lists: [] });
     stubAuthMeFetch(null);
+    discardSession.mockResolvedValue({ ok: true });
 
     await act(async () => {
       root.render(
@@ -556,20 +557,18 @@ describe("IndividualReviewPanel", () => {
       await Promise.resolve();
     });
 
-    expect(selectByText(container, "Dismiss file")).toBeUndefined();
-
     const header = container.querySelector("header")!;
-    expect(header.querySelector("h1")?.textContent).toBe("Review statements");
-    expect(header.textContent).toMatch(/\d+ left/);
     const back = header.querySelector('button[aria-label="Back"]') as HTMLButtonElement;
-    expect(back).toBeTruthy();
     await act(async () => {
       back.click();
     });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
 
+    expect(discardSession).toHaveBeenCalledWith("s1", expect.anything());
     expect(push).toHaveBeenCalledWith("/upload");
-    expect(discardSession).not.toHaveBeenCalled();
-    expect(container.querySelector("main h1")).toBeNull();
   });
 
   it("last-row resolution does not redirect and shows the interim placeholder", async () => {
