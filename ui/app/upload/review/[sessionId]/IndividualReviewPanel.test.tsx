@@ -4,12 +4,14 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { AppShell } from "@/components/AppShell";
 import { IndividualReviewPanel, nextReviewableRow } from "./IndividualReviewPanel";
 import { formatIbanGroups } from "../../CreditCardFace";
 import type { CandidateRow, ImportSession, StagedStatement } from "../../uploadClient";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({
+  usePathname: () => "/upload/review/s1",
   useRouter: () => ({ push }),
 }));
 
@@ -27,9 +29,9 @@ vi.mock("@/app/lists/listsClient", async () => {
 const fetchImportSession = vi.fn();
 const assignRow = vi.fn();
 const deleteRow = vi.fn();
-const discardSession = vi.fn();
 const undoLastResolution = vi.fn();
 const editRowDescription = vi.fn();
+const discardSession = vi.fn();
 vi.mock("../../uploadClient", async () => {
   const actual = await vi.importActual<typeof import("../../uploadClient")>("../../uploadClient");
   return {
@@ -37,9 +39,9 @@ vi.mock("../../uploadClient", async () => {
     fetchImportSession: (...args: unknown[]) => fetchImportSession(...args),
     assignRow: (...args: unknown[]) => assignRow(...args),
     deleteRow: (...args: unknown[]) => deleteRow(...args),
-    discardSession: (...args: unknown[]) => discardSession(...args),
     undoLastResolution: (...args: unknown[]) => undoLastResolution(...args),
     editRowDescription: (...args: unknown[]) => editRowDescription(...args),
+    discardSession: (...args: unknown[]) => discardSession(...args),
   };
 });
 
@@ -217,11 +219,11 @@ describe("IndividualReviewPanel", () => {
 
   beforeEach(() => {
     push.mockReset();
+    discardSession.mockReset();
     fetchLists.mockReset();
     fetchImportSession.mockReset();
     assignRow.mockReset();
     deleteRow.mockReset();
-    discardSession.mockReset();
     undoLastResolution.mockReset();
     editRowDescription.mockReset();
     capturedDragHandler = undefined;
@@ -254,6 +256,50 @@ describe("IndividualReviewPanel", () => {
     const main = container.querySelector("main")!;
     expect(main.className).not.toMatch(/bg-black/);
     expect(main.className).not.toMatch(/fixed/);
+  });
+
+  it("renders keyboard-variant direction hint with arrow keycaps, not inline unicode arrows in copy", async () => {
+    fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
+    fetchLists.mockResolvedValue({ ok: true, lists: [] });
+    stubAuthMeFetch(null);
+
+    await act(async () => {
+      root.render(<IndividualReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("Use the");
+    expect(container.textContent).toContain("arrow keys");
+    const hintKbds = [...container.querySelectorAll("kbd")].filter((el) =>
+      el.className.includes("bg-surface"),
+    );
+    expect(hintKbds.map((el) => el.textContent)).toEqual(["←", "→"]);
+    expect(hintKbds.every((el) => el.className.includes("text-accent"))).toBe(true);
+  });
+
+  it("renders touch-variant direction hint with the same keycaps", async () => {
+    stubCoarsePointer();
+    fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
+    fetchLists.mockResolvedValue({ ok: true, lists: [] });
+    stubAuthMeFetch(null);
+
+    await act(async () => {
+      root.render(<IndividualReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("Drag the card, or use the");
+    expect(container.textContent).toContain("arrow keys");
+    const hintKbds = [...container.querySelectorAll("kbd")].filter((el) =>
+      el.className.includes("bg-surface"),
+    );
+    expect(hintKbds.map((el) => el.textContent)).toEqual(["←", "→"]);
   });
 
   it("reuses CreditCardFace for the card-identification block when the statement has an IBAN", async () => {
@@ -493,30 +539,37 @@ describe("IndividualReviewPanel", () => {
     expect(container.querySelector('button[aria-haspopup="listbox"]')).toBeNull();
   });
 
-  it("Dismiss file calls discardSession and navigates to /upload", async () => {
+  it("chrome back navigates to /upload without discarding the session", async () => {
     fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
     fetchLists.mockResolvedValue({ ok: true, lists: [] });
     stubAuthMeFetch(null);
-    discardSession.mockResolvedValue({ ok: true });
 
     await act(async () => {
-      root.render(<IndividualReviewPanel sessionId="s1" />);
+      root.render(
+        <AppShell>
+          <IndividualReviewPanel sessionId="s1" />
+        </AppShell>,
+      );
     });
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
     });
 
-    const dismissButton = selectByText(container, "Dismiss file");
+    expect(selectByText(container, "Dismiss file")).toBeUndefined();
+
+    const header = container.querySelector("header")!;
+    expect(header.querySelector("h1")?.textContent).toBe("Review statements");
+    expect(header.textContent).toMatch(/\d+ left/);
+    const back = header.querySelector('button[aria-label="Back"]') as HTMLButtonElement;
+    expect(back).toBeTruthy();
     await act(async () => {
-      dismissButton.click();
-    });
-    await act(async () => {
-      await Promise.resolve();
+      back.click();
     });
 
-    expect(discardSession).toHaveBeenCalledWith("s1", expect.anything());
     expect(push).toHaveBeenCalledWith("/upload");
+    expect(discardSession).not.toHaveBeenCalled();
+    expect(container.querySelector("main h1")).toBeNull();
   });
 
   it("last-row resolution does not redirect and shows the interim placeholder", async () => {
@@ -553,7 +606,6 @@ describe("IndividualReviewPanel", () => {
       await Promise.resolve();
     });
 
-    expect(push).not.toHaveBeenCalled();
     expect(container.textContent).toContain("All caught up for now.");
   });
 

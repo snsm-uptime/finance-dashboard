@@ -9,11 +9,11 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from "react";
-import { useRouter } from "next/navigation";
 import { useDrag } from "@use-gesture/react";
 
 import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
 import { IconButton } from "@/components/IconButton";
+import { useChromeHeader } from "@/components/ChromeBack";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { useFormSubmission } from "@/hooks";
 import { fetchLists, type ListItem } from "@/app/lists/listsClient";
@@ -25,7 +25,6 @@ import { CreditCardFace, CreditCardMark } from "../../CreditCardFace";
 import {
   assignRow,
   deleteRow,
-  discardSession,
   editRowDescription,
   fetchImportSession,
   undoLastResolution,
@@ -34,7 +33,6 @@ import {
   type ImportSession,
   type IndividualReviewMessages,
   type StagedStatement,
-  type UploadMessages,
 } from "../../uploadClient";
 
 type IndividualReviewPanelProps = {
@@ -137,6 +135,29 @@ function formatRowDate(iso: string, locale: Locale): string {
   return locale === "es" ? `${dayName}, ${day} ${monthAbbr}` : `${dayName}, ${monthAbbr} ${day}`;
 }
 
+function ArrowKeyKbd({ arrow }: { arrow: "←" | "→" }) {
+  return (
+    <kbd
+      aria-hidden
+      className="inline-flex box-border h-[1.25rem] min-h-[1.25rem] min-w-[1.25rem] shrink-0 items-center justify-center rounded-[4px] border border-border bg-surface px-1 align-middle text-[0.75rem] leading-none font-[550] !text-accent"
+    >
+      {arrow}
+    </kbd>
+  );
+}
+
+function DirectionHint({ template }: { template: string }) {
+  return (
+    <p className="m-0 inline-flex w-full items-center justify-center gap-1 text-center text-muted text-[0.68rem]">
+      {template.split(/(\{left\}|\{right\})/g).map((part, index) => {
+        if (part === "{left}") return <ArrowKeyKbd key={index} arrow="←" />;
+        if (part === "{right}") return <ArrowKeyKbd key={index} arrow="→" />;
+        return <span key={index}>{part}</span>;
+      })}
+    </p>
+  );
+}
+
 /**
  * Individual review — one transaction at a time, four directional actions
  * (Story 4.13). Server (GET session) is the source of truth for which row is
@@ -145,7 +166,6 @@ function formatRowDate(iso: string, locale: Locale): string {
 export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps) {
   const { locale } = usePreferences();
   const t = uploadCopy(locale);
-  const router = useRouter();
   const selectId = useId();
   const cardRef = useRef<HTMLDivElement>(null);
 
@@ -199,15 +219,6 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     }),
     [t.errorCardAlreadyRegistered, t.errorInvalidCardLabel, t.errorGeneric, t.errorUnauthorized],
   );
-
-  const dismissMessages: UploadMessages = {
-    errorUnsupportedFileType: t.errorUnsupportedFileType,
-    errorUnknownStatement: t.errorUnknownStatement,
-    errorAmbiguousStatement: t.errorAmbiguousStatement,
-    errorUnreadableStatement: t.errorUnreadableStatement,
-    errorGeneric: t.errorGeneric,
-    errorUnauthorized: t.errorUnauthorized,
-  };
 
   useEffect(() => {
     let cancelled = false;
@@ -268,6 +279,18 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   }, []);
 
   const current = nextReviewableRow(session);
+  const remainingCount = session
+    ? session.statements.reduce((sum, statement) => sum + statement.rows.length, 0)
+    : 0;
+  const remainingLabel =
+    session && current
+      ? t.individualReviewProgress.replace("{count}", String(remainingCount))
+      : "";
+  useChromeHeader({
+    backHref: "/upload",
+    title: t.individualReviewTitle,
+    details: remainingLabel || null,
+  });
   const card = useCardIdentification(sessionId, current?.statement ?? null, cardMessages);
 
   const action = useFormSubmission(async (act: Action) => {
@@ -289,14 +312,6 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     if (!listId) return { ok: false, error: t.errorGeneric };
     const result = await assignRow(sessionId, row.id, listId, messages);
     if (result.ok) setSession(result.session);
-    return result;
-  });
-
-  const dismiss = useFormSubmission(async () => {
-    const result = await discardSession(sessionId, dismissMessages);
-    if (result.ok) {
-      router.push("/upload");
-    }
     return result;
   });
 
@@ -346,7 +361,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
 
   useDrag(
     ({ first, active, last, movement: [mx, my], velocity: [vx, vy], direction: [dx, dy] }) => {
-      if (!isCoarsePointer || action.pending || dismiss.pending) return;
+      if (!isCoarsePointer || action.pending) return;
       // Block a brand-new gesture from starting while a previous fling/undo
       // snap-back is still resolving — but once a gesture is under way, its
       // own live dragOffset updates must not block its own continuation.
@@ -401,7 +416,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   // list picker's own arrow-key navigation.
   useEffect(() => {
     function onKeyDown(event: globalThis.KeyboardEvent) {
-      if (!current || throwing || action.pending || dismiss.pending) return;
+      if (!current || throwing || action.pending) return;
       const target = event.target;
       if (
         target instanceof HTMLInputElement ||
@@ -423,7 +438,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current?.row.id, canAcceptDefault, canAcceptChosen, throwing, action.pending, dismiss.pending]);
+  }, [current?.row.id, canAcceptDefault, canAcceptChosen, throwing, action.pending]);
 
   // Title edit state resets whenever the reviewed row changes — by any of
   // assign/delete/undo resolving, or a session refresh (AC #8). Adjusted
@@ -529,14 +544,6 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     }
   }
 
-  const remainingCount = session
-    ? session.statements.reduce((sum, statement) => sum + statement.rows.length, 0)
-    : 0;
-  const remainingLabel =
-    session && current
-      ? t.individualReviewProgress.replace("{count}", String(remainingCount))
-      : "";
-
   // Mirrors SessionReviewPanel.tsx's StatementCard `needsRegistration` — same
   // statement shape, same OR'd fallback for a matched-but-not-yet-flagged card.
   const needsCardRegistration =
@@ -556,181 +563,180 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
 
   return (
     <main
-      className="min-h-full flex flex-col gap-4 py-[2.5rem]"
+      className="min-h-full flex flex-col gap-4 pb-[2.5rem] pt-3"
       style={{ fontFamily: "var(--font-ui), Manrope, system-ui, sans-serif" }}
     >
-      <div className="mx-auto flex w-full max-w-[26rem] flex-col gap-4 px-[1.5rem]">
-        <div className="flex items-center justify-between">
-          <h1 className="m-0 text-[1.5rem] font-[550] text-foreground">
-            {t.individualReviewTitle}
-          </h1>
-          {remainingLabel ? (
-            <span className="text-muted text-[0.85rem]">{remainingLabel}</span>
+      {sessionError || listsError ? (
+        <div className="mx-auto flex w-full max-w-[26rem] flex-col gap-4 px-[1.5rem]">
+          {sessionError ? (
+            <p className="text-owe text-[0.9rem] m-0" role="alert">
+              {sessionError}
+            </p>
+          ) : null}
+          {listsError ? (
+            <p className="text-owe text-[0.9rem] m-0" role="alert">
+              {listsError}
+            </p>
           ) : null}
         </div>
+      ) : null}
 
-        {sessionError ? (
-          <p className="text-owe text-[0.9rem] m-0" role="alert">
-            {sessionError}
-          </p>
-        ) : null}
-        {listsError ? (
-          <p className="text-owe text-[0.9rem] m-0" role="alert">
-            {listsError}
-          </p>
-        ) : null}
-      </div>
-
-        {current ? (
-          <>
-            <div className="grid w-full grid-cols-[minmax(0,1fr)_minmax(0,26rem)_minmax(0,1fr)] grid-rows-[auto_auto] items-center gap-3 px-2">
-              <IconButton
-                className="col-start-1 row-start-1 w-full min-w-0 justify-center self-center"
-                variant="ghost"
-                disabled={!canAcceptDefault || action.pending || dismiss.pending || throwing}
-                onClick={() =>
-                  flingAndSubmit({ x: -THROW_DISTANCE, y: 0 }, { kind: "acceptDefault" })
+      {current ? (
+        <>
+          <div className="w-full px-2">
+            <div className="mx-auto flex w-full max-w-[26rem] flex-col gap-4">
+              <DirectionHint
+                template={
+                  isCoarsePointer
+                    ? t.individualReviewDirectionHintTouch
+                    : t.individualReviewDirectionHintKeyboard
                 }
-                label={
-                  defaultListId
-                    ? t.individualReviewAcceptDefault.replace("{list}", defaultListName)
-                    : t.individualReviewNoDefaultListShort
-                }
-                caption={
-                  action.pending && !throwing
-                    ? t.individualReviewCommitting
-                    : defaultListId
-                      ? defaultListName
-                      : t.individualReviewNoDefaultListShort
-                }
-                icon={<ArrowIcon className="w-4 h-4" />}
               />
 
-              <div
-                ref={cardRef}
-                className="relative col-start-2 row-start-1 flex min-h-[11rem] min-w-0 w-full flex-col justify-between rounded-[12px] border border-border bg-surface p-[1.25rem] shadow-lg touch-none"
-                style={{
-                  transform: dragOffset
-                    ? `translateX(${dragOffset.x}px) rotate(${dragOffset.x / 20}deg)`
-                    : undefined,
-                  // Only fade out once committed to a fling (post-release,
-                  // isDragging false) — never during a live, uncommitted drag,
-                  // or dragging far past the threshold and back below it
-                  // makes the card vanish/reappear mid-gesture.
-                  opacity:
-                    !isDragging && dragOffset && Math.abs(dragOffset.x) >= THROW_DISTANCE * 0.9
-                      ? 0
-                      : 1,
-                  transition: isDragging ? "none" : "transform 220ms ease, opacity 220ms ease",
-                }}
-              >
-                <IconButton
-                  className="absolute top-2 right-2"
-                  variant="ghost"
-                  disabled={!canDelete || action.pending || dismiss.pending || throwing}
-                  onClick={() => action.submit({ kind: "delete" })}
-                  label={
-                    action.pending ? t.individualReviewDeleting : t.individualReviewDelete
-                  }
-                  icon={<TrashIcon className="w-4 h-4" />}
+              {listOptions.length > 0 ? (
+                <SoftLedgerSelect
+                  id={selectId}
+                  value={pickedListId}
+                  options={[{ value: "", label: t.individualReviewChooseList }, ...listOptions]}
+                  onChange={setPickedListId}
                 />
-                <div
-                  ref={titleContainerRef}
-                  onClick={handleTitleClick}
-                  className={`cursor-text rounded-sm -mx-1 -my-1 min-w-0 py-1 pl-1 pr-8 ${
-                    titleState === "primed" ? "border border-accent" : ""
-                  }`}
-                >
-                  {titleState === "editing" ? (
-                    <input
-                      ref={titleInputRef}
-                      value={titleDraft}
-                      onChange={(e) => setTitleDraft(e.currentTarget.value)}
-                      onKeyDown={onTitleKeyDown}
-                      maxLength={DESCRIPTION_MAX_LENGTH}
-                      disabled={titleSubmitting}
-                      autoComplete="off"
-                      aria-label={t.individualReviewTitleFieldLabel}
-                      className="w-full min-w-0 m-0 px-2 py-1 -mx-2 -my-1 rounded-sm border border-accent bg-surface text-foreground font-[550] text-[1.05rem] break-words whitespace-normal disabled:opacity-55"
-                    />
-                  ) : (
-                    <h2 className="m-0 min-w-0 text-[1.05rem] font-[550] text-foreground break-words whitespace-normal overflow-visible">
-                      {current.row.description}
-                    </h2>
-                  )}
-                </div>
-                {titleError ? (
-                  <p role="alert" className="m-0 mt-1 text-owe text-[0.8rem]">
-                    {titleError}
-                  </p>
-                ) : null}
-                {/* Subtitle (store) — no adapter emits a structured merchant
-                    field yet, so this slot stays blank until one does. */}
-                <div>
-                  <p
-                    className="m-0 mt-[0.75rem] text-[1.3rem] font-[500] text-foreground"
-                    style={{ fontFamily: "var(--font-brand), 'Times New Roman', serif" }}
-                  >
-                    {formatRowAmount(current.row.amount, current.row.currency)}
-                  </p>
-                  <p className="m-0 mt-[0.5rem] text-[0.8rem] text-muted">
-                    {formatRowDate(current.row.posted_date, locale)}
-                  </p>
-                </div>
-              </div>
+              ) : null}
+            </div>
+          </div>
 
+          <div className="grid w-full grid-cols-[minmax(0,1fr)_minmax(0,26rem)_minmax(0,1fr)] grid-rows-[auto_auto] items-center gap-3 px-2">
+            <IconButton
+              className="col-start-1 row-start-1 w-full min-w-0 justify-center self-center"
+              variant="ghost"
+              disabled={!canAcceptDefault || action.pending || throwing}
+              onClick={() =>
+                flingAndSubmit({ x: -THROW_DISTANCE, y: 0 }, { kind: "acceptDefault" })
+              }
+              label={
+                defaultListId
+                  ? t.individualReviewAcceptDefault.replace("{list}", defaultListName)
+                  : t.individualReviewNoDefaultListShort
+              }
+              caption={
+                action.pending && !throwing
+                  ? t.individualReviewCommitting
+                  : defaultListId
+                    ? defaultListName
+                    : t.individualReviewNoDefaultListShort
+              }
+              icon={<ArrowIcon className="w-4 h-4" />}
+            />
+
+            <div
+              ref={cardRef}
+              className="relative col-start-2 row-start-1 flex min-h-[11rem] min-w-0 w-full flex-col justify-between rounded-[12px] border border-border bg-surface p-[1.25rem] shadow-lg touch-none"
+              style={{
+                transform: dragOffset
+                  ? `translateX(${dragOffset.x}px) rotate(${dragOffset.x / 20}deg)`
+                  : undefined,
+                // Only fade out once committed to a fling (post-release,
+                // isDragging false) — never during a live, uncommitted drag,
+                // or dragging far past the threshold and back below it
+                // makes the card vanish/reappear mid-gesture.
+                opacity:
+                  !isDragging && dragOffset && Math.abs(dragOffset.x) >= THROW_DISTANCE * 0.9
+                    ? 0
+                    : 1,
+                transition: isDragging ? "none" : "transform 220ms ease, opacity 220ms ease",
+              }}
+            >
               <IconButton
-                className="col-start-3 row-start-1 w-full min-w-0 justify-center self-center"
+                className="absolute top-2 right-2"
                 variant="ghost"
-                disabled={!canAcceptChosen || action.pending || dismiss.pending || throwing}
-                onClick={() =>
-                  flingAndSubmit({ x: THROW_DISTANCE, y: 0 }, { kind: "acceptChosen" })
+                disabled={!canDelete || action.pending || throwing}
+                onClick={() => action.submit({ kind: "delete" })}
+                label={
+                  action.pending ? t.individualReviewDeleting : t.individualReviewDelete
                 }
-                label={t.individualReviewAcceptChosen.replace(
-                  "{list}",
-                  chosenListName || t.individualReviewChooseList,
-                )}
-                caption={
-                  action.pending && !throwing
-                    ? t.individualReviewCommitting
-                    : chosenListName || t.individualReviewChooseList
-                }
-                icon={<ArrowIcon className="w-4 h-4 rotate-180" />}
+                icon={<TrashIcon className="w-4 h-4" />}
               />
-
-              <div />
-              <button
-                type="button"
-                disabled={!canUndo || action.pending || dismiss.pending || throwing}
-                onClick={() => action.submit({ kind: "undo" })}
-                className="col-start-2 row-start-2 justify-self-center m-0 px-3 py-[6px] rounded-sm border border-border bg-transparent text-foreground cursor-pointer font-[550] text-[0.8rem] disabled:opacity-55 disabled:cursor-not-allowed"
+              <div
+                ref={titleContainerRef}
+                onClick={handleTitleClick}
+                className={`cursor-text rounded-sm -mx-1 -my-1 min-w-0 py-1 pl-1 pr-8 ${titleState === "primed" ? "border border-accent" : ""
+                  }`}
               >
-                {action.pending ? t.individualReviewUndoing : t.individualReviewUndo}
-              </button>
-              <div />
+                {titleState === "editing" ? (
+                  <input
+                    ref={titleInputRef}
+                    value={titleDraft}
+                    onChange={(e) => setTitleDraft(e.currentTarget.value)}
+                    onKeyDown={onTitleKeyDown}
+                    maxLength={DESCRIPTION_MAX_LENGTH}
+                    disabled={titleSubmitting}
+                    autoComplete="off"
+                    aria-label={t.individualReviewTitleFieldLabel}
+                    className="w-full min-w-0 m-0 px-2 py-1 -mx-2 -my-1 rounded-sm border border-accent bg-surface text-foreground font-[550] text-[1.05rem] break-words whitespace-normal disabled:opacity-55"
+                  />
+                ) : (
+                  <h2 className="m-0 min-w-0 text-[1.05rem] font-[550] text-foreground break-words whitespace-normal overflow-visible">
+                    {current.row.description}
+                  </h2>
+                )}
+              </div>
+              {titleError ? (
+                <p role="alert" className="m-0 mt-1 text-owe text-[0.8rem]">
+                  {titleError}
+                </p>
+              ) : null}
+              {/* Subtitle (store) — no adapter emits a structured merchant
+                    field yet, so this slot stays blank until one does. */}
+              <div>
+                <p
+                  className="m-0 mt-[0.75rem] text-[1.3rem] font-[500] text-foreground"
+                  style={{ fontFamily: "var(--font-brand), 'Times New Roman', serif" }}
+                >
+                  {formatRowAmount(current.row.amount, current.row.currency)}
+                </p>
+                <p className="m-0 mt-[0.5rem] text-[0.8rem] text-muted">
+                  {formatRowDate(current.row.posted_date, locale)}
+                </p>
+              </div>
             </div>
 
-            <div className="mx-auto flex w-full max-w-[26rem] flex-col gap-4 px-[1.5rem]">
-            <p className="m-0 text-center text-muted text-[0.68rem]">
-              {isCoarsePointer
-                ? t.individualReviewDirectionHintTouch
-                : t.individualReviewDirectionHintKeyboard}
-            </p>
+            <IconButton
+              className="col-start-3 row-start-1 w-full min-w-0 justify-center self-center"
+              variant="ghost"
+              disabled={!canAcceptChosen || action.pending || throwing}
+              onClick={() =>
+                flingAndSubmit({ x: THROW_DISTANCE, y: 0 }, { kind: "acceptChosen" })
+              }
+              label={t.individualReviewAcceptChosen.replace(
+                "{list}",
+                chosenListName || t.individualReviewChooseList,
+              )}
+              caption={
+                action.pending && !throwing
+                  ? t.individualReviewCommitting
+                  : chosenListName || t.individualReviewChooseList
+              }
+              icon={<ArrowIcon className="w-4 h-4 rotate-180" />}
+            />
 
-            {listOptions.length > 0 ? (
-              <SoftLedgerSelect
-                id={selectId}
-                value={pickedListId}
-                options={[{ value: "", label: t.individualReviewChooseList }, ...listOptions]}
-                onChange={setPickedListId}
-              />
-            ) : null}
+            <div />
+            <button
+              type="button"
+              disabled={!canUndo || action.pending || throwing}
+              onClick={() => action.submit({ kind: "undo" })}
+              className="col-start-2 row-start-2 justify-self-center m-0 px-3 py-[6px] rounded-sm border border-border bg-transparent text-foreground cursor-pointer font-[550] text-[0.8rem] disabled:opacity-55 disabled:cursor-not-allowed"
+            >
+              {action.pending ? t.individualReviewUndoing : t.individualReviewUndo}
+            </button>
+            <div />
+          </div>
 
-            {/* Card identification / registration (Story 4.8.1) — subordinate
-                to the four-direction card, only relevant when the row's
-                parent statement carries an IBAN. Reuses CreditCardFace, same
-                as SessionReviewPanel's StatementCard renders it. */}
-            {current.statement.iban ? (
+          <div className="w-full px-2">
+            <div className="mx-auto flex w-full max-w-[26rem] flex-col gap-4">
+              {/* Card identification / registration (Story 4.8.1) — subordinate
+                  to the four-direction card, only relevant when the row's
+                  parent statement carries an IBAN. Reuses CreditCardFace, same
+                  as SessionReviewPanel's StatementCard renders it. */}
+              {current.statement.iban ? (
               <div className="w-full">
                 {card.loading ? (
                   <p className="m-0 text-[0.85rem] text-muted">{t.cardIdentificationTitle}…</p>
@@ -754,7 +760,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
                               className="min-w-0 flex-1 m-0 p-0 border-0 bg-transparent text-white text-[0.78rem] font-semibold uppercase tracking-[0.04em] placeholder:text-white/55 placeholder:normal-case placeholder:tracking-normal focus:outline-none disabled:opacity-55"
                             />
                             <IconButton
-                              className="w-7 h-7 min-w-7 !p-0 text-white hover:text-white"
+                              className="w-7 h-7 min-w-7 p-0! text-white hover:text-white"
                               type="submit"
                               disabled={!cardLabelInput.trim() || registering || card.loading}
                               label={
@@ -809,34 +815,19 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
               ) : null}
             </div>
             </div>
-          </>
-        ) : !session ? (
-          <p className="mx-auto w-full max-w-[26rem] px-[1.5rem] text-muted text-[0.85rem] m-0">
-            {t.individualReviewLoadingSession}
-          </p>
-        ) : session.discarded_at ? null : (
-          // Interim placeholder only — Story 4.13.1 replaces this branch with
-          // ImportReviewSheet (the real "review is done, now Save" surface).
-          <p className="mx-auto w-full max-w-[26rem] px-[1.5rem] text-muted text-[0.9rem] m-0 py-[2rem] text-center">
-            {t.individualReviewAllCaughtUp}
-          </p>
-        )}
-
-        <div className="mx-auto mt-2 w-full max-w-[26rem] px-[1.5rem]">
-          <button
-            type="button"
-            disabled={dismiss.pending || action.pending}
-            onClick={() => dismiss.submit(undefined)}
-            className="m-0 px-3 py-[9px] rounded-sm border border-border bg-transparent text-foreground cursor-pointer font-[550] text-[0.95rem] disabled:opacity-55 disabled:cursor-not-allowed"
-          >
-            {t.individualReviewDismissFile}
-          </button>
-          {dismiss.error ? (
-            <p className="text-owe text-[0.9rem] mt-2 mb-0" role="alert">
-              {dismiss.error}
-            </p>
-          ) : null}
-        </div>
+          </div>
+        </>
+      ) : !session ? (
+        <p className="mx-auto w-full max-w-[26rem] px-[1.5rem] text-muted text-[0.85rem] m-0">
+          {t.individualReviewLoadingSession}
+        </p>
+      ) : session.discarded_at ? null : (
+        // Interim placeholder only — Story 4.13.1 replaces this branch with
+        // ImportReviewSheet (the real "review is done, now Save" surface).
+        <p className="mx-auto w-full max-w-[26rem] px-[1.5rem] text-muted text-[0.9rem] m-0 py-[2rem] text-center">
+          {t.individualReviewAllCaughtUp}
+        </p>
+      )}
     </main>
   );
 }
