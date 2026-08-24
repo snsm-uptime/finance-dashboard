@@ -658,7 +658,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
             </div>
           </div>
 
-          <div className="grid w-full grid-cols-[minmax(0,1fr)_minmax(0,26rem)_minmax(0,1fr)] grid-rows-[auto_auto] items-center gap-3 px-2">
+          <div className="grid w-full grid-cols-[minmax(0,1fr)_minmax(0,14rem)_minmax(0,1fr)] grid-rows-[auto_auto] items-center gap-3 px-2 md:grid-cols-[minmax(0,1fr)_minmax(0,26rem)_minmax(0,1fr)]">
             <IconButton
               className="col-start-1 row-start-1 w-full min-w-0 justify-center self-center"
               variant="ghost"

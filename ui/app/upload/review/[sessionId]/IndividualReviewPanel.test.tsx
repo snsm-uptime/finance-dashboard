@@ -258,6 +258,28 @@ describe("IndividualReviewPanel", () => {
     expect(main.className).not.toMatch(/fixed/);
   });
 
+  it("caps the expense card column on narrow viewports so side actions stay readable", async () => {
+    fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
+    fetchLists.mockResolvedValue({ ok: true, lists: [] });
+    stubAuthMeFetch(null);
+
+    await act(async () => {
+      root.render(<IndividualReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const grid = [...container.querySelectorAll("div")].find((el) =>
+      el.className.includes("grid-cols-[minmax(0,1fr)_minmax(0,14rem)_minmax(0,1fr)]"),
+    );
+    expect(grid).toBeTruthy();
+    expect(grid?.className).toContain(
+      "md:grid-cols-[minmax(0,1fr)_minmax(0,26rem)_minmax(0,1fr)]",
+    );
+  });
+
   it("renders keyboard-variant direction hint with arrow keycaps, not inline unicode arrows in copy", async () => {
     fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
     fetchLists.mockResolvedValue({ ok: true, lists: [] });
@@ -280,7 +302,7 @@ describe("IndividualReviewPanel", () => {
     expect(hintKbds.every((el) => el.className.includes("text-accent"))).toBe(true);
   });
 
-  it("renders touch-variant direction hint with the same keycaps", async () => {
+  it("renders a drag hint on coarse pointers instead of arrow-key keycaps", async () => {
     stubCoarsePointer();
     fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
     fetchLists.mockResolvedValue({ ok: true, lists: [] });
@@ -294,12 +316,9 @@ describe("IndividualReviewPanel", () => {
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain("Drag the card, or use the");
-    expect(container.textContent).toContain("arrow keys");
-    const hintKbds = [...container.querySelectorAll("kbd")].filter((el) =>
-      el.className.includes("bg-surface"),
-    );
-    expect(hintKbds.map((el) => el.textContent)).toEqual(["←", "→"]);
+    expect(container.textContent).toContain("Drag the card to the corresponding side");
+    expect(container.textContent).not.toContain("arrow keys");
+    expect(container.querySelectorAll("kbd")).toHaveLength(0);
   });
 
   it("reuses CreditCardFace for the card-identification block when the statement has an IBAN", async () => {
