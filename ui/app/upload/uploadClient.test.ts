@@ -8,6 +8,7 @@ import {
   editRowDescription,
   fetchImportSession,
   finalizeSession,
+  unassignRow,
   undoLastResolution,
   uploadStatement,
 } from "./uploadClient";
@@ -43,12 +44,13 @@ const individualReviewMessages = {
   errorRowNotAvailable: "row-not-available",
   errorNothingToUndo: "nothing-to-undo",
   errorSessionHasPendingRows: "session-has-pending-rows",
+  errorRowNotDiscardable: "row-not-discardable",
   errorFxUnavailable: "fx-unavailable",
   errorGeneric: "generic",
   errorUnauthorized: "unauthorized",
 };
 
-const emptyStatementFields = { rows: [], zero_amount_excluded_count: 0 };
+const emptyStatementFields = { rows: [], zero_amount_excluded_count: 0, assigned_rows: [] };
 
 // Story 4.12 added four fields that default when the payload omits them, so the
 // exact-shape assertions below spread these rather than restating them.
@@ -393,6 +395,8 @@ describe("uploadClient", () => {
         currency: "CRC",
         posted_date: "2026-01-01",
         status: "pending",
+        resolved_list_id: null,
+        dedup_skipped: false,
       },
     ]);
   });
@@ -524,6 +528,155 @@ describe("uploadClient", () => {
       "/api/import/sessions/s1/rows/r1/delete",
       expect.objectContaining({ method: "POST" }),
     );
+  });
+
+  it("unassignRow posts to the row unassign route", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        id: "s1",
+        created_at: "2026-08-19T00:00:00Z",
+        discarded_at: null,
+        statements: [],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await unassignRow("s1", "r1", individualReviewMessages);
+    expect(result.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/import/sessions/s1/rows/r1/unassign",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("unassignRow maps import_row_not_discardable to errorRowNotDiscardable (409)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: async () => ({ code: "import_row_not_discardable", detail: "no" }),
+      }),
+    );
+
+    const result = await unassignRow("s1", "r1", individualReviewMessages);
+    expect(result).toEqual({ ok: false, error: "row-not-discardable" });
+  });
+
+  it("asStagedStatement parses assigned_rows with resolved_list_id and dedup_skipped", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: "s1",
+          created_at: "2026-08-19T00:00:00Z",
+          discarded_at: null,
+          statements: [
+            {
+              id: "st1",
+              product_id: "bac_credit",
+              status: "staged",
+              candidate_row_count: 2,
+              iban: null,
+              filename: null,
+              card_id: null,
+              rows: [],
+              zero_amount_excluded_count: 0,
+              assigned_rows: [
+                {
+                  id: "r1",
+                  sequence: 1,
+                  description: "Coffee",
+                  amount: "10.00",
+                  currency: "CRC",
+                  posted_date: "2026-01-01",
+                  status: "committed",
+                  resolved_list_id: "l1",
+                  dedup_skipped: false,
+                },
+                {
+                  id: "r2",
+                  sequence: 2,
+                  description: "Lunch",
+                  amount: "5.00",
+                  currency: "CRC",
+                  posted_date: "2026-01-02",
+                  status: "committed",
+                  resolved_list_id: "l1",
+                  dedup_skipped: true,
+                },
+              ],
+            },
+          ],
+        }),
+      }),
+    );
+
+    const result = await fetchImportSession("s1", individualReviewMessages);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.session.statements[0].assigned_rows).toEqual([
+      {
+        id: "r1",
+        sequence: 1,
+        description: "Coffee",
+        amount: "10.00",
+        currency: "CRC",
+        posted_date: "2026-01-01",
+        status: "committed",
+        resolved_list_id: "l1",
+        dedup_skipped: false,
+      },
+      {
+        id: "r2",
+        sequence: 2,
+        description: "Lunch",
+        amount: "5.00",
+        currency: "CRC",
+        posted_date: "2026-01-02",
+        status: "committed",
+        resolved_list_id: "l1",
+        dedup_skipped: true,
+      },
+    ]);
+  });
+
+  it("asStagedStatement defaults assigned_rows to [] when the payload omits it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: "s1",
+          created_at: "2026-08-19T00:00:00Z",
+          discarded_at: null,
+          statements: [
+            {
+              id: "st1",
+              product_id: "bac_credit",
+              status: "staged",
+              candidate_row_count: 1,
+              iban: null,
+              filename: null,
+              card_id: null,
+              rows: [],
+              zero_amount_excluded_count: 0,
+              // assigned_rows omitted — mirrors an older API payload.
+            },
+          ],
+        }),
+      }),
+    );
+
+    const result = await fetchImportSession("s1", individualReviewMessages);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.session.statements[0].assigned_rows).toEqual([]);
   });
 
   it("undoLastResolution maps import_nothing_to_undo", async () => {

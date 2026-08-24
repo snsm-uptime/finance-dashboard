@@ -1549,3 +1549,246 @@ def test_landing_list_id_is_null_when_nothing_new_was_imported(
     assert payload["landing_list_id"] is None
     assert payload["imported_new_count"] == 0
     assert payload["skipped_duplicate_count"] == 0
+
+
+# --- Story 4.13.1: assigned_rows payload + per-row unassign (ImportReviewSheet) ---
+
+
+def test_get_session_assigned_rows_committed_only_pending_and_deleted_excluded(
+    client_with_fx: TestClient,
+) -> None:
+    client = client_with_fx
+    _register(client, "assignedrowsget@example.com")
+    list_id = _own_list_id(client)
+    session_id = _upload_bac_session(client)
+    rows = _pending_rows(client.get(f"/import/sessions/{session_id}").json())
+    assert len(rows) >= 3
+    assigned_row, deleted_row, still_pending_row = rows[0], rows[1], rows[2]
+
+    assert _assign(client, session_id, assigned_row["id"], list_id).status_code == 200
+    deleted = client.post(f"/import/sessions/{session_id}/rows/{deleted_row['id']}/delete")
+    assert deleted.status_code == 200, deleted.text
+
+    payload = client.get(f"/import/sessions/{session_id}").json()
+    statement = payload["statements"][0]
+    pending_ids = {row["id"] for row in statement["rows"]}
+    assigned_ids = {row["id"] for row in statement["assigned_rows"]}
+
+    # Pending-only contract (4.11 AC #1) stays unchanged.
+    assert deleted_row["id"] not in pending_ids
+    assert assigned_row["id"] not in pending_ids
+    assert still_pending_row["id"] in pending_ids
+    # assigned_rows is committed-only; deleted rows never appear in either array.
+    assert assigned_ids == {assigned_row["id"]}
+    assert deleted_row["id"] not in assigned_ids
+
+    entry = next(row for row in statement["assigned_rows"] if row["id"] == assigned_row["id"])
+    assert entry["resolved_list_id"] == list_id
+    assert entry["dedup_skipped"] is False
+    assert entry["status"] == ROW_STATUS_COMMITTED
+    assert isinstance(entry["amount"], str)
+    Decimal(entry["amount"])  # money asserts use Decimal, never float
+
+
+def test_unassign_returns_row_to_pending_hard_deletes_ledger_and_allows_reassign(
+    client_with_fx: TestClient, db_session: Session
+) -> None:
+    client = client_with_fx
+    _register(client, "unassignreassign@example.com")
+    list_id = _own_list_id(client)
+    session_id = _upload_bac_session(client)
+    row = _first_pending(client, session_id)
+    assert _assign(client, session_id, row["id"], list_id).status_code == 200
+
+    unassigned = client.post(f"/import/sessions/{session_id}/rows/{row['id']}/unassign")
+
+    assert unassigned.status_code == 200, unassigned.text
+    body = unassigned.json()
+    statement = body["statements"][0]
+    assert any(item["id"] == row["id"] for item in statement["rows"])
+    assert all(item["id"] != row["id"] for item in statement["assigned_rows"])
+    assert body["undo"] is None  # sheet discard is not card-undo; the pointer must not survive it
+
+    db_session.expire_all()
+    candidate = db_session.get(ImportCandidateRowModel, UUID(row["id"]))
+    assert candidate is not None
+    assert candidate.status == ROW_STATUS_PENDING
+    assert candidate.dedup_skipped is False
+    assert (
+        db_session.scalars(
+            select(LedgerEntryModel).where(
+                LedgerEntryModel.import_candidate_row_id == UUID(row["id"])
+            )
+        ).first()
+        is None
+    )
+
+    # UNIQUE(import_candidate_row_id) is actually freed — re-assign succeeds.
+    reassigned = _assign(client, session_id, row["id"], list_id)
+    assert reassigned.status_code == 200, reassigned.text
+
+
+def test_unassign_dedup_skipped_row_is_409_and_stays_committed(
+    client_with_fx: TestClient, db_session: Session
+) -> None:
+    client = client_with_fx
+    _register(client, "unassigndedup@example.com")
+    list_id = _own_list_id(client)
+    first_session = _upload_bac_session(client)
+    first_row = _first_pending(client, first_session)
+    identity = _identity_of(db_session, first_row["id"])
+    assert _assign(client, first_session, first_row["id"], list_id).status_code == 200
+
+    second_session = _upload_bac_session(client)
+    duplicate = next(
+        item
+        for item in _pending_rows(client.get(f"/import/sessions/{second_session}").json())
+        if _identity_of(db_session, item["id"]) == identity
+    )
+    assert _assign(client, second_session, duplicate["id"], list_id).status_code == 200
+    db_session.expire_all()
+    assert db_session.get(ImportCandidateRowModel, UUID(duplicate["id"])).dedup_skipped is True
+
+    response = client.post(f"/import/sessions/{second_session}/rows/{duplicate['id']}/unassign")
+
+    assert response.status_code == 409, response.text
+    assert response.json()["code"] == "import_row_not_discardable"
+    db_session.expire_all()
+    candidate = db_session.get(ImportCandidateRowModel, UUID(duplicate["id"]))
+    assert candidate.status == ROW_STATUS_COMMITTED
+    assert candidate.dedup_skipped is True
+
+
+def test_unassign_last_remaining_assigned_row_leaves_assigned_rows_empty(
+    client_with_fx: TestClient, db_session: Session
+) -> None:
+    client = client_with_fx
+    _register(client, "unassignlastrow@example.com")
+    user_id = UUID(client.get("/auth/me").json()["user_id"])
+    list_id = _own_list_id(client)
+    repo = SqlAlchemyImportSessionRepository(db_session)
+    record = repo.create_session(
+        session_id=uuid4(),
+        user_id=user_id,
+        statements=[
+            DetectedStatement(
+                product_id="fake_product",
+                status=STATEMENT_STATUS_STAGED,
+                candidate_rows=[_crc_line("only")],
+            )
+        ],
+        pdf_paths={0: "/data/pdfs/unassign-last-row.pdf"},
+    )
+    db_session.commit()
+    row_id = record.statements[0].candidate_rows[0].id
+    assert _assign(client, record.id, row_id, list_id).status_code == 200
+
+    unassigned = client.post(f"/import/sessions/{record.id}/rows/{row_id}/unassign")
+
+    assert unassigned.status_code == 200, unassigned.text
+    body = unassigned.json()
+    statement = body["statements"][0]
+    assert statement["status"] == STATEMENT_STATUS_STAGED
+    assert [row["id"] for row in statement["rows"]] == [str(row_id)]
+    assert statement["assigned_rows"] == []
+
+
+def test_unassign_unknown_row_id_is_404(client_with_fx: TestClient) -> None:
+    client = client_with_fx
+    _register(client, "unassignunknown@example.com")
+    session_id = _upload_bac_session(client)
+
+    response = client.post(f"/import/sessions/{session_id}/rows/{uuid4()}/unassign")
+
+    assert response.status_code == 404, response.text
+    assert response.json()["code"] == "import_row_not_found"
+
+
+def test_unassign_a_still_pending_row_is_409(client_with_fx: TestClient) -> None:
+    client = client_with_fx
+    _register(client, "unassignpending@example.com")
+    session_id = _upload_bac_session(client)
+    row = _first_pending(client, session_id)
+
+    response = client.post(f"/import/sessions/{session_id}/rows/{row['id']}/unassign")
+
+    assert response.status_code == 409, response.text
+    assert response.json()["code"] == "import_row_not_available"
+
+
+def test_finalize_after_unassign_reopens_pending_is_409(client_with_fx: TestClient) -> None:
+    """Unassign puts a row back in the review queue — finalize (Save) must
+    still refuse while it sits pending again."""
+    client = client_with_fx
+    _register(client, "finalizeafterunassign@example.com")
+    list_id = _own_list_id(client)
+    session_id = _upload_bac_session(client)
+    rows = _pending_rows(client.get(f"/import/sessions/{session_id}").json())
+    for row in rows:
+        assert _assign(client, session_id, row["id"], list_id).status_code == 200
+
+    assert (
+        client.post(f"/import/sessions/{session_id}/rows/{rows[0]['id']}/unassign").status_code
+        == 200
+    )
+
+    response = client.post(f"/import/sessions/{session_id}/finalize")
+
+    assert response.status_code == 409, response.text
+    assert response.json()["code"] == "import_session_has_pending_rows"
+
+
+def test_delete_assigned_row_reverses_ledger_leaves_no_pending_and_finalizes(
+    client_with_fx: TestClient, db_session: Session
+) -> None:
+    """ImportReviewSheet Save: POST .../delete on a committed row must not
+    409, must not return it to pending, must drop its ledger expense, and
+    remaining assigned rows must then finalize."""
+    client = client_with_fx
+    _register(client, "deleteassignedfinalize@example.com")
+    list_id = _own_list_id(client)
+    session_id = _upload_bac_session(client)
+    rows = _pending_rows(client.get(f"/import/sessions/{session_id}").json())
+    assert len(rows) >= 2
+    keep, discard = rows[0], rows[1]
+    for row in rows:
+        assert _assign(client, session_id, row["id"], list_id).status_code == 200
+
+    deleted = client.post(f"/import/sessions/{session_id}/rows/{discard['id']}/delete")
+
+    assert deleted.status_code == 200, deleted.text
+    body = deleted.json()
+    statement = body["statements"][0]
+    pending_ids = {row["id"] for row in statement["rows"]}
+    assigned_ids = {row["id"] for row in statement["assigned_rows"]}
+    assert discard["id"] not in pending_ids
+    assert discard["id"] not in assigned_ids
+    assert keep["id"] in assigned_ids
+    assert pending_ids == set()
+    assert body["undo"] is None
+
+    db_session.expire_all()
+    candidate = db_session.get(ImportCandidateRowModel, UUID(discard["id"]))
+    assert candidate is not None
+    assert candidate.status == ROW_STATUS_DELETED
+    assert candidate.resolved_list_id is None
+    assert (
+        db_session.scalars(
+            select(LedgerEntryModel).where(
+                LedgerEntryModel.import_candidate_row_id == UUID(discard["id"])
+            )
+        ).first()
+        is None
+    )
+    assert (
+        db_session.scalars(
+            select(LedgerEntryModel).where(
+                LedgerEntryModel.import_candidate_row_id == UUID(keep["id"])
+            )
+        ).first()
+        is not None
+    )
+
+    finalized = client.post(f"/import/sessions/{session_id}/finalize")
+    assert finalized.status_code == 200, finalized.text
+    assert finalized.json()["finalized_at"] is not None

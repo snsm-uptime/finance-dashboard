@@ -5,7 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppShell } from "@/components/AppShell";
-import { IndividualReviewPanel, nextReviewableRow } from "./IndividualReviewPanel";
+import { IndividualReviewPanel, nextReviewableRow, titleTextareaHeightPx } from "./IndividualReviewPanel";
 import { formatIbanGroups } from "../../CreditCardFace";
 import type { CandidateRow, ImportSession, StagedStatement } from "../../uploadClient";
 
@@ -32,6 +32,8 @@ const deleteRow = vi.fn();
 const undoLastResolution = vi.fn();
 const editRowDescription = vi.fn();
 const discardSession = vi.fn();
+const finalizeSession = vi.fn();
+const unassignRow = vi.fn();
 vi.mock("../../uploadClient", async () => {
   const actual = await vi.importActual<typeof import("../../uploadClient")>("../../uploadClient");
   return {
@@ -42,6 +44,8 @@ vi.mock("../../uploadClient", async () => {
     undoLastResolution: (...args: unknown[]) => undoLastResolution(...args),
     editRowDescription: (...args: unknown[]) => editRowDescription(...args),
     discardSession: (...args: unknown[]) => discardSession(...args),
+    finalizeSession: (...args: unknown[]) => finalizeSession(...args),
+    unassignRow: (...args: unknown[]) => unassignRow(...args),
   };
 });
 
@@ -97,6 +101,7 @@ function makeStatement(overrides: Partial<StagedStatement> = {}): StagedStatemen
     card_id: null,
     zero_amount_excluded_count: 0,
     rows: [makeRow()],
+    assigned_rows: [],
     ...overrides,
   };
 }
@@ -172,11 +177,14 @@ function dispatchOutsidePointerDown() {
 // setter, so `input.value = x` alone leaves the tracker already in sync and
 // the subsequent "input" event's onChange never fires. Calling the original
 // native setter directly (bypassing React's patch) avoids that.
-function setInputValue(input: HTMLInputElement, value: string) {
-  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!
-    .set!;
-  setter.call(input, value);
-  input.dispatchEvent(new Event("input", { bubbles: true }));
+function setFieldValue(field: HTMLInputElement | HTMLTextAreaElement, value: string) {
+  const proto =
+    field instanceof HTMLTextAreaElement
+      ? window.HTMLTextAreaElement.prototype
+      : window.HTMLInputElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(proto, "value")!.set!;
+  setter.call(field, value);
+  field.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
 describe("nextReviewableRow", () => {
@@ -211,6 +219,23 @@ describe("nextReviewableRow", () => {
     const session = makeSession({ statements: [statement] });
     expect(nextReviewableRow(session)).toEqual({ row: remaining, statement });
   });
+
+  it("skips staged-discarded pending row ids", () => {
+    const statement = makeStatement({ rows: [ROW_1, ROW_2] });
+    const session = makeSession({ statements: [statement] });
+    expect(nextReviewableRow(session, new Set(["r1"]))).toEqual({ row: ROW_2, statement });
+    expect(nextReviewableRow(session, new Set(["r1", "r2"]))).toBeNull();
+  });
+});
+
+describe("titleTextareaHeightPx", () => {
+  it("never shrinks below the original title height", () => {
+    expect(titleTextareaHeightPx(20, 20, 40)).toBe(40);
+  });
+
+  it("grows in whole line increments when content is taller", () => {
+    expect(titleTextareaHeightPx(41, 20, 40)).toBe(60);
+  });
 });
 
 describe("IndividualReviewPanel", () => {
@@ -218,6 +243,7 @@ describe("IndividualReviewPanel", () => {
   let root: Root;
 
   beforeEach(() => {
+    sessionStorage.clear();
     push.mockReset();
     discardSession.mockReset();
     fetchLists.mockReset();
@@ -226,6 +252,8 @@ describe("IndividualReviewPanel", () => {
     deleteRow.mockReset();
     undoLastResolution.mockReset();
     editRowDescription.mockReset();
+    finalizeSession.mockReset();
+    unassignRow.mockReset();
     capturedDragHandler = undefined;
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -444,14 +472,10 @@ describe("IndividualReviewPanel", () => {
     expect(optionLabels).not.toContain("Household");
   });
 
-  it("Delete advances without calling assign", async () => {
+  it("Delete stages the row without calling deleteRow or assign", async () => {
     fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
     fetchLists.mockResolvedValue({ ok: true, lists: [] });
     stubAuthMeFetch(null);
-    deleteRow.mockResolvedValue({
-      ok: true,
-      session: makeSession({ statements: [makeStatement({ rows: [] })] }),
-    });
 
     await act(async () => {
       root.render(<IndividualReviewPanel sessionId="s1" />);
@@ -469,14 +493,17 @@ describe("IndividualReviewPanel", () => {
       await Promise.resolve();
     });
 
-    expect(deleteRow).toHaveBeenCalledWith("s1", "r1", expect.anything());
+    expect(deleteRow).not.toHaveBeenCalled();
     expect(assignRow).not.toHaveBeenCalled();
+    expect(selectByText(document.body, "Save")).not.toBeNull();
+    expect(document.body.textContent).toContain("Discarded");
+    expect(document.body.textContent).toContain("Coffee");
   });
 
-  it("Undo is disabled with no undo pointer, and calls undoLastResolution once available", async () => {
-    // Two rows: deleting the first must leave the queue non-empty so the
+  it("Undo is disabled with no undo pointer, and restores a staged card-discard without calling the server", async () => {
+    // Two rows: staging-discard the first must leave the queue non-empty so the
     // four-direction card (and its Undo button) is still on screen — an
-    // empty queue renders the interim placeholder instead (Task 8.2), which
+    // empty queue renders the confirm sheet instead, which
     // has no undo control by design.
     const session = makeSession({ statements: [makeStatement({ rows: [ROW_1, ROW_2] })] });
     fetchImportSession.mockResolvedValue({ ok: true, session });
@@ -494,13 +521,6 @@ describe("IndividualReviewPanel", () => {
     const undoButton = selectByText(container, "Undo");
     expect(undoButton.disabled).toBe(true);
 
-    deleteRow.mockResolvedValue({
-      ok: true,
-      session: makeSession({
-        statements: [makeStatement({ rows: [ROW_2] })],
-        undo: { row_id: "r1", action: "delete" },
-      }),
-    });
     const deleteButton = selectByLabel(container, "Delete");
     await act(async () => {
       deleteButton.click();
@@ -510,13 +530,12 @@ describe("IndividualReviewPanel", () => {
       await Promise.resolve();
     });
 
+    expect(deleteRow).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("Lunch");
+
     const undoButtonAfter = selectByText(container, "Undo");
     expect(undoButtonAfter.disabled).toBe(false);
 
-    undoLastResolution.mockResolvedValue({
-      ok: true,
-      session: makeSession({ undo: null }),
-    });
     await act(async () => {
       undoButtonAfter.click();
     });
@@ -524,7 +543,8 @@ describe("IndividualReviewPanel", () => {
       await Promise.resolve();
     });
 
-    expect(undoLastResolution).toHaveBeenCalledWith("s1", expect.anything());
+    expect(undoLastResolution).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("Coffee");
   });
 
   it("card-identification gating blocks accept for an unregistered IBAN but not delete", async () => {
@@ -624,7 +644,9 @@ describe("IndividualReviewPanel", () => {
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain("All caught up for now.");
+    expect(push).not.toHaveBeenCalled();
+    expect(selectByText(document.body, "Save")).toBeTruthy();
+    expect(document.body.textContent).toContain("Confirm placements");
   });
 
   it("picker selection persists across rows after a successful assign (Task 4.1 regression)", async () => {
@@ -680,7 +702,6 @@ describe("IndividualReviewPanel", () => {
     });
     stubAuthMeFetch("l2");
     assignRow.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
-    deleteRow.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
 
     await act(async () => {
       root.render(<IndividualReviewPanel sessionId="s1" />);
@@ -722,14 +743,14 @@ describe("IndividualReviewPanel", () => {
     });
     expect(assignRow).toHaveBeenCalledWith("s1", "r1", "l2", expect.anything());
 
-    // Swipe up past the threshold: delete.
+    // Swipe up past the threshold: stage-discard, no server delete.
     await act(async () => {
       capturedDragHandler!({ last: true, movement: [0, -120], velocity: [0, 2], direction: [0, -1] });
     });
     await act(async () => {
       await Promise.resolve();
     });
-    expect(deleteRow).toHaveBeenCalledWith("s1", "r1", expect.anything());
+    expect(deleteRow).not.toHaveBeenCalled();
 
     // Swipe down past the threshold: never a gesture — nothing fires.
     deleteRow.mockClear();
@@ -799,6 +820,38 @@ describe("IndividualReviewPanel", () => {
     expect(assignRow).toHaveBeenCalledWith("s1", "r1", "l2", expect.anything());
   });
 
+  it("arrow keys still preventDefault while a throw is in flight so the page cannot pan", async () => {
+    fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
+    fetchLists.mockResolvedValue({ ok: true, lists: [] });
+    stubAuthMeFetch("l2");
+    assignRow.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
+
+    await act(async () => {
+      root.render(<IndividualReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, cancelable: true }));
+    });
+
+    const duringThrow = new KeyboardEvent("keydown", {
+      key: "ArrowLeft",
+      bubbles: true,
+      cancelable: true,
+    });
+    await act(async () => {
+      window.dispatchEvent(duringThrow);
+    });
+    expect(duringThrow.defaultPrevented).toBe(true);
+
+    await waitOutThrow();
+    expect(assignRow).toHaveBeenCalledTimes(1);
+  });
+
   it("arrow keys are ignored while the title input is focused", async () => {
     fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
     fetchLists.mockResolvedValue({ ok: true, lists: [] });
@@ -823,10 +876,10 @@ describe("IndividualReviewPanel", () => {
     await act(async () => {
       clickable.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    const input = container.querySelector("input") as HTMLInputElement;
+    const field = container.querySelector("textarea") as HTMLTextAreaElement;
 
     await act(async () => {
-      input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+      field.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
     });
     await waitOutThrow();
 
@@ -873,10 +926,10 @@ describe("IndividualReviewPanel", () => {
       });
     }
 
-    it("first click primes (soft border, no input); second click mounts and focuses the input", async () => {
+    it("first click primes (soft border, no field); second click mounts and focuses a textarea with the original text", async () => {
       await renderWithSession(SESSION_ONE_PENDING);
 
-      expect(container.querySelector("input[value]")).toBeNull();
+      expect(container.querySelector("textarea")).toBeNull();
       const title = Array.from(container.querySelectorAll("h2, div")).find(
         (el) => el.textContent === "Coffee",
       ) as HTMLElement;
@@ -885,14 +938,15 @@ describe("IndividualReviewPanel", () => {
       await act(async () => {
         clickable.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       });
-      expect(container.querySelector("input")).toBeNull();
+      expect(container.querySelector("textarea")).toBeNull();
 
       await act(async () => {
         clickable.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       });
-      const input = container.querySelector("input") as HTMLInputElement;
-      expect(input).not.toBeNull();
-      expect(document.activeElement).toBe(input);
+      const field = container.querySelector("textarea") as HTMLTextAreaElement;
+      expect(field).not.toBeNull();
+      expect(field.value).toBe("Coffee");
+      expect(document.activeElement).toBe(field);
     });
 
     it("Enter with unchanged text is a no-op (no PATCH call)", async () => {
@@ -907,10 +961,10 @@ describe("IndividualReviewPanel", () => {
       await act(async () => {
         clickable.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       });
-      const input = container.querySelector("input") as HTMLInputElement;
+      const field = container.querySelector("textarea") as HTMLTextAreaElement;
 
       await act(async () => {
-        input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+        field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
       });
 
       expect(editRowDescription).not.toHaveBeenCalled();
@@ -928,13 +982,13 @@ describe("IndividualReviewPanel", () => {
       await act(async () => {
         clickable.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       });
-      const input = container.querySelector("input") as HTMLInputElement;
+      const field = container.querySelector("textarea") as HTMLTextAreaElement;
 
       await act(async () => {
-        setInputValue(input, "   ");
+        setFieldValue(field, "   ");
       });
       await act(async () => {
-        input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+        field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
       });
 
       expect(editRowDescription).not.toHaveBeenCalled();
@@ -954,13 +1008,13 @@ describe("IndividualReviewPanel", () => {
       await act(async () => {
         clickable.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       });
-      const input = container.querySelector("input") as HTMLInputElement;
+      const field = container.querySelector("textarea") as HTMLTextAreaElement;
 
       await act(async () => {
-        setInputValue(input, "  Espresso  ");
+        setFieldValue(field, "  Espresso  ");
       });
       await act(async () => {
-        input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+        field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
       });
       await act(async () => {
         await Promise.resolve();
@@ -981,16 +1035,16 @@ describe("IndividualReviewPanel", () => {
       await act(async () => {
         clickable.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       });
-      const input = container.querySelector("input") as HTMLInputElement;
+      const field = container.querySelector("textarea") as HTMLTextAreaElement;
       await act(async () => {
-        setInputValue(input, "Something else");
+        setFieldValue(field, "Something else");
       });
 
       await act(async () => {
-        input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        field.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
       });
 
-      expect(container.querySelector("input")).toBeNull();
+      expect(container.querySelector("textarea")).toBeNull();
       expect(container.textContent).toContain("Coffee");
       expect(editRowDescription).not.toHaveBeenCalled();
     });
@@ -1015,7 +1069,88 @@ describe("IndividualReviewPanel", () => {
       await act(async () => {
         clickable.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       });
-      expect(container.querySelector("input")).toBeNull();
+      expect(container.querySelector("textarea")).toBeNull();
+      expect(editRowDescription).not.toHaveBeenCalled();
+    });
+
+    it("outside pointerdown from editing with changed text commits via editRowDescription", async () => {
+      await renderWithSession(SESSION_ONE_PENDING);
+      const afterEdit = makeSession({
+        statements: [makeStatement({ rows: [makeRow({ description: "Espresso" })] })],
+      });
+      editRowDescription.mockResolvedValue({ ok: true, session: afterEdit });
+      const clickable = (Array.from(container.querySelectorAll("div")).find(
+        (el) => el.textContent === "Coffee",
+      ) as HTMLElement).closest("div")!;
+
+      await act(async () => {
+        clickable.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+      await act(async () => {
+        clickable.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+      const field = container.querySelector("textarea") as HTMLTextAreaElement;
+      await act(async () => {
+        setFieldValue(field, "  Espresso  ");
+      });
+
+      await act(async () => {
+        dispatchOutsidePointerDown();
+      });
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(editRowDescription).toHaveBeenCalledWith("s1", "r1", "Espresso", expect.anything());
+      expect(container.querySelector("textarea")).toBeNull();
+      expect(container.textContent).toContain("Espresso");
+    });
+
+    it("Ctrl+Z after a committed title edit PATCHes the previous description", async () => {
+      await renderWithSession(SESSION_ONE_PENDING);
+      const afterEdit = makeSession({
+        statements: [makeStatement({ rows: [makeRow({ description: "Espresso" })] })],
+      });
+      editRowDescription
+        .mockResolvedValueOnce({ ok: true, session: afterEdit })
+        .mockResolvedValueOnce({ ok: true, session: SESSION_ONE_PENDING });
+      const clickable = (Array.from(container.querySelectorAll("div")).find(
+        (el) => el.textContent === "Coffee",
+      ) as HTMLElement).closest("div")!;
+
+      await act(async () => {
+        clickable.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+      await act(async () => {
+        clickable.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+      const field = container.querySelector("textarea") as HTMLTextAreaElement;
+      await act(async () => {
+        setFieldValue(field, "Espresso");
+      });
+      await act(async () => {
+        field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      });
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(editRowDescription).toHaveBeenCalledWith("s1", "r1", "Espresso", expect.anything());
+
+      await act(async () => {
+        window.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true }),
+        );
+      });
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(editRowDescription).toHaveBeenCalledWith("s1", "r1", "Coffee", expect.anything());
+      expect(container.textContent).toContain("Coffee");
     });
 
     it("row-advance reset: title state returns to idle even if primed/editing on the previous row", async () => {
@@ -1031,12 +1166,8 @@ describe("IndividualReviewPanel", () => {
       await act(async () => {
         clickable.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       });
-      expect(container.querySelector("input")).not.toBeNull();
+      expect(container.querySelector("textarea")).not.toBeNull();
 
-      deleteRow.mockResolvedValue({
-        ok: true,
-        session: makeSession({ statements: [makeStatement({ rows: [ROW_2] })] }),
-      });
       const deleteButton = selectByLabel(container, "Delete");
       await act(async () => {
         deleteButton.click();
@@ -1046,7 +1177,7 @@ describe("IndividualReviewPanel", () => {
         await Promise.resolve();
       });
 
-      expect(container.querySelector("input")).toBeNull();
+      expect(container.querySelector("textarea")).toBeNull();
       expect(container.textContent).toContain("Lunch");
     });
 
@@ -1063,9 +1194,9 @@ describe("IndividualReviewPanel", () => {
       await act(async () => {
         clickable.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       });
-      const input = container.querySelector("input") as HTMLInputElement;
+      const field = container.querySelector("textarea") as HTMLTextAreaElement;
       await act(async () => {
-        setInputValue(input, "Espresso");
+        setFieldValue(field, "Espresso");
       });
 
       editRowDescription.mockResolvedValue({
@@ -1078,7 +1209,7 @@ describe("IndividualReviewPanel", () => {
       });
 
       await act(async () => {
-        input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+        field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
       });
       await act(async () => {
         await Promise.resolve();
@@ -1087,7 +1218,263 @@ describe("IndividualReviewPanel", () => {
 
       expect(fetchImportSession).toHaveBeenCalledTimes(2);
       expect(container.textContent).toContain("Lunch");
-      expect(container.querySelector("input")).toBeNull();
+      expect(container.querySelector("textarea")).toBeNull();
+    });
+  });
+
+  describe("ImportReviewSheet trigger (Story 4.13.1)", () => {
+    // Sheet renders via createPortal(..., document.body) — outside `container`
+    // — so assertions in this block query document.body, not container.
+    async function renderWithSession(session: ImportSession) {
+      fetchImportSession.mockResolvedValue({ ok: true, session });
+      fetchLists.mockResolvedValue({
+        ok: true,
+        lists: [{ id: "l1", name: "Groceries", owner_id: "u1", role: "owner" }],
+      });
+      stubAuthMeFetch(null);
+
+      await act(async () => {
+        root.render(<IndividualReviewPanel sessionId="s1" />);
+      });
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+    }
+
+    function assignedRow(overrides: Partial<CandidateRow> = {}): CandidateRow {
+      return makeRow({
+        status: "committed",
+        resolved_list_id: "l1",
+        dedup_skipped: false,
+        ...overrides,
+      });
+    }
+
+    it("zero pending rows + not finalized renders the sheet instead of redirecting", async () => {
+      const session = makeSession({
+        statements: [
+          makeStatement({
+            rows: [],
+            assigned_rows: [assignedRow({ id: "r1", description: "Coffee" })],
+          }),
+        ],
+      });
+
+      await renderWithSession(session);
+
+      expect(push).not.toHaveBeenCalled();
+      expect(document.body.textContent).toContain("Coffee");
+      expect(document.body.textContent).toContain("Groceries");
+      expect(selectByText(document.body, "Save")).not.toBeNull();
+    });
+
+    it("an empty assigned set still renders the sheet with Save", async () => {
+      const session = makeSession({
+        statements: [makeStatement({ rows: [], assigned_rows: [] })],
+      });
+
+      await renderWithSession(session);
+
+      expect(push).not.toHaveBeenCalled();
+      expect(selectByText(document.body, "Save")).not.toBeNull();
+    });
+
+    it("a duplicate-skipped row shows no discard control", async () => {
+      const session = makeSession({
+        statements: [
+          makeStatement({
+            rows: [],
+            assigned_rows: [
+              assignedRow({ id: "r1", description: "Coffee", dedup_skipped: true }),
+            ],
+          }),
+        ],
+      });
+
+      await renderWithSession(session);
+
+      expect(document.body.textContent).toContain("Already in this list");
+      expect(selectByLabel(document.body, "Discard")).toBeNull();
+    });
+
+    it("Save calls finalizeSession and lands on landing_list_id", async () => {
+      const session = makeSession({
+        statements: [
+          makeStatement({ rows: [], assigned_rows: [assignedRow({ id: "r1" })] }),
+        ],
+      });
+      await renderWithSession(session);
+      finalizeSession.mockResolvedValue({
+        ok: true,
+        session: makeSession({
+          finalized_at: "2026-08-24T00:00:00Z",
+          landing_list_id: "l1",
+          statements: [makeStatement({ rows: [], assigned_rows: [] })],
+        }),
+      });
+
+      const saveButton = selectByText(document.body, "Save");
+      await act(async () => {
+        saveButton.click();
+      });
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(finalizeSession).toHaveBeenCalledWith("s1", expect.anything());
+      expect(push).toHaveBeenCalledWith("/lists/l1");
+    });
+
+    it("Save lands on /lists when landing_list_id is null", async () => {
+      const session = makeSession({
+        statements: [
+          makeStatement({ rows: [], assigned_rows: [assignedRow({ id: "r1" })] }),
+        ],
+      });
+      await renderWithSession(session);
+      finalizeSession.mockResolvedValue({
+        ok: true,
+        session: makeSession({
+          finalized_at: "2026-08-24T00:00:00Z",
+          landing_list_id: null,
+          statements: [makeStatement({ rows: [], assigned_rows: [] })],
+        }),
+      });
+
+      const saveButton = selectByText(document.body, "Save");
+      await act(async () => {
+        saveButton.click();
+      });
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(push).toHaveBeenCalledWith("/lists");
+    });
+
+    it("discarding a row stages it locally without calling unassignRow", async () => {
+      const session = makeSession({
+        statements: [
+          makeStatement({
+            rows: [],
+            assigned_rows: [assignedRow({ id: "r1", description: "Coffee" })],
+          }),
+        ],
+      });
+      await renderWithSession(session);
+
+      const discardButton = selectByLabel(document.body, "Discard");
+      await act(async () => {
+        discardButton.click();
+      });
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(unassignRow).not.toHaveBeenCalled();
+      expect(selectByText(document.body, "Save")).not.toBeNull();
+      expect(document.body.textContent).toContain("Discarded");
+      expect(document.body.textContent).toContain("Coffee");
+    });
+
+    it("Change List unassigns the selected row so card review resumes", async () => {
+      const session = makeSession({
+        statements: [
+          makeStatement({
+            rows: [],
+            assigned_rows: [assignedRow({ id: "r1", description: "Coffee" })],
+          }),
+        ],
+      });
+      await renderWithSession(session);
+      unassignRow.mockResolvedValue({
+        ok: true,
+        session: makeSession({
+          statements: [
+            makeStatement({
+              rows: [makeRow({ id: "r1", description: "Coffee" })],
+              assigned_rows: [],
+            }),
+          ],
+        }),
+      });
+
+      const coffee = document.body.querySelector(
+        'input[type="checkbox"][aria-label="Coffee"]',
+      ) as HTMLInputElement;
+      await act(async () => {
+        coffee.click();
+      });
+      const changeList = selectByText(document.body, "Change List");
+      await act(async () => {
+        changeList.click();
+      });
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(unassignRow).toHaveBeenCalledWith("s1", "r1", expect.anything());
+      expect(selectByText(document.body, "Save")).toBeFalsy();
+      expect(document.body.textContent).toContain("Coffee");
+      expect(selectByLabel(document.body, "Delete")).toBeTruthy();
+    });
+
+    it("Save after card trash deletes the staged row then finalizes", async () => {
+      fetchImportSession.mockResolvedValue({
+        ok: true,
+        session: SESSION_ONE_PENDING,
+      });
+      fetchLists.mockResolvedValue({
+        ok: true,
+        lists: [{ id: "l1", name: "Groceries", owner_id: "u1", role: "owner" }],
+      });
+      stubAuthMeFetch(null);
+
+      await act(async () => {
+        root.render(<IndividualReviewPanel sessionId="s1" />);
+      });
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      await act(async () => {
+        selectByLabel(container, "Delete").click();
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(document.body.textContent).toContain("Discarded");
+      deleteRow.mockResolvedValue({
+        ok: true,
+        session: makeSession({ statements: [makeStatement({ rows: [] })] }),
+      });
+      finalizeSession.mockResolvedValue({
+        ok: true,
+        session: makeSession({
+          finalized_at: "2026-08-24T00:00:00Z",
+          landing_list_id: "l1",
+          statements: [makeStatement({ rows: [], assigned_rows: [] })],
+        }),
+      });
+
+      await act(async () => {
+        selectByText(document.body, "Save").click();
+      });
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(deleteRow).toHaveBeenCalledWith("s1", "r1", expect.anything());
+      expect(finalizeSession).toHaveBeenCalledWith("s1", expect.anything());
+      expect(push).toHaveBeenCalledWith("/lists/l1");
     });
   });
 });

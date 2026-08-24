@@ -123,6 +123,7 @@ describe("AppShell chrome header", () => {
 
     const header = container.querySelector("header");
     expect(header).toBeTruthy();
+    expect(header?.getAttribute("data-app-chrome")).toBe("header");
     const heading = header!.querySelector("h1");
     expect(heading?.textContent).toBe("Review statements");
     expect(header!.textContent).toContain("12 left");

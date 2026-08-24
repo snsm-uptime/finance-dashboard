@@ -42,7 +42,10 @@ function AppShellFrame({ children }: { children: ReactNode }) {
     <div className="fixed inset-0 flex flex-col overflow-hidden">
       <div className="relative flex flex-col flex-1 min-h-0">
         {showHeader ? (
-          <header className="flex shrink-0 items-center gap-2 pt-[max(0.5rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pb-1 pl-[max(0.5rem,env(safe-area-inset-left))]">
+          <header
+            data-app-chrome="header"
+            className="flex shrink-0 items-center gap-2 pt-[max(0.5rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pb-1 pl-[max(0.5rem,env(safe-area-inset-left))]"
+          >
             <div className="flex w-10 shrink-0 items-center justify-start">
               {header.onBack || header.backHref ? (
                 <IconButton
@@ -74,7 +77,7 @@ function AppShellFrame({ children }: { children: ReactNode }) {
             ) : null}
           </header>
         ) : null}
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">{children}</div>
+        <div className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">{children}</div>
       </div>
       <TabBar
         homeHref="/home"
