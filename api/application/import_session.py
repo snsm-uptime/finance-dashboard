@@ -219,6 +219,20 @@ class CommitRow:
 
 
 @dataclass(frozen=True, slots=True)
+class FailedStatementRecord:
+    id: UUID
+    product_id: str
+    filename: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CommittedByListRecord:
+    list_id: UUID
+    name: str
+    count: int
+
+
+@dataclass(frozen=True, slots=True)
 class ImportSessionRecord:
     id: UUID
     user_id: UUID
@@ -234,11 +248,17 @@ class ImportSessionRecord:
     # Derived from row state every time the record is built, never incremented
     # counters (Story 4.12, AC #4): undo returns a row to pending and counters
     # would drift, so the 4.14 summary would lie after any undo.
+    # Session-lifetime scope (Story 4.14) — not the same as BulkCommitResponse
+    # imported_new_count / skipped_duplicate_count, which cover one bulk call.
     imported_new_count: int = 0
     skipped_duplicate_count: int = 0
     # The list that received the most newly imported rows this session, or None
     # when the session imported nothing new (AC #6).
     landing_list_id: UUID | None = None
+    deleted_count: int = 0
+    zero_amount_excluded_count: int = 0
+    failed_statements: list[FailedStatementRecord] = field(default_factory=list)
+    committed_by_list: list[CommittedByListRecord] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)

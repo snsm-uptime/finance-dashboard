@@ -1551,6 +1551,140 @@ def test_landing_list_id_is_null_when_nothing_new_was_imported(
     assert payload["skipped_duplicate_count"] == 0
 
 
+def test_session_summary_fields_mix_and_undo(
+    client_with_fx: TestClient, db_session: Session
+) -> None:
+    client = client_with_fx
+    _register(client, "summarymix@example.com")
+    user_id = UUID(client.get("/auth/me").json()["user_id"])
+    list_id = _own_list_id(client)
+    list_name = client.get(f"/lists/{list_id}").json()["name"]
+    repo = SqlAlchemyImportSessionRepository(db_session)
+    storage = FilesystemPdfStorage(base_dir=os.environ["PDF_STORAGE_PATH"])
+    path = storage.save(user_id=user_id, filename="mixed.pdf", content=b"%PDF-1.4 stub")
+    mixed = repo.create_session(
+        session_id=uuid4(),
+        user_id=user_id,
+        statements=[
+            DetectedStatement(
+                product_id="fake_product",
+                status=STATEMENT_STATUS_FAILED,
+                candidate_rows=[],
+                original_filename="failed.pdf",
+            ),
+            DetectedStatement(
+                product_id="fake_product",
+                status=STATEMENT_STATUS_STAGED,
+                candidate_rows=[
+                    CanonicalLine(
+                        posted_date="2026-01-01",
+                        amount=Decimal("0.00"),
+                        currency="CRC",
+                        product_id="fake_product",
+                        line_type="purchase",
+                        normalized_description="zero",
+                    ),
+                    CanonicalLine(
+                        posted_date="2026-01-02",
+                        amount=Decimal("10.00"),
+                        currency="CRC",
+                        product_id="fake_product",
+                        line_type="purchase",
+                        normalized_description="keep",
+                    ),
+                    CanonicalLine(
+                        posted_date="2026-01-02",
+                        amount=Decimal("10.00"),
+                        currency="CRC",
+                        product_id="fake_product",
+                        line_type="purchase",
+                        normalized_description="keep",
+                    ),
+                    CanonicalLine(
+                        posted_date="2026-01-03",
+                        amount=Decimal("11.00"),
+                        currency="CRC",
+                        product_id="fake_product",
+                        line_type="purchase",
+                        normalized_description="drop",
+                    ),
+                ],
+                original_filename="ok.pdf",
+            ),
+        ],
+        pdf_paths={0: path, 1: path},
+    )
+    db_session.commit()
+
+    pending = [
+        row
+        for stmt in client.get(f"/import/sessions/{mixed.id}").json()["statements"]
+        for row in stmt["rows"]
+    ]
+    keep_rows = [row for row in pending if row["description"] == "keep"]
+    drop = next(row for row in pending if row["description"] == "drop")
+    assert _assign(client, str(mixed.id), keep_rows[0]["id"], list_id).status_code == 200
+    assert _assign(client, str(mixed.id), keep_rows[1]["id"], list_id).status_code == 200
+    assert client.post(f"/import/sessions/{mixed.id}/rows/{drop['id']}/delete").status_code == 200
+
+    summary = client.get(f"/import/sessions/{mixed.id}").json()
+    assert summary["deleted_count"] == 1
+    assert summary["zero_amount_excluded_count"] == 1
+    assert summary["imported_new_count"] == 1
+    assert summary["skipped_duplicate_count"] == 1
+    assert summary["committed_by_list"] == [{"list_id": list_id, "name": list_name, "count": 1}]
+    assert summary["failed_statements"] == [
+        {
+            "id": str(mixed.statements[0].id),
+            "product_id": "fake_product",
+            "filename": "failed.pdf",
+        }
+    ]
+
+    undone_delete = client.post(f"/import/sessions/{mixed.id}/undo")
+    assert undone_delete.status_code == 200
+    after_delete_undo = undone_delete.json()
+    assert after_delete_undo["deleted_count"] == 0
+    assert after_delete_undo["imported_new_count"] == 1
+    assert after_delete_undo["committed_by_list"] == [
+        {"list_id": list_id, "name": list_name, "count": 1}
+    ]
+
+    one_id = uuid4()
+    one = repo.create_session(
+        session_id=one_id,
+        user_id=user_id,
+        statements=[
+            DetectedStatement(
+                product_id="fake_product",
+                status=STATEMENT_STATUS_STAGED,
+                candidate_rows=[
+                    CanonicalLine(
+                        posted_date="2026-02-01",
+                        amount=Decimal("5.00"),
+                        currency="CRC",
+                        product_id="fake_product",
+                        line_type="purchase",
+                        normalized_description="solo",
+                    )
+                ],
+            )
+        ],
+        pdf_paths={0: path},
+    )
+    db_session.commit()
+    solo = _pending_rows(client.get(f"/import/sessions/{one.id}").json())[0]
+    assert _assign(client, str(one.id), solo["id"], list_id).status_code == 200
+    assigned = client.get(f"/import/sessions/{one.id}").json()
+    assert assigned["imported_new_count"] == 1
+    assert assigned["committed_by_list"] == [{"list_id": list_id, "name": list_name, "count": 1}]
+    undone_assign = client.post(f"/import/sessions/{one.id}/undo")
+    assert undone_assign.status_code == 200, undone_assign.text
+    after = undone_assign.json()
+    assert after["imported_new_count"] == 0
+    assert after["committed_by_list"] == []
+
+
 # --- Story 4.13.1: assigned_rows payload + per-row unassign (ImportReviewSheet) ---
 
 

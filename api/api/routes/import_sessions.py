@@ -90,7 +90,9 @@ from api.schemas.import_sessions import (
     BulkCommitResponse,
     CandidateRowResponse,
     CardIdentificationResponse,
+    CommittedByListResponse,
     EditRowBody,
+    FailedStatementResponse,
     IdentifyCardBody,
     ImportBatchResponse,
     ImportSessionResponse,
@@ -178,6 +180,18 @@ def _session_response(session: ImportSessionRecord) -> ImportSessionResponse:
         imported_new_count=session.imported_new_count,
         skipped_duplicate_count=session.skipped_duplicate_count,
         landing_list_id=session.landing_list_id,
+        deleted_count=session.deleted_count,
+        zero_amount_excluded_count=session.zero_amount_excluded_count,
+        failed_statements=[
+            FailedStatementResponse(
+                id=failed.id, product_id=failed.product_id, filename=failed.filename
+            )
+            for failed in session.failed_statements
+        ],
+        committed_by_list=[
+            CommittedByListResponse(list_id=item.list_id, name=item.name, count=item.count)
+            for item in session.committed_by_list
+        ],
     )
 
 
