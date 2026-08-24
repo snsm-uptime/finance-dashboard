@@ -7,24 +7,22 @@ import { useFormSubmission } from "@/hooks";
 import { uploadCopy } from "@/lib/i18n/upload";
 import { UploadButton } from "./UploadButton";
 import {
-  fetchImportSession,
   uploadStatement,
   type ImportSession,
   type UploadMessages,
 } from "./uploadClient";
 import {
   forgetOpenImportSession,
-  peekOpenImportSessionId,
   rememberOpenImportSession,
 } from "./openImportSession";
 import { SessionReviewPanel } from "./SessionReviewPanel";
 
-export function UploadPanel() {
+export function UploadPanel({ initialSession = null }: { initialSession?: ImportSession | null }) {
   const { locale } = usePreferences();
   const t = uploadCopy(locale);
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [session, setSession] = useState<ImportSession | null>(null);
+  const [session, setSession] = useState<ImportSession | null>(initialSession);
   const [discarded, setDiscarded] = useState(false);
 
   const messages: UploadMessages = {
@@ -47,35 +45,12 @@ export function UploadPanel() {
   });
 
   useEffect(() => {
-    const openId = peekOpenImportSessionId();
-    if (!openId) return;
-    let cancelled = false;
-    void fetchImportSession(openId, {
-      errorForbidden: t.errorGeneric,
-      errorSessionNotFound: t.errorGeneric,
-      errorStatementNotFound: t.errorGeneric,
-      errorSessionDiscarded: t.errorGeneric,
-      errorStatementNotAvailable: t.errorGeneric,
-      errorRowNotFound: t.errorGeneric,
-      errorRowNotAvailable: t.errorGeneric,
-      errorNothingToUndo: t.errorGeneric,
-      errorSessionHasPendingRows: t.errorGeneric,
-      errorFxUnavailable: t.errorGeneric,
-      errorGeneric: t.errorGeneric,
-      errorUnauthorized: t.errorUnauthorized,
-    }).then((result) => {
-      if (cancelled) return;
-      if (result.ok && !result.session.discarded_at) {
-        setSession(result.session);
-        return;
-      }
-      forgetOpenImportSession();
-    });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (initialSession) {
+      rememberOpenImportSession(initialSession.id);
+      return;
+    }
+    forgetOpenImportSession();
+  }, [initialSession]);
 
   async function onFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];

@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { UploadPanel } from "./UploadPanel";
+import type { ImportSession } from "./uploadClient";
 
 const uploadStatement = vi.fn();
 const discardSession = vi.fn();
@@ -116,22 +117,41 @@ async function selectFile(container: HTMLElement, file: File) {
   });
 }
 
-const unmatchedSession = {
+const unmatchedSession: ImportSession = {
   id: "s1",
   created_at: "2026-08-18T00:00:00Z",
   discarded_at: null,
   undo: null,
+  finalized_at: null,
+  imported_new_count: 0,
+  skipped_duplicate_count: 0,
+  landing_list_id: null,
+  deleted_count: 0,
+  zero_amount_excluded_count: 0,
+  failed_statements: [],
+  committed_by_list: [],
   statements: [
     {
       id: "st1",
       product_id: "bac_credit",
       status: "staged",
-      candidate_row_count: 3,
+      candidate_row_count: 1,
       iban: "DE89370400440532013000",
       filename: "statement.pdf",
       card_id: null,
-      rows: [],
+      rows: [
+        {
+          id: "r1",
+          sequence: 0,
+          description: "Store",
+          amount: "10.00",
+          currency: "CRC",
+          posted_date: "2026-07-15",
+          status: "pending",
+        },
+      ],
       zero_amount_excluded_count: 0,
+      assigned_rows: [],
     },
   ],
 };
@@ -244,20 +264,25 @@ describe("UploadPanel", () => {
     expect(container.querySelector('input[type="file"]')).toBeNull();
   });
 
-  it("resumes an open import session when returning to Upload", async () => {
-    sessionStorage.setItem("finance-helper.open-import-session-id", "s1");
-    fetchImportSession.mockResolvedValue({ ok: true, session: unmatchedSession });
-
+  it("hydrates from initialSession without sessionStorage", async () => {
     await act(async () => {
-      root.render(<UploadPanel />);
-    });
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
+      root.render(<UploadPanel initialSession={unmatchedSession} />);
     });
 
-    expect(fetchImportSession).toHaveBeenCalledWith("s1", expect.anything());
+    expect(fetchImportSession).not.toHaveBeenCalled();
     expect(container.querySelector('input[type="file"]')).toBeNull();
     expect(container.textContent).toContain("IBAN: DE89 3704 0044 0532 0130 00");
+  });
+
+  it("does not resurrect a stale tab id when the server has no active session", async () => {
+    sessionStorage.setItem("finance-helper.open-import-session-id", "s1");
+
+    await act(async () => {
+      root.render(<UploadPanel initialSession={null} />);
+    });
+
+    expect(fetchImportSession).not.toHaveBeenCalled();
+    expect(container.querySelector('input[type="file"]')).not.toBeNull();
+    expect(sessionStorage.getItem("finance-helper.open-import-session-id")).toBeNull();
   });
 });
