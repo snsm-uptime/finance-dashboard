@@ -20,3 +20,4 @@ export { SystemIcon } from "./SystemIcon";
 export { HashtagIcon } from "./HashtagIcon";
 export { PercentageIcon } from "./PercentageIcon";
 export { ArrowIcon } from "./ArrowIcon";
+export { TrashIcon } from "./TrashIcon";

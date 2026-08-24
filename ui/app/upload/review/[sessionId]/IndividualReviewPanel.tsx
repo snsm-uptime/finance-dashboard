@@ -17,7 +17,7 @@ import { IconButton } from "@/components/IconButton";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { useFormSubmission } from "@/hooks";
 import { fetchLists, type ListItem } from "@/app/lists/listsClient";
-import { ArrowIcon, SaveIcon } from "@/app/icons";
+import { ArrowIcon, SaveIcon, TrashIcon } from "@/app/icons";
 import { uploadCopy } from "@/lib/i18n/upload";
 import type { Locale } from "@/lib/i18n/locale";
 import { useCardIdentification } from "@/hooks/useCardIdentification";
@@ -301,8 +301,11 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   });
 
   const listOptions = useMemo(
-    () => (lists ?? []).map((l) => ({ value: l.id, label: l.name })),
-    [lists],
+    () =>
+      (lists ?? [])
+        .filter((l) => l.id !== defaultListId)
+        .map((l) => ({ value: l.id, label: l.name })),
+    [lists, defaultListId],
   );
   const defaultListName = (lists ?? []).find((l) => l.id === defaultListId)?.name ?? "";
   const chosenListName = (lists ?? []).find((l) => l.id === pickedListId)?.name ?? "";
@@ -579,7 +582,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
 
         {current ? (
           <>
-            {lists !== null && lists.length > 0 ? (
+            {listOptions.length > 0 ? (
               <SoftLedgerSelect
                 id={selectId}
                 value={pickedListId}
@@ -588,20 +591,9 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
               />
             ) : null}
 
-            <div className="grid grid-cols-[5.5rem_1fr_5.5rem] grid-rows-[auto_auto_auto] items-center gap-3">
-              <div />
-              <button
-                type="button"
-                disabled={!canDelete || action.pending || dismiss.pending || throwing}
-                onClick={() => action.submit({ kind: "delete" })}
-                className="col-start-2 row-start-1 justify-self-center m-0 px-3 py-[6px] rounded-sm border border-border bg-transparent text-foreground cursor-pointer font-[550] text-[0.8rem] disabled:opacity-55 disabled:cursor-not-allowed"
-              >
-                {action.pending ? t.individualReviewDeleting : t.individualReviewDelete}
-              </button>
-              <div />
-
+            <div className="grid grid-cols-[5.5rem_1fr_5.5rem] grid-rows-[auto_auto] items-center gap-3">
               <IconButton
-                className="col-start-1 row-start-2 self-center"
+                className="col-start-1 row-start-1 self-center"
                 variant="ghost"
                 disabled={!canAcceptDefault || action.pending || dismiss.pending || throwing}
                 onClick={() =>
@@ -624,7 +616,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
 
               <div
                 ref={cardRef}
-                className="col-start-2 row-start-2 flex min-h-[11rem] flex-col justify-between rounded-[12px] border border-border bg-surface p-[1.25rem] shadow-lg touch-none"
+                className="relative col-start-2 row-start-1 flex min-h-[11rem] min-w-0 flex-col justify-between rounded-[12px] border border-border bg-surface p-[1.25rem] shadow-lg touch-none"
                 style={{
                   transform: dragOffset
                     ? `translateX(${dragOffset.x}px) rotate(${dragOffset.x / 20}deg)`
@@ -640,10 +632,20 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
                   transition: isDragging ? "none" : "transform 220ms ease, opacity 220ms ease",
                 }}
               >
+                <IconButton
+                  className="absolute top-2 right-2"
+                  variant="ghost"
+                  disabled={!canDelete || action.pending || dismiss.pending || throwing}
+                  onClick={() => action.submit({ kind: "delete" })}
+                  label={
+                    action.pending ? t.individualReviewDeleting : t.individualReviewDelete
+                  }
+                  icon={<TrashIcon className="w-4 h-4" />}
+                />
                 <div
                   ref={titleContainerRef}
                   onClick={handleTitleClick}
-                  className={`cursor-text rounded-sm -mx-1 -my-1 px-1 py-1 ${
+                  className={`cursor-text rounded-sm -mx-1 -my-1 min-w-0 py-1 pl-1 pr-8 ${
                     titleState === "primed" ? "border border-accent" : ""
                   }`}
                 >
@@ -657,10 +659,10 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
                       disabled={titleSubmitting}
                       autoComplete="off"
                       aria-label={t.individualReviewTitleFieldLabel}
-                      className="w-full m-0 px-2 py-1 -mx-2 -my-1 rounded-sm border border-accent bg-surface text-foreground font-[550] text-[1.05rem] disabled:opacity-55"
+                      className="w-full min-w-0 m-0 px-2 py-1 -mx-2 -my-1 rounded-sm border border-accent bg-surface text-foreground font-[550] text-[1.05rem] break-words whitespace-normal disabled:opacity-55"
                     />
                   ) : (
-                    <h2 className="m-0 text-[1.05rem] font-[550] text-foreground">
+                    <h2 className="m-0 min-w-0 text-[1.05rem] font-[550] text-foreground break-words whitespace-normal overflow-visible">
                       {current.row.description}
                     </h2>
                   )}
@@ -686,7 +688,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
               </div>
 
               <IconButton
-                className="col-start-3 row-start-2 self-center"
+                className="col-start-3 row-start-1 self-center"
                 variant="ghost"
                 disabled={!canAcceptChosen || action.pending || dismiss.pending || throwing}
                 onClick={() =>
@@ -709,7 +711,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
                 type="button"
                 disabled={!canUndo || action.pending || dismiss.pending || throwing}
                 onClick={() => action.submit({ kind: "undo" })}
-                className="col-start-2 row-start-3 justify-self-center m-0 px-3 py-[6px] rounded-sm border border-border bg-transparent text-foreground cursor-pointer font-[550] text-[0.8rem] disabled:opacity-55 disabled:cursor-not-allowed"
+                className="col-start-2 row-start-2 justify-self-center m-0 px-3 py-[6px] rounded-sm border border-border bg-transparent text-foreground cursor-pointer font-[550] text-[0.8rem] disabled:opacity-55 disabled:cursor-not-allowed"
               >
                 {action.pending ? t.individualReviewUndoing : t.individualReviewUndo}
               </button>

@@ -349,6 +349,36 @@ describe("IndividualReviewPanel", () => {
     expect(assignRow).toHaveBeenCalledWith("s1", "r1", "l2", expect.anything());
   });
 
+  it("omits the default list from the picker", async () => {
+    fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
+    fetchLists.mockResolvedValue({
+      ok: true,
+      lists: [
+        { id: "l1", name: "Groceries", owner_id: "u1", role: "owner" },
+        { id: "l2", name: "Household", owner_id: "u1", role: "member" },
+      ],
+    });
+    stubAuthMeFetch("l2");
+
+    await act(async () => {
+      root.render(<IndividualReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const trigger = container.querySelector('button[aria-haspopup="listbox"]') as HTMLButtonElement;
+    await act(async () => {
+      trigger.click();
+    });
+    const optionLabels = Array.from(container.querySelectorAll('[role="option"]')).map(
+      (el) => el.textContent,
+    );
+    expect(optionLabels).toContain("Groceries");
+    expect(optionLabels).not.toContain("Household");
+  });
+
   it("Delete advances without calling assign", async () => {
     fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
     fetchLists.mockResolvedValue({ ok: true, lists: [] });
@@ -366,7 +396,7 @@ describe("IndividualReviewPanel", () => {
       await Promise.resolve();
     });
 
-    const deleteButton = selectByText(container, "Delete");
+    const deleteButton = selectByLabel(container, "Delete");
     await act(async () => {
       deleteButton.click();
     });
@@ -406,7 +436,7 @@ describe("IndividualReviewPanel", () => {
         undo: { row_id: "r1", action: "delete" },
       }),
     });
-    const deleteButton = selectByText(container, "Delete");
+    const deleteButton = selectByLabel(container, "Delete");
     await act(async () => {
       deleteButton.click();
     });
@@ -453,15 +483,14 @@ describe("IndividualReviewPanel", () => {
       await Promise.resolve();
     });
 
-    await openAndChoose(container, "Groceries");
-
     const defaultButton = selectByLabel(container, "Add to Groceries");
-    const chosenButton = selectByLabel(container, "Accept to Groceries");
-    const deleteButton = selectByText(container, "Delete");
+    const chosenButton = selectByLabel(container, "Accept to Choose list");
+    const deleteButton = selectByLabel(container, "Delete");
 
     expect(defaultButton.disabled).toBe(true);
     expect(chosenButton.disabled).toBe(true);
     expect(deleteButton.disabled).toBe(false);
+    expect(container.querySelector('button[aria-haspopup="listbox"]')).toBeNull();
   });
 
   it("Dismiss file calls discardSession and navigates to /upload", async () => {
@@ -938,7 +967,7 @@ describe("IndividualReviewPanel", () => {
         ok: true,
         session: makeSession({ statements: [makeStatement({ rows: [ROW_2] })] }),
       });
-      const deleteButton = selectByText(container, "Delete");
+      const deleteButton = selectByLabel(container, "Delete");
       await act(async () => {
         deleteButton.click();
       });
