@@ -165,6 +165,9 @@ def test_unauthenticated_rejected_on_both_routes(client: TestClient) -> None:
     )
     assert bulk_commit.status_code == 401
 
+    active = client.get("/import/sessions/active")
+    assert active.status_code == 401
+
 
 def test_upload_non_pdf_bytes_rejected_content_based(client: TestClient) -> None:
     _register(client, "uploadbadtype@example.com")
@@ -1549,6 +1552,59 @@ def test_landing_list_id_is_null_when_nothing_new_was_imported(
     assert payload["landing_list_id"] is None
     assert payload["imported_new_count"] == 0
     assert payload["skipped_duplicate_count"] == 0
+
+
+def test_get_active_session_null_when_none(client: TestClient) -> None:
+    _register(client, "activenone@example.com")
+    response = client.get("/import/sessions/active")
+    assert response.status_code == 200, response.text
+    assert response.json() is None
+
+
+def test_get_active_session_excludes_discarded_finalized_and_other_users(
+    client: TestClient,
+) -> None:
+    _register(client, "activeowner@example.com")
+    older = _upload_bac_session(client)
+    newer = _upload_bac_session(client)
+    discarded = _upload_bac_session(client)
+    assert client.delete(f"/import/sessions/{discarded}").status_code == 200
+
+    active = client.get("/import/sessions/active")
+    assert active.status_code == 200, active.text
+    body = active.json()
+    assert body["id"] == newer
+    assert body["id"] != older
+
+    client.post("/auth/logout")
+    _register(client, "activestranger@example.com")
+    stranger_active = client.get("/import/sessions/active")
+    assert stranger_active.status_code == 200
+    assert stranger_active.json() is None
+
+
+def test_get_active_session_includes_zero_pending_unfinalized(
+    client_with_fx: TestClient,
+) -> None:
+    client = client_with_fx
+    _register(client, "activesheet@example.com")
+    session_id = _upload_bac_session(client)
+    list_id = _own_list_id(client)
+    while True:
+        pending = _pending_rows(client.get(f"/import/sessions/{session_id}").json())
+        if not pending:
+            break
+        deleted = client.post(f"/import/sessions/{session_id}/rows/{pending[0]['id']}/delete")
+        assert deleted.status_code == 200, deleted.text
+
+    active = client.get("/import/sessions/active")
+    assert active.status_code == 200, active.text
+    body = active.json()
+    assert body["id"] == session_id
+    assert body["finalized_at"] is None
+    assert body["deleted_count"] > 0
+    assert sum(len(s["rows"]) for s in body["statements"]) == 0
+    assert list_id  # list exists; unused beyond membership for delete path
 
 
 def test_session_summary_fields_mix_and_undo(

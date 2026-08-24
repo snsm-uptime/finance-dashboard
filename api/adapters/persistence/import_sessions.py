@@ -264,6 +264,26 @@ class SqlAlchemyImportSessionRepository:
             return None
         return self._to_record(row)
 
+    def find_active_session(self, user_id: UUID) -> ImportSessionRecord | None:
+        row = self._session.scalar(
+            select(ImportSessionModel)
+            .options(
+                selectinload(ImportSessionModel.statements).selectinload(
+                    ImportStatementModel.candidate_rows
+                )
+            )
+            .where(
+                ImportSessionModel.user_id == user_id,
+                ImportSessionModel.discarded_at.is_(None),
+                ImportSessionModel.finalized_at.is_(None),
+            )
+            .order_by(ImportSessionModel.created_at.desc())
+            .limit(1)
+        )
+        if row is None:
+            return None
+        return self._to_record(row)
+
     def discard_session(self, session_id: UUID, user_id: UUID) -> ImportSessionRecord:
         row = self._load_session(session_id, user_id)
         if row is None:

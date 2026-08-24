@@ -31,6 +31,7 @@ from application.import_session import (
     EditCandidateRowService,
     FinalizeImportSessionCommand,
     FinalizeImportSessionService,
+    GetActiveImportSessionService,
     ImportSessionRecord,
     MatchStatementCardCommand,
     MatchStatementCardService,
@@ -271,6 +272,17 @@ def _persist_identified_card(
             content={"detail": str(exc), "code": "import_statement_not_found"},
         )
     return None
+
+
+@router.get("/active", response_model=ImportSessionResponse | None)
+def get_active_import_session(
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> ImportSessionResponse | None:
+    result = GetActiveImportSessionService(SqlAlchemyImportSessionRepository(db)).execute(user_id)
+    if result is None:
+        return None
+    return _session_response(result)
 
 
 @router.get("/{session_id}", response_model=ImportSessionResponse)

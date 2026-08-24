@@ -301,6 +301,10 @@ class ImportSessionRepository(Protocol):
 
     def get_session(self, session_id: UUID, user_id: UUID) -> ImportSessionRecord | None: ...
 
+    def find_active_session(self, user_id: UUID) -> ImportSessionRecord | None:
+        """Owner's most recent session that is neither discarded nor finalized."""
+        ...
+
     def discard_session(self, session_id: UUID, user_id: UUID) -> ImportSessionRecord:
         """Set discarded_at. Idempotent — calling twice does not error."""
         ...
@@ -522,6 +526,16 @@ class UploadStatementPdfService:
 class DiscardImportSessionCommand:
     actor_user_id: UUID
     session_id: UUID
+
+
+class GetActiveImportSessionService:
+    """Most recent in-flight session for the caller, or None (Story 4.14)."""
+
+    def __init__(self, session_repo: ImportSessionRepository) -> None:
+        self._session_repo = session_repo
+
+    def execute(self, actor_user_id: UUID) -> ImportSessionRecord | None:
+        return self._session_repo.find_active_session(actor_user_id)
 
 
 class DiscardImportSessionService:
