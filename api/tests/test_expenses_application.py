@@ -21,8 +21,6 @@ from application.expenses import (
     ListExpensesCommand,
     ListExpensesService,
     ListMemberView,
-    MarkLedgerEntryReviewedCommand,
-    MarkLedgerEntryReviewedService,
     UpdateExpenseOriginCommand,
     UpdateExpenseOriginService,
 )
@@ -141,35 +139,6 @@ class _FakeExpenseRepo:
             fx_fallback=existing.fx_fallback,
             origin_kind=origin_kind,
             origin_card_id=origin_card_id,
-            import_reviewed_at=datetime.now(UTC),
-        )
-        self.entries[entry_id] = updated
-        return updated
-
-    def mark_ledger_entry_reviewed(
-        self, *, list_id: UUID, entry_id: UUID, actor_user_id: UUID
-    ) -> LedgerEntryRecord:
-        existing = self.entries.get(entry_id)
-        if existing is None or existing.list_id != list_id:
-            raise SubjectNotFoundError()
-        updated = LedgerEntryRecord(
-            id=existing.id,
-            list_id=existing.list_id,
-            amount=existing.amount,
-            currency=existing.currency,
-            normalized_description=existing.normalized_description,
-            payer_id=existing.payer_id,
-            provenance=existing.provenance,
-            line_type=existing.line_type,
-            posted_date=existing.posted_date,
-            created_at=existing.created_at,
-            amount_crc=existing.amount_crc,
-            fx_rate=existing.fx_rate,
-            fx_rate_date=existing.fx_rate_date,
-            fx_fallback=existing.fx_fallback,
-            origin_kind=existing.origin_kind,
-            origin_card_id=existing.origin_card_id,
-            import_reviewed_at=datetime.now(UTC),
         )
         self.entries[entry_id] = updated
         return updated
@@ -273,7 +242,6 @@ def test_update_origin_blank_to_cash_to_card_to_blank() -> None:
         )
     )
     assert cash_result.origin_kind == "cash"
-    assert cash_result.import_reviewed_at is not None
 
     card_result = update_service.execute(
         UpdateExpenseOriginCommand(
@@ -510,101 +478,3 @@ def test_list_expenses_omits_lens_on_value_error(monkeypatch: pytest.MonkeyPatch
     assert len(listed.expenses) == 1
     assert listed.expenses[0].lens is None
     assert listed.expenses[0].entry.normalized_description == "Coffee"
-
-
-def test_mark_reviewed_sets_import_reviewed_at() -> None:
-    actor = uuid4()
-    repo = _FakeExpenseRepo(list_id=uuid4(), member_ids=[actor])
-    created = CreateManualExpenseService(repo, MaterializeFxService(_FakeBccrClient())).execute(
-        _command(repo, actor)
-    )
-    assert created.import_reviewed_at is None
-
-    result = MarkLedgerEntryReviewedService(repo).execute(
-        MarkLedgerEntryReviewedCommand(
-            actor_user_id=actor, list_id=repo.list_id, entry_id=created.id
-        )
-    )
-
-    assert result.import_reviewed_at is not None
-    assert result.id == created.id
-
-
-def test_mark_reviewed_by_non_payer_member_succeeds() -> None:
-    actor = uuid4()
-    payer = uuid4()
-    repo = _FakeExpenseRepo(list_id=uuid4(), member_ids=[actor, payer])
-    created = CreateManualExpenseService(repo, MaterializeFxService(_FakeBccrClient())).execute(
-        _command(repo, actor, payer=payer)
-    )
-
-    result = MarkLedgerEntryReviewedService(repo).execute(
-        MarkLedgerEntryReviewedCommand(
-            actor_user_id=actor, list_id=repo.list_id, entry_id=created.id
-        )
-    )
-
-    assert result.import_reviewed_at is not None
-
-
-def test_mark_reviewed_on_nonexistent_entry_raises_subject_not_found() -> None:
-    actor = uuid4()
-    repo = _FakeExpenseRepo(list_id=uuid4(), member_ids=[actor])
-
-    with pytest.raises(SubjectNotFoundError):
-        MarkLedgerEntryReviewedService(repo).execute(
-            MarkLedgerEntryReviewedCommand(
-                actor_user_id=actor, list_id=repo.list_id, entry_id=uuid4()
-            )
-        )
-
-
-def test_mark_reviewed_on_other_list_entry_raises_subject_not_found() -> None:
-    actor = uuid4()
-    repo = _FakeExpenseRepo(list_id=uuid4(), member_ids=[actor])
-    created = CreateManualExpenseService(repo, MaterializeFxService(_FakeBccrClient())).execute(
-        _command(repo, actor)
-    )
-    foreign = LedgerEntryRecord(
-        id=created.id,
-        list_id=uuid4(),
-        amount=created.amount,
-        currency=created.currency,
-        normalized_description=created.normalized_description,
-        payer_id=created.payer_id,
-        provenance=created.provenance,
-        line_type=created.line_type,
-        posted_date=created.posted_date,
-        created_at=created.created_at,
-        amount_crc=created.amount_crc,
-        fx_rate=created.fx_rate,
-        fx_rate_date=created.fx_rate_date,
-        fx_fallback=created.fx_fallback,
-        origin_kind=created.origin_kind,
-        origin_card_id=created.origin_card_id,
-        import_reviewed_at=created.import_reviewed_at,
-    )
-    repo.entries[created.id] = foreign
-
-    with pytest.raises(SubjectNotFoundError):
-        MarkLedgerEntryReviewedService(repo).execute(
-            MarkLedgerEntryReviewedCommand(
-                actor_user_id=actor, list_id=repo.list_id, entry_id=created.id
-            )
-        )
-
-
-def test_mark_reviewed_by_non_member_denied() -> None:
-    actor = uuid4()
-    outsider = uuid4()
-    repo = _FakeExpenseRepo(list_id=uuid4(), member_ids=[actor])
-    created = CreateManualExpenseService(repo, MaterializeFxService(_FakeBccrClient())).execute(
-        _command(repo, actor)
-    )
-
-    with pytest.raises(NotListMemberError):
-        MarkLedgerEntryReviewedService(repo).execute(
-            MarkLedgerEntryReviewedCommand(
-                actor_user_id=outsider, list_id=repo.list_id, entry_id=created.id
-            )
-        )

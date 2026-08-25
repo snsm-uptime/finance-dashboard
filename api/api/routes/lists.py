@@ -20,8 +20,6 @@ from application.expenses import (
     ListExpensesService,
     ListMembersCommand,
     ListMembersService,
-    MarkLedgerEntryReviewedCommand,
-    MarkLedgerEntryReviewedService,
     SplitOverrideInput,
     UpdateExpenseOriginCommand,
     UpdateExpenseOriginService,
@@ -161,7 +159,6 @@ def _expense_item(row: ListedExpense) -> ExpenseItemResponse:
         fx_fallback=entry.fx_fallback,
         origin_kind=entry.origin_kind if entry.origin_kind in ("card", "cash") else None,
         origin_card_id=entry.origin_card_id,
-        import_reviewed_at=entry.import_reviewed_at,
         viewer_share_kind=share_kind,
         viewer_share_value=(
             _money_str(lens.share_value) if share_kind is not None and lens is not None else None
@@ -485,7 +482,6 @@ def create_list_expense(
         fx_fallback=created.fx_fallback,
         origin_kind=created.origin_kind,
         origin_card_id=created.origin_card_id,
-        import_reviewed_at=created.import_reviewed_at,
     )
 
 
@@ -529,28 +525,6 @@ def update_list_expense_origin(
         entry_id,
         updated.origin_kind,
     )
-    return _expense_item(ListedExpense(entry=updated))
-
-
-@router.patch("/{list_id}/expenses/{entry_id}/reviewed", response_model=ExpenseItemResponse)
-def mark_list_expense_reviewed(
-    list_id: uuid.UUID,
-    entry_id: uuid.UUID,
-    user_id: uuid.UUID = Depends(require_authenticated_user),
-    db: Session = Depends(get_db),
-) -> ExpenseItemResponse | JSONResponse:
-    service = MarkLedgerEntryReviewedService(SqlAlchemyListRepository(db))
-    try:
-        updated = service.execute(
-            MarkLedgerEntryReviewedCommand(
-                actor_user_id=user_id, list_id=list_id, entry_id=entry_id
-            )
-        )
-    except SubjectNotFoundError:
-        return _subject_not_found()
-    except (ListNotFoundError, NotListMemberError):
-        return _access_denied()
-    logger.info("manual_expense_marked_reviewed list_id=%s entry_id=%s", list_id, entry_id)
     return _expense_item(ListedExpense(entry=updated))
 
 

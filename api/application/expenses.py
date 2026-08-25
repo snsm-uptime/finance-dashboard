@@ -59,7 +59,6 @@ class LedgerEntryRecord:
     external_ref: str | None = None
     origin_kind: str | None = None
     origin_card_id: UUID | None = None
-    import_reviewed_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,11 +116,7 @@ class ExpenseRepository(Protocol):
         actor_user_id: UUID,
         origin_kind: str | None,
         origin_card_id: UUID | None,
-    ) -> LedgerEntryRecord: ...
-
-    def mark_ledger_entry_reviewed(
-        self, *, list_id: UUID, entry_id: UUID, actor_user_id: UUID
-    ) -> LedgerEntryRecord: ...
+        ) -> LedgerEntryRecord: ...
 
     def atomic(self) -> AbstractContextManager[None]:
         """Savepoint so create+override failures do not need a full session rollback."""
@@ -148,13 +143,6 @@ class UpdateExpenseOriginCommand:
     entry_id: UUID
     origin_kind: str | None
     origin_card_id: UUID | None
-
-
-@dataclass(frozen=True, slots=True)
-class MarkLedgerEntryReviewedCommand:
-    actor_user_id: UUID
-    list_id: UUID
-    entry_id: UUID
 
 
 @dataclass(frozen=True, slots=True)
@@ -313,27 +301,6 @@ class UpdateExpenseOriginService:
         )
 
 
-class MarkLedgerEntryReviewedService:
-    """Acknowledge a freshly imported ledger row — any list member with write access."""
-
-    def __init__(self, repo: ExpenseRepository) -> None:
-        self._repo = repo
-
-    def execute(self, command: MarkLedgerEntryReviewedCommand) -> LedgerEntryRecord:
-        AuthorizeListAccessService(self._repo).execute(
-            AuthorizeListAccessCommand(
-                acting_user_id=command.actor_user_id,
-                list_id=command.list_id,
-                action="write_expense",
-            )
-        )
-        return self._repo.mark_ledger_entry_reviewed(
-            list_id=command.list_id,
-            entry_id=command.entry_id,
-            actor_user_id=command.actor_user_id,
-        )
-
-
 class ListExpensesService:
     """Newest-first expenses for Soft-Ledger — authorize_list_access(read_expenses)."""
 
@@ -468,8 +435,6 @@ __all__ = [
     "SplitOverrideInput",
     "SplitRepository",
     "ListNotFoundError",
-    "MarkLedgerEntryReviewedCommand",
-    "MarkLedgerEntryReviewedService",
     "UpdateExpenseOriginCommand",
     "UpdateExpenseOriginService",
 ]

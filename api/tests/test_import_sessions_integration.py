@@ -329,7 +329,6 @@ def test_bulk_commit_happy_path_lands_ledger_rows_payer_is_actor(
     assert len({row.import_candidate_row_id for row in ledger_rows}) == len(ledger_rows)
     assert all(row.origin_kind is None for row in ledger_rows)
     assert all(row.origin_card_id is None for row in ledger_rows)
-    assert all(row.import_reviewed_at is None for row in ledger_rows)
 
     _assert_source_pdf_released(db_session, session_id=session_id, user_id=me["user_id"])
 
