@@ -46,6 +46,7 @@ export function SoftLedgerSelect({
   const listboxId = `${reactId}-listbox`;
   const triggerId = id ?? `${reactId}-trigger`;
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
 
   const selected = options.find((o) => o.value === value);
@@ -77,9 +78,14 @@ export function SoftLedgerSelect({
     };
   }, [open, close]);
 
+  function blurTriggerAfterChoose() {
+    triggerRef.current?.blur();
+  }
+
   function choose(next: string) {
     onChange(next);
     close();
+    blurTriggerAfterChoose();
   }
 
   function onTriggerKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
@@ -111,6 +117,7 @@ export function SoftLedgerSelect({
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       close();
+      blurTriggerAfterChoose();
     }
   }
 
@@ -132,6 +139,7 @@ export function SoftLedgerSelect({
         aria-label={ariaLabel}
         aria-labelledby={ariaLabelledBy}
         aria-describedby={ariaDescribedBy}
+        ref={triggerRef}
         onClick={() => {
           if (!disabled) setOpen((v) => !v);
         }}

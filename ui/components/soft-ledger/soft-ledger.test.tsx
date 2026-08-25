@@ -395,6 +395,76 @@ describe("Soft-Ledger primitives", () => {
       bob.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     });
     expect(onChange).toHaveBeenCalledWith("b");
+    expect(document.activeElement).not.toBe(trigger);
+  });
+
+  it("SoftLedgerSelect blurs the trigger after choosing, not after Escape", () => {
+    const onChange = vi.fn();
+    act(() => {
+      root.render(
+        <SoftLedgerSelect
+          value="a"
+          options={[
+            { value: "a", label: "Alice" },
+            { value: "b", label: "Bob" },
+          ]}
+          onChange={onChange}
+          aria-label="Member"
+        />,
+      );
+    });
+    const trigger = host.querySelector("button[aria-haspopup='listbox']") as HTMLButtonElement;
+    act(() => {
+      trigger.focus();
+      trigger.click();
+    });
+    expect(document.activeElement).toBe(trigger);
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(trigger);
+    expect(onChange).not.toHaveBeenCalled();
+
+    act(() => {
+      trigger.click();
+    });
+    const bob = Array.from(host.querySelectorAll("[role='option']")).find(
+      (el) => el.textContent === "Bob",
+    ) as HTMLElement;
+    act(() => {
+      bob.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    });
+    expect(onChange).toHaveBeenCalledWith("b");
+    expect(document.activeElement).not.toBe(trigger);
+  });
+
+  it("SoftLedgerSelect blurs the trigger after Enter confirms the listbox value", () => {
+    const onChange = vi.fn();
+    act(() => {
+      root.render(
+        <SoftLedgerSelect
+          value="a"
+          options={[
+            { value: "a", label: "Alice" },
+            { value: "b", label: "Bob" },
+          ]}
+          onChange={onChange}
+          aria-label="Member"
+        />,
+      );
+    });
+    const trigger = host.querySelector("button[aria-haspopup='listbox']") as HTMLButtonElement;
+    act(() => {
+      trigger.focus();
+      trigger.click();
+    });
+    const listbox = host.querySelector("[role='listbox']") as HTMLUListElement;
+    act(() => {
+      listbox.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).not.toBe(trigger);
   });
 
   it("IncompleteDisclosure renders nothing when isIncomplete is false or undefined (AC #1)", () => {
