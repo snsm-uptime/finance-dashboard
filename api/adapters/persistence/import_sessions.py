@@ -277,7 +277,7 @@ class SqlAlchemyImportSessionRepository:
                 ImportSessionModel.discarded_at.is_(None),
                 ImportSessionModel.finalized_at.is_(None),
             )
-            .order_by(ImportSessionModel.created_at.desc())
+            .order_by(ImportSessionModel.created_at.desc(), ImportSessionModel.id.desc())
             .limit(1)
         )
         if row is None:

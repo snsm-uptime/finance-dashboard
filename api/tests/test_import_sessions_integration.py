@@ -23,6 +23,7 @@ from adapters.persistence.import_sessions import SqlAlchemyImportSessionReposito
 from adapters.persistence.models import (
     ImportBatchModel,
     ImportCandidateRowModel,
+    ImportSessionModel,
     ImportStatementModel,
     LedgerEntryModel,
 )
@@ -1562,13 +1563,21 @@ def test_get_active_session_null_when_none(client: TestClient) -> None:
 
 
 def test_get_active_session_excludes_discarded_finalized_and_other_users(
-    client: TestClient,
+    client: TestClient, db_session: Session
 ) -> None:
     _register(client, "activeowner@example.com")
     older = _upload_bac_session(client)
     newer = _upload_bac_session(client)
     discarded = _upload_bac_session(client)
     assert client.delete(f"/import/sessions/{discarded}").status_code == 200
+
+    # func.now() is transaction-scoped in Postgres, and this fixture wraps the
+    # whole test in one transaction (create_savepoint), so back-to-back
+    # requests can tie on created_at — force the real ordering that two
+    # genuinely separate requests would produce.
+    db_session.get(ImportSessionModel, UUID(older)).created_at = datetime(2026, 1, 1, tzinfo=UTC)
+    db_session.get(ImportSessionModel, UUID(newer)).created_at = datetime(2026, 1, 2, tzinfo=UTC)
+    db_session.commit()
 
     active = client.get("/import/sessions/active")
     assert active.status_code == 200, active.text
