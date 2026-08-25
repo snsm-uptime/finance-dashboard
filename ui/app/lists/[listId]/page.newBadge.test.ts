@@ -24,7 +24,6 @@ function expense(overrides: Partial<ExpenseItem> = {}): ExpenseItem {
     origin_kind: null,
     origin_card_id: null,
     origin_card_label: null,
-    import_reviewed_at: null,
     viewer_share_kind: null,
     viewer_share_value: null,
     viewer_net_crc: null,
@@ -38,6 +37,10 @@ describe("calendarDateInCostaRica", () => {
     // 05:00 UTC is still 23:00 the previous day in CR (UTC-6, no DST).
     expect(calendarDateInCostaRica("2026-08-25T05:00:00Z")).toBe("2026-08-24");
     expect(calendarDateInCostaRica("2026-08-25T06:00:00Z")).toBe("2026-08-25");
+  });
+
+  it("returns null for unparseable timestamps", () => {
+    expect(calendarDateInCostaRica("not-a-date")).toBeNull();
   });
 });
 

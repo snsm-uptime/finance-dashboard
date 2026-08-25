@@ -73,7 +73,6 @@ class ExpenseItemResponse(BaseModel):
     # Origin (card / Cash / blank) — Story 4.2 / FR-21.
     origin_kind: Literal["card", "cash"] | None = None
     origin_card_id: UUID | None = None
-    import_reviewed_at: datetime | None = None
     # Viewer lens for the receipt row (stated share + CRC net). Null when omitted.
     viewer_share_kind: Literal["percentage", "absolute"] | None = None
     viewer_share_value: str | None = None
@@ -114,7 +113,6 @@ class CreateExpenseResponse(BaseModel):
     fx_fallback: bool = False
     origin_kind: Literal["card", "cash"] | None = None
     origin_card_id: UUID | None = None
-    import_reviewed_at: datetime | None = None
 
 
 class UpdateExpenseOriginBody(BaseModel):

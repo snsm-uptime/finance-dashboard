@@ -443,7 +443,6 @@ export type ExpenseItem = {
   origin_kind: string | null;
   origin_card_id: string | null;
   origin_card_label: string | null;
-  import_reviewed_at: string | null;
   viewer_share_kind: "percentage" | "absolute" | null;
   viewer_share_value: string | null;
   viewer_net_crc: string | null;
@@ -514,7 +513,6 @@ function asExpense(data: unknown): ExpenseItem | null {
     origin_kind: typeof row.origin_kind === "string" ? row.origin_kind : null,
     origin_card_id: typeof row.origin_card_id === "string" ? row.origin_card_id : null,
     origin_card_label: typeof row.origin_card_label === "string" ? row.origin_card_label : null,
-    import_reviewed_at: typeof row.import_reviewed_at === "string" ? row.import_reviewed_at : null,
     viewer_share_kind:
       row.viewer_share_kind === "percentage" || row.viewer_share_kind === "absolute"
         ? row.viewer_share_kind

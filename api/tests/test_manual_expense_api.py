@@ -913,9 +913,7 @@ def _seed_parser_expense(
     return str(entry_id)
 
 
-def test_patch_origin_on_parser_row_sets_import_reviewed_at(
-    client: TestClient, db_session: Session
-) -> None:
+def test_patch_origin_on_parser_row_succeeds(client: TestClient, db_session: Session) -> None:
     owner_id = _register(client, "owner-origin-parser-reviewed@example.com")
     created = client.post("/lists", json={"name": "Parser origin review"})
     list_id = created.json()["id"]
@@ -925,83 +923,11 @@ def test_patch_origin_on_parser_row_sets_import_reviewed_at(
     assert listing.status_code == 200, listing.text
     seeded = next(e for e in listing.json()["expenses"] if e["id"] == entry_id)
     assert seeded["provenance"] == "parser"
-    assert seeded["import_reviewed_at"] is None
 
     patched = client.patch(
         f"/lists/{list_id}/expenses/{entry_id}/origin",
         json={"origin_kind": "cash"},
     )
     assert patched.status_code == 200, patched.text
-    assert patched.json()["import_reviewed_at"] is not None
     assert patched.json()["origin_kind"] == "cash"
-
-
-def test_patch_expense_reviewed_happy_path_allows_non_payer_member(
-    client: TestClient, db_session: Session
-) -> None:
-    from uuid import UUID
-
-    from adapters.persistence.models import ListMembershipModel
-
-    owner_id = _register(client, "owner-reviewed-nonpayer@example.com")
-    created = client.post("/lists", json={"name": "Reviewed non-payer"})
-    list_id = created.json()["id"]
-    entry_id = _seed_parser_expense(db_session, list_id=list_id, payer_id=owner_id)
-
-    member_id = _register(client, "member-reviewed-nonpayer@example.com")
-    db_session.add(
-        ListMembershipModel(
-            id=uuid4(),
-            list_id=UUID(list_id),
-            user_id=UUID(member_id),
-            role="member",
-        )
-    )
-    db_session.flush()
-
-    resp = client.patch(f"/lists/{list_id}/expenses/{entry_id}/reviewed")
-    assert resp.status_code == 200, resp.text
-    assert resp.json()["import_reviewed_at"] is not None
-    assert resp.json()["id"] == entry_id
-
-
-def test_patch_expense_reviewed_wrong_list_returns_404(
-    client: TestClient, db_session: Session
-) -> None:
-    owner_id = _register(client, "owner-reviewed-wronglist@example.com")
-    created_a = client.post("/lists", json={"name": "Reviewed A"})
-    list_a = created_a.json()["id"]
-    created_b = client.post("/lists", json={"name": "Reviewed B"})
-    list_b = created_b.json()["id"]
-    entry_id = _seed_parser_expense(db_session, list_id=list_a, payer_id=owner_id)
-
-    resp = client.patch(f"/lists/{list_b}/expenses/{entry_id}/reviewed")
-    assert resp.status_code == 404, resp.text
-    assert resp.json()["code"] == "subject_not_found"
-
-
-def test_patch_expense_reviewed_by_non_member_forbidden(
-    client: TestClient, db_session: Session
-) -> None:
-    owner_id = _register(client, "owner-reviewed-acl@example.com")
-    created = client.post("/lists", json={"name": "Reviewed ACL"})
-    list_id = created.json()["id"]
-    entry_id = _seed_parser_expense(db_session, list_id=list_id, payer_id=owner_id)
-
-    client.post("/auth/sign-out")
-    _register(client, "stranger-reviewed-acl@example.com")
-
-    resp = client.patch(f"/lists/{list_id}/expenses/{entry_id}/reviewed")
-    assert resp.status_code == 403, resp.text
-    assert resp.json()["code"] == "not_list_member"
-
-
-def test_patch_expense_reviewed_unauthenticated(client: TestClient, db_session: Session) -> None:
-    owner_id = _register(client, "owner-reviewed-unauth@example.com")
-    created = client.post("/lists", json={"name": "Reviewed unauth"})
-    list_id = created.json()["id"]
-    entry_id = _seed_parser_expense(db_session, list_id=list_id, payer_id=owner_id)
-
-    client.post("/auth/sign-out")
-    resp = client.patch(f"/lists/{list_id}/expenses/{entry_id}/reviewed")
-    assert resp.status_code == 401
+    assert "import_reviewed_at" not in patched.json()
