@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 import { SlideDown } from "@/components/SlideDown";
 import { useFormSubmission } from "@/hooks";
@@ -43,12 +43,9 @@ export function CardRoutingControl({ card, lists, messages, onUpdated, trailing 
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"fixed" | "review">(card.routing_mode);
   const [fixedListId, setFixedListId] = useState(card.fixed_list_id ?? "");
-
-  useEffect(() => {
-    if (fixedListId && !lists.some((list) => list.id === fixedListId)) {
-      setFixedListId("");
-    }
-  }, [lists, fixedListId]);
+  // Membership can drop the previously-selected list out of `lists`; derive
+  // instead of syncing via effect so a stale id never renders as selected.
+  const activeFixedListId = lists.some((list) => list.id === fixedListId) ? fixedListId : "";
 
   const { pending, error, submit, clearError } = useFormSubmission(
     async (input: { mode: "fixed" | "review"; fixedListId: string }) => {
@@ -71,7 +68,7 @@ export function CardRoutingControl({ card, lists, messages, onUpdated, trailing 
     },
   );
 
-  const canSubmit = !pending && (mode === "review" || fixedListId.length > 0);
+  const canSubmit = !pending && (mode === "review" || activeFixedListId.length > 0);
   const chipLabel =
     card.routing_mode === "fixed" ? messages.routingChipFixed : messages.routingChipReview;
   const chipAria = `${messages.routingTitle}: ${chipLabel}`;
@@ -163,7 +160,7 @@ export function CardRoutingControl({ card, lists, messages, onUpdated, trailing 
           {mode === "fixed" ? (
             <SoftLedgerSelect
               aria-label={messages.routingListLabel}
-              value={fixedListId}
+              value={activeFixedListId}
               disabled={pending}
               options={lists.map((l) => ({ value: l.id, label: l.name }))}
               onChange={(value) => {
@@ -176,7 +173,7 @@ export function CardRoutingControl({ card, lists, messages, onUpdated, trailing 
             type="button"
             className="font-inherit text-[0.8rem] font-semibold py-[0.4rem] px-[0.75rem] rounded-[8px] border border-accent bg-accent text-on-accent cursor-pointer self-start disabled:cursor-not-allowed disabled:opacity-60"
             disabled={!canSubmit}
-            onClick={() => submit({ mode, fixedListId })}
+            onClick={() => submit({ mode, fixedListId: activeFixedListId })}
           >
             {pending ? messages.routingSaving : messages.routingSave}
           </button>
