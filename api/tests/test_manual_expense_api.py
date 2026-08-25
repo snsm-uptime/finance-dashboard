@@ -913,9 +913,7 @@ def _seed_parser_expense(
     return str(entry_id)
 
 
-def test_patch_origin_on_parser_row_succeeds(
-    client: TestClient, db_session: Session
-) -> None:
+def test_patch_origin_on_parser_row_succeeds(client: TestClient, db_session: Session) -> None:
     owner_id = _register(client, "owner-origin-parser-reviewed@example.com")
     created = client.post("/lists", json={"name": "Parser origin review"})
     list_id = created.json()["id"]

@@ -116,7 +116,7 @@ class ExpenseRepository(Protocol):
         actor_user_id: UUID,
         origin_kind: str | None,
         origin_card_id: UUID | None,
-        ) -> LedgerEntryRecord: ...
+    ) -> LedgerEntryRecord: ...
 
     def atomic(self) -> AbstractContextManager[None]:
         """Savepoint so create+override failures do not need a full session rollback."""
