@@ -253,7 +253,7 @@ describe("IndividualReviewPanel", () => {
   let root: Root;
 
   beforeEach(() => {
-    sessionStorage.clear();
+    localStorage.clear();
     push.mockReset();
     discardSession.mockReset();
     fetchLists.mockReset();
