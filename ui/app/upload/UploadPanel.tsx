@@ -46,8 +46,19 @@ async function hashFile(file: File): Promise<{ contentHash?: string; fallbackKey
   const fallbackKey = `${file.name}:${file.size}:${file.lastModified}`;
   const subtle = globalThis.crypto?.subtle;
   if (!subtle) return { fallbackKey };
-  const digest = await subtle.digest("SHA-256", await file.arrayBuffer());
-  return { contentHash: bytesToHex(digest), fallbackKey };
+  try {
+    const digest = await subtle.digest("SHA-256", await file.arrayBuffer());
+    return { contentHash: bytesToHex(digest), fallbackKey };
+  } catch {
+    return { fallbackKey };
+  }
+}
+
+function reviewHrefFor(entry: QueueEntry): string | null {
+  const sessionId =
+    entry.state === "staged" && entry.session ? entry.session.id : entry.duplicateSessionId;
+  if (!sessionId) return null;
+  return `/upload/review/${encodeURIComponent(sessionId)}`;
 }
 
 function isInQueueDuplicate(
@@ -113,6 +124,7 @@ export function UploadPanel({ initialSession = null }: { initialSession?: Import
   const queueRef = useRef<QueueEntry[]>(queue);
   const drainingRef = useRef(false);
   const aliveRef = useRef(true);
+  const pickChainRef = useRef(Promise.resolve());
   const [capMessage, setCapMessage] = useState<string | null>(null);
 
   const messages: UploadMessages = {
@@ -128,7 +140,7 @@ export function UploadPanel({ initialSession = null }: { initialSession?: Import
   function commitQueue(next: QueueEntry[]) {
     queueRef.current = next;
     writeUploadQueue(next);
-    setQueue(next);
+    if (aliveRef.current) setQueue(next);
   }
 
   function patchEntry(id: string, patch: Partial<QueueEntry>) {
@@ -137,12 +149,15 @@ export function UploadPanel({ initialSession = null }: { initialSession?: Import
 
   useEffect(() => {
     aliveRef.current = true;
-    writeUploadQueue(queueRef.current);
+    const recovered = queueRef.current.map((entry) =>
+      entry.state === "uploading" && entry.file ? { ...entry, state: "pending" as const } : entry,
+    );
+    commitQueue(recovered);
     void drainQueue();
     return () => {
       aliveRef.current = false;
     };
-    // Resume any leftover pending uploads after returning from review.
+    // Resume leftover pending/uploading uploads after returning from review.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only drain
   }, []);
 
@@ -155,12 +170,15 @@ export function UploadPanel({ initialSession = null }: { initialSession?: Import
     drainingRef.current = true;
     try {
       for (;;) {
-        if (!aliveRef.current) return;
         const next = queueRef.current.find((entry) => entry.state === "pending" && entry.file);
         if (!next || !next.file) break;
         patchEntry(next.id, { state: "uploading", error: undefined });
-        const result = await uploadStatement(next.file, messages);
-        if (!aliveRef.current) return;
+        let result: Awaited<ReturnType<typeof uploadStatement>>;
+        try {
+          result = await uploadStatement(next.file, messages);
+        } catch {
+          result = { ok: false, error: messages.errorGeneric };
+        }
         if (result?.ok) {
           const updated = queueRef.current.map((entry) =>
             entry.id === next.id
@@ -188,18 +206,13 @@ export function UploadPanel({ initialSession = null }: { initialSession?: Import
       }
     } finally {
       drainingRef.current = false;
-      if (aliveRef.current && queueRef.current.some((entry) => entry.state === "pending")) {
+      if (queueRef.current.some((entry) => entry.state === "pending")) {
         void drainQueue();
       }
     }
   }
 
-  async function onFileChange(event: ChangeEvent<HTMLInputElement>) {
-    // Snapshot before clearing — FileList is live and becomes empty when value is reset.
-    const picked = Array.from(event.target.files ?? []);
-    event.target.value = "";
-    if (picked.length === 0) return;
-
+  async function enqueueFiles(picked: File[]) {
     setCapMessage(null);
     const additions: QueueEntry[] = [];
     let overflow = false;
@@ -235,8 +248,16 @@ export function UploadPanel({ initialSession = null }: { initialSession?: Import
     if (additions.length > 0) {
       commitQueue([...queueRef.current, ...additions]);
     }
-    if (overflow) setCapMessage(t.queueCap);
+    if (overflow && aliveRef.current) setCapMessage(t.queueCap);
     void drainQueue();
+  }
+
+  function onFileChange(event: ChangeEvent<HTMLInputElement>) {
+    // Snapshot before clearing — FileList is live and becomes empty when value is reset.
+    const picked = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (picked.length === 0) return;
+    pickChainRef.current = pickChainRef.current.then(() => enqueueFiles(picked)).catch(() => undefined);
   }
 
   function removePending(id: string) {
@@ -249,7 +270,12 @@ export function UploadPanel({ initialSession = null }: { initialSession?: Import
       patchEntry(id, { error: result.error });
       return;
     }
-    const remaining = queueRef.current.filter((entry) => entry.id !== id);
+    const remaining = queueRef.current.filter(
+      (entry) =>
+        entry.id !== id &&
+        entry.session?.id !== sessionId &&
+        entry.duplicateSessionId !== sessionId,
+    );
     commitQueue(remaining);
     rememberLastStaged(remaining);
   }
@@ -292,36 +318,34 @@ export function UploadPanel({ initialSession = null }: { initialSession?: Import
           {queue.length > 0 ? (
             <ul className="m-0 p-0 list-none flex flex-col gap-2">
               {queue.map((entry) => {
-                const reviewHref =
-                  entry.state === "staged" && entry.session
-                    ? `/upload/review/${encodeURIComponent(entry.session.id)}`
-                    : null;
+                const reviewHref = reviewHrefFor(entry);
+                const discardSessionId = entry.session?.id ?? entry.duplicateSessionId;
                 return (
                   <li
                     key={entry.id}
                     className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2"
                   >
-                    {reviewHref ? (
-                      <Link
-                        href={reviewHref}
-                        className="min-w-0 flex-1 truncate text-[0.9rem] text-foreground no-underline"
-                        aria-label={`${t.resumeReview}: ${entry.displayName}`}
-                      >
-                        {entry.displayName}
-                      </Link>
-                    ) : (
-                      <div className="min-w-0 flex-1">
+                    <div className="min-w-0 flex-1">
+                      {reviewHref ? (
+                        <Link
+                          href={reviewHref}
+                          className="block truncate text-[0.9rem] text-foreground no-underline"
+                          aria-label={`${t.resumeReview}: ${entry.displayName}`}
+                        >
+                          {entry.displayName}
+                        </Link>
+                      ) : (
                         <p className="m-0 truncate text-[0.9rem] text-foreground">
                           {entry.displayName}
                         </p>
-                        {entry.error && entry.state !== "duplicate" ? (
-                          <p className="m-0 mt-1 text-owe text-[0.8rem]" role="alert">
-                            {entry.error}
-                          </p>
-                        ) : null}
-                      </div>
-                    )}
-                    {entry.state === "pending" ? (
+                      )}
+                      {entry.error && entry.state !== "duplicate" ? (
+                        <p className="m-0 mt-1 text-owe text-[0.8rem]" role="alert">
+                          {entry.error}
+                        </p>
+                      ) : null}
+                    </div>
+                    {entry.state === "pending" || entry.state === "failed" ? (
                       <IconButton
                         variant="ghost"
                         label={t.removePending}
@@ -338,14 +362,13 @@ export function UploadPanel({ initialSession = null }: { initialSession?: Import
                         <SpinnerIcon className="col-start-1 row-start-1 size-5 animate-spin motion-reduce:animate-none" />
                       </span>
                     ) : null}
-                    {reviewHref ? (
+                    {reviewHref && discardSessionId ? (
                       <IconButton
                         variant="ghost"
                         label={t.close}
                         icon={<CloseIcon className="size-5" />}
                         onClick={() => {
-                          const sessionId = entry.session?.id;
-                          if (sessionId) void discardStaged(entry.id, sessionId);
+                          void discardStaged(entry.id, discardSessionId);
                         }}
                       />
                     ) : null}

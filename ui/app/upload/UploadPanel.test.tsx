@@ -266,6 +266,7 @@ describe("UploadPanel", () => {
 
     const busy = container.querySelector('button[aria-busy="true"]');
     expect(busy).not.toBeNull();
+    expect(busy?.hasAttribute("disabled")).toBe(false);
     expect(busy?.getAttribute("aria-label")).toBe("Uploading…");
     expect(container.querySelector(".animate-spin")).not.toBeNull();
 
@@ -574,5 +575,95 @@ describe("UploadPanel", () => {
       expect.objectContaining({ errorDuplicateStatement: expect.any(String) }),
     );
     expect(container.querySelector('a[href="/upload/review/s1"]')).toBeNull();
+  });
+
+  it("shows a discard error on the staged resume row", async () => {
+    discardSession.mockResolvedValue({ ok: false, error: "Something went wrong. Try again." });
+
+    await act(async () => {
+      root.render(<UploadPanel initialSession={unmatchedSession} />);
+    });
+
+    const close = container.querySelector('button[aria-label="Close"]') as HTMLButtonElement;
+    await act(async () => {
+      close.click();
+    });
+
+    expect(container.querySelector('a[href="/upload/review/s1"]')).not.toBeNull();
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe(
+      "Something went wrong. Try again.",
+    );
+  });
+
+  it("lets the user dismiss a failed row", async () => {
+    uploadStatement.mockResolvedValue({ ok: false, error: "Could not read this PDF." });
+
+    await act(async () => {
+      root.render(<UploadPanel />);
+    });
+    await selectFiles(container, fakeFile("bad.pdf", "%PDF-bad"));
+    await waitFor(
+      () => Boolean(container.textContent?.includes("Could not read this PDF.")),
+      "failed row",
+    );
+
+    const remove = container.querySelector('button[aria-label="Remove"]') as HTMLButtonElement;
+    expect(remove).not.toBeNull();
+    await act(async () => {
+      remove.click();
+    });
+    expect(container.textContent).not.toContain("bad.pdf");
+  });
+
+  it("links a server duplicate to the blocking session", async () => {
+    uploadStatement.mockResolvedValue({
+      ok: false,
+      error: "This statement has already been uploaded.",
+      duplicateSessionId: "existing-session",
+    });
+
+    await act(async () => {
+      root.render(<UploadPanel />);
+    });
+    await selectFiles(container, fakeFile("dup.pdf", "%PDF-dup"));
+    await waitFor(
+      () => Boolean(container.querySelector('a[href="/upload/review/existing-session"]')),
+      "duplicate resume link",
+    );
+
+    expect(container.querySelector('a[href="/upload/review/existing-session"]')?.textContent).toBe(
+      "dup.pdf",
+    );
+    expect(
+      container.querySelector('[aria-label="This statement has already been uploaded."]'),
+    ).not.toBeNull();
+  });
+
+  it("finishes an in-flight upload into the store after leaving the page", async () => {
+    let release!: (value: unknown) => void;
+    uploadStatement.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+
+    await act(async () => {
+      root.render(<UploadPanel />);
+    });
+    await selectFiles(container, fakeFile("leave.pdf", "%PDF-leave"));
+    await waitFor(() => uploadStatement.mock.calls.length === 1, "upload started");
+
+    await act(async () => {
+      root.unmount();
+    });
+    await act(async () => {
+      release({ ok: true, session: sessionFor("left", "leave.pdf") });
+    });
+    await tick();
+
+    expect(readUploadQueue().some((entry) => entry.session?.id === "left")).toBe(true);
+
+    root = createRoot(container);
   });
 });
