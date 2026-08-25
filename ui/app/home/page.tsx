@@ -99,13 +99,6 @@ export default async function Home() {
           </div>
         </section>
       </div>
-
-      <p className={`${listsStyles.copy} ${styles.foot}`}>
-        <a className={listsStyles.link} href="/upload">
-          {t.uploadLink}
-        </a>{" "}
-        {t.uploadHint}
-      </p>
     </main>
   );
 }

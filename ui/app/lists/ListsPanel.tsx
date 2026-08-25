@@ -74,25 +74,36 @@ function ListCardFace({
   memberBadge: string;
 }) {
   const roster = rosterForCard(list, currentUserId);
+  const hasBalance = Boolean(balance);
+  const hasRoster = roster.length > 0;
+  const titleOnly = !hasBalance && !hasRoster;
   return (
-    <>
+    <span
+      className={titleOnly ? styles.cardFaceTitleOnly : styles.cardFace}
+    >
       {isOwner ? null : (
         <ListRoleBookmark mark={memberMark} label={memberBadge} />
       )}
       {title}
-      <span className={styles.cardDivider} aria-hidden="true" />
-      <span className={styles.cardMiddle}>{balance}</span>
-      <span className={styles.chipRow}>
-        {roster.map((member) => (
-          <Chip
-            key={member.user_id}
-            tone={member.user_id === list.owner_id ? "accent" : "muted"}
-          >
-            {memberLabel(member)}
-          </Chip>
-        ))}
-      </span>
-    </>
+      {hasBalance ? (
+        <span className={styles.cardMiddle}>{balance}</span>
+      ) : null}
+      {hasBalance || hasRoster ? (
+        <span className={styles.cardDivider} aria-hidden="true" />
+      ) : null}
+      {hasRoster ? (
+        <span className={styles.chipRow}>
+          {roster.map((member) => (
+            <Chip
+              key={member.user_id}
+              tone={member.user_id === list.owner_id ? "accent" : "muted"}
+            >
+              {memberLabel(member)}
+            </Chip>
+          ))}
+        </span>
+      ) : null}
+    </span>
   );
 }
 

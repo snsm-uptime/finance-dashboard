@@ -122,7 +122,8 @@ export function AccountMenu() {
         <p className="text-muted text-[0.85rem]">{t.loading}</p>
       ) : null}
 
-      <section className="mb-6" aria-labelledby="account-language">
+      <div className="mb-6 flex flex-row flex-wrap items-start gap-x-8 gap-y-6">
+      <section aria-labelledby="account-language">
         <h2 id="account-language" className="m-0 mb-[0.6rem] text-[0.72rem] font-[550] text-muted tracking-[0.02rem]">
           {t.language}
         </h2>
@@ -149,7 +150,7 @@ export function AccountMenu() {
         </div>
       </section>
 
-      <section className="mb-6" aria-labelledby="account-theme">
+      <section aria-labelledby="account-theme">
         <h2 id="account-theme" className="m-0 mb-[0.6rem] text-[0.72rem] font-[550] text-muted tracking-[0.02rem]">
           {t.theme}
         </h2>
@@ -165,6 +166,7 @@ export function AccountMenu() {
           ]}
         />
       </section>
+      </div>
 
       {lists.length > 0 ? (
         <div className="mb-6">

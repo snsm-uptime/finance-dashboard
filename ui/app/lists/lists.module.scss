@@ -343,12 +343,29 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.35rem;
   width: 100%;
   min-height: 8.25rem;
   box-sizing: border-box;
   padding: 1.1rem 1.25rem 0.85rem;
   text-align: center;
+}
+
+.cardFace,
+.cardFaceTitleOnly {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.cardFace {
+  gap: 0.35rem;
+}
+
+.cardFaceTitleOnly {
+  justify-content: center;
 }
 
 .cardButton {
