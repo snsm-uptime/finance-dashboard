@@ -558,9 +558,9 @@ When the user confirms that a manual entry and a bank line represent the same ex
 - v1 does **not** use aliases for automatic ML categorization; that interpretation is post-v1. Schema/storage of the alias is in v1 so later models can learn from it.
 
 
-### Parse failure, quarantine, and correction
+### Parse failure and correction
 
-**Description:** When parsing fails, the system alerts and does not silently commit bad data. Failure is statement-scoped. Users see the PDF beside extracted items, may accept with quarantine or dismiss, can hand-fix unresolved rows, and resolve manual-vs-parsed conflicts on re-upload. Misfiled imports can be reassigned; bad batches can be rolled back.
+**Description:** When parsing fails, the system alerts and does not silently commit bad data. Failure is statement-scoped. Users see the PDF beside extracted items and may dismiss the statement or file; a corrected re-upload or manual expense entry captures data the parser missed. Rows that do parse resolve independently through row-level review. Manual-vs-parsed conflicts are resolved on re-upload. Misfiled imports can be reassigned; bad batches can be rolled back. *(Reworded 2026-08-25 — quarantine removed; Sprint Change Proposal 2026-08-25.)*
 
 #### FR-24: Statement-scoped parse failure
 
@@ -580,27 +580,28 @@ On parse failure, the system shows the original PDF beside the items that were e
 - The comparison view appears only on failure for that statement — clean parses skip it.
 - The view is usable on a mobile viewport.
 
-#### FR-26: Accept with quarantine or dismiss
+#### FR-26: Dismiss failed statement or file
 
-From the comparison view the user may **accept with quarantine** (parsed rows import; unparsed stored as unresolved; statement marked incomplete) or **dismiss** the statement or entire file.
-
-**Consequences (testable):**
-
-- Nothing partial enters the ledger without an explicit human decision in front of the evidence.
-- Accept-with-quarantine marks the statement incomplete for balance disclosure.
-
-#### FR-27: Manual resolution of quarantined rows
-
-Unresolved rows can be edited by hand against the rendered PDF (values typed by the user) without waiting for a parser fix.
+From the comparison view the user may **dismiss** the statement or the entire file.
 
 **Consequences (testable):**
 
-- Hand-entered values are stored with provenance distinguishing them from parser-derived rows.
-- Editing works on a phone-sized viewport.
+- A statement that fails to parse produces no rows and nothing partial enters the ledger.
+- Rows that do parse flow through the normal row-level review queue (FR-17/18) independently of any statement-level outcome.
+
+> **Amended 2026-08-25** — Sprint Change Proposal 2026-08-25 (quarantine removed). Originally titled "Accept with quarantine or dismiss": the user could accept-with-quarantine (parsed rows import; unparsed stored as unresolved; statement marked incomplete) or dismiss. Row-level review (Story 4.10+) already resolves parsed rows independently before Save, making quarantine's partial-commit/durable-unresolved-bucket redundant. Superseded wording retained here for history.
+
+#### FR-27: Removed — Manual resolution of quarantined rows
+
+**Status: removed from v1 (2026-08-25).** Superseded by the row-level review model — there is no unresolved-row bucket to hand-fix. Manual expense entry (FR-21) remains the general hand-entry path for data a parser missed.
+
+> **Amended 2026-08-25** — Sprint Change Proposal 2026-08-25. Originally: unresolved rows could be edited by hand against the rendered PDF, with hand-entered values stored with provenance distinguishing them from parser-derived rows, editable on a phone-sized viewport. Superseded wording retained here for history.
 
 #### FR-28: Manual-vs-parsed conflict on re-upload
 
-When a re-upload produces a parsed row that matches or near-matches a hand-fixed row, the system prompts using the **same resolution UI as FR-22**: pick Manual or Parsed by default; **“Not the same expense”** keeps both only after double-count/overpay confirm — never silently duplicates.
+When a re-upload produces a parsed row that matches or near-matches a previously-resolved manual entry, the system prompts using the **same resolution UI as FR-22**: pick Manual or Parsed by default; **“Not the same expense”** keeps both only after double-count/overpay confirm — never silently duplicates.
+
+> **Amended 2026-08-25** — wording was "hand-fixed row," tied to the now-removed FR-27 quarantine hand-fix flow; reworded to "previously-resolved manual entry" (any FR-21 manual/hand-provenance row).
 
 **Consequences (testable):**
 
@@ -760,11 +761,14 @@ Below settle-up, the view lists items for the period newest-first in a receipt-l
 
 #### FR-43: Incomplete balance disclosure
 
-If quarantined or unresolved rows affect the period, balances disclose that they are incomplete.
+If unresolved same-price conflicts (FR-22) affect the period, balances disclose that they are incomplete.
 
 **Consequences (testable):**
 
 - The UI does not present a confident settle-up total that silently omits unresolved purchases.
+- A dismissed statement (FR-26) is not "incomplete" — it was never imported.
+
+> **Amended 2026-08-25** — Sprint Change Proposal 2026-08-25. Originally sourced from "quarantined or unresolved rows"; quarantine is removed (FR-27), so unresolved same-price conflicts are now the sole trigger. Superseded wording retained here for history.
 
 #### FR-44: Balance shape ready for settlement
 
@@ -811,7 +815,7 @@ Re-importing the same or overlapping statement must not corrupt balances via dup
 Every import is an atomic journaled batch that can be rolled back (FR-30).
 
 #### NFR-6: Incomplete-data honesty
-Any settle-up or balance figure derived from incomplete/quarantined data must be disclosed as such (FR-43).
+Any settle-up or balance figure derived from incomplete data (unresolved same-price conflicts, FR-43) must be disclosed as such. *(Reworded 2026-08-25 — quarantine removed; Sprint Change Proposal 2026-08-25.)*
 
 ### Usability and form factor
 
@@ -857,7 +861,7 @@ PostgreSQL schema evolution is supported via migrations as the data model change
 - PostgreSQL persistence in its own container, with a data volume outside the repository
 - Email-and-password authentication (sign up, sign in, password reset; email verification only if required for invites or recovery) — no profile or settings surface beyond auth
 - Personal lists created on signup, user-created lists, per-member splits (list default + item overrides), and email invitations to lists (registered and unregistered addresses, with post-signup redirect to the inviting list)
-- Manual resolution of quarantined rows against the rendered PDF, with provenance recorded per row; on re-upload, conflicts between a hand-fixed row and a new parse use the same Manual|Parsed (+ confirmed “Not the same expense”) UI as same-price conflicts
+- Dismiss a statement or file that fails to parse; on re-upload, conflicts between a previously-resolved manual entry and a new parse use the same Manual|Parsed (+ confirmed “Not the same expense”) UI as same-price conflicts *(reworded 2026-08-25 — quarantine/hand-fix removed; Sprint Change Proposal 2026-08-25)*
 - Explicit payer on shared expenses, editable; defaults to the current user on import and manual entry; manual create also requires description and offers Adjust split disclosure
 - Manual item entry to a list without waiting for statement import
 - Same-price manual/import comparison review at end of upload; confirmed matches store manual label as alias of bank description (ML use is post-v1)

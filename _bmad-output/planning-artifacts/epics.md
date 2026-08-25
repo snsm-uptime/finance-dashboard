@@ -68,11 +68,11 @@ FR-24: If a statement cannot be parsed correctly on the automatic path, the syst
 
 FR-25: On parse failure, the system shows the original PDF beside extracted items (on phone, PDF in the lower half); comparison appears only on failure; view is usable on mobile.
 
-FR-26: From the comparison view the user may accept with quarantine (parsed rows import; unparsed stored unresolved; statement marked incomplete) or dismiss the statement or entire file; nothing partial enters the ledger without an explicit human decision in front of the evidence.
+FR-26: From the comparison view the user may dismiss the statement or the entire file; a statement that fails to parse produces no rows and nothing partial enters the ledger; rows that do parse flow through the normal row-level review queue (FR-17/18) independently. *(Reworded 2026-08-25 — quarantine removed; Sprint Change Proposal 2026-08-25.)*
 
-FR-27: Unresolved rows can be edited by hand against the rendered PDF; hand-entered values store provenance distinguishing them from parser rows; editing works on phone viewport.
+FR-27: **Removed from v1** — superseded by the row-level review model (Story 4.10+); there is no unresolved-row bucket to hand-fix. Manual expense entry (FR-21) remains the general hand-entry path. *(Removed 2026-08-25 — Sprint Change Proposal 2026-08-25.)*
 
-FR-28: When a re-upload produces a parsed row that matches or near-matches a hand-fixed row, the system prompts with the same FR-22 resolution UI (Manual|Parsed; confirmed “Not the same expense”); never silently duplicates.
+FR-28: When a re-upload produces a parsed row that matches or near-matches a previously-resolved manual entry, the system prompts with the same FR-22 resolution UI (Manual|Parsed; confirmed “Not the same expense”); never silently duplicates. *(Reworded 2026-08-25 — "hand-fixed" language tied to removed FR-27.)*
 
 FR-29: A user can reassign a statement filed to the wrong list to another list they belong to; balances on both lists reflect the move; share allocations follow destination list rules unless item overrides exist.
 
@@ -102,7 +102,7 @@ FR-41: Top of the view shows how much each person needs to pay (CRC) to settle t
 
 FR-42: Below settle-up, the view lists items for the period newest-first in a receipt-like format; incomplete/quarantined contribution is disclosed on this screen.
 
-FR-43: If quarantined or unresolved rows affect the period, balances disclose that they are incomplete; UI does not present a confident settle-up total that silently omits unresolved purchases.
+FR-43: If unresolved same-price conflicts (FR-22) affect the period, balances disclose that they are incomplete; UI does not present a confident settle-up total that silently omits unresolved purchases. A dismissed statement is not "incomplete" — it was never imported. *(Reworded 2026-08-25 — quarantine was the prior trigger source; Sprint Change Proposal 2026-08-25.)*
 
 FR-44: v1 balances are computed from per-transaction share allocations and payer such that a future payments/settlement ledger can draw them down without a model rewrite; recording payments remains out of scope for v1.
 
@@ -179,7 +179,7 @@ UX-DR6: Build Section label, Top nav (transparent brand + list title), Tab bar (
 
 UX-DR7: Lists homepage uses same Warm Balance tokens with list name + balance in owe/owed (or settled/zero) for instant who-owes-whom scan.
 
-UX-DR8: Incomplete-balance disclosure placed calm/muted below the strip island (same inset), not over the amount; quarantine incompleteness is announced to assistive tech, not color-only.
+UX-DR8: Incomplete-balance disclosure placed calm/muted below the strip island (same inset), not over the amount; incompleteness (from unresolved same-price conflicts) is announced to assistive tech, not color-only. *(Reworded 2026-08-25 — quarantine removed; Sprint Change Proposal 2026-08-25.)*
 
 UX-DR9: Implement IA surfaces: First paint (remembered last-opened list else Lists homepage), Lists homepage, Shared-expenses, Upload, Individual review, Bulk review, Parse comparison, Card registration, Same-price conflict review, Manual expense, Invite, Invitee signup landing, Account menu — per EXPERIENCE.md.
 
@@ -187,7 +187,7 @@ UX-DR10: Account menu is minimal: sign out, password reset, Language EN/ES (reme
 
 UX-DR11: Phone Individual review, per parsed transaction on a centered card over a dimmed backdrop: true swipe commits — right → chosen list (list picker first), left → configurable default, up → delete; undo is a button on every platform including phone, never a gesture; desktop Individual review uses labeled buttons as primary for the same four outcomes; accessible non-gesture equivalents required. *(Amended 2026-08-20.)*
 
-UX-DR12: Parse comparison pane: PDF in lower half on phone, extracted items above; actions accept-with-quarantine or dismiss statement/file; comparison only on failure.
+UX-DR12: Parse comparison pane: PDF in lower half on phone, extracted items above; actions dismiss statement or dismiss file; comparison only on failure. *(Reworded 2026-08-25 — quarantine removed; Sprint Change Proposal 2026-08-25.)*
 
 UX-DR13: Card registration prompt blocks review until user-chosen label + IBAN saved; fixed card→list routing is after registration, not inside the prompt; UI shows user’s label, not bank product codes.
 
@@ -240,8 +240,8 @@ FR-22: Epic 5 — Same-price manual match review
 FR-23: Epic 5 — Manual label as bank-description alias
 FR-24: Epic 5 — Statement-scoped parse failure
 FR-25: Epic 5 — Side-by-side comparison on failure
-FR-26: Epic 5 — Accept with quarantine or dismiss
-FR-27: Epic 5 — Manual resolution of quarantined rows
+FR-26: Epic 5 — Dismiss failed statement or file
+FR-27: Removed from v1 (2026-08-25) — superseded by row-level review
 FR-28: Epic 5 — Manual-vs-parsed conflict on re-upload
 FR-29: Epic 5 — Reassign statement to another list
 FR-30: Epic 5 — Roll back an import batch
@@ -1529,11 +1529,13 @@ So that I can queue several statements in one pass instead of uploading them one
 
 ## Epic 5: Import resilience (then settle polish)
 
-Ordered: parse failure/quarantine/hand-fix → wire FR-43 on strip → reassign/rollback → same-price + aliases → then simplify (FR-41) + statement-cycle selector (FR-39).
+Ordered: parse failure → dismiss → reassign/rollback → same-price + aliases → wire FR-43 on strip → then simplify (FR-41) + statement-cycle selector (FR-39).
 
-**FRs covered:** FR-22, FR-23, FR-24, FR-25, FR-26, FR-27, FR-28, FR-29, FR-30, FR-39, FR-41, FR-43 (wire)  
+**FRs covered:** FR-22, FR-23, FR-24, FR-25, FR-26, FR-28, FR-29, FR-30, FR-39, FR-41, FR-43 (wire)  
 **Demo gate:** J3 + J7 before simplify stories  
-**Sprint order:** Do not start Stories 5.9 / 5.10 until Stories 5.1–5.8 are demonstrable for the J3 + J7 demo gate.
+**Sprint order:** Do not start Stories 5.8 / 5.9 until Stories 5.1–5.7 are demonstrable for the J3 + J7 demo gate.
+
+**Scope change (2026-08-25):** Story 4.10's row-level review model (per-transaction assign/delete/undo before Save on ImportReviewSheet) made statement-level quarantine redundant — rows that parse already resolve independently before Save, so there is no "partial statement" state left to hold in limbo. Old Story 5.2 ("Accept with quarantine or dismiss") is replaced by dismiss-only; old Story 5.3 ("Hand-edit unresolved rows against PDF") is cut — there is no unresolved-row bucket to hand-fix (manual expense entry, FR-21, remains the general hand-entry path). FR-27 is removed from v1; FR-26, FR-28, and FR-43 are reworded. FR-43's incomplete-disclosure trigger now sources solely from unresolved same-price conflicts (Story 5.7, was 5.4) instead of quarantine, so disclosure-wiring now builds after conflict review rather than before it. Stories renumbered 5.5–5.10 → 5.3–5.9 accordingly. AD-3, AD-4, and AD-17 are amended by Sprint Change Proposal 2026-08-25. See that proposal for full rationale.
 
 ### Story 5.1: Parse failure → side-by-side comparison
 
@@ -1565,123 +1567,43 @@ So that nothing enters the ledger silently and I can see the evidence (J3).
 
 **Given** this story alone
 **When** I am on the comparison surface
-**Then** accept-with-quarantine / dismiss actions are not required yet — Story 5.2 adds those decisions; this story’s exit is “failure is visible with evidence, ledger untouched”
+**Then** a dismiss action is not required yet — Story 5.2 adds it; this story’s exit is “failure is visible with evidence, ledger untouched”
 
 **Given** CI
 **When** parse-failure coverage runs
 **Then** at least one synthetic parse-failure fixture (anonymized; no real PII) opens the comparison surface — mirrors the Story 4.5 golden pattern for the failure path (NFR-2, AD-11)
 
-### Story 5.2: Accept with quarantine or dismiss
+### Story 5.2: Dismiss failed statement or file
 
 As a user facing a failed parse,
-I want to accept with quarantine, dismiss the statement, or dismiss the whole file,
-So that partial data only enters the ledger after an explicit decision in front of the evidence.
+I want to dismiss the failed statement or the whole file,
+So that nothing partial enters the ledger and I'm not blocked from reviewing statements that did parse.
 
 **Acceptance Criteria:**
 
 **Given** the comparison surface from Story 5.1
-**When** I choose accept with quarantine
-**Then** successfully parsed rows import into the destination list’s ledger
-**And** unparsed / unresolved rows are stored as quarantine on that Statement
-**And** the statement is marked incomplete (FR-26, AD-17)
-**And** nothing partial enters the ledger without this explicit human decision
-
-**Given** accept with quarantine and zero successfully parsed rows (all unresolved)
-**When** I confirm
-**Then** the action is allowed — statement is marked incomplete with quarantine only
-**And** no purchase rows enter the ledger until hand-fix (Story 5.3)
-**And** Soft-Ledger will disclose incomplete once Story 5.4 is wired
-
-**Given** the comparison surface
 **When** I dismiss the statement
-**Then** that statement is not committed to the ledger
-**And** siblings in the Import Session remain available to review
+**Then** that statement is not committed to the ledger and produces no rows in the row-level review queue (FR-26)
+**And** siblings in the Import Session remain available to review (FR-15 continuity)
 
 **Given** the comparison surface
 **When** I dismiss the entire file
 **Then** remaining uncommitted statements from the upload are abandoned
 **And** no further ledger writes occur for those statements
 
-**Given** accept-with-quarantine committed
-**When** unresolved quarantine remains
-**Then** the statement PDF is retained on the operator volume — not deleted on this commit (AD-3 continuity from Story 4.12)
-**And** PDF deletion (Story 4.12 clean-commit path) applies only when the statement has no unresolved quarantine and commit succeeded
+**Given** a statement is dismissed
+**When** the dismissal completes
+**Then** the statement's PDF is released from the operator volume immediately — there is no unresolved state to retain it for (AD-3)
 
 **Given** EN/ES locale
-**When** quarantine / dismiss copy is shown
+**When** dismiss copy is shown
 **Then** chrome and outcome labels are localized (UX-DR18)
 
-### Story 5.3: Hand-edit unresolved rows against PDF
-
-As a user with quarantined rows,
-I want to edit unresolved lines by hand against the rendered PDF,
-So that I can complete the statement without waiting for a perfect automatic parse.
-
-**Acceptance Criteria:**
-
-**Given** a statement accepted with quarantine (Story 5.2)
-**When** I open unresolved rows
-**Then** I can edit them by hand while the original PDF remains visible for comparison (FR-27)
-**And** editing works on phone viewport (NFR-7)
-
-**Given** I save a hand-entered / hand-fixed value
-**When** the row is stored
-**Then** provenance distinguishes it from parser-emitted rows (FR-27)
-**And** money fields remain NUMERIC/Decimal + ISO 4217 (AD-5)
-
-**Given** I attempt to save with empty amount, non-numeric amount, or missing currency
-**When** validation runs
-**Then** the save is rejected with a clear error
-**And** required CanonicalLine money fields must validate before the row counts as resolved
-
-**Given** some quarantine rows are fixed and others remain unresolved
-**When** I leave the editor
-**Then** the statement stays incomplete
-**And** the PDF is retained while any unresolved rows remain
-**And** Soft-Ledger stays incomplete for the affected period (once Story 5.4 is wired)
-
-**Given** all unresolved rows for a statement are resolved
-**When** the statement is no longer incomplete
-**Then** the statement incomplete flag clears
-**And** the PDF may be deleted from the operator volume and its path reference cleared (AD-3) — ledger rows remain the durable record
-
 **Given** this story alone
-**When** settle-up is viewed
-**Then** incomplete-disclosure wiring is not required yet — Story 5.4 turns on FR-43 for real quarantine data
+**When** a statement fails to parse
+**Then** hand-editing unresolved rows is out of scope — there is no unresolved-row bucket; a corrected re-upload or a manual expense entry (FR-21) are the available paths to capture that data
 
-### Story 5.4: Wire incomplete-balance disclosure on strip
-
-As a list member,
-I want the Soft-Ledger settle strip to disclose when quarantined or unresolved rows affect the period,
-So that I never trust a confident total that silently omits purchases (J7).
-
-**Acceptance Criteria:**
-
-**Given** quarantined or unresolved rows affect the current period on a list
-**When** I view shared-expenses
-**Then** balances disclose that they are incomplete — the UI does not present a confident settle-up total that silently omits unresolved purchases (FR-43, NFR-6)
-**And** incomplete lights iff domain reports unresolved quarantine (or unresolved same-price conflicts) intersecting the viewed period — UI reads that signal only; no decorative incomplete
-**And** disclosure uses the Epic 3 pattern slot: calm/muted below the island strip (same inset), not over the hero amount (UX-DR8, Story 3.6)
-**And** disclosure includes a calm path to resolve (link/action to unresolved quarantine and/or conflict review) — not a dead hint and not color-only (UX-DR19)
-
-**Given** incomplete disclosure is shown
-**When** assistive tech reads the surface
-**Then** incompleteness is announced — not color-only (UX-DR19)
-**And** EN/ES copy is localized (UX-DR18)
-
-**Given** no quarantine / unresolved rows affect the period
-**When** I view the strip
-**Then** no incomplete disclosure appears (honest empty — same as Story 3.6)
-
-**Given** quarantine exists on a statement outside the currently selected cycle/period
-**When** I view Soft-Ledger for the selected period
-**Then** incomplete disclosure does not light solely because of other cycles — only unresolved rows that affect the viewed period flag incompleteness
-
-**Given** I resolve remaining quarantine (Story 5.3)
-**When** the period is complete again
-**Then** the incomplete disclosure clears and the strip returns to a confident settle figure
-
-### Story 5.5: Reassign statement to another list
+### Story 5.3: Reassign statement to another list
 
 As a list member,
 I want to move a statement filed to the wrong list to another list I belong to,
@@ -1689,12 +1611,12 @@ So that balances on both lists stay correct after the mistake.
 
 **Acceptance Criteria:**
 
-**Given** a committed statement (Import Batch) on list A
+**Given** a statement with committed ledger rows on list A (one or more Import Batches — row-level review commits one batch per row; bulk review commits one batch for the whole statement, per Story 4.10's batch grain)
 **When** I reassign it to list B that I belong to
-**Then** ledger rows move with the statement
+**Then** every ledger row originating from that statement moves with it
 **And** balances on both lists reflect the move (FR-29)
 **And** I see a one-line confirm that shares will follow destination list defaults unless item-level overrides already exist — no silent surprise
-**And** reassign preserves `batch_id` — statement/batch identity does not fork
+**And** reassign preserves each row's `batch_id` — batch identity does not fork or merge
 
 **Given** the destination list
 **When** share allocations are applied after reassignment
@@ -1704,47 +1626,37 @@ So that balances on both lists stay correct after the mistake.
 **When** I attempt reassignment
 **Then** the action is rejected (NFR-3)
 
-**Given** the statement is still incomplete / has quarantine
-**When** I reassign it to list B
-**Then** reassignment is allowed
-**And** quarantine rows and the incomplete flag move with the statement to list B
-
 **Given** reassignment completes
 **When** I view Soft-Ledger on each list
 **Then** settle strips update from the same Epic 3/4 balance path — no parallel settle math
 
-### Story 5.6: Roll back an import batch
+### Story 5.4: Roll back an import batch
 
 As a user who imported the wrong batch,
-I want to remove a whole journaled Import Batch,
+I want to remove a single journaled Import Batch,
 So that its ledger effect is undone and a later re-import does not leave duplicate leftovers.
 
 **Acceptance Criteria:**
 
-**Given** a committed Import Batch
+**Given** a committed Import Batch — one row's commit under row-level review, or one statement's commit under bulk review (Story 4.10 batch grain: one batch = one commit action)
 **When** I remove that batch
 **Then** the batch’s ledger effect is fully undone (FR-30, NFR-5, AD-4)
 **And** rollback targets `batch_id` — not an ad-hoc row delete
-**And** rollback undoes ledger effect on the list where the batch currently resides (safe after Story 5.5 reassign)
+**And** rollback undoes ledger effect on the list where the batch currently resides (safe after Story 5.3 reassign)
 
 **Given** the batch is rolled back
 **When** I re-import the same or overlapping statement later
 **Then** there are no leftover duplicates from the rolled-back batch (FR-30, NFR-4)
 
-**Given** other Import Batches on the same list
+**Given** other Import Batches on the same list — including sibling row-level batches from the same statement
 **When** I roll back one batch
 **Then** sibling batches remain intact
-
-**Given** a batch that was accepted with quarantine
-**When** I roll back that batch
-**Then** ledger rows for the batch are undone and that batch’s quarantine is cleared
-**And** the PDF path is cleared if no longer needed for any remaining quarantine
 
 **Given** Soft-Ledger after rollback
 **When** I view the list
 **Then** settle figures and incomplete disclosure (if any) reflect the post-rollback ledger only
 
-### Story 5.7: Same-price conflict review (Manual | Parsed)
+### Story 5.5: Same-price conflict review (Manual | Parsed)
 
 As a user finishing an import that collides with unresolved manual entries,
 I want same-price matches collected and resolved with Manual or Parsed (one survivor),
@@ -1768,7 +1680,7 @@ So that I never auto-merge or double-count without an explicit choice (J7).
 **Then** all pairs are collected and resolved one collision at a time until none remain
 
 **Given** I leave conflict review before all collisions are resolved
-**When** I return later (or follow the Story 5.4 resolve path)
+**When** I return later (or follow the Story 5.7 resolve path)
 **Then** the unresolved conflict set persists across sessions and remaining collisions can be resumed
 **And** Soft-Ledger stays non-confident / incomplete until the queue is cleared
 
@@ -1784,7 +1696,7 @@ So that I never auto-merge or double-count without an explicit choice (J7).
 
 **Given** unresolved conflicts for the period
 **When** I view Soft-Ledger
-**Then** the strip must not show a confident hero total — prefer incomplete disclosure (Story 5.4) over a frozen/blank strip (UX-DR14)
+**Then** the strip must not show a confident hero total — prefer incomplete disclosure (Story 5.7) over a frozen/blank strip (UX-DR14)
 **And** “blocked” means no Simplify / no all-clear affordance until conflicts are resolved — not an unusable app
 
 **Given** EN/ES locale
@@ -1793,32 +1705,64 @@ So that I never auto-merge or double-count without an explicit choice (J7).
 
 **Given** this story alone
 **When** I confirm Manual and Parsed are the same expense
-**Then** alias storage is not required yet — Story 5.8 adds FR-23 aliases and FR-28 re-upload hand-fixed conflicts
+**Then** alias storage is not required yet — Story 5.6 adds FR-23 aliases and FR-28 re-upload manual-entry conflicts
 
-### Story 5.8: Alias on confirm + hand-fixed re-upload conflict
+### Story 5.6: Alias on confirm + manual-entry re-upload conflict
 
-As a user who matched a manual label to a bank line (or re-uploaded after a hand fix),
+As a user who matched a manual label to a bank line (or re-uploaded after resolving a conflict as Manual),
 I want the manual label stored as an alias and the same conflict UI on near-matches,
-So that I don’t silently duplicate hand-fixed rows and aliases are ready for later use.
+So that I don’t silently duplicate a manual row and aliases are ready for later use.
 
 **Acceptance Criteria:**
 
-**Given** I confirm a manual entry and a bank line are the same expense (Story 5.7 survivor path)
+**Given** I confirm a manual entry and a bank line are the same expense (Story 5.5 survivor path)
 **When** the match is saved
 **Then** the system stores the manual label as an alias for that bank description (FR-23)
 **And** v1 does not use aliases for ML categorization
 
-**Given** a re-upload produces a parsed row that matches or near-matches a hand-fixed row
+**Given** a re-upload produces a parsed row that matches or near-matches a previously-resolved manual entry
 **When** conflict detection runs
 **Then** the system prompts with the same FR-22 resolution UI (Manual | Parsed; confirmed “Not the same expense”) (FR-28)
-**And** it never silently duplicates the hand-fixed row
+**And** it never silently duplicates the manual row
 **And** v1 near-match = same amount+currency within the list date window (reuse AD-10); description similarity is not required to prompt
 
-**Given** alias or hand-fixed conflict resolution completes
+**Given** alias or manual-entry conflict resolution completes
 **When** I return to shared-expenses
 **Then** Soft-Ledger reflects a single coherent survivor set — no parallel conflict ledger
 
-### Story 5.9: Settle-up simplify (suggested transfers)
+### Story 5.7: Wire incomplete-balance disclosure on strip
+
+As a list member,
+I want the Soft-Ledger settle strip to disclose when unresolved same-price conflicts affect the period,
+So that I never trust a confident total that silently omits unresolved purchases (J7).
+
+**Acceptance Criteria:**
+
+**Given** unresolved same-price conflicts (Story 5.5) affect the current period on a list
+**When** I view shared-expenses
+**Then** balances disclose that they are incomplete — the UI does not present a confident settle-up total that silently omits unresolved purchases (FR-43, NFR-6)
+**And** incomplete lights iff domain reports unresolved same-price conflicts intersecting the viewed period — UI reads that signal only; no decorative incomplete
+**And** disclosure uses the Epic 3 pattern slot: calm/muted below the island strip (same inset), not over the hero amount (UX-DR8, Story 3.6)
+**And** disclosure includes a calm path to resolve (link/action to conflict review) — not a dead hint and not color-only (UX-DR19)
+
+**Given** incomplete disclosure is shown
+**When** assistive tech reads the surface
+**Then** incompleteness is announced — not color-only (UX-DR19)
+**And** EN/ES copy is localized (UX-DR18)
+
+**Given** no unresolved same-price conflicts affect the period
+**When** I view the strip
+**Then** no incomplete disclosure appears (honest empty — same as Story 3.6) — a dismissed statement (Story 5.2) is not "incomplete," it was simply never imported
+
+**Given** an unresolved conflict exists on a statement outside the currently selected cycle/period
+**When** I view Soft-Ledger for the selected period
+**Then** incomplete disclosure does not light solely because of other cycles — only unresolved conflicts that affect the viewed period flag incompleteness
+
+**Given** I resolve remaining same-price conflicts (Story 5.5)
+**When** the period is complete again
+**Then** the incomplete disclosure clears and the strip returns to a confident settle figure
+
+### Story 5.8: Settle-up simplify (suggested transfers)
 
 As a list member,
 I want an optional simplify that suggests fewer CRC transfers to settle the period,
@@ -1831,13 +1775,9 @@ So that I can see a shorter payment plan without the app recording that anyone p
 **Then** I see suggested transfers that preserve net balances in CRC (FR-41)
 **And** simplify does not record payments (v2) — no “Mark settled” / payment CTA (UX-DR20, AD-21)
 
-**Given** unresolved same-price conflicts remain for the period (Story 5.7)
+**Given** unresolved same-price conflicts remain for the period (Story 5.5)
 **When** I view Soft-Ledger
-**Then** Simplify is unavailable — no Simplify affordance until those conflicts are resolved (aligns with Story 5.7)
-
-**Given** the period is incomplete from quarantine only (no unresolved same-price conflicts)
-**When** I open Simplify
-**Then** Simplify may open and incomplete disclosure remains visible — it does not present a confident plan that hides missing rows (FR-43 continuity)
+**Then** Simplify is unavailable — no Simplify affordance until those conflicts are resolved (aligns with Story 5.5)
 
 **Given** a solo list, already-minimal two-member nets, or all-zero balances
 **When** I open Simplify
@@ -1853,7 +1793,7 @@ So that I can see a shorter payment plan without the app recording that anyone p
 **When** I return to the strip
 **Then** underlying net balances are unchanged
 
-### Story 5.10: Statement-cycle period selector
+### Story 5.9: Statement-cycle period selector
 
 As a list member,
 I want the shared-expenses period to align to statement/billing cycles, and to pick which cycle when cards differ,

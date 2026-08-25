@@ -83,7 +83,9 @@ flowchart LR
 
 - **Binds:** persistence, uploads, quarantine, import sessions
 - **Prevents:** Split brains (S3 + DB + files with unclear owners); PDF bytes in git; retaining statement PDFs after SQL already holds the ledger
-- **Rule:** PostgreSQL is the only durable store for users, lists, cards, import sessions/batches, candidate/committed rows, quarantine, FX snapshots/flags, aliases. Statement PDF bytes may live temporarily on an **operator volume outside the repo**; Postgres stores path references only while the file is needed (not `bytea`, not object storage in v1). **After a statement is parsed correctly and its Import Batch commits successfully with no unresolved quarantine, delete the PDF file and clear its path reference** — the ledger in SQL is the source of truth. Retain the PDF (and path) only while review/comparison or unresolved quarantine still needs the source document; **review includes ImportReviewSheet until Save** (last pending assign/delete is not “review no longer needs the PDF”). Clear on dismiss and when quarantine is fully resolved.
+- **Rule:** PostgreSQL is the only durable store for users, lists, cards, import sessions/batches, candidate/committed rows, FX snapshots/flags, aliases. Statement PDF bytes may live temporarily on an **operator volume outside the repo**; Postgres stores path references only while the file is needed (not `bytea`, not object storage in v1). **After a statement is parsed correctly and its Import Batch commits successfully, delete the PDF file and clear its path reference** — the ledger in SQL is the source of truth. Retain the PDF (and path) only while review/comparison still needs the source document; **review includes ImportReviewSheet until Save** (last pending assign/delete is not “review no longer needs the PDF”). Clear on dismiss.
+
+> **Amended 2026-08-25** — Sprint Change Proposal 2026-08-25 (quarantine removed). "No unresolved quarantine" is no longer a commit-delete condition — quarantine doesn't exist. A dismissed statement (Story 5.2) releases its PDF immediately, since there is nothing durable left to retain it for. Superseded wording retained here for history: originally, PDF delete required "no unresolved quarantine," and retention continued "while... unresolved quarantine still needs the source document," clearing "when quarantine is fully resolved."
 
 ### AD-4 — Import Session and Batch [ADOPTED]
 
@@ -94,7 +96,9 @@ flowchart LR
   - **Import Batch** = journaled commit unit. Batch boundary = **one commit action** (stable `batch_id` per action). Under bulk review a commit action covers a whole statement; under row-level individual review (FR-17, FR-18) it covers a single candidate row, so one statement may produce many batches. Multi-statement uploads likewise produce multiple batches under one session.
   - **Partial commit is a normal state, not a fault.** A statement's rows may resolve independently, to different lists, across separate transactions. A statement is complete only once every non-excluded row has left `pending`.
   - A candidate row may produce **at most one** ledger entry, enforced in the database by `ledger_entries.import_candidate_row_id UNIQUE`. That constraint is the backstop against double-commit; the guarded conditional `UPDATE ... WHERE status = 'pending'` is the fast path and clean-error path in front of it. **Both layers are required** — the application check alone does not survive concurrent requests, since two can pass validation before either persists.
-  - Rollback (FR-30) targets a `batch_id` atomically. Because a batch is one commit action, rollback granularity under individual review is **per-row**; Epic 5 Story 5.6 inherits this. Nothing reaches settle math until its batch commits.
+  - Rollback (FR-30) targets a `batch_id` atomically. Because a batch is one commit action, rollback granularity under individual review is **per-row**; Epic 5 Story 5.4 inherits this. Nothing reaches settle math until its batch commits.
+
+> **Amended 2026-08-25** — Sprint Change Proposal 2026-08-25. Story reference above updated: rollback was Epic 5 Story 5.6 under the pre-2026-08-25 numbering, now renumbered to Story 5.4 (quarantine removal collapsed Stories 5.2–5.10 to 5.2–5.9).
 
 > **Amended 2026-08-20** — Sprint Change Proposal 2026-08-20 (row-level individual review).
 > Originally the v1 batch boundary was **one Statement's accept/commit** (stable `batch_id` per
@@ -188,11 +192,12 @@ flowchart LR
 - **Prevents:** JSON-blob staging vs typed commit mismatch
 - **Rule:** Staging and ledger share one **CanonicalLine** field set: at least `posted_date` (ISO-8601), signed `amount`, ISO 4217 `currency`, `product_id`, `line_type`, `external_ref` when provided, `normalized_description`, `provenance` (`parser` | `hand`). `CANDIDATE_ROW` = CanonicalLine + session review fields only. Adapters MUST emit CanonicalLine; persistence MUST NOT store adapter-private shapes as the row body.
 
-### AD-17 — Quarantine ownership [ADOPTED]
+### AD-17 — Quarantine ownership [RETIRED]
 
-- **Binds:** FR-25–27, FR-43 incomplete disclosure
-- **Prevents:** Session-only quarantine that vanish after commit while settle needs them
-- **Rule:** Pre-commit unresolved rows live on the Import Session. After **accept-with-quarantine**, unresolved rows become **durable** entities owned by the committed **Statement** (statement marked incomplete). Hand-fix (FR-27) mutates those durable rows. Balance views MUST disclose incompleteness when any statement in the period has unresolved quarantine.
+- **Binds:** ~~FR-25–27, FR-43 incomplete disclosure~~
+- **Rule (retired):** ~~Pre-commit unresolved rows live on the Import Session. After **accept-with-quarantine**, unresolved rows become **durable** entities owned by the committed **Statement** (statement marked incomplete). Hand-fix (FR-27) mutates those durable rows. Balance views MUST disclose incompleteness when any statement in the period has unresolved quarantine.~~
+
+> **Retired 2026-08-25** — Sprint Change Proposal 2026-08-25 (quarantine removed). Row-level review (AD-9 amendment, Story 4.10+) resolves rows independently before Save, so there is no durable unresolved-row entity for this decision to own. FR-43 incomplete disclosure now sources solely from AD-10 unresolved same-price conflicts. FR-25–26 rebound to dismiss-only (PRD); FR-27 removed. Superseded rule retained above (struck through) for history.
 
 ### AD-18 — Dedup identity authority [ADOPTED]
 
@@ -414,8 +419,8 @@ erDiagram
 | Detect / split / parse / normalize | `adapters/bank/*` | Paradigm, AD-2, AD-11, AD-16, AD-25, AD-26, AD-27, AD-28 |
 | Import Session review | `application` + `ui` | AD-4, AD-9, AD-12 |
 | Commit / dedup / batch rollback | `domain` + persistence | AD-4, AD-16, AD-18 |
-| Quarantine + incomplete disclosure | `domain` + settle views | AD-17 |
-| PDF failure comparison | `ui` react-pdf + PDF path | AD-3, AD-12 |
+| Incomplete disclosure (same-price conflicts) | `domain` + settle views | AD-10 |
+| PDF failure comparison (dismiss-only) | `ui` react-pdf + PDF path | AD-3, AD-12 |
 | Same-price conflicts | `application` match | AD-10 |
 | Settle-up / simplify CRC | `domain` + materialized FX | AD-5, AD-6, AD-7, AD-21 |
 | Invites email | SMTP adapter | AD-8, AD-19 |
