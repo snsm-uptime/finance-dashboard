@@ -10,12 +10,15 @@ import { uploadCopy } from "@/lib/i18n/upload";
 import { UploadButton } from "./UploadButton";
 import {
   discardSession,
+  fetchActiveImportSession,
   uploadStatement,
   type ImportSession,
   type UploadMessages,
 } from "./uploadClient";
 import {
   forgetOpenImportSession,
+  isDiscardedImportSession,
+  rememberDiscardedImportSession,
   rememberOpenImportSession,
 } from "./openImportSession";
 import {
@@ -111,18 +114,36 @@ function seedFromSession(initialSession: ImportSession): QueueEntry {
   };
 }
 
+function shouldSeedSession(session: ImportSession): boolean {
+  return !session.discarded_at && !isDiscardedImportSession(session.id);
+}
+
 function initialQueue(initialSession: ImportSession | null): QueueEntry[] {
-  const stored = readUploadQueue();
+  const stored = readUploadQueue().filter(
+    (entry) => !entry.session || !isDiscardedImportSession(entry.session.id),
+  );
+  const seed =
+    initialSession && shouldSeedSession(initialSession)
+      ? seedFromSession(initialSession)
+      : null;
   if (stored.length > 0) {
-    if (
-      initialSession &&
-      !stored.some((entry) => entry.session?.id === initialSession.id)
-    ) {
-      return [...stored, seedFromSession(initialSession)];
+    if (seed && !stored.some((entry) => entry.session?.id === seed.session?.id)) {
+      return [...stored, seed];
     }
     return stored;
   }
-  return initialSession ? [seedFromSession(initialSession)] : [];
+  return seed ? [seed] : [];
+}
+
+function reconcileWithLiveActive(queue: QueueEntry[], live: ImportSession | null): QueueEntry[] {
+  const next = queue.filter((entry) => {
+    if (entry.state !== "staged" || !entry.session) return true;
+    return !isDiscardedImportSession(entry.session.id);
+  });
+  if (live && shouldSeedSession(live) && !next.some((entry) => entry.session?.id === live.id)) {
+    return [...next, seedFromSession(live)];
+  }
+  return next;
 }
 
 export function UploadPanel({ initialSession = null }: { initialSession?: ImportSession | null }) {
@@ -219,6 +240,12 @@ export function UploadPanel({ initialSession = null }: { initialSession?: Import
     );
     commitQueue(recovered);
     void drainQueue();
+    void fetchActiveImportSession(messages).then((result) => {
+      if (!aliveRef.current || !result.ok) return;
+      const reconciled = reconcileWithLiveActive(queueRef.current, result.session);
+      commitQueue(reconciled);
+      rememberLastStaged(reconciled);
+    });
     return () => {
       aliveRef.current = false;
     };
@@ -288,6 +315,7 @@ export function UploadPanel({ initialSession = null }: { initialSession?: Import
       patchEntry(id, { error: result.error });
       return;
     }
+    rememberDiscardedImportSession(sessionId);
     const remaining = queueRef.current.filter(
       (entry) =>
         entry.id !== id &&

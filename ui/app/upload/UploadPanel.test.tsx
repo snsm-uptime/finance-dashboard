@@ -577,6 +577,30 @@ describe("UploadPanel", () => {
     expect(container.querySelector('a[href="/upload/review/s1"]')).toBeNull();
   });
 
+  it("does not resurrect a discarded session from stale initialSession after remount", async () => {
+    discardSession.mockResolvedValue({ ok: true });
+
+    await act(async () => {
+      root.render(<UploadPanel initialSession={unmatchedSession} />);
+    });
+    const close = container.querySelector('button[aria-label="Close"]') as HTMLButtonElement;
+    await act(async () => {
+      close.click();
+    });
+    expect(container.querySelector('a[href="/upload/review/s1"]')).toBeNull();
+
+    act(() => {
+      root.unmount();
+    });
+    root = createRoot(container);
+    await act(async () => {
+      root.render(<UploadPanel initialSession={unmatchedSession} />);
+    });
+
+    expect(container.querySelector('a[href="/upload/review/s1"]')).toBeNull();
+    expect(container.textContent).not.toContain("statement.pdf");
+  });
+
   it("shows a discard error on the staged resume row", async () => {
     discardSession.mockResolvedValue({ ok: false, error: "Something went wrong. Try again." });
 
