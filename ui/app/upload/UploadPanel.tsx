@@ -147,24 +147,6 @@ export function UploadPanel({ initialSession = null }: { initialSession?: Import
     commitQueue(queueRef.current.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)));
   }
 
-  useEffect(() => {
-    aliveRef.current = true;
-    const recovered = queueRef.current.map((entry) =>
-      entry.state === "uploading" && entry.file ? { ...entry, state: "pending" as const } : entry,
-    );
-    commitQueue(recovered);
-    void drainQueue();
-    return () => {
-      aliveRef.current = false;
-    };
-    // Resume leftover pending/uploading uploads after returning from review.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only drain
-  }, []);
-
-  useEffect(() => {
-    rememberLastStaged(queueRef.current);
-  }, [initialSession]);
-
   async function drainQueue() {
     if (drainingRef.current) return;
     drainingRef.current = true;
@@ -211,6 +193,24 @@ export function UploadPanel({ initialSession = null }: { initialSession?: Import
       }
     }
   }
+
+  useEffect(() => {
+    aliveRef.current = true;
+    const recovered = queueRef.current.map((entry) =>
+      entry.state === "uploading" && entry.file ? { ...entry, state: "pending" as const } : entry,
+    );
+    commitQueue(recovered);
+    void drainQueue();
+    return () => {
+      aliveRef.current = false;
+    };
+    // Resume leftover pending/uploading uploads after returning from review.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only drain
+  }, []);
+
+  useEffect(() => {
+    rememberLastStaged(queueRef.current);
+  }, [initialSession]);
 
   async function enqueueFiles(picked: File[]) {
     setCapMessage(null);

@@ -1,7 +1,7 @@
 """Alembic revision: content_hash on import_sessions (Story 4.16).
 
-Revision ID: 0026_import_session_content_hash
-Revises: 0025_import_reviewed_at
+Revision ID: 0027_import_session_content_hash
+Revises: 0026_drop_import_reviewed_at
 Create Date: 2026-08-24
 
 Nullable SHA-256 hex digest of the uploaded PDF bytes, used to reject
@@ -10,7 +10,9 @@ user (AC #4). No backfill — pre-4.16 sessions never participate in hash
 dedup. A partial, non-unique index is defense-in-depth only; the
 application-level check in UploadStatementPdfService is the contract.
 
-Revision id is kept under 32 chars — alembic_version.version_num is VARCHAR(32).
+Linearized after main's 0026_drop_import_reviewed_at (both had been 0026
+heads). Revision id is kept under 32 chars — alembic_version.version_num
+is VARCHAR(32).
 """
 
 from collections.abc import Sequence
@@ -18,8 +20,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0026_import_session_content_hash"
-down_revision: str | None = "0025_import_reviewed_at"
+revision: str = "0027_import_session_content_hash"
+down_revision: str | None = "0026_drop_import_reviewed_at"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
