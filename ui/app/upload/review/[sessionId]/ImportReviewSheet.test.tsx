@@ -191,7 +191,7 @@ describe("ImportReviewSheet", () => {
   let session: ImportSession;
 
   beforeEach(() => {
-    sessionStorage.clear();
+    localStorage.clear();
     push.mockReset();
     unassignRow.mockReset();
     finalizeSession.mockReset();
@@ -402,7 +402,7 @@ describe("ImportReviewSheet", () => {
       ) as HTMLElement;
       (coffeeLi.querySelector('button[aria-label="Discard"]') as HTMLButtonElement).click();
     });
-    expect(sessionStorage.getItem("finance-helper.staged-import-discards.s1")).toContain(
+    expect(localStorage.getItem("finance-helper.staged-import-discards.s1")).toContain(
       "r-coffee",
     );
     await act(async () => {
@@ -414,7 +414,7 @@ describe("ImportReviewSheet", () => {
     expect(deleteRow).toHaveBeenCalledWith("s1", "r-coffee", expect.anything());
     expect(finalizeSession).not.toHaveBeenCalled();
     expect(container.querySelector("[role='alert']")?.textContent).toBe("cannot delete");
-    expect(sessionStorage.getItem("finance-helper.staged-import-discards.s1")).toContain(
+    expect(localStorage.getItem("finance-helper.staged-import-discards.s1")).toContain(
       "r-coffee",
     );
 
@@ -436,7 +436,7 @@ describe("ImportReviewSheet", () => {
     );
     expect(onSessionUpdate).toHaveBeenCalledTimes(3);
     expect(push).toHaveBeenCalledWith("/lists/list-home");
-    expect(sessionStorage.getItem("finance-helper.staged-import-discards.s1")).toBeNull();
+    expect(localStorage.getItem("finance-helper.staged-import-discards.s1")).toBeNull();
   });
 
   it("Discard stages checked rows without calling unassignRow until Save", async () => {
@@ -493,11 +493,11 @@ describe("ImportReviewSheet", () => {
       ...leakedSession,
       statements: [{ ...leakedSession.statements[0], rows: [], assigned_rows: keepers }],
     };
-    sessionStorage.setItem(
+    localStorage.setItem(
       "finance-helper.staged-import-discards.s1",
       JSON.stringify({
         deleteIds: ["r-trash"],
-        unassignIds: ["r-coffee"],
+        sheetDiscardIds: ["r-coffee"],
         lastCardStagedId: "r-trash",
       }),
     );
@@ -545,7 +545,7 @@ describe("ImportReviewSheet", () => {
     );
     expect(push).toHaveBeenCalledWith("/lists/list-home");
     expect(container.querySelector("[role='alert']")).toBeNull();
-    expect(sessionStorage.getItem("finance-helper.staged-import-discards.s1")).toBeNull();
+    expect(localStorage.getItem("finance-helper.staged-import-discards.s1")).toBeNull();
   });
 
   it("Change List unassigns only the selected rows; failure skips later rows and stays on the sheet", async () => {
