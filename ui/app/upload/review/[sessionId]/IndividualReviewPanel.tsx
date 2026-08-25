@@ -21,18 +21,15 @@ import { usePreferences } from "@/components/PreferencesProvider";
 import { useFormSubmission } from "@/hooks";
 import { fetchLists } from "@/app/lists/listsClient";
 import { replaceMembershipLists, useMembershipLists } from "@/app/lists/membershipListsStore";
-import { ArrowIcon, SaveIcon, TrashIcon } from "@/app/icons";
+import { ArrowIcon, SaveIcon, SpinnerIcon, TrashIcon } from "@/app/icons";
 import { uploadCopy } from "@/lib/i18n/upload";
 import type { Locale } from "@/lib/i18n/locale";
 import { useCardIdentification } from "@/hooks/useCardIdentification";
 import { CreditCardFace, CreditCardMark } from "../../CreditCardFace";
-import { classifyActiveImportSession } from "../../classifyActiveImportSession";
-import { DiscardConfirmDialog } from "../../DiscardConfirmDialog";
 import { ImportCompletionSummary } from "./ImportCompletionSummary";
 import { ImportReviewSheet } from "./ImportReviewSheet";
 import {
   assignRow,
-  discardSession,
   editRowDescription,
   fetchImportSession,
   undoLastResolution,
@@ -41,12 +38,15 @@ import {
   type ImportSession,
   type IndividualReviewMessages,
   type StagedStatement,
-  type UploadMessages,
 } from "../../uploadClient";
 import {
   forgetOpenImportSession,
   rememberOpenImportSession,
 } from "../../openImportSession";
+import {
+  hasRemainingUploadWork,
+  removeUploadQueueSession,
+} from "../../uploadQueueStore";
 import {
   clearLastCardStagedDiscard,
   restoreStagedDiscard,
@@ -333,63 +333,36 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
       )
     : 0;
   const remainingLabel =
-    session && current
+    session && current && !session.finalized_at
       ? t.individualReviewProgress.replace("{count}", String(remainingCount))
       : "";
-  const discardMessages: UploadMessages = useMemo(
-    () => ({
-      errorUnsupportedFileType: t.errorUnsupportedFileType,
-      errorUnknownStatement: t.errorUnknownStatement,
-      errorAmbiguousStatement: t.errorAmbiguousStatement,
-      errorUnreadableStatement: t.errorUnreadableStatement,
-      errorGeneric: t.errorGeneric,
-      errorUnauthorized: t.errorUnauthorized,
-    }),
-    [
-      t.errorUnsupportedFileType,
-      t.errorUnknownStatement,
-      t.errorAmbiguousStatement,
-      t.errorUnreadableStatement,
-      t.errorGeneric,
-      t.errorUnauthorized,
-    ],
-  );
+  const moreUploadsRemain = Boolean(session && hasRemainingUploadWork(session.id));
+  const chromeTitle = session?.finalized_at
+    ? moreUploadsRemain
+      ? t.completionReviewAnotherFile
+      : t.completionReturnHome
+    : t.individualReviewTitle;
   const leavingRef = useRef(false);
-  const [confirmDiscard, setConfirmDiscard] = useState(false);
-  // classifyActiveImportSession is contracted to only see genuinely active
-  // sessions (Task 3.2: "discarded/finalized not used as active"). This
-  // route can render a finalized session (the completion summary), so guard
-  // here rather than passing it out-of-contract.
-  const isFinalized = !!session?.finalized_at;
-  const reviewKind = session && !isFinalized ? classifyActiveImportSession(session) : "untouched";
-  const needsRetentionWarning =
-    !isFinalized && (reviewKind === "partial" || reviewKind === "sheet-waiting");
   const onBack = useCallback(() => {
     if (leavingRef.current) return;
-    if (needsRetentionWarning) {
-      setConfirmDiscard(true);
-      return;
-    }
     leavingRef.current = true;
-    if (isFinalized) {
-      forgetOpenImportSession();
-      router.push("/upload");
+    forgetOpenImportSession();
+    if (session?.finalized_at && !hasRemainingUploadWork(session.id)) {
+      const landing = session.landing_list_id;
+      router.push(landing ? `/lists/${encodeURIComponent(landing)}` : "/lists");
       return;
     }
-    void discardSession(sessionId, discardMessages).finally(() => {
-      forgetOpenImportSession();
-      router.push("/upload");
-    });
-  }, [
-    sessionId,
-    router,
-    needsRetentionWarning,
-    isFinalized,
-    discardMessages,
-  ]);
+    router.push("/upload");
+  }, [router, session]);
+  useEffect(() => {
+    if (!session?.discarded_at) return;
+    removeUploadQueueSession(session.id);
+    forgetOpenImportSession();
+    router.replace("/upload");
+  }, [session, router]);
   useChromeHeader({
     onBack,
-    title: t.individualReviewTitle,
+    title: chromeTitle,
     details: remainingLabel || null,
   });
   const card = useCardIdentification(sessionId, current?.statement ?? null, cardMessages);
@@ -953,7 +926,13 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
               {current.statement.iban ? (
               <div className="w-full">
                 {card.loading ? (
-                  <p className="m-0 text-[0.85rem] text-muted">{t.cardIdentificationTitle}…</p>
+                  <span
+                    className="grid size-5 place-items-center text-muted"
+                    aria-label={t.individualReviewLoadingSession}
+                    aria-busy="true"
+                  >
+                    <SpinnerIcon className="size-5 animate-spin motion-reduce:animate-none" />
+                  </span>
                 ) : needsCardRegistration ? (
                   <form className="m-0 w-full" onSubmit={handleRegisterCard}>
                     <CreditCardFace
@@ -1032,9 +1011,13 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
           </div>
         </>
       ) : !session ? (
-        <p className="mx-auto w-full max-w-[26rem] px-[1.5rem] text-muted text-[0.85rem] m-0">
-          {t.individualReviewLoadingSession}
-        </p>
+        <span
+          className="mx-auto grid size-8 place-items-center text-muted"
+          aria-label={t.individualReviewLoadingSession}
+          aria-busy="true"
+        >
+          <SpinnerIcon className="size-8 animate-spin motion-reduce:animate-none" />
+        </span>
       ) : session.discarded_at ? null : !session.finalized_at ? (
         <ImportReviewSheet
           sessionId={sessionId}
@@ -1046,23 +1029,6 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
       ) : (
         <ImportCompletionSummary session={session} />
       )}
-      <DiscardConfirmDialog
-        open={confirmDiscard}
-        title={t.discardConfirmTitle}
-        body={t.discardConfirmBody}
-        confirmLabel={t.discardConfirmAction}
-        cancelLabel={t.discardCancel}
-        onCancel={() => setConfirmDiscard(false)}
-        onConfirm={() => {
-          setConfirmDiscard(false);
-          if (leavingRef.current) return;
-          leavingRef.current = true;
-          void discardSession(sessionId, discardMessages).finally(() => {
-            forgetOpenImportSession();
-            router.push("/upload");
-          });
-        }}
-      />
     </main>
   );
 }

@@ -7,11 +7,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ImportCompletionSummary } from "./ImportCompletionSummary";
 import type { ImportSession } from "../../uploadClient";
 
-const push = vi.fn();
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push }),
-}));
-
 vi.mock("@/components/PreferencesProvider", () => ({
   usePreferences: () => ({ locale: "en" as const }),
 }));
@@ -40,7 +35,6 @@ describe("ImportCompletionSummary", () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
-    push.mockReset();
   });
 
   afterEach(() => {
@@ -48,24 +42,42 @@ describe("ImportCompletionSummary", () => {
     container.remove();
   });
 
-  it("renders counts and Continue lands on the landing list", async () => {
+  it("renders counts without a Continue button", async () => {
     await act(async () => {
       root.render(<ImportCompletionSummary session={finalized} />);
     });
 
-    expect(container.textContent).toContain("3 added to Groceries");
-    expect(container.textContent).toContain("2 deleted");
-    expect(container.textContent).toContain("4 zero-amount");
-    expect(container.textContent).toContain("bad.pdf");
-    expect(container.textContent).toContain("3 imported");
-    expect(container.textContent).toContain("1 skipped as duplicates");
+    const rows = [...container.querySelectorAll("li")];
+    const byLabel = (fragment: string) =>
+      rows.find((row) => row.textContent?.includes(fragment));
 
-    const continueButton = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent === "Continue",
-    );
-    await act(async () => {
-      continueButton?.click();
-    });
-    expect(push).toHaveBeenCalledWith("/lists/list-1");
+    const groceries = byLabel("Added to Groceries");
+    expect(groceries).toBeTruthy();
+    expect(groceries?.textContent).toMatch(/3/);
+
+    const deleted = byLabel("Deleted");
+    expect(deleted?.textContent).toMatch(/2/);
+
+    const zero = byLabel("Zero-amount excluded");
+    expect(zero?.textContent).toMatch(/4/);
+    expect(zero?.textContent).toContain("Check the PDF");
+
+    const failed = byLabel("Could not parse bad.pdf");
+    expect(failed).toBeTruthy();
+    expect(failed?.textContent).toContain("—");
+
+    const imported = byLabel("Imported");
+    expect(imported?.textContent).toMatch(/3/);
+
+    const skipped = byLabel("Skipped as duplicates");
+    expect(skipped?.textContent).toMatch(/1/);
+
+    expect(container.textContent).not.toContain("Continue");
+    expect(container.querySelector("button")).toBeNull();
+
+    const slip = container.querySelector(".bg-surface");
+    expect(slip?.className).toContain("bg-surface");
+    expect(slip?.className).toContain("dark:text-white");
+    expect(slip?.getAttribute("style") ?? "").toMatch(/clip-path|clipPath/);
   });
 });

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppShell } from "@/components/AppShell";
 import { resetMembershipListsStore } from "@/app/lists/membershipListsStore";
+import { resetUploadQueue, writeUploadQueue } from "../../uploadQueueStore";
 import {
   IndividualReviewPanel,
   nextReviewableRow,
@@ -15,9 +16,10 @@ import { formatIbanGroups } from "../../CreditCardFace";
 import type { CandidateRow, ImportSession, StagedStatement } from "../../uploadClient";
 
 const push = vi.fn();
+const replace = vi.fn();
 vi.mock("next/navigation", () => ({
   usePathname: () => "/upload/review/s1",
-  useRouter: () => ({ push }),
+  useRouter: () => ({ push, replace }),
 }));
 
 const fetchLists = vi.fn();
@@ -255,6 +257,7 @@ describe("IndividualReviewPanel", () => {
   beforeEach(() => {
     sessionStorage.clear();
     push.mockReset();
+    replace.mockReset();
     discardSession.mockReset();
     fetchLists.mockReset();
     fetchImportSession.mockReset();
@@ -265,6 +268,7 @@ describe("IndividualReviewPanel", () => {
     finalizeSession.mockReset();
     unassignRow.mockReset();
     capturedDragHandler = undefined;
+    resetUploadQueue();
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -592,11 +596,10 @@ describe("IndividualReviewPanel", () => {
     expect(container.querySelector('button[aria-haspopup="listbox"]')).toBeNull();
   });
 
-  it("chrome back discards the session then navigates to /upload", async () => {
+  it("chrome back returns to /upload without discarding the session", async () => {
     fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
     fetchLists.mockResolvedValue({ ok: true, lists: [] });
     stubAuthMeFetch(null);
-    discardSession.mockResolvedValue({ ok: true });
 
     await act(async () => {
       root.render(
@@ -620,7 +623,94 @@ describe("IndividualReviewPanel", () => {
       await Promise.resolve();
     });
 
-    expect(discardSession).toHaveBeenCalledWith("s1", expect.anything());
+    expect(discardSession).not.toHaveBeenCalled();
+    expect(push).toHaveBeenCalledWith("/upload");
+  });
+
+  it("chrome title is Return Home after finalize and back goes to the landing list", async () => {
+    fetchImportSession.mockResolvedValue({
+      ok: true,
+      session: makeSession({
+        statements: [makeStatement({ rows: [] })],
+        finalized_at: "2026-08-24T01:00:00Z",
+        landing_list_id: "list-1",
+        imported_new_count: 2,
+        deleted_count: 1,
+      }),
+    });
+    fetchLists.mockResolvedValue({ ok: true, lists: [] });
+    stubAuthMeFetch(null);
+
+    await act(async () => {
+      root.render(
+        <AppShell>
+          <IndividualReviewPanel sessionId="s1" />
+        </AppShell>,
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const heading = container.querySelector("header h1");
+    expect(heading?.textContent).toBe("Return Home");
+    expect(container.textContent).not.toContain("Continue");
+
+    const back = container.querySelector(
+      'header button[aria-label="Back"]',
+    ) as HTMLButtonElement;
+    await act(async () => {
+      back.click();
+    });
+    expect(discardSession).not.toHaveBeenCalled();
+    expect(push).toHaveBeenCalledWith("/lists/list-1");
+  });
+
+  it("chrome title is Review another file when other uploads remain", async () => {
+    const finalized = makeSession({
+      statements: [makeStatement({ rows: [] })],
+      finalized_at: "2026-08-24T01:00:00Z",
+      landing_list_id: "list-1",
+    });
+    writeUploadQueue([
+      {
+        id: "s1",
+        state: "staged",
+        session: finalized,
+        displayName: "done.pdf",
+      },
+      {
+        id: "s2",
+        state: "staged",
+        displayName: "next.pdf",
+        session: makeSession({ id: "s2" }),
+      },
+    ]);
+    fetchImportSession.mockResolvedValue({ ok: true, session: finalized });
+    fetchLists.mockResolvedValue({ ok: true, lists: [] });
+    stubAuthMeFetch(null);
+
+    await act(async () => {
+      root.render(
+        <AppShell>
+          <IndividualReviewPanel sessionId="s1" />
+        </AppShell>,
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector("header h1")?.textContent).toBe("Review another file");
+
+    const back = container.querySelector(
+      'header button[aria-label="Back"]',
+    ) as HTMLButtonElement;
+    await act(async () => {
+      back.click();
+    });
     expect(push).toHaveBeenCalledWith("/upload");
   });
 
@@ -1327,7 +1417,7 @@ describe("IndividualReviewPanel", () => {
       expect(selectByLabel(document.body, "Discard")).toBeNull();
     });
 
-    it("Save calls finalizeSession and lands on landing_list_id", async () => {
+    it("Save calls finalizeSession and shows the completion summary without redirecting", async () => {
       const session = makeSession({
         statements: [
           makeStatement({ rows: [], assigned_rows: [assignedRow({ id: "r1" })] }),
@@ -1353,10 +1443,11 @@ describe("IndividualReviewPanel", () => {
       });
 
       expect(finalizeSession).toHaveBeenCalledWith("s1", expect.anything());
-      expect(push).toHaveBeenCalledWith("/lists/l1");
+      expect(push).not.toHaveBeenCalled();
+      expect(document.body.textContent).toContain("Import complete");
     });
 
-    it("Save lands on /lists when landing_list_id is null", async () => {
+    it("Save does not land on /lists when landing_list_id is null", async () => {
       const session = makeSession({
         statements: [
           makeStatement({ rows: [], assigned_rows: [assignedRow({ id: "r1" })] }),
@@ -1381,7 +1472,8 @@ describe("IndividualReviewPanel", () => {
         await Promise.resolve();
       });
 
-      expect(push).toHaveBeenCalledWith("/lists");
+      expect(push).not.toHaveBeenCalled();
+      expect(document.body.textContent).toContain("Import complete");
     });
 
     it("discarding a row stages it locally without calling unassignRow", async () => {
@@ -1507,7 +1599,8 @@ describe("IndividualReviewPanel", () => {
 
       expect(deleteRow).toHaveBeenCalledWith("s1", "r1", expect.anything());
       expect(finalizeSession).toHaveBeenCalledWith("s1", expect.anything());
-      expect(push).toHaveBeenCalledWith("/lists/l1");
+      expect(push).not.toHaveBeenCalled();
+      expect(document.body.textContent).toContain("Import complete");
     });
   });
 
