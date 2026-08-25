@@ -10,6 +10,7 @@ from domain.settle import (
     ShareAllocation,
     compute_settle_balance_for_list_members,
 )
+from domain.splits import compute_share_allocations
 
 
 class MockAllocationResult:
@@ -593,4 +594,116 @@ def test_mixed_crc_and_usd_entries_use_materialized_amount_crc(alice_id, bob_id,
     # owes the other half of each entry.
     assert balances[alice_id] == Decimal("1000") - Decimal("500") - Decimal("26250")
     assert balances[bob_id] == Decimal("52500") - Decimal("500") - Decimal("26250")
+    assert sum(balances.values(), Decimal("0")) == Decimal("0")
+
+
+def test_negative_purchase_refund_inverts_even_split(alice_id, bob_id, list_id):
+    """Imported refunds (negative CRC purchases) invert settle vs the matching charge."""
+    members = [
+        ListMemberView(user_id=alice_id, alias="Alice"),
+        ListMemberView(user_id=bob_id, alias="Bob"),
+    ]
+    refund = LedgerEntryRecord(
+        id=uuid4(),
+        list_id=list_id,
+        amount_crc=Decimal("-1000"),
+        currency="CRC",
+        payer_id=alice_id,
+        line_type="purchase",
+    )
+
+    seen_totals: list[Decimal] = []
+
+    def compute_allocations_fn(
+        total,
+        currency,
+        item_override=None,
+        receipt_override=None,
+        list_default_mode="even",
+        list_default_shares=None,
+        member_ids=None,
+        creator_user_id=None,
+        currency_exponent=2,
+    ):
+        seen_totals.append(total)
+        allocations = [
+            ShareAllocation(member_id=alice_id, amount=Decimal("500"), currency="CRC"),
+            ShareAllocation(member_id=bob_id, amount=Decimal("500"), currency="CRC"),
+        ]
+        return MockAllocationResult(allocations)
+
+    balances = compute_settle_balance_for_list_members(
+        [refund],
+        members,
+        alice_id,
+        compute_allocations_fn,
+        lambda _receipt_id: None,
+        lambda _list_id: None,
+        default_mode="even",
+    )
+
+    assert seen_totals == [Decimal("1000")]
+    assert balances[alice_id] == Decimal("-500")
+    assert balances[bob_id] == Decimal("500")
+    assert sum(balances.values(), Decimal("0")) == Decimal("0")
+
+
+def test_zero_amount_purchase_is_skipped(alice_id, bob_id, list_id):
+    members = [
+        ListMemberView(user_id=alice_id, alias="Alice"),
+        ListMemberView(user_id=bob_id, alias="Bob"),
+    ]
+    zero = LedgerEntryRecord(
+        id=uuid4(),
+        list_id=list_id,
+        amount_crc=Decimal("0"),
+        currency="CRC",
+        payer_id=alice_id,
+        line_type="purchase",
+    )
+
+    def compute_allocations_fn(*_args, **_kwargs):
+        raise AssertionError("zero-amount purchases must not be allocated")
+
+    balances = compute_settle_balance_for_list_members(
+        [zero],
+        members,
+        alice_id,
+        compute_allocations_fn,
+        lambda _receipt_id: None,
+        lambda _list_id: None,
+        default_mode="even",
+    )
+
+    assert balances[alice_id] == Decimal("0")
+    assert balances[bob_id] == Decimal("0")
+
+
+def test_negative_purchase_with_real_share_allocator(alice_id, bob_id, list_id):
+    """Reproduce GET /lists 500: compute_share_allocations rejects non-positive totals."""
+    members = [
+        ListMemberView(user_id=alice_id, alias="Alice"),
+        ListMemberView(user_id=bob_id, alias="Bob"),
+    ]
+    refund = LedgerEntryRecord(
+        id=uuid4(),
+        list_id=list_id,
+        amount_crc=Decimal("-80.00"),
+        currency="CRC",
+        payer_id=alice_id,
+        line_type="purchase",
+    )
+
+    balances = compute_settle_balance_for_list_members(
+        [refund],
+        members,
+        alice_id,
+        compute_share_allocations,
+        lambda _receipt_id: None,
+        lambda _list_id: None,
+        default_mode="even",
+    )
+
+    assert balances[alice_id] == Decimal("-40.00")
+    assert balances[bob_id] == Decimal("40.00")
     assert sum(balances.values(), Decimal("0")) == Decimal("0")

@@ -3,8 +3,10 @@
 Pure domain logic: no FastAPI / SQLAlchemy. Money uses Decimal only.
 
 Settle-up is computed, not recorded. For each ledger entry with line_type in
-(purchase, classified_purchase_reversal), allocations are computed dynamically
-from split overrides + list defaults, then balances are aggregated.
+(purchase, classified_purchase_reversal) and a nonzero amount_crc, allocations
+are computed dynamically from split overrides + list defaults, then balances
+are aggregated. Negative amounts (refunds / reversals) use the absolute value
+for share math and invert the resulting balances.
 
 Balance polarity: positive = member is owed CRC; negative = member owes CRC.
 Invariant: sum of all balances should equal 0 (balanced system).
@@ -98,7 +100,13 @@ def compute_settle_balance_for_list_members(
 
         payer_id = entry.payer_id
         # Always the materialized CRC amount — never re-call BCCR here (AC #2, AD-21).
-        amount = entry.amount_crc
+        raw_amount = entry.amount_crc
+        if raw_amount == 0:
+            continue
+        # Purchases/refunds and classified reversals can be signed (statement credits).
+        # Share allocation requires a positive total; apply the same polarity after.
+        sign = Decimal("1") if raw_amount > 0 else Decimal("-1")
+        split_total = abs(raw_amount)
 
         receipt_override = None
         if entry.receipt_id:
@@ -107,7 +115,7 @@ def compute_settle_balance_for_list_members(
                 receipt_override = split_override
 
         allocations = compute_allocations_fn(
-            total=amount,
+            total=split_total,
             currency=entry.currency,
             item_override=None,
             receipt_override=receipt_override,
@@ -121,18 +129,18 @@ def compute_settle_balance_for_list_members(
         payer_share = None
         for allocation in allocations.allocations:
             if allocation.member_id == payer_id:
-                payer_share = allocation.amount
+                payer_share = allocation.amount * sign
                 break
 
         if payer_share is not None:
-            balance_dict[payer_id] += amount - payer_share
+            balance_dict[payer_id] += raw_amount - payer_share
             for allocation in allocations.allocations:
                 if allocation.member_id != payer_id:
-                    balance_dict[allocation.member_id] -= allocation.amount
+                    balance_dict[allocation.member_id] -= allocation.amount * sign
         else:
-            balance_dict[payer_id] += amount
+            balance_dict[payer_id] += raw_amount
             for allocation in allocations.allocations:
-                balance_dict[allocation.member_id] -= allocation.amount
+                balance_dict[allocation.member_id] -= allocation.amount * sign
 
     total = sum(balance_dict.values(), Decimal("0"))
     if total != Decimal("0"):
