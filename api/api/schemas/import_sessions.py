@@ -47,6 +47,8 @@ class StagedStatementResponse(BaseModel):
     filename: str | None = None  # Story 4.8.2: original uploaded filename
     card_id: UUID | None = None  # Story 4.8.3: identified card (if IBAN matched)
     rows: list[CandidateRowResponse] = Field(default_factory=list)
+    # Per-statement scope. Not the same field as ImportSessionResponse's
+    # zero_amount_excluded_count below, which is the session-lifetime total.
     zero_amount_excluded_count: int = 0
     # Story 4.13.1: committed rows (including dedup_skipped), for
     # ImportReviewSheet. Sibling to the pending-only `rows` above — that
@@ -84,6 +86,8 @@ class ImportSessionResponse(BaseModel):
     # imported nothing new, so the caller stays put rather than guessing.
     landing_list_id: UUID | None = None
     deleted_count: int = 0
+    # Session-lifetime total across all statements — not
+    # StagedStatementResponse's per-statement zero_amount_excluded_count above.
     zero_amount_excluded_count: int = 0
     failed_statements: list[FailedStatementResponse] = Field(default_factory=list)
     committed_by_list: list[CommittedByListResponse] = Field(default_factory=list)

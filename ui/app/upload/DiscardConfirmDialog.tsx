@@ -1,5 +1,9 @@
 "use client";
 
+import { useRef } from "react";
+
+import { useFocusTrap } from "@/hooks/useFocusTrap";
+
 type DiscardConfirmDialogProps = {
   open: boolean;
   title: string;
@@ -21,6 +25,16 @@ export function DiscardConfirmDialog({
   onConfirm,
   onCancel,
 }: DiscardConfirmDialogProps) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+
+  useFocusTrap({
+    isActive: open,
+    containerRef: panelRef,
+    defaultFocusRef: cancelRef,
+    onEscapePress: onCancel,
+  });
+
   if (!open) return null;
   return (
     <div
@@ -29,6 +43,7 @@ export function DiscardConfirmDialog({
       onClick={onCancel}
     >
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="discard-confirm-title"
@@ -41,6 +56,7 @@ export function DiscardConfirmDialog({
         <p className="mt-3 mb-0 text-[0.9rem] leading-relaxed text-muted">{body}</p>
         <div className="mt-5 flex flex-wrap justify-end gap-2">
           <button
+            ref={cancelRef}
             type="button"
             className="inline-flex items-center justify-center rounded-sm border border-border bg-transparent px-3 py-[9px] text-[0.95rem] font-[550] text-foreground"
             onClick={onCancel}

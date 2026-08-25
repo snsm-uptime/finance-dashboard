@@ -74,8 +74,6 @@ const THROW_ANIMATION_MS = 220;
 // Mirrors api/domain/expenses.py:20 (normalize_row_description) — display-side
 // guard only, the server is the actual enforcement point.
 const DESCRIPTION_MAX_LENGTH = 500;
-/** Signup always creates this list (api/domain/signup.py PERSONAL_LIST_NAME). */
-const PERSONAL_LIST_NAME = "Personal";
 const TITLE_TEXT_CLASS =
   "m-0 w-full min-w-0 text-[1.05rem] leading-snug font-[550] text-foreground break-words";
 
@@ -218,6 +216,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   const [sessionError, setSessionError] = useState<string | null>(null);
   const lists = useMembershipLists();
   const [listsError, setListsError] = useState<string | null>(null);
+  const [defaultListId, setDefaultListId] = useState<string>("");
   const [pickedListId, setPickedListId] = useState<string>("");
   const [isCoarsePointer] = useState(
     () => typeof window !== "undefined" && !!window.matchMedia?.("(pointer: coarse)").matches,
@@ -309,10 +308,21 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locale]);
 
-  const defaultListId = useMemo(
-    () => (lists ?? []).find((list) => list.name === PERSONAL_LIST_NAME)?.id ?? "",
-    [lists],
-  );
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/auth/me", { headers: { Accept: "application/json" }, credentials: "same-origin" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { default_import_list_id?: string | null } | null) => {
+        if (cancelled || !data) return;
+        setDefaultListId(data.default_import_list_id ?? "");
+      })
+      .catch(() => {
+        /* default list is a convenience — a failed read just disables that action */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const current = nextReviewableRow(session, discardedIds);
   const remainingCount = session
@@ -346,8 +356,14 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   );
   const leavingRef = useRef(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
-  const reviewKind = session ? classifyActiveImportSession(session) : "untouched";
-  const needsRetentionWarning = reviewKind === "partial" || reviewKind === "sheet-waiting";
+  // classifyActiveImportSession is contracted to only see genuinely active
+  // sessions (Task 3.2: "discarded/finalized not used as active"). This
+  // route can render a finalized session (the completion summary), so guard
+  // here rather than passing it out-of-contract.
+  const isFinalized = !!session?.finalized_at;
+  const reviewKind = session && !isFinalized ? classifyActiveImportSession(session) : "untouched";
+  const needsRetentionWarning =
+    !isFinalized && (reviewKind === "partial" || reviewKind === "sheet-waiting");
   const onBack = useCallback(() => {
     if (leavingRef.current) return;
     if (needsRetentionWarning) {
@@ -355,6 +371,11 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
       return;
     }
     leavingRef.current = true;
+    if (isFinalized) {
+      forgetOpenImportSession();
+      router.push("/upload");
+      return;
+    }
     void discardSession(sessionId, discardMessages).finally(() => {
       forgetOpenImportSession();
       router.push("/upload");
@@ -363,6 +384,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     sessionId,
     router,
     needsRetentionWarning,
+    isFinalized,
     discardMessages,
   ]);
   useChromeHeader({
@@ -414,6 +436,9 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   // card is identified/registered when that statement carries an IBAN.
   const cardReadyOrNoIban = !current?.statement.iban || card.cardMatched;
   const canAcceptChosen = !!current && !!pickedListId && cardReadyOrNoIban && !card.loading;
+  // `lists !== null` guards a loading race: /api/auth/me can resolve
+  // defaultListId before /api/lists resolves lists, which would otherwise
+  // render this button enabled with a blank defaultListName.
   const canAcceptDefault =
     !!current && !!defaultListId && lists !== null && cardReadyOrNoIban && !card.loading;
   // Delete has no card-identification gate — a pending row is always

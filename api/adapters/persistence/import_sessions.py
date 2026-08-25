@@ -60,7 +60,10 @@ def _session_record(
     row: ImportSessionModel, *, list_names: dict[UUID, str] | None = None
 ) -> ImportSessionRecord:
     # Counts and landing target are derived here from rows the selectinload
-    # already fetched — no extra query, and no drift (Story 4.12, AC #4/#6).
+    # already fetched — no drift (Story 4.12, AC #4/#6). `committed_by_list`
+    # (Story 4.14) needs list *names*, which the selectinload doesn't carry;
+    # `_to_record` below issues one extra `_list_names` query for that, only
+    # when the session has at least one committed row.
     # Two integer counters on the session would be the obvious move and would
     # be wrong: undo returns a row to pending and the counters would not follow
     # it, so the Story 4.14 summary would lie after any undo.

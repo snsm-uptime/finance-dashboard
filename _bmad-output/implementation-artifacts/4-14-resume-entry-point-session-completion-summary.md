@@ -4,7 +4,7 @@ baseline_commit: 4e5753a
 
 # Story 4.14: Resume entry point + session completion summary
 
-Status: in-progress
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -222,8 +222,6 @@ Follow `_bmad-output/project-context.md`: snake_case wire names, money as string
 - [Source: `_bmad-output/implementation-artifacts/4-13-individual-review-card-four-direction-actions-inline-title-edit.md`]
 - [Source: `_bmad-output/implementation-artifacts/deferred-work.md` — count field names]
 
-Ultimate context engine analysis completed - comprehensive developer guide created.
-
 ## Dev Agent Record
 
 ### Agent Model Used
@@ -244,3 +242,25 @@ GPT-5.6 Sol
 ### Completion Notes List
 
 ### File List
+
+### Review Findings
+
+Adversarial review (bmad-code-review) against `git diff a737a06..3a8f36d` — story 4-14's own commits, isolated from the 4.13.1 merge it builds on. Three parallel layers (Blind Hunter, Edge Case Hunter, Acceptance Auditor), findings deduplicated and verified against source before rating.
+
+- [x] [Review][Patch] Revert Save to finalize directly per spec — `ui/app/upload/review/[sessionId]/ImportReviewSheet.tsx:310-359` — decision: revert to spec (2026-08-24). **Fixed:** Save now calls `finalizeSession` directly (single action, matching pre-4.14 shape); `projectCompletionSummary`/`summarySession`/`continueAction` removed; the real `ImportCompletionSummary` (gated on `session.finalized_at`) is what renders, per AC 7 / Task 6.2 / 6.5. Removed the now-dead `showContinue`/`showTitle` props and the `completionBackToReview` i18n key. Tests reverted to match (`ImportReviewSheet.test.tsx`, `IndividualReviewPanel.test.tsx`).
+- [x] [Review][Defer] Discard no longer deletes the source PDF for untouched/partial sessions, with no cleanup job to ever reclaim it [api/application/import_session.py:548-559] — deferred, accepted as designed: matches AC #6 / Task 5.3 exactly (route through `_release_source_pdf_if_idle`, not unconditional delete); PDF garbage collection for permanently-`staged` discarded sessions is out of this story's scope and belongs in a future story, not a patch here (2026-08-24).
+- [x] [Review][Verified] New Postgres-only integration tests were never run against real Postgres per the Dev Agent Record — decision: run the suite now (2026-08-24). Ran `docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm --no-deps api pytest -q tests/test_import_sessions_integration.py tests/test_import_session_application.py` against the worktree's Compose Postgres 16: **125 passed**, 0 failures. AC #1.6's Postgres-integration mandate is now satisfied; no bugs surfaced.
+- [x] [Review][Patch] `classifyActiveImportSession` misclassifies finalized sessions as "partial" [ui/app/upload/classifyActiveImportSession.ts:20] — **Fixed:** `IndividualReviewPanel.tsx`'s `onBack` now guards on `session.finalized_at` before classifying or offering the retention warning, and no longer calls `discardSession` on a finalized session; chrome-back on the completion summary just navigates home.
+- [x] [Review][Patch] `continueAction` drops `onSessionUpdate(result.session)` before navigating away after finalize [ui/app/upload/review/[sessionId]/ImportReviewSheet.tsx:349-357] — **Resolved** as part of the Save/Continue revert above; `continueAction` no longer exists, and the restored single `saveAction` calls `onSessionUpdate(result.session)` before `router.push`.
+- [x] [Review][Patch] Default-list quick action resolves via hardcoded "Personal" name match instead of the account's saved `default_import_list_id` [ui/app/upload/review/[sessionId]/IndividualReviewPanel.tsx:78,312-313] — **Fixed:** restored the `/api/auth/me` fetch of `default_import_list_id` into `defaultListId` state; removed `PERSONAL_LIST_NAME`. Tests updated (`stubAuthMeFetch` restored to real ids at the call sites that exercise the default-list action).
+- [x] [Review][Patch] `DiscardConfirmDialog` is a new bespoke modal that skips the Escape-key/focus-trap handling of the `Sheet` pattern it was directed to reuse (Task 5.1) [ui/app/upload/DiscardConfirmDialog.tsx] — **Fixed:** wired the existing shared `useFocusTrap` hook (same one `Sheet` uses) — Escape now cancels, initial focus lands on Cancel, Tab is trapped in the dialog.
+- [x] [Review][Patch] `fetchActiveImportSessionOnServer` collapses network errors, non-2xx, and malformed JSON into a silent "no active session" with no logging [ui/app/upload/page.tsx:19-33] — **Fixed:** added `console.error` on both the non-ok-response and caught-exception paths, distinguishing a real failure from a genuine empty result.
+- [x] [Review][Patch] `membershipListsStore` singleton is reset only from `AccountMenu`'s 4 explicit sign-out handlers — any other session-ending path leaves the previous user's list roster in memory for the tab's next user [ui/app/lists/membershipListsStore.ts:36] — **Fixed:** `SignInForm.tsx` now resets the store on mount — landing on `/sign-in` always means re-authentication is required, regardless of which path (explicit sign-out, expired session, alias-gate redirect) sent the user there.
+- [x] [Review][Patch] `SoftLedgerSelect`'s fallback-to-first-option was removed app-wide, not scoped to the two consumers this story needed it for; the third consumer (`ManualExpenseForm.tsx`) was not audited or tested against the new behavior [ui/components/soft-ledger/Select.tsx:51] — **Audited and fixed:** `payerId`/`assigneeId` default to `currentUserId`, which is normally a valid member, so risk was low in practice; added the same membership-valid-or-blank derivation pattern already used by `DefaultImportListControl`/`CardRoutingControl` (`activePayerId`/`activeAssigneeId`) for defense in depth. `originValue`'s own default (`""`) is always a valid option already.
+- [x] [Review][Patch] `_to_record` issues an extra `_list_names` query on every session mutation once any row is committed, not only when a caller needs `committed_by_list` [api/adapters/persistence/import_sessions.py:178-187] — **Fixed (docs):** corrected the misleading "no extra query" comment on `_session_record` to explain when `_to_record` actually issues one; the query itself is a single indexed `IN` lookup gated on "at least one committed row exists," which is inherent to computing the new `committed_by_list` field and not worth adding caching complexity for.
+- [x] [Review][Patch] `zero_amount_excluded_count` now exists at two scopes (per-statement, session-lifetime) without the disambiguating comment Task 2.3 required for the other same-name collision [api/api/schemas/import_sessions.py:50,87] — **Fixed:** added scope-disambiguating comments on both fields, matching the existing `imported_new_count`/`skipped_duplicate_count` pattern.
+- [x] [Review][Patch] Stray generator artifact line left in the committed story file [_bmad-output/implementation-artifacts/4-14-resume-entry-point-session-completion-summary.md:225] — **Fixed:** line removed.
+
+**Verification after patches:** `ui` — typecheck clean, lint clean on touched files, full `vitest run` 437/437 passed. `api` — `ruff check` + `ruff format --check` clean, full `pytest` against Compose Postgres 16 701/701 passed.
+
+Dismissed as noise/false positive/not reachable (4): `UploadPanel`'s `useState(initialSession)` staleness claim (effect doesn't call `setSession`; no `router.refresh()` call exists on this route to trigger a same-mount re-render); `DiscardImportSessionService` PDF-delete error handling "removed" claim (still present, just moved into the shared `_release_source_pdf_if_idle` helper); `imported_new_count` vs `committed_by_list` sum mismatch via null `resolved_list_id` (not reachable — the single write site that sets a row to `committed` always sets `resolved_list_id` in the same `UPDATE`); `DefaultImportListControl`/`CardRoutingControl` transient blank-select flash while the membership store's first snapshot loads (real but a one-frame, self-correcting cosmetic flash).

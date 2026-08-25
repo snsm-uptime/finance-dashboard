@@ -1,10 +1,11 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 import { EyeIcon } from "@/app/icons";
 import { IconButton } from "@/components/IconButton";
+import { resetMembershipListsStore } from "@/app/lists/membershipListsStore";
 import { signInMessages, type Locale } from "@/lib/i18n/signin";
 import { attemptSignIn } from "./signInClient";
 import styles from "../signup/signup.module.scss";
@@ -26,6 +27,13 @@ export function SignInForm({ locale, returnTo }: Props) {
     () => email.trim().length > 0 && password.length > 0 && !pending,
     [email, password, pending],
   );
+
+  // Landing here means re-authentication is required regardless of how the
+  // user got here (explicit sign-out, expired session, alias-gate redirect)
+  // — any cached membership roster from a previous session is stale.
+  useEffect(() => {
+    resetMembershipListsStore();
+  }, []);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

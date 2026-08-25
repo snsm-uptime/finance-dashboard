@@ -8,15 +8,9 @@ import type { ImportSession } from "../../uploadClient";
 
 type ImportCompletionSummaryProps = {
   session: ImportSession;
-  showContinue?: boolean;
-  showTitle?: boolean;
 };
 
-export function ImportCompletionSummary({
-  session,
-  showContinue = true,
-  showTitle = true,
-}: ImportCompletionSummaryProps) {
+export function ImportCompletionSummary({ session }: ImportCompletionSummaryProps) {
   const { locale } = usePreferences();
   const t = uploadCopy(locale);
   const router = useRouter();
@@ -32,7 +26,7 @@ export function ImportCompletionSummary({
       aria-label={t.completionTitle}
       className="mx-auto flex w-full max-w-[26rem] flex-col gap-4 px-[1.5rem] py-[2rem]"
     >
-      {showTitle ? <h1 className="m-0 text-[1.15rem] font-[550]">{t.completionTitle}</h1> : null}
+      <h1 className="m-0 text-[1.15rem] font-[550]">{t.completionTitle}</h1>
       <ul className="m-0 list-none p-0 text-[0.95rem] leading-relaxed">
         {session.committed_by_list.map((group) => (
           <li key={group.list_id} className="mb-2">
@@ -68,15 +62,13 @@ export function ImportCompletionSummary({
           )}
         </li>
       </ul>
-      {showContinue ? (
-        <button
-          type="button"
-          className="inline-flex items-center justify-center self-start rounded-sm border-none bg-accent px-3 py-[9px] text-[0.95rem] font-[550] text-on-accent"
-          onClick={onContinue}
-        >
-          {t.completionContinue}
-        </button>
-      ) : null}
+      <button
+        type="button"
+        className="inline-flex items-center justify-center self-start rounded-sm border-none bg-accent px-3 py-[9px] text-[0.95rem] font-[550] text-on-accent"
+        onClick={onContinue}
+      >
+        {t.completionContinue}
+      </button>
     </section>
   );
 }

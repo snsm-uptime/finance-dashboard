@@ -428,7 +428,7 @@ describe("IndividualReviewPanel", () => {
       ok: true,
       lists: [{ id: "l2", name: "Personal", owner_id: "u1", role: "owner" }],
     });
-    stubAuthMeFetch(null);
+    stubAuthMeFetch("l2");
     assignRow.mockResolvedValue({
       ok: true,
       session: makeSession({ statements: [makeStatement({ rows: [] })] }),
@@ -465,7 +465,7 @@ describe("IndividualReviewPanel", () => {
         { id: "l2", name: "Personal", owner_id: "u1", role: "owner" },
       ],
     });
-    stubAuthMeFetch(null);
+    stubAuthMeFetch("l2");
 
     await act(async () => {
       root.render(<IndividualReviewPanel sessionId="s1" />);
@@ -571,7 +571,7 @@ describe("IndividualReviewPanel", () => {
     });
     // Also stands in for the identify-card fetch: its shape has no `matched`
     // field, so identifyCardForStatement fails and needsRegistration flips on.
-    stubAuthMeFetch(null);
+    stubAuthMeFetch("l-personal");
 
     await act(async () => {
       root.render(<IndividualReviewPanel sessionId="s1" />);
@@ -717,7 +717,7 @@ describe("IndividualReviewPanel", () => {
         { id: "l2", name: "Personal", owner_id: "u1", role: "owner" },
       ],
     });
-    stubAuthMeFetch(null);
+    stubAuthMeFetch("l2");
     assignRow.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
 
     await act(async () => {
@@ -818,7 +818,7 @@ describe("IndividualReviewPanel", () => {
       ok: true,
       lists: [{ id: "l2", name: "Personal", owner_id: "u1", role: "owner" }],
     });
-    stubAuthMeFetch(null);
+    stubAuthMeFetch("l2");
     assignRow.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
 
     await act(async () => {
@@ -1327,7 +1327,7 @@ describe("IndividualReviewPanel", () => {
       expect(selectByLabel(document.body, "Discard")).toBeNull();
     });
 
-    it("Save previews the summary; Back returns to review; Continue finalizes and lands", async () => {
+    it("Save calls finalizeSession and lands on landing_list_id", async () => {
       const session = makeSession({
         statements: [
           makeStatement({ rows: [], assigned_rows: [assignedRow({ id: "r1" })] }),
@@ -1352,30 +1352,11 @@ describe("IndividualReviewPanel", () => {
         await Promise.resolve();
       });
 
-      expect(finalizeSession).not.toHaveBeenCalled();
-      expect(document.body.textContent).toContain("Import complete");
-      expect(push).not.toHaveBeenCalled();
-      await act(async () => {
-        selectByText(document.body, "Back to review").click();
-      });
-      expect(document.body.textContent).toContain("Confirm placements");
-      expect(finalizeSession).not.toHaveBeenCalled();
-      await act(async () => {
-        selectByText(document.body, "Save").click();
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      expect(document.body.textContent).toContain("Import complete");
-      await act(async () => {
-        selectByText(document.body, "Continue").click();
-        await Promise.resolve();
-        await Promise.resolve();
-      });
       expect(finalizeSession).toHaveBeenCalledWith("s1", expect.anything());
       expect(push).toHaveBeenCalledWith("/lists/l1");
     });
 
-    it("Save shows the summary and Continue lands on /lists when landing_list_id is null", async () => {
+    it("Save lands on /lists when landing_list_id is null", async () => {
       const session = makeSession({
         statements: [
           makeStatement({ rows: [], assigned_rows: [assignedRow({ id: "r1" })] }),
@@ -1400,11 +1381,6 @@ describe("IndividualReviewPanel", () => {
         await Promise.resolve();
       });
 
-      expect(document.body.textContent).toContain("Import complete");
-      expect(push).not.toHaveBeenCalled();
-      await act(async () => {
-        selectByText(document.body, "Continue").click();
-      });
       expect(push).toHaveBeenCalledWith("/lists");
     });
 
@@ -1477,7 +1453,7 @@ describe("IndividualReviewPanel", () => {
       expect(selectByLabel(document.body, "Delete")).toBeTruthy();
     });
 
-    it("Save keeps card trash staged; Continue deletes and finalizes", async () => {
+    it("Save after card trash deletes the staged row then finalizes", async () => {
       fetchImportSession.mockResolvedValue({
         ok: true,
         session: SESSION_ONE_PENDING,
@@ -1529,15 +1505,6 @@ describe("IndividualReviewPanel", () => {
         await Promise.resolve();
       });
 
-      expect(deleteRow).not.toHaveBeenCalled();
-      expect(finalizeSession).not.toHaveBeenCalled();
-      expect(document.body.textContent).toContain("Import complete");
-      expect(push).not.toHaveBeenCalled();
-      await act(async () => {
-        selectByText(document.body, "Continue").click();
-        await Promise.resolve();
-        await Promise.resolve();
-      });
       expect(deleteRow).toHaveBeenCalledWith("s1", "r1", expect.anything());
       expect(finalizeSession).toHaveBeenCalledWith("s1", expect.anything());
       expect(push).toHaveBeenCalledWith("/lists/l1");
