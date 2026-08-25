@@ -18,6 +18,8 @@ describe("account i18n", () => {
       "loading",
       "saveLanguageFailed",
       "saveThemeFailed",
+      "defaultListTitle",
+      "defaultListHint",
     ] as const;
 
     for (const key of required) {

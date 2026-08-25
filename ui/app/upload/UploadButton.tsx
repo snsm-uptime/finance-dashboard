@@ -45,7 +45,8 @@ function UploadGlyph({
  * Hover: accent fill, accent outline at 2× stroke, a lifted card shadow (M3
  * elevation level 3), and the glyph's two text lines animate into the import
  * arrow — chrome and glyph share MOTION_DURATION_MS so they move as one piece.
- * Pending: filled + spinner.
+ * Pending: filled + spinner. The control stays clickable so the picker
+ * can append files while a drain is in flight (Story 4.16 Task 5.4).
  *
  * The morph is driven from here rather than from CSS `:hover`, because the
  * glyph animates its `d` attributes in JS (see FileImportMorphIcon). Touch
@@ -94,7 +95,7 @@ export function UploadButton({
     <IconButton
       {...rest}
       label={name}
-      disabled={isBusy}
+      disabled={Boolean(disabled)}
       className={classes}
       style={{
         ...style,

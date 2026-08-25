@@ -5,7 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DefaultImportListControl } from "./DefaultImportListControl";
-import { cardsMessages } from "@/lib/i18n/cards";
+import { accountMessages } from "@/lib/i18n/account";
 import type { ListItem } from "../lists/listsClient";
 
 const setDefaultImportList = vi.fn();
@@ -21,11 +21,11 @@ vi.mock("../lists/listsClient", async () => {
 });
 
 const messages = {
-  defaultListTitle: cardsMessages.en.defaultListTitle,
-  defaultListHint: cardsMessages.en.defaultListHint,
-  errorGeneric: cardsMessages.en.errorGeneric,
-  errorUnauthorized: cardsMessages.en.errorUnauthorized,
-  errorForbidden: cardsMessages.en.errorForbidden,
+  defaultListTitle: accountMessages.en.defaultListTitle,
+  defaultListHint: accountMessages.en.defaultListHint,
+  errorGeneric: accountMessages.en.errorGeneric,
+  errorUnauthorized: accountMessages.en.errorUnauthorized,
+  errorForbidden: accountMessages.en.errorForbidden,
 };
 
 const lists: ListItem[] = [

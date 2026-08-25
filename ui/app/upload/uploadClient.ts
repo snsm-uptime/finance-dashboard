@@ -70,6 +70,7 @@ export type UploadMessages = {
   errorUnknownStatement: string;
   errorAmbiguousStatement: string;
   errorUnreadableStatement: string;
+  errorDuplicateStatement: string;
   errorGeneric: string;
   errorUnauthorized: string;
 };
@@ -121,6 +122,7 @@ export type BulkCommitResult = {
 };
 
 type ErrorResult = { ok: false; error: string };
+type UploadErrorResult = { ok: false; error: string; duplicateSessionId?: string };
 type OkSession = { ok: true; session: ImportSession };
 type OkDiscard = { ok: true };
 type OkBulkCommit = { ok: true; result: BulkCommitResult };
@@ -136,6 +138,7 @@ function mapError(
   if (code === "unknown_bank_adapter") return messages.errorUnknownStatement;
   if (code === "ambiguous_bank_adapter") return messages.errorAmbiguousStatement;
   if (code === "invalid_canonical_line") return messages.errorUnreadableStatement;
+  if (code === "duplicate_statement_upload") return messages.errorDuplicateStatement;
   return messages.errorGeneric;
 }
 
@@ -360,7 +363,7 @@ export function asImportSession(data: unknown): ImportSession | null {
 export async function uploadStatement(
   file: File,
   messages: UploadMessages,
-): Promise<OkSession | ErrorResult> {
+): Promise<OkSession | UploadErrorResult> {
   const formData = new FormData();
   formData.set("file", file);
 
@@ -375,9 +378,18 @@ export async function uploadStatement(
   } catch {
     return { ok: false, error: messages.errorGeneric };
   }
-  const body = (await parseJson(response)) as { detail?: unknown; code?: unknown } | null;
+  const body = (await parseJson(response)) as {
+    detail?: unknown;
+    code?: unknown;
+    session_id?: unknown;
+  } | null;
   if (!response.ok) {
-    return { ok: false, error: mapError(response.status, body, messages) };
+    const error = mapError(response.status, body, messages);
+    const duplicateSessionId =
+      typeof body?.session_id === "string" && body.session_id.length > 0
+        ? body.session_id
+        : undefined;
+    return duplicateSessionId ? { ok: false, error, duplicateSessionId } : { ok: false, error };
   }
   const session = asImportSession(body);
   if (!session) return { ok: false, error: messages.errorGeneric };

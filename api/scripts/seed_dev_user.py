@@ -26,7 +26,7 @@ from adapters.persistence.models import ListMembershipModel, ListModel, UserMode
 from adapters.persistence.password_hasher import Argon2PasswordHasher
 from domain.alias import validate_alias
 from domain.list_invite import INVITE_MEMBER_ROLE
-from domain.signup import normalize_email
+from domain.signup import PERSONAL_LIST_NAME, normalize_email
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -155,6 +155,11 @@ def _seed_user(session: Session, spec: MockUser) -> tuple[UserModel, dict[str, L
             owned[name] = list_model
             logger.info("Seeded list %r for %s", name, email)
         _ensure_membership(session, list_model, user, OWNER_ROLE)
+
+    personal = owned.get(PERSONAL_LIST_NAME)
+    if personal is not None and user.default_import_list_id != personal.id:
+        user.default_import_list_id = personal.id
+        logger.info("Set default review destination for %s to %r", email, PERSONAL_LIST_NAME)
 
     return user, owned
 

@@ -4,7 +4,7 @@ import type { Locale } from "@/lib/i18n/locale";
 export const accountMessages = {
   en: {
     title: "Account",
-    subtitle: "Language, appearance, and sign out — no profile settings.",
+    subtitle: "Language, appearance, default review list, and sign out — no profile settings.",
     language: "Language",
     theme: "Theme",
     en: "English",
@@ -20,10 +20,15 @@ export const accountMessages = {
     saveThemeFailed: "Could not save theme. Try again.",
     navAccount: "Account",
     manageCards: "Manage cards",
+    defaultListTitle: "Default review destination",
+    defaultListHint: "Low-effort review accepts land here.",
+    errorGeneric: "Something went wrong. Try again.",
+    errorUnauthorized: "Sign in to manage your account.",
+    errorForbidden: "You don't have access to that list.",
   },
   es: {
     title: "Cuenta",
-    subtitle: "Idioma, apariencia y cerrar sesión — sin ajustes de perfil.",
+    subtitle: "Idioma, apariencia, lista de revisión por defecto y cerrar sesión — sin ajustes de perfil.",
     language: "Idioma",
     theme: "Tema",
     en: "English",
@@ -39,6 +44,11 @@ export const accountMessages = {
     saveThemeFailed: "No se pudo guardar el tema. Inténtalo de nuevo.",
     navAccount: "Cuenta",
     manageCards: "Administrar tarjetas",
+    defaultListTitle: "Destino de revisión por defecto",
+    defaultListHint: "Las revisiones rápidas llegan aquí.",
+    errorGeneric: "Algo salió mal. Inténtalo de nuevo.",
+    errorUnauthorized: "Inicia sesión para administrar tu cuenta.",
+    errorForbidden: "No tienes acceso a esa lista.",
   },
 } as const;
 

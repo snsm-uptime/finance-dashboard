@@ -81,13 +81,6 @@ describe("CardsPanel", () => {
     fetchLists.mockReset();
     fetchCards.mockResolvedValue({ ok: true, cards: [card] });
     fetchLists.mockResolvedValue({ ok: true, lists });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({ default_import_list_id: "list-1" }),
-      }),
-    );
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -98,11 +91,10 @@ describe("CardsPanel", () => {
       root.unmount();
     });
     container.remove();
-    vi.unstubAllGlobals();
     resetMembershipListsStore();
   });
 
-  it("keeps Register, default destination, then list in source order", async () => {
+  it("keeps Register then list in source order", async () => {
     await act(async () => {
       root.render(<CardsPanel embedded />);
     });
@@ -114,27 +106,17 @@ describe("CardsPanel", () => {
     );
     expect(classTokens(wrapper)).not.toContain("flex-col-reverse");
 
-    expect(wrapper.children).toHaveLength(3);
+    expect(wrapper.children).toHaveLength(2);
     expect(wrapper.children[0].getAttribute("aria-labelledby")).toMatch(/register-title$/);
-    expect(wrapper.children[1].className.split(/\s+/)).toContain("empty:hidden");
-    expect(wrapper.children[2].getAttribute("aria-labelledby")).toMatch(/list-title$/);
-    expect(headingTexts(container)).toEqual([t.submit, t.defaultListTitle, t.listTitle]);
-  });
-
-  it("keeps an empty default-destination slot when there are no lists", async () => {
-    fetchLists.mockResolvedValue({ ok: true, lists: [] });
-    await act(async () => {
-      root.render(<CardsPanel embedded />);
-    });
-    await waitForDom(() => container.textContent?.includes(card.label));
-
-    const wrapper = container.firstElementChild as HTMLElement;
-    expect(wrapper.children).toHaveLength(3);
-    expect(wrapper.children[1].childElementCount).toBe(0);
+    expect(wrapper.children[1].getAttribute("aria-labelledby")).toMatch(/list-title$/);
     expect(headingTexts(container)).toEqual([t.submit, t.listTitle]);
   });
 
   it("drops a deleted list from destination dropdowns without a remount", async () => {
+    fetchCards.mockResolvedValue({
+      ok: true,
+      cards: [{ ...card, routing_mode: "fixed", fixed_list_id: "list-1" }],
+    });
     fetchLists.mockResolvedValue({
       ok: true,
       lists: [
@@ -146,6 +128,14 @@ describe("CardsPanel", () => {
       root.render(<CardsPanel embedded />);
     });
     await waitForDom(() => container.textContent?.includes(card.label));
+
+    const chip = Array.from(container.querySelectorAll("button")).find((btn) =>
+      btn.getAttribute("aria-label")?.startsWith(`${t.routingTitle}:`),
+    ) as HTMLButtonElement;
+    await act(async () => {
+      chip.click();
+    });
+    await waitForDom(() => Boolean(container.querySelector('button[aria-haspopup="listbox"]')));
 
     const trigger = container.querySelector('button[aria-haspopup="listbox"]') as HTMLButtonElement;
     await act(async () => {

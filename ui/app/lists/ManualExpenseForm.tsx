@@ -188,7 +188,7 @@ export function ManualExpenseForm({
     | { ok: true; value: CreateExpenseBody["split_override"] | undefined }
     | { ok: false; error: string } {
     if (mode === "whole_assignee") {
-      return { ok: true, value: { kind: "whole_assignee", assignee_id: assigneeId } };
+      return { ok: true, value: { kind: "whole_assignee", assignee_id: activeAssigneeId } };
     }
     if (mode === "absolute_amounts") {
       const amounts = nonEmptyEntries(absoluteAmounts);
@@ -235,7 +235,11 @@ export function ManualExpenseForm({
   );
 
   const canSubmit =
-    amount.trim().length > 0 && description.trim().length > 0 && !pending;
+    amount.trim().length > 0 &&
+    description.trim().length > 0 &&
+    !!activePayerId &&
+    (mode !== "whole_assignee" || !!activeAssigneeId) &&
+    !pending;
 
   useFormStateSync(canSubmit, onCanSubmitChange);
 
@@ -247,11 +251,13 @@ export function ManualExpenseForm({
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!activePayerId) return;
+    if (mode === "whole_assignee" && !activeAssigneeId) return;
     await submit({
       amount: amount.trim(),
       currency: "CRC",
       description: description.trim(),
-      payer_id: payerId,
+      payer_id: activePayerId,
       split_override: undefined,
       ...originFields(),
     });
@@ -329,7 +335,7 @@ export function ManualExpenseForm({
           />
         </div>
 
-        {payerId === currentUserId ? (
+        {activePayerId === currentUserId ? (
           <div className={styles.field}>
             <span className={styles.label} id={`${baseId}-origin-label`}>
               {messages.expenseOriginLabel}

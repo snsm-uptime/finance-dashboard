@@ -1,6 +1,7 @@
 export { SaveIcon } from "./SaveIcon";
 export { SendIcon } from "./SendIcon";
 export { CloseIcon } from "./CloseIcon";
+export { AlertIcon } from "./AlertIcon";
 export { PlusIcon } from "./PlusIcon";
 export { DotsIcon } from "./DotsIcon";
 export { ShareIcon } from "./ShareIcon";

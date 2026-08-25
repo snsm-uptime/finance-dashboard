@@ -1,14 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
+import { DefaultImportListControl } from "@/app/cards/DefaultImportListControl";
 import { MoonIcon, SunIcon, SystemIcon } from "@/app/icons";
+import { fetchLists, type ListItem } from "@/app/lists/listsClient";
+import { resetMembershipListsStore } from "@/app/lists/membershipListsStore";
 import {
   clearPrefsCache,
   usePreferences,
 } from "@/components/PreferencesProvider";
-import { resetMembershipListsStore } from "@/app/lists/membershipListsStore";
 import { TriSwitch } from "@/components/TriSwitch";
 import { accountCopy } from "@/lib/i18n/account";
 import type { Locale, ThemePreference } from "@/lib/i18n/locale";
@@ -23,6 +25,24 @@ export function AccountMenu() {
   const [pending, setPending] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lists, setLists] = useState<ListItem[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchLists({
+      errorGeneric: t.errorGeneric,
+      errorInvalidName: t.errorGeneric,
+      errorForbidden: t.errorForbidden,
+      errorUnauthorized: t.errorUnauthorized,
+    }).then((result) => {
+      if (!cancelled && result.ok) setLists(result.lists);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // List membership is independent of locale; fetch once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function onLanguage(next: Locale) {
     setPending(true);
@@ -145,6 +165,21 @@ export function AccountMenu() {
           ]}
         />
       </section>
+
+      {lists.length > 0 ? (
+        <div className="mb-6">
+          <DefaultImportListControl
+            lists={lists}
+            messages={{
+              defaultListTitle: t.defaultListTitle,
+              defaultListHint: t.defaultListHint,
+              errorGeneric: t.errorGeneric,
+              errorUnauthorized: t.errorUnauthorized,
+              errorForbidden: t.errorForbidden,
+            }}
+          />
+        </div>
+      ) : null}
 
       <section className="mb-6">
         <Link className={resetLinkClass} href="/cards">

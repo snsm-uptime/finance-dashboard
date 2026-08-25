@@ -1,159 +1,324 @@
 ---
-baseline_commit: c04e29c95b54728af1ce6898356b59f5ad44f5df
+baseline_commit: 8b30ed608c6074c6b32b6d0617ce1be58e59999a
 ---
 
 # Story 4.16: Multi-file upload — pending queue, per-item removal, duplicate detection
 
-Status: ready-for-dev
+Status: done
 
 > **Renumbered 2026-08-20: was Story 4.10.** Epic 4 was reordered so numeric order matches build
-> order (Sprint Change Proposal 2026-08-20). This story is independent of review granularity and
-> can be built at any point. `sprint-change-proposal-2026-08-19.md` still refers to it by its old
-> key `4-10-multi-file-upload-pending-queue-dedup` — that proposal is a historical record and was
-> deliberately left unedited.
+> order (Sprint Change Proposal 2026-08-20). Independent of review granularity; can ship in
+> parallel with 4.13.1 / 4.14 / 4.15. Historical proposals may still say `4-10-multi-file-…`.
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
-## Origin note (2026-08-19) — read before starting
+## Origin note — read before starting
 
-This story did not exist in the original `epics.md` sequence. It was added out-of-band at explicit user request during Story 4.6's post-review follow-up, after the user asked to select multiple PDFs at once, remove a queued item before it's processed, and reject duplicate uploads. There is **no PRD FR** and **no EXPERIENCE.md/DESIGN.md flow** for a multi-file picker or a pending-queue UI — J1 (`EXPERIENCE.md` line 167) only narrates picking one PDF. This story's UI shape is therefore new ground, not a spec transcription; keep it minimal and consistent with `UploadPanel.tsx`'s existing list/row style rather than inventing new visual language.
+This story was added out-of-band (2026-08-19) after Story 4.6: select several PDFs, remove a queued item before upload, reject duplicates. There is **no PRD FR** and **no EXPERIENCE.md / DESIGN.md flow** for a multi-file picker or pending queue. J1 only narrates picking **one** PDF (multi-statement **inside** that file is FR-15 / Story 4.6, not this story). Keep UI minimal and consistent with Warm Balance / existing upload Tailwind — do not invent a new visual language.
 
-**The user also asked for uploads to "later run in separate threads."** This directly conflicts with an already-**ADOPTED** architecture decision:
-
-> `architecture-finance-helper-2026-08-03/.memlog.md`: "Ingest runtime v1 = in-process synchronous in the API service: upload path detects/splits/parses before review; no job queue in v1 [ADOPTED]"
-
-> `project-context.md` (Compose section, AD-2): "Do not add Redis, workers, or a fourth app service in v1 unless a measured NFR-12 failure forces it" — and under "Never": "add Redis/worker 'just in case'"
-
-**This story does not add a job queue, worker pool, or threading.** It only shapes the client/API boundary (one upload call per file, independent per-file status) so that a *future* move to concurrent/background processing is additive rather than a redesign. Actual concurrent processing requires its own architecture decision via `bmad-correct-course` before it is ever implemented — do not build it here, and do not let "so it can be threaded later" justify adding concurrency now.
+**"Later run in separate threads" is out of scope.** Ingest is in-process synchronous on `api`; no Redis, workers, or extra Compose service (AD-2). This story only makes a future concurrency move *additive* (one `POST /import/sessions` per file, independent per-file status). Do not add a job queue or `Promise.all` uploads.
 
 ## Story
 
 As a user uploading statements,
 I want to select multiple PDFs at once, remove one from the batch before it's processed, and be warned if I pick a file I've already queued or staged,
-So that I can queue several statements in one pass instead of uploading them one at a time.
+so that I can queue several statements in one pass instead of uploading them one at a time.
 
 ## Acceptance Criteria
 
-1. **Given** the Upload page, **when** I open the file picker, **then** I can select more than one PDF at once, and each selected file appears as its own pending entry in a queue before any upload request is sent for it.
-2. **Given** a pending (not-yet-processed) entry in the queue, **when** I remove it, **then** it is dropped from the queue with no API call ever made for that file.
-3. **Given** an already-processed entry (a staged Import Session shown in the queue), **when** I discard it, **then** the existing per-session discard behavior applies (soft-delete, PDF cleanup) — same contract as today's single-session Discard button, now available per row.
-4. **Given** a file whose content is byte-identical to a file already pending in this queue, or to an already-staged (not discarded) Import Session for the current user, **when** I try to queue it, **then** it is rejected inline with a clear "already added" error and is not queued or uploaded. (This is a deliberate broadening of `epics.md`'s draft wording, which scoped the check to "this browser session" — the server-side check is keyed by `user_id`, not by browser/session, since that's the only scope the API can actually enforce; see Task 2.3.)
-5. **Given** a queued batch with no duplicates, **when** processing runs, **then** each file is uploaded via its own `POST /import/sessions` call — sequential, one at a time, in-process (no concurrency introduced by this story; see Origin note) — and a single file's rejection (any existing 422/409 error) does not block or discard the others still in the queue.
-6. **Given** the batch finishes, **when** I view the result, **then** I see one row per file with its own outcome (queued / uploading / staged with statements / failed / duplicate‑rejected), and each staged row exposes its own Discard action per AC #3.
+1. **Given** the Upload page, **when** I open the file picker, **then** I can select more than one PDF at once, and each selected file appears as its own pending queue entry **before** any upload request is sent for it.
+2. **Given** a pending (not-yet-processed) entry, **when** I remove it, **then** it is dropped from the queue with **no** API call for that file.
+3. **Given** a staged Import Session row in the queue, **when** I discard it, **then** existing per-session discard applies (`DELETE /import/sessions/{id}`, soft-delete + PDF cleanup) — same contract as today's Discard, per row.
+4. **Given** a file whose bytes are identical to (a) a file already `pending` / `uploading` / `staged` in **this tab's queue**, or (b) an **active** Import Session for this user (`discarded_at IS NULL` and `finalized_at IS NULL`) that has a stored `content_hash`, **when** I try to queue or upload it, **then** it is rejected with a clear "already added" error and is not queued as a new upload (client pre-filter for (a); server 409 for (b)).
+5. **Given** a queued batch with no in-queue duplicates, **when** processing runs, **then** each file is uploaded via its own `POST /import/sessions` — **sequential**, one at a time, in-process — and one file's 422/409/5xx does not discard or cancel the remaining queue.
+6. **Given** the batch finishes, **when** I view the result, **then** I see one row per file with its own outcome (`pending` / `uploading` / `staged` / `failed` / `duplicate`) and each staged row exposes Discard (AC #3) plus the existing resume-review path for that session.
 
-## Scope Note — what this story does NOT build
+**Deliberate AC broadening vs `epics.md`:** epics wording scopes staged-file dupes to "this browser session." The API can only enforce `(user_id, content_hash)` among **active** sessions. Client SHA-256 covers same-picker / same-tab queue. Do not implement a weaker filename-only server check.
 
-- **No concurrent/background processing.** See Origin note. The existing single-file `POST /import/sessions` endpoint (Story 4.6) is reused unchanged, called once per queued file, sequentially.
-- **No batch-level API endpoint.** This is a client-side orchestration story, not a new bulk-upload route. (Do not confuse this with Story 4.7 "Bulk review" — 4.7 is about assigning an *already-staged* session's statements to one list; this story is about queuing multiple *uploads* before staging. They are unrelated and do not conflict: 4.7 already operates per `session_id` and has no assumption that only one session exists at a time.)
-- **No cap/limit UI beyond a simple default.** This story assumes a soft client-side cap of 10 files per batch (no PRD/NFR number exists for this — see Dev Notes) to keep a naive "select 200 files" case from hammering the single synchronous API worker. Treat this as a starting default, not a hard product requirement — flag if the user wants a different number.
-- **No dedup of parsed *ledger rows*.** That's Story 4.12's domain-identity dedup at commit time (AD-18) and is untouched by this story. This story's duplicate check is purely "is this the same PDF file, before it's even parsed" — a different, earlier gate.
+## Scope — do not build
+
+- No job queue, worker, Redis, threading, or concurrent `uploadStatement` calls.
+- No batch-upload API. Do not confuse with Story 4.7 bulk **review** (assign an already-staged session to one list).
+- No ledger / `compute_canonical_identity` / FR-20 skip counts — that is Story 4.12 at **commit**.
+- No `GET` list-all-sessions endpoint. `GET /import/sessions/active` stays "most recent one" (Story 4.14). See coexistence note below.
+- No unique DB constraint on `content_hash` (discarded/finalized hashes must not permanently block re-upload).
+- Soft client cap of **10** files per picker batch (not a PRD/NFR number). Do not silently truncate; show an inline message.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Domain — content-hash duplicate detection (AC: #4)
-  - [ ] 1.1 `api/domain/errors.py`: add `DuplicateStatementUploadError(DomainError)` (`CODE = "duplicate_statement_upload"`, message along the lines of "This statement has already been uploaded.", shape like the existing `UnsupportedFileTypeError`/`ImportSessionNotFoundError` added in Story 4.6).
-  - [ ] 1.2 `api/domain/import_session.py`: add `compute_pdf_content_hash(content: bytes) -> str` — `hashlib.sha256(content).hexdigest()`. Pure, stdlib-only (AD-1 — no new dependency). This is the *only* duplicate-identity mechanism for this story: exact byte-for-byte match, not filename, not statement period/product — deliberately simple and unambiguous. (A future story could add "same statement period + product already staged" as a softer heuristic; do not build that here, it is a different, fuzzier rule than what AC #4 asks for.)
+- [x] Task 1: Domain — content-hash + error (AC: #4)
+  - [x] 1.1 `api/domain/errors.py`: `DuplicateStatementUploadError(DomainError)` with `CODE = "duplicate_statement_upload"` and a MESSAGE like `"This statement has already been uploaded."` — same shape as `UnsupportedFileTypeError`.
+  - [x] 1.2 `api/domain/import_session.py`: `compute_pdf_content_hash(content: bytes) -> str` = `hashlib.sha256(content).hexdigest()` (64 lowercase hex). Stdlib only (AD-1). Exact bytes only — not filename, period, or product.
 
-- [ ] Task 2: Persistence — store and query content hash (AC: #4)
-  - [ ] 2.1 `api/adapters/persistence/models.py`: add `content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)` to `ImportSessionModel` (one hash per uploaded file — matches the existing one-`whole_pdf_path`-per-session shape from Story 4.6, not per-statement). **Nullable, not backfilled**: sessions created before this migration have no hash and simply never participate in dedup — do not write a backfill migration, there is no way to recompute a hash for files that may already be deleted (Story 4.6's cleanup-on-reject / discard-delete paths). Document this tradeoff in Completion Notes.
-  - [ ] 2.2 New Alembic migration `api/adapters/persistence/migrations/versions/0017_import_session_content_hash.py` (next revision after `0016_import_sessions.py`, head as of this story): `ALTER TABLE import_sessions ADD COLUMN content_hash VARCHAR(64) NULL`. Add a plain (non-unique) index on `(user_id, content_hash)` — **not** a unique constraint (a discarded session's hash must not block a legitimate re-upload; uniqueness has to be enforced at the *active-sessions-only* application layer, not the schema, since Postgres can't express a partial-unique-among-live-rows constraint as a plain column constraint without a filtered/partial index — use `postgresql_where=text("discarded_at IS NULL")` on the index if you want DB-level defense-in-depth, but the domain error from Task 1.1/3.x is the actual enforcement path either way).
-  - [ ] 2.3 `api/adapters/persistence/import_sessions.py` (`SqlAlchemyImportSessionRepository`): add `find_active_session_by_content_hash(user_id: UUID, content_hash: str) -> bool` — `SELECT 1 FROM import_sessions WHERE user_id = :user_id AND content_hash = :content_hash AND discarded_at IS NULL LIMIT 1`, plus store `content_hash` on `create_session()` (new required kwarg).
-  - [ ] 2.4 Add `find_active_session_by_content_hash` to the `ImportSessionRepository` Protocol in `api/application/import_session.py`, and `content_hash: str` to `create_session()`'s signature there too.
+- [x] Task 2: Persistence (AC: #4)
+  - [x] 2.1 `ImportSessionModel`: `content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)`. **No backfill** — pre-4.16 sessions never participate in hash dedup (PDF may already be deleted).
+  - [x] 2.2 Alembic **`0026_import_session_content_hash.py`**, `revision = "0026_import_session_content_hash"` (keep id ≤ 32 chars), **`down_revision = "0025_import_reviewed_at"`**. `ADD COLUMN content_hash VARCHAR(64) NULL`. Non-unique index on `(user_id, content_hash)` with `postgresql_where=text("discarded_at IS NULL AND finalized_at IS NULL")` if used as defense-in-depth — **application check is the contract**. Reconfirm HEAD is still `0025_import_reviewed_at` before writing.
+  - [x] 2.3 `SqlAlchemyImportSessionRepository.create_session`: persist `content_hash` (`str | None = None` so existing test factories that mint sessions without an upload stay valid). Production upload **must** pass the hash.
+  - [x] 2.4 Add `find_active_session_by_content_hash(user_id: UUID, content_hash: str) -> bool`: `SELECT 1 … WHERE user_id AND content_hash AND discarded_at IS NULL AND finalized_at IS NULL LIMIT 1`.
+  - [x] 2.5 Protocol `ImportSessionRepository` in `api/application/import_session.py`: same method + `create_session(..., content_hash: str | None = None)`.
 
-- [ ] Task 3: Application — duplicate check before storage (AC: #4, #5)
-  - [ ] 3.1 `UploadStatementPdfService.execute()` (`api/application/import_session.py`): compute `content_hash = compute_pdf_content_hash(command.content)` **immediately after `validate_pdf_upload`, before `self._pdf_storage.save(...)`**. Call `self._session_repo.find_active_session_by_content_hash(command.actor_user_id, content_hash)`; if `True`, raise `DuplicateStatementUploadError()` **without ever calling `pdf_storage.save()`** — this is the one place in the whole upload path where the file is rejected *before* touching disk, unlike the existing `UnknownBankAdapterError`/etc. paths (Story 4.6) which save first and clean up after. Get this ordering right — checking after save would mean writing-then-deleting a duplicate's bytes for no reason, and would need the same cleanup-on-reject wrapping Story 4.6 already built for the other error types (don't duplicate that wrapping here, avoid it by checking first).
-  - [ ] 3.2 Pass `content_hash=content_hash` through to `create_session(...)`.
-  - [ ] 3.3 Unit tests (fakes, no DB — `api/tests/test_import_session_application.py` pattern already established): same content twice for the same user with the first session still active → second raises `DuplicateStatementUploadError`, storage never called; first session discarded → re-upload of the same content now succeeds; same content, different `user_id` → both succeed (no cross-user dedup — hash+user_id is the key, not hash alone).
+- [x] Task 3: Application — check **before** disk (AC: #4, #5)
+  - [x] 3.1 In `UploadStatementPdfService.execute()`: after `validate_pdf_upload`, **before** `pdf_storage.save`: compute hash; if `find_active_session_by_content_hash` → raise `DuplicateStatementUploadError` (no save, no pipeline). Then save → existing `try` / `except Exception` PDF delete (Story 4.6 review patch) unchanged.
+  - [x] 3.2 Pass `content_hash=` into `create_session`.
+  - [x] 3.3 Unit tests in `api/tests/test_import_session_application.py` — extend `_FakeImportSessionRepo` (do not invent a second fake): same bytes + first session still active → second raises, `storage.saved` unchanged; first discarded **or** finalized → re-upload succeeds; same bytes, different `user_id` → both succeed.
 
-- [ ] Task 4: API — error mapping (AC: #4, #5)
-  - [ ] 4.1 `api/api/routes/import_sessions.py`: add an `except DuplicateStatementUploadError` branch to `upload_statement_pdf`, mapping to `409 Conflict` with `{"detail": str(exc), "code": "duplicate_statement_upload"}` — 409 (not 422) because this is a conflict with existing server state, not a malformed request; mirrors the "409 or 422, developer's call, document which" note Story 4.7 already left for its own conflict case. Document the 409 choice in this story's Completion Notes so 4.7 doesn't have to re-decide it.
-  - [ ] 4.2 Integration test (`api/tests/test_import_sessions_integration.py` pattern): upload same fixture PDF twice while the first session is still active → second returns 409 `duplicate_statement_upload`, no second session row created, no second file written to `PDF_STORAGE_PATH`; discard the first, re-upload the same bytes → 201.
+- [x] Task 4: HTTP mapping (AC: #4, #5)
+  - [x] 4.1 `upload_statement_pdf` in `api/api/routes/import_sessions.py`: `except DuplicateStatementUploadError` → **409** `{"detail": str(exc), "code": "duplicate_statement_upload"}` (conflict with existing state, not 422 malformed). Explicit `JSONResponse` like the other upload catches — do not stuff this into row `_ERROR_MAP` tuples.
+  - [x] 4.2 Integration (`api/tests/test_import_sessions_integration.py`): same fixture PDF twice while first is active → 409, no second session row, no second file under `PDF_STORAGE_PATH`; discard first → 201. Optionally: finalize first (if a helper exists) → re-upload 201.
 
-- [ ] Task 5: UI — pending queue + multi-select (AC: #1, #2, #4, #5, #6)
-  - [ ] 5.1 `ui/app/upload/UploadPanel.tsx`: replace the single `session: ImportSession | null` state (Story 4.6, plus today's "block second upload while a session is active" gate — **this story removes that gate and replaces it with the queue**, do not layer multi-file on top of it) with a queue of entries, e.g. `type QueueEntry = { id: string; file: File; state: "pending" | "uploading" | "staged" | "failed" | "duplicate"; session?: ImportSession; error?: string }`, held in `useState<QueueEntry[]>([])`.
-  - [ ] 5.2 File `<input>` gets the `multiple` attribute; `onFileChange` iterates `event.target.files`, for each file: compute a quick client-side dedup key (recommended: hash via `crypto.subtle.digest("SHA-256", await file.arrayBuffer())` — same algorithm as the server's `compute_pdf_content_hash`, giving instant "already in this queue" feedback without a round trip; acceptable fallback if `crypto.subtle` support is a concern: compare `name`+`size`+`lastModified` — weaker, document the tradeoff if chosen) against files already `pending`/`uploading`/`staged` in the queue; if it matches, add a `"duplicate"` entry with an inline error instead of queuing it for upload. This is a **client-side pre-filter only** — the server's `content_hash` check (Task 3) remains the actual enforcement authority for cross-session duplicates (a file staged in an earlier visit, not in this queue).
-  - [ ] 5.3 Enforce the soft 10-file batch cap (Scope Note) client-side with a clear inline message if exceeded — do not silently truncate the selection.
-  - [ ] 5.4 Process the queue **sequentially** (`for` loop with `await`, not `Promise.all`/`allSettled`) — one `uploadStatement()` call in flight at a time. This matters: the api process handles requests synchronously per Story 4.6/architecture (no job queue), so firing N concurrent requests from the browser would queue up blocking `pdfplumber` work on the same worker rather than actually parallelizing anything, and makes partial-failure bookkeeping harder for no benefit.
-  - [ ] 5.5 Each queue row renders per its `state` (reuse the existing `statusStagedClass`/`statusFailedClass` pattern from 4.6, extend with a duplicate/rejected style) and gets its own action: pending → remove button (client-only, Task 5's own new i18n string, no API call); staged → the existing `discardSession()` wired per-row instead of the single global button Story 4.6 built.
-  - [ ] 5.6 `ui/app/upload/uploadClient.ts`: no new functions needed — `uploadStatement`/`discardSession` are reused as-is per queue item. Add the `409 duplicate_statement_upload` code to `mapError()` with a new message key (do not reuse `errorUnreadableStatement`/`errorUnknownStatement` — this is a different failure class the user should be able to tell apart, same reasoning Story 4.6's review applied to splitting `unknown_bank_adapter`/`ambiguous_bank_adapter`).
-  - [ ] 5.7 `ui/lib/i18n/upload.ts`: add EN+ES keys for: remove-pending-item action label, "already added to this batch" (client-side dup), `errorDuplicateStatement` (server 409), and the 10-file-cap message. Follow the existing per-domain TS object convention — do not create a new i18n file for this.
-  - [ ] 5.8 Styling: Tailwind utilities co-located (Epic 3.5 / AD-23), no new `.module.css` — extend the existing inline utility classes already in `UploadPanel.tsx` rather than introducing a new styling approach for the queue rows.
+- [x] Task 5: UI queue (AC: #1–#6)
+  - [x] 5.1 `UploadPanel.tsx`: replace exclusive `session | null` + hidden picker (`session ? SessionReviewPanel : picker`) with a **queue** plus a picker that **stays available**. Suggested:
 
-- [ ] Task 6: UI tests (AC: #1, #2, #4, #5, #6)
-  - [ ] 6.1 `ui/app/upload/UploadPanel.test.tsx`: multi-select renders N pending rows; remove on a pending row drops it with `uploadStatement` never called for that file; two identical files selected together → second is flagged duplicate client-side, only one `uploadStatement` call fires; sequential processing — assert call order/timing via mock resolution order, not `Promise.all` races; a mid-batch failure (mock one call rejecting) leaves other rows unaffected; per-row discard on a staged entry calls `discardSession` with that row's session id only.
-  - [ ] 6.2 `ui/app/upload/uploadClient.test.ts`: `mapError` maps `409`/`duplicate_statement_upload` to the new message key.
+    `type QueueEntry = { id: string; file?: File; contentHash?: string; state: "pending" | "uploading" | "staged" | "failed" | "duplicate"; session?: ImportSession; error?: string; displayName: string }`
 
-- [ ] Task 7: Story-close overview (required before `done` — see Dev Notes)
+    Seed one `staged` row from `initialSession` when present (Story 4.14 SSR). Do **not** keep `if (!file || session) return`.
+  - [x] 5.2 `<input multiple accept="application/pdf">`. On change, iterate **all** `FileList` entries. Client SHA-256 via `crypto.subtle.digest("SHA-256", await file.arrayBuffer())` → 64-char hex (same as Python `hexdigest()`). Match against queue entries in `pending` | `uploading` | `staged` that already have a hash; duplicates become `duplicate` rows with inline copy — **not** uploaded. Fallback if SubtleCrypto unavailable: `name`+`size`+`lastModified` and document in Completion Notes. Server remains authority for other-tab / prior-visit actives.
+  - [x] 5.3 Soft cap 10: if a selection would push pending+uploading+staged above 10, show cap copy and do not enqueue the overflow. No silent truncate.
+  - [x] 5.4 Drain **sequentially** (`for` + `await`, single in-flight upload). If the user adds more files while a drain is running, append `pending` and let the same drain (or a re-entrant-safe continuation) pick them up — **never** start a second parallel drain. Do **not** use `useFormSubmission` as the batch engine (it is one-shot global pending); per-row `state` is the source of truth. `UploadButton` may show busy while **any** row is `uploading`, but the file input must remain usable to append.
+  - [x] 5.5 Row UI (Tailwind only, no new `.module.css`): pending → Remove (no API); uploading → busy; staged → reuse discard via `discardSession(session.id)` **and** keep resume (`SessionReviewPanel` **or** compact row + link to `/upload/review/{id}` — do not mount N full review panels). failed → mapped error; duplicate → client or server copy. After discard of the hydrated 4.14 session, `forgetOpenImportSession` as today.
+  - [x] 5.6 `uploadClient.ts` `mapError` + `UploadMessages`: map `duplicate_statement_upload` → new `errorDuplicateStatement`. Do not reuse unknown/ambiguous/unreadable keys. `uploadStatement` / `discardSession` signatures stay per-file / per-id.
+  - [x] 5.7 `ui/lib/i18n/upload.ts` EN+ES: remove-pending label, in-queue already-added, `errorDuplicateStatement`, 10-file cap. Same `uploadMessages` object — no new i18n file.
+  - [x] 5.8 `rememberOpenImportSession`: still **one** id — last successfully staged session in this tab (including `initialSession` effect). Do not invent multi-id storage in this story.
+
+- [x] Task 6: UI tests (AC: #1, #2, #4, #5, #6)
+  - [x] 6.1 `UploadPanel.test.tsx`: replace **"unmounts the file picker while a session is active"** — picker must remain. Cover: N pending rows from `multiple`; pending Remove never calls `uploadStatement` for that file; two identical files in one selection → one upload; sequential order (mock resolve order); mid-batch reject leaves other rows; staged discard calls `discardSession` with that id; `initialSession` seeds a staged row **without** hiding the input.
+  - [x] 6.2 `uploadClient.test.ts`: 409 + `duplicate_statement_upload` → new message.
+
+- [x] Task 7: Story-close overview (four-section template in Completion Notes) before `done`.
+
+### Review Findings
+
+Group A (API hash/dedup) — 2026-08-25
+
+- [x] [Review][Patch] Put the blocking session id on 409 so the client can discard/resume that session [api/api/routes/import_sessions.py:241]
+- [x] [Review][Patch] Use `DuplicateStatementUploadError.CODE` in the 409 JSON body [api/api/routes/import_sessions.py:244]
+- [x] [Review][Patch] Mirror the Alembic partial index on `ImportSessionModel.__table_args__` [api/adapters/persistence/models.py:411]
+- [x] [Review][Patch] Assert `content_hash` is persisted (application `create_calls` + integration surviving row) [api/tests/test_import_session_application.py:1837] [api/tests/test_import_sessions_integration.py:251]
+
+- [x] [Review][Defer] Concurrent same-hash uploads can both pass the application check [api/application/import_session.py:464] — deferred, later hardening story: UI drain is sequential; spec forbids a unique `content_hash` constraint
+- [x] [Review][Defer] Upload 409 is an undeclared `JSONResponse` beside a 201 `response_model` [api/api/routes/import_sessions.py:200] — deferred, pre-existing
+
+Group B (upload queue UI) — 2026-08-25
+
+- [x] [Review][Decision] Duplicate rows use a hover/focus tooltip instead of inline copy — kept icon + tooltip (side-UI cue; spec treated as satisfied)
+
+- [x] [Review][Patch] Show staged discard errors on the row [ui/app/upload/UploadPanel.tsx:304]
+- [x] [Review][Patch] Don't leave in-flight rows stuck `uploading` after leaving the page [ui/app/upload/UploadPanel.tsx:157]
+- [x] [Review][Patch] Catch `hashFile` failures and fall back to name+size+mtime [ui/app/upload/UploadPanel.tsx:45]
+- [x] [Review][Patch] Keep the picker usable while a row is `uploading` (Task 5.4) [ui/app/upload/UploadPanel.tsx:268]
+- [x] [Review][Patch] Serialize overlapping `onFileChange` so a second pick cannot overwrite the first batch [ui/app/upload/UploadPanel.tsx:197]
+- [x] [Review][Patch] Let the user dismiss a `failed` row [ui/app/upload/UploadPanel.tsx:317]
+- [x] [Review][Patch] Use 409 `duplicateSessionId` as the resume/discard target [ui/app/upload/UploadPanel.tsx:179]
+
+- [x] [Review][Defer] Unrelated `uploadMessages` rewrites (completion copy, account-page default-list) [ui/lib/i18n/upload.ts] — deferred, Group C side-UI/docs
+- [x] [Review][Defer] 10-file cap and SubtleCrypto fallback have no UI tests [ui/app/upload/UploadPanel.test.tsx] — deferred, Task 6.1 did not require them
+
+Group C (side UI/behavior) — 2026-08-25
+
+- [x] [Review][Defer] SoftLedgerSelect blurs the trigger after choose, including keyboard Enter/Space [ui/components/soft-ledger/Select.tsx] — shipped: listbox ArrowUp/Down + Enter/Space confirm, blur-after-choose so review keys work; ↑ opens the picker from the card
+
+- [x] [Review][Patch] Manual expense submit still sends stale `payerId` / `assigneeId` when the select shows empty [ui/app/lists/ManualExpenseForm.tsx:250]
+- [x] [Review][Patch] Default-list Accept is enabled when `default_import_list_id` is not in loaded memberships [ui/app/upload/review/[sessionId]/IndividualReviewPanel.tsx:415]
+- [x] [Review][Patch] Chrome Back sets `leavingRef` before `router.push` and never clears it [ui/app/upload/review/[sessionId]/IndividualReviewPanel.tsx:346]
+- [x] [Review][Patch] Card-identification spinner reuses session-loading `aria-label` [ui/app/upload/review/[sessionId]/IndividualReviewPanel.tsx:931]
+
+- [x] [Review][Defer] Chrome back no longer discards; Continue removed; receipt/owe Discard/spinner/seed/blur undocumented [ui/app/upload/review/[sessionId]/IndividualReviewPanel.tsx:346] — **documented in Group D** (4.16 close + 4.14/4.13.1 notes)
+- [x] [Review][Defer] Signup still creates Personal without `default_import_list_id` [api/application/signup.py] — deferred, seed-only (`seed_dev_user.py` **does** set Personal); production signup still empty default
+- [x] [Review][Defer] Settle refund polarity extra cases (reversal line type, overrides) [api/domain/settle.py:108] — deferred, out of 4.16 ACs; abs+sign invert is the intended refund fix
+- [x] [Review][Defer] Review/bulk/completion rewrites were out of 4.16 “leave alone” list [ui/app/upload/review] — deferred, shipped on this branch by design
+
+Group D (docs vs shipped UI) — 2026-08-25
+
+- [x] [Review][Patch] 4.16 story-close omits SubtleCrypto fallback, 409-vs-422, no hash backfill, review chrome/keyboard/Select/seed-vs-signup, and `Select.tsx` from the File List [_bmad-output/implementation-artifacts/4-16-multi-file-upload-pending-queue-dedup.md:248]
+- [x] [Review][Patch] 4.14 still requires Continue and chrome-Back discard; Completion Notes empty; review bullets still describe `saveAction` `router.push` and summary Back “home” [_bmad-output/implementation-artifacts/4-14-resume-entry-point-session-completion-summary.md:37]
+- [x] [Review][Patch] 4.13.1 AC #3 still says Save lands on `landing_list_id`; owe-colored sheet Discard is undocumented [_bmad-output/implementation-artifacts/4-13-1-import-review-sheet.md:37]
+- [x] [Review][Patch] Group C findings still say seed does not set `default_import_list_id` and Select blur is unimplemented [_bmad-output/implementation-artifacts/4-16-multi-file-upload-pending-queue-dedup.md:118]
+
+- [x] [Review][Defer] Signup still creates Personal without `default_import_list_id` [api/application/signup.py] — deferred, pre-existing; only `seed_dev_user.py` sets the preference
+- [x] [Review][Defer] `hasRemainingUploadWork` is in-memory tab queue only [ui/app/upload/uploadQueueStore.ts:41] — deferred, 4.16 tab-lifetime by design; reload makes finalized Back land on the list
+- [x] [Review][Defer] Sheet Discard still deletes at Save rather than unassign-to-pending [ui/app/upload/review/[sessionId]/ImportReviewSheet.tsx:266] — deferred, already recorded in 4.13.1 Deviations (Change List is unassign)
 
 ## Dev Notes
 
 ### Why this is smaller than it sounds
 
-The backend already supports multiple concurrent Import Sessions per user — `UploadStatementPdfService.execute()` (Story 4.6) mints a fresh `session_id` on every call with no uniqueness constraint preventing two active sessions for the same user. **Nothing about "multiple sessions at once" requires new backend architecture.** The only genuinely new backend piece is the content-hash duplicate gate (Tasks 1–4); everything else is: (a) reuse the existing single-file upload/discard endpoints per queue item, (b) a client-side orchestration loop. Do not build a new "batch" domain concept, table, or endpoint.
+Backend **already allows** many non-discarded, non-finalized sessions per user (`uuid4()` per upload; integration test uploads three and `GET /active` returns the newest). No new session/batch aggregate. New backend = hash column + lookup + 409. UI = queue orchestration on existing BFF `POST /api/import/sessions` and `DELETE …/sessions/{id}`.
 
-### The one architecture line this story must not cross
+### Current code (read before editing)
 
-Quoting `project-context.md` verbatim because it is easy to over-read "multiple files" as "let's parallelize them":
+**Upload service today** (`UploadStatementPdfService.execute`, ~453–522 in `api/application/import_session.py`):
 
-> "**Do not** add Redis, workers, or a fourth app service in v1 unless a measured NFR-12 failure forces it (AD-2)" / Never: "add Redis/worker 'just in case'"
+1. `validate_pdf_upload` (PDF magic) — reject before storage.
+2. `pdf_storage.save` **then** `run_import_pipeline` + card match + `create_session`.
+3. Broad `except Exception`: delete just-saved PDF, re-raise (4.6 review — do not nest the duplicate check inside this `try`; duplicates must never `save`).
+4. `_release_source_pdf_if_idle` after create if nothing staged/failed.
 
-Sequential client-side processing (Task 5.4) is a deliberate choice, not a placeholder for "do it properly later inside this story." If a future story wants real concurrency, it goes through `bmad-correct-course` first (this reverses an ADOPTED decision, not just extends one) — this story's job is only to make that reversal *additive* (stable per-file request shape, independent per-file status) rather than a redesign.
+**Session model:** `content_hash` does **not** exist. PDF path is on `ImportStatementModel.pdf_path`, not the session. `create_session` kwargs today: `session_id`, `user_id`, `statements`, `pdf_paths` only. Production caller is `UploadStatementPdfService`; many integration tests call `repo.create_session` directly — keep `content_hash` optional on the repo.
 
-### What "duplicate" means here vs. Story 4.12
+**Protocol:** adding `find_active_session_by_content_hash` requires `_FakeImportSessionRepo` in `test_import_session_application.py` only (grep: that is the sole fake).
 
-- **This story (upload-time):** byte-identical PDF content, checked before parsing even starts, scoped to `(user_id, content_hash)` among the user's *active* (non-discarded) sessions. Purely mechanical — no statement parsing involved.
-- **Story 4.12 (commit-time):** `compute_canonical_identity` (`domain/canonical_line.py`, Story 4.4) dedups *parsed ledger rows* by domain identity (external_ref or a fallback tuple), independent of which file they came from. A user could legitimately re-upload a statement covering an overlapping date range from a different export — same ledger rows, different file bytes — and 4.9's dedup (not this story's) is what catches that. Do not conflate the two; this story's check is strictly narrower and earlier in the pipeline.
+**Alembic HEAD:** `0025_import_reviewed_at` (Story 4.15). Next file is **0026**, not 0017 (0017 is already `import_batches`).
 
-### Hexagonal placement (AD-1)
+**Upload UI today:** `UploadPanel` hides the picker whenever `session` is set and `onFileChange` ignores picks if `session` is set. Tests lock that in. 4.16 **inverts** it: queue + picker coexist. `page.tsx` SSR `GET /import/sessions/active` and BFF routes stay as-is.
 
-Same boundaries as Story 4.6: `compute_pdf_content_hash` and `DuplicateStatementUploadError` are pure domain (no FastAPI/SQLAlchemy/pdfplumber imports); the duplicate query lives in `adapters/persistence`; `application/import_session.py` composes the check into the existing service; `api/routes/import_sessions.py` stays a thin HTTP translation layer; `ui` talks to `api` only via the existing same-origin BFF routes under `ui/app/api/import/` (Story 4.6) — no changes needed there, they already forward whatever the browser sends.
+**`useFormSubmission`:** fine for single-file historically; a sequential queue with per-row errors will fight a single `pending`/`error`. Prefer local state + a drain lock (`useRef`).
 
-### Files you will modify (read fully before editing)
+### 4.14 coexistence (must not regress)
 
-- `api/domain/errors.py`, `api/domain/import_session.py` — Story 4.6's files, read `validate_pdf_upload` before adding `compute_pdf_content_hash` alongside it.
-- `api/application/import_session.py` — read `UploadStatementPdfService.execute()` in full; note it currently wraps `run_import_pipeline`+`create_session` in one `try/except Exception` that deletes the saved PDF on *any* failure (added in Story 4.6's code-review pass) — the new duplicate check must run **before** this block, not inside it, since a duplicate should never reach `pdf_storage.save()` at all.
-- `api/adapters/persistence/import_sessions.py`, `api/adapters/persistence/models.py` — read the existing `ImportSessionModel`/`create_session()`/`_session_record()` shapes before extending them.
-- `ui/app/upload/UploadPanel.tsx` — read in full; this story replaces its single-`session` state model, not appends to it. The most recent change on this file (uncommitted as of this story's creation) added a "block second upload while a session is active" input-disable gate specifically because there was no queue yet — that gate's *purpose* (don't silently drop/replace an active session) is subsumed by the queue, but its *mechanism* (disable the whole input) must be removed, not kept alongside the new multi-select behavior.
-- `ui/app/upload/uploadClient.ts`, `ui/lib/i18n/upload.ts` — extend `mapError`/`UploadMessages`/`uploadMessages` following the exact pattern already used for `errorAmbiguousStatement` (added in the same recent pass).
+| Behavior | Keep |
+|----------|------|
+| `GET /import/sessions/active` | Newest active session only |
+| `page.tsx` hydrates `initialSession` | Seed **one** staged queue row; **picker stays up** |
+| `openImportSession` sessionStorage | Single id |
+| Older active sessions | Remain in DB; **not listed** after refresh if they are not the newest. Do not auto-discard them. Full multi-session resume list is **out of scope** (follow-up if product wants it). |
+| `SessionReviewPanel` classify/resume/discard | Still valid for a **staged** row's session; do not delete this component |
 
-### Testing Requirements (project-context "Discipline" + "Layers")
+### Duplicate: 4.16 vs 4.12
 
-- Domain: pure unit test for `compute_pdf_content_hash` (same bytes → same hash; different bytes → different hash) — trivial but keep it, matches the "Unit: domain Decimal + fake FX" layer discipline pattern for any new pure function.
-- Application: unit tests with fakes, no DB (`_FakeImportSessionRepo`/`_FakePdfStorage` already exist in `test_import_session_application.py` — extend them with `find_active_session_by_content_hash`, don't build new fakes).
-- Integration: Postgres-gated `TestClient` (`test_import_sessions_integration.py`) for the 409 path.
-- UI: extend `UploadPanel.test.tsx`'s existing `vi.mock("./uploadClient", ...)` pattern; no new test infrastructure needed.
-- Money/date rules (AD-5, dates) are untouched by this story — no new assertions needed there.
+| | 4.16 upload | 4.12 commit |
+|--|-------------|-------------|
+| Key | SHA-256 of PDF bytes | `compute_canonical_identity` / `import_identity` |
+| When | Before parse / before `save` | Per destination list at commit |
+| Same statement, different export bytes | Not a 4.16 hit | 4.12 skip |
+| Same bytes, already **finalized** | Allowed to upload again (hash lookup excludes `finalized_at`) | 4.12 still skips ledger dupes |
+| Same bytes, still reviewing | 409 | N/A |
 
-### Story-close overview (required before `done`)
+### Hex / stack
 
-Per `_bmad-output/implementation-artifacts/story-close-overview-checklist.md`, paste the four-section template (Request path / Key components / Why this shape / What not to break) into Completion Notes before marking this story `done` — see `4-6-upload-pdf-detect-split-import-session.md`'s Completion Notes for the expected format once that section exists there.
+- Hash + error in `domain/`; query in `adapters/persistence`; composition in `application/`; HTTP in `api/routes`. UI HTTP-only via existing BFF.
+- Money/dates/FX untouched. i18n: per-domain TS objects. Styling: Tailwind co-located (AD-23); `UploadButton.module.scss` stays for the trigger only.
+- Python 3.12 / FastAPI / Next 16 — no new deps. `hashlib` + `crypto.subtle` only.
 
-### Project Structure Notes
+### Files to modify
 
-- Next Alembic revision: `0017` (head is `0016_import_sessions.py` as of this story's creation — reconfirm before writing the migration in case another story lands first).
-- No new files under `api/domain`, `api/application`, or `api/adapters/persistence` beyond what's listed in Tasks 1–2 — this story extends Story 4.6's modules, it does not create parallel ones.
-- No new UI route/page — `ui/app/upload/page.tsx` and the BFF routes under `ui/app/api/import/` (Story 4.6) are untouched; all changes are inside `UploadPanel.tsx` + its client/i18n co-files.
+| Path | Change |
+|------|--------|
+| `api/domain/errors.py` | New error |
+| `api/domain/import_session.py` | `compute_pdf_content_hash` |
+| `api/application/import_session.py` | Protocol + check-before-save + `create_session` hash |
+| `api/adapters/persistence/models.py` | `content_hash` |
+| `api/adapters/persistence/import_sessions.py` | persist + lookup |
+| `api/adapters/persistence/migrations/versions/0026_import_session_content_hash.py` | **NEW** |
+| `api/api/routes/import_sessions.py` | 409 mapping |
+| `api/tests/test_import_session_application.py` | Fake + unit tests |
+| `api/tests/test_import_sessions_integration.py` | 409 path |
+| `ui/app/upload/UploadPanel.tsx` | Queue model |
+| `ui/app/upload/UploadPanel.test.tsx` | Invert picker-hidden test; queue cases |
+| `ui/app/upload/uploadClient.ts` | `mapError` + `UploadMessages` |
+| `ui/app/upload/uploadClient.test.ts` | 409 mapping |
+| `ui/lib/i18n/upload.ts` | EN+ES keys |
+
+### Files to leave alone unless a compile error forces a touch
+
+- `ui/app/upload/page.tsx` (SSR active session)
+- `ui/app/api/import/**` (BFF already forwards multipart)
+- `compute_canonical_identity` / commit/finalize services
+
+This branch **also shipped** review/bulk/completion/`Select.tsx`/`seed_dev_user.py` changes (author intent). Do not revert those to match older 4.14/4.13.1 story text; the story-close and 4.14/4.13.1 notes below are the live contract.
+
+- Review/bulk routes / `SessionReviewPanel.tsx` — originally “compose only”; rewritten on this branch (see Completion Notes).
+
+### Testing
+
+- Domain: same bytes → same hash; different bytes → different hash.
+- Application: fakes, no DB; assert `storage.saved == []` on duplicate.
+- Integration: Postgres 16 + real `FilesystemPdfStorage` (existing file pattern).
+- UI: existing jsdom `createRoot`/`act` + `vi.mock("./uploadClient")`. Extend `fakeFileList` to multiple files.
+
+### Story-close overview
+
+Paste the four sections from `_bmad-output/implementation-artifacts/story-close-overview-checklist.md` into Completion Notes before `done`.
+
+### Project structure
+
+- One story, one branch: `feat/4/4-16-multi-file-upload-pending-queue-dedup`.
+- Generic fixture vocabulary only; never commit real bank PDFs.
 
 ### References
 
-- [Source: _bmad-output/planning-artifacts/epics.md#Story 4.16: Multi-file upload — pending queue, per-item removal, duplicate detection] — ACs, story statement (added alongside this story file).
-- [Source: _bmad-output/planning-artifacts/architecture/architecture-finance-helper-2026-08-03/.memlog.md] — "Ingest runtime v1 = in-process synchronous... no job queue in v1 [ADOPTED]" — the binding constraint on Task 5.4 and the Origin note.
-- [Source: _bmad-output/project-context.md#Compose / AD-2] — "Do not add Redis, workers, or a fourth app service in v1 unless a measured NFR-12 failure forces it"; "Never... add Redis/worker 'just in case'".
-- [Source: _bmad-output/implementation-artifacts/4-6-upload-pdf-detect-split-import-session.md] — the service/repository/route/UI shapes this story extends; its own code-review pass (2026-08-19) is the direct predecessor of every file this story touches.
-- [Source: _bmad-output/implementation-artifacts/4-7-bulk-review-assign-commit-path.md] — per 4.7's still-unimplemented draft (status: `ready-for-dev`, not `done` — written before Story 4.6 existed, full of `[VERIFY AGAINST 4.6 SCHEMA]` placeholders), its design is `session_id`-scoped with no single-active-session assumption, so no conflict with this story is expected — re-verify once 4.7 actually lands and those placeholders are resolved against real code.
-- [Source: _bmad-output/planning-artifacts/ux-designs/ux-finance-helper-2026-08-03/EXPERIENCE.md] line 167 — J1 only narrates a single-PDF pick; no multi-file/queue UX is specified anywhere in DESIGN.md/EXPERIENCE.md, confirmed by grep — this story's UI shape is new, keep it minimal.
-- [Source: _bmad-output/planning-artifacts/prds/prd-finance-helper-2026-08-02/prd.md#FR-13, FR-14, FR-15] — no FR covers multi-file selection or upload-time duplicate detection; closest is FR-20's post-*commit* dedup summary, which is a different mechanism (see Dev Notes "What 'duplicate' means here vs. Story 4.12").
+- [Source: `_bmad-output/planning-artifacts/epics.md` — Story 4.16] — ACs; ingest-architecture AC (sequential, no threads).
+- [Source: `_bmad-output/planning-artifacts/sprint-change-proposal-2026-08-20.md`] — independent of row-level review reorder.
+- [Source: `_bmad-output/planning-artifacts/sprint-change-proposal-2026-08-21.md`] — no AC change for 4.16.
+- [Source: `ARCHITECTURE-SPINE.md` AD-2] — in-process ingest; no worker until measured NFR-12.
+- [Source: `architecture-finance-helper-2026-08-03/.memlog.md`] — "no job queue in v1 [ADOPTED]".
+- [Source: `_bmad-output/project-context.md`] — AD-1 hex, AD-3 PDF lifecycle, AD-18 commit-time identity, AD-23 Tailwind.
+- [Source: `_bmad-output/implementation-artifacts/4-6-upload-pdf-detect-split-import-session.md`] — save-then-cleanup `except Exception`; split adapter error i18n.
+- [Source: `_bmad-output/implementation-artifacts/4-12-commit-batch-dedup-summary-land-on-settle-strip.md`] — ledger dedup ≠ file hash.
+- [Source: `_bmad-output/implementation-artifacts/4-14-resume-entry-point-session-completion-summary.md`] — `GET /active` most-recent; 4.16 listed as later/out of scope.
+- [Source: `EXPERIENCE.md` J1] — single PDF pick; no queue UX.
+- [Source: PRD FR-13 / FR-14 / FR-15 / FR-20] — no multi-file or upload-time hash FR; FR-15 is multi-statement **inside** one PDF; FR-20 is post-commit summary.
 
 ## Dev Agent Record
 
 ### Agent Model Used
 
+Cursor Grok 4.6 (UI, Tasks 5-7) + Claude Sonnet 5 (backend, Tasks 1-4)
+
 ### Debug Log References
+
+- Existing integration tests that re-upload the BAC fixture now append a trailing PDF comment so 4.16 byte-hash 409 does not collide with 4.12 identity tests (`_upload_bac_session`).
+- SubtleCrypto fallback (name+size+lastModified) is used only when `crypto.subtle` is missing; server 409 remains authority for other tabs / prior visits.
 
 ### Completion Notes List
 
+## Story-close overview — 4.16
+
+**Request path:**
+browser file picker → `UploadPanel` sequential `POST /api/import/sessions` (existing BFF) → `upload_statement_pdf` → `UploadStatementPdfService.execute` (SHA-256 **before** `pdf_storage.save`; 409 `duplicate_statement_upload` + blocking `session_id`, not 422) → `create_session(content_hash=)`. No backfill of `content_hash` on pre-4.16 rows. Staged discard stays `DELETE /import/sessions/{id}`. Client hash: SubtleCrypto SHA-256, else `name`+`size`+`lastModified` (server 409 still wins other tabs).
+
+**Key components:**
+`DuplicateStatementUploadError` + `compute_pdf_content_hash`; Alembic `0026_import_session_content_hash`; `find_active_session_by_content_hash`; `UploadPanel` queue; `uploadQueueStore` (tab-lifetime); `SoftLedgerSelect` listbox keyboard + blur-after-confirm; individual-review chrome (Back → `/upload` without discard; after finalize, chrome Back lands on `landing_list_id` / `/lists`, or `/upload` if `hasRemainingUploadWork`); zigzag `ImportCompletionSummary` (no Continue); keyboard legend ↑ list / ←↓→ / ⌫ delete; session/card/bulk loading spinners; `seed_dev_user.py` sets Personal `default_import_list_id` (signup does not).
+
+**Why this shape:**
+No worker/batch-upload API (AD-2). Dedup is exact PDF bytes among **active** sessions only. Sequential drain. Review/completion chrome on this branch is author-intent product, not a 4.16 AC — recorded here so 4.14/4.13.1 text is not the live contract.
+
+**What not to break:**
+`GET /import/sessions/active` still newest active only. `rememberOpenImportSession` is still one id. Do not unique-constrain `content_hash`. Do not start parallel `uploadStatement` calls. 4.12 commit identity is unchanged. Chrome Back on an in-progress review must not `discardSession`. Save must leave the user on the receipt until they use chrome Back.
+
 ### File List
+
+- api/domain/errors.py
+- api/domain/import_session.py
+- api/application/import_session.py
+- api/adapters/persistence/models.py
+- api/adapters/persistence/import_sessions.py
+- api/adapters/persistence/migrations/versions/0026_import_session_content_hash.py
+- api/api/routes/import_sessions.py
+- api/tests/test_import_session_domain.py
+- api/tests/test_import_session_application.py
+- api/tests/test_import_sessions_integration.py
+- ui/app/upload/UploadPanel.tsx
+- ui/app/upload/UploadPanel.test.tsx
+- ui/app/upload/uploadClient.ts
+- ui/app/upload/uploadClient.test.ts
+- ui/app/upload/uploadQueueStore.ts
+- ui/lib/i18n/upload.ts
+- ui/components/soft-ledger/Select.tsx
+- ui/components/soft-ledger/soft-ledger.test.tsx
+- ui/app/upload/SessionReviewPanel.tsx
+- ui/app/lists/ManualExpenseForm.tsx
+- ui/app/lists/ManualExpenseForm.test.tsx
+- ui/app/upload/review/[sessionId]/IndividualReviewPanel.tsx
+- ui/app/upload/review/[sessionId]/IndividualReviewPanel.test.tsx
+- ui/app/upload/review/[sessionId]/ImportCompletionSummary.tsx
+- ui/app/upload/review/[sessionId]/ImportCompletionSummary.test.tsx
+- ui/app/upload/review/[sessionId]/ImportReviewSheet.tsx
+- ui/app/upload/review/[sessionId]/ImportReviewSheet.test.tsx
+- ui/app/upload/bulk/[sessionId]/BulkReviewPanel.tsx
+- ui/app/icons/AlertIcon.tsx
+- ui/app/icons/index.ts
+- api/scripts/seed_dev_user.py
+- _bmad-output/implementation-artifacts/sprint-status.yaml
+- _bmad-output/implementation-artifacts/4-16-multi-file-upload-pending-queue-dedup.md
 
 ## Change Log
 
-- 2026-08-19: Story created via `bmad-create-story`, out of epic sequence at explicit user request during Story 4.6's post-review follow-up. No PRD FR or EXPERIENCE.md flow exists for this scope — see Origin note. Threading/concurrency explicitly deferred (conflicts with an ADOPTED architecture decision); status → ready-for-dev.
+- 2026-08-19: Story created via `bmad-create-story` (then numbered 4.10). Threading deferred; status ready-for-dev.
+- 2026-08-20: Renumbered to 4.16; sprint-status key `4-16-multi-file-upload-pending-queue-dedup`.
+- 2026-08-24: Recreated via `bmad-create-story` against HEAD `8b30ed6`. Refreshed Alembic head (`0026` after `0025`), 4.14 picker coexistence, optional `create_session` hash for test factories, duplicate scope = active (`discarded_at` and `finalized_at` null). Status → ready-for-dev.
+- 2026-08-24/25: UI queue (Tasks 5-7) implemented and committed on this branch by a concurrent Cursor/Grok 4.6 session (commits `8bdaf21`, `353a357`, `c73f05a`, `d9d0dfb`).
+- 2026-08-25: Backend (Tasks 1-4) implemented by Claude Sonnet 5: domain error + `compute_pdf_content_hash`, `content_hash` column + Alembic `0026`, `find_active_session_by_content_hash`, pre-save duplicate check in `UploadStatementPdfService`, 409 HTTP mapping, unit + integration tests (adjusted pre-existing `_upload_bac_session` fixture to vary bytes per call so it doesn't collide with the new active-session dedup). Full backend + UI suites green. Status → review.
+- 2026-08-25: Group A code review patches: 409 includes blocking `session_id` (`exc.CODE`); ORM mirrors non-unique partial index; tests assert stored hash. Concurrent same-hash race deferred.
+- 2026-08-25: Group B review: keep duplicate icon+tooltip; drain persists after leave-review; picker stays clickable while busy; discard/failed/409 session-id row fixes.
+- 2026-08-25: Group C review patches: submit uses membership-valid payer/assignee; default-list Accept requires the id in loaded lists; chrome Back releases `leavingRef` after a failed/no-op push; card-identification spinner has its own aria-label.
+- 2026-08-25: Group D patches applied: 4.16/4.14/4.13.1 notes match shipped chrome. Status → done.

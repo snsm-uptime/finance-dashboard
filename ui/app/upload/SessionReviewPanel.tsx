@@ -51,6 +51,7 @@ export function SessionReviewPanel({
     errorUnknownStatement: t.errorUnknownStatement,
     errorAmbiguousStatement: t.errorAmbiguousStatement,
     errorUnreadableStatement: t.errorUnreadableStatement,
+    errorDuplicateStatement: t.errorDuplicateStatement,
     errorGeneric: t.errorGeneric,
     errorUnauthorized: t.errorUnauthorized,
   };

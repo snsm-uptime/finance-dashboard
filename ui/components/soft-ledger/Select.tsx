@@ -1,9 +1,11 @@
 "use client";
 
 import {
+  forwardRef,
   useCallback,
   useEffect,
   useId,
+  useImperativeHandle,
   useRef,
   useState,
   type KeyboardEvent,
@@ -14,6 +16,10 @@ import { menuSurface } from "@/components/MenuSurface";
 export type SoftLedgerSelectOption = {
   value: string;
   label: string;
+};
+
+export type SoftLedgerSelectHandle = {
+  focusAndOpen: () => void;
 };
 
 type SoftLedgerSelectProps = {
@@ -30,23 +36,30 @@ type SoftLedgerSelectProps = {
 };
 
 /** Soft-Ledger listbox select — kit-bound open/closed surface; never native OS menu. */
-export function SoftLedgerSelect({
-  id,
-  name,
-  value,
-  options,
-  disabled = false,
-  required = false,
-  "aria-label": ariaLabel,
-  "aria-labelledby": ariaLabelledBy,
-  "aria-describedby": ariaDescribedBy,
-  onChange,
-}: SoftLedgerSelectProps) {
+export const SoftLedgerSelect = forwardRef<SoftLedgerSelectHandle, SoftLedgerSelectProps>(
+  function SoftLedgerSelect(
+    {
+      id,
+      name,
+      value,
+      options,
+      disabled = false,
+      required = false,
+      "aria-label": ariaLabel,
+      "aria-labelledby": ariaLabelledBy,
+      "aria-describedby": ariaDescribedBy,
+      onChange,
+    },
+    ref,
+  ) {
   const reactId = useId();
   const listboxId = `${reactId}-listbox`;
   const triggerId = id ?? `${reactId}-trigger`;
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const listboxRef = useRef<HTMLUListElement>(null);
   const [open, setOpen] = useState(false);
+  const [highlightIndex, setHighlightIndex] = useState(0);
 
   const selected = options.find((o) => o.value === value);
   const selectedIndex = Math.max(
@@ -55,6 +68,24 @@ export function SoftLedgerSelect({
   );
 
   const close = useCallback(() => setOpen(false), []);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      focusAndOpen() {
+        if (disabled) return;
+        triggerRef.current?.focus();
+        setOpen(true);
+      },
+    }),
+    [disabled],
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    setHighlightIndex(selectedIndex);
+    listboxRef.current?.focus();
+  }, [open, selectedIndex]);
 
   useEffect(() => {
     if (!open) return;
@@ -77,14 +108,31 @@ export function SoftLedgerSelect({
     };
   }, [open, close]);
 
+  function blurTriggerAfterChoose() {
+    triggerRef.current?.blur();
+  }
+
   function choose(next: string) {
     onChange(next);
     close();
+    blurTriggerAfterChoose();
+  }
+
+  function moveHighlight(delta: number) {
+    const next = Math.min(options.length - 1, Math.max(0, highlightIndex + delta));
+    setHighlightIndex(next);
+    const option = options[next];
+    if (option) onChange(option.value);
   }
 
   function onTriggerKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
     if (disabled) return;
-    if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
+    if (
+      event.key === "ArrowDown" ||
+      event.key === "ArrowUp" ||
+      event.key === "Enter" ||
+      event.key === " "
+    ) {
       event.preventDefault();
       setOpen(true);
     }
@@ -94,23 +142,23 @@ export function SoftLedgerSelect({
     if (event.key === "Escape") {
       event.preventDefault();
       close();
+      triggerRef.current?.focus();
       return;
     }
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      const next = options[Math.min(selectedIndex + 1, options.length - 1)];
-      if (next) onChange(next.value);
+      moveHighlight(1);
       return;
     }
     if (event.key === "ArrowUp") {
       event.preventDefault();
-      const prev = options[Math.max(selectedIndex - 1, 0)];
-      if (prev) onChange(prev.value);
+      moveHighlight(-1);
       return;
     }
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      close();
+      const option = options[highlightIndex];
+      if (option) choose(option.value);
     }
   }
 
@@ -132,6 +180,7 @@ export function SoftLedgerSelect({
         aria-label={ariaLabel}
         aria-labelledby={ariaLabelledBy}
         aria-describedby={ariaDescribedBy}
+        ref={triggerRef}
         onClick={() => {
           if (!disabled) setOpen((v) => !v);
         }}
@@ -155,10 +204,11 @@ export function SoftLedgerSelect({
       {open ? (
         <ul
           id={listboxId}
+          ref={listboxRef}
           className={`${menuSurface.panel} absolute z-20 top-[calc(100%_+_0.25rem)] left-0 right-0 m-0 p-1 list-none max-h-56`}
           role="listbox"
-          tabIndex={-1}
-          aria-activedescendant={`${listboxId}-opt-${selectedIndex}`}
+          tabIndex={0}
+          aria-activedescendant={`${listboxId}-opt-${highlightIndex}`}
           onKeyDown={onListKeyDown}
         >
           {options.map((option, index) => {
@@ -183,4 +233,5 @@ export function SoftLedgerSelect({
       ) : null}
     </div>
   );
-}
+},
+);

@@ -800,4 +800,40 @@ describe("ManualExpenseForm", () => {
     expect(originAfter).not.toBeNull();
     expect(originAfter.value).toBe("");
   });
+
+  it("does not submit a payer id that is missing from memberships", async () => {
+    await act(async () => {
+      root.render(
+        <ManualExpenseForm
+          listId="list-1"
+          currentUserId="user-z"
+          members={members}
+          messages={messages}
+        />,
+      );
+    });
+
+    const amount = container.querySelector('input[name="amount"]') as HTMLInputElement;
+    const description = container.querySelector(
+      'input[name="description"]',
+    ) as HTMLInputElement;
+    const form = container.querySelector("form") as HTMLFormElement;
+    const submitButton = form.querySelector(
+      'button[type="submit"]',
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(amount, "10.00");
+      amount.dispatchEvent(new Event("input", { bubbles: true }));
+      setter?.call(description, "Coffee");
+      description.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    expect(submitButton.disabled).toBe(true);
+    await act(async () => {
+      form.requestSubmit();
+    });
+    expect(createExpense).not.toHaveBeenCalled();
+  });
 });

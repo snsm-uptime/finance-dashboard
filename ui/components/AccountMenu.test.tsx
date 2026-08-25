@@ -5,6 +5,18 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const fetchLists = vi.fn();
+
+vi.mock("@/app/lists/listsClient", async () => {
+  const actual = await vi.importActual<typeof import("@/app/lists/listsClient")>(
+    "@/app/lists/listsClient",
+  );
+  return {
+    ...actual,
+    fetchLists: (...args: unknown[]) => fetchLists(...args),
+  };
+});
+
 import { AccountMenu } from "./AccountMenu";
 import { PreferencesProvider } from "./PreferencesProvider";
 
@@ -64,6 +76,8 @@ describe("AccountMenu", () => {
     document.documentElement.classList.remove("light", "dark");
     document.documentElement.lang = "en";
     localStorage.clear();
+    fetchLists.mockReset();
+    fetchLists.mockResolvedValue({ ok: true, lists: [] });
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
@@ -261,6 +275,30 @@ describe("AccountMenu", () => {
     expect(assign).toHaveBeenCalledWith("/forgot-password");
     expect(localStorage.getItem("fh_lang_cache")).toBeNull();
     expect(localStorage.getItem("fh_theme_cache")).toBeNull();
+    unmount();
+  });
+
+  it("shows the default review destination when the user has lists", async () => {
+    fetchLists.mockResolvedValue({
+      ok: true,
+      lists: [{ id: "list-1", name: "Household", owner_id: "u1", role: "owner" }],
+    });
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url === "/api/auth/me") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify(mePayload({ default_import_list_id: "list-1" })),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          ),
+        );
+      }
+      return Promise.resolve(new Response(null, { status: 404 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { host, unmount } = renderAccount();
+    await waitForDom(() => host.textContent?.includes("Default review destination"));
+    expect(host.textContent).toContain("Low-effort review accepts land here.");
     unmount();
   });
 });

@@ -1,11 +1,12 @@
 /** @vitest-environment jsdom */
 
-import { act } from "react";
+import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { UploadPanel } from "./UploadPanel";
 import type { ImportSession } from "./uploadClient";
+import { readUploadQueue, resetUploadQueue, writeUploadQueue } from "./uploadQueueStore";
 
 const uploadStatement = vi.fn();
 const discardSession = vi.fn();
@@ -41,42 +42,21 @@ vi.mock("@/hooks/useCardIdentification", () => ({
   }),
 }));
 
-type MockSubmitFn = (data: unknown) => Promise<{ ok: boolean; error?: string }>;
-
-vi.mock("@/hooks", async () => {
-  const React = await import("react");
-  return {
-    useFormSubmission: (fn: MockSubmitFn) => {
-      const [error, setError] = React.useState<string | null>(null);
-      const [pending, setPending] = React.useState(false);
-
-      const submit = React.useCallback(
-        async (arg: unknown) => {
-          setPending(true);
-          try {
-            const result = await fn(arg);
-            if (!result.ok) {
-              setError(result.error ?? null);
-            } else {
-              setError(null);
-            }
-          } catch (err) {
-            setError((err as Error).message);
-          } finally {
-            setPending(false);
-          }
-        },
-        [fn],
-      );
-
-      return {
-        submit,
-        pending,
-        error,
-      };
-    },
-  };
-});
+vi.mock("next/link", () => ({
+  default: ({
+    href,
+    children,
+    ...rest
+  }: {
+    href: string;
+    children: ReactNode;
+    [key: string]: unknown;
+  }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
+}));
 
 vi.mock("@/components/IconButton/IconButton.module.scss", () => ({
   default: new Proxy(
@@ -96,25 +76,49 @@ vi.mock("./UploadButton.module.scss", () => ({
   ),
 }));
 
-function fakeFile(): File {
-  return new File(["%PDF-1.4"], "statement.pdf", { type: "application/pdf" });
+function fakeFile(name = "statement.pdf", contents = "%PDF-1.4"): File {
+  return new File([contents], name, { type: "application/pdf", lastModified: 1 });
 }
 
-function fakeFileList(file: File): FileList {
+function fakeFileList(...files: File[]): FileList {
   const list: Record<number, File> & { length: number; item: (i: number) => File | null } = {
-    0: file,
-    length: 1,
-    item: (i: number) => (i === 0 ? file : null),
+    length: files.length,
+    item: (i: number) => files[i] ?? null,
   };
+  files.forEach((file, index) => {
+    list[index] = file;
+  });
   return list as unknown as FileList;
 }
 
-async function selectFile(container: HTMLElement, file: File) {
+async function tick() {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 15));
+  });
+}
+
+async function waitFor(predicate: () => boolean, label: string, timeoutMs = 4000) {
+  const start = Date.now();
+  while (!predicate()) {
+    if (Date.now() - start > timeoutMs) {
+      throw new Error(`timed out waiting for ${label}`);
+    }
+    await tick();
+  }
+}
+
+async function selectFiles(container: HTMLElement, ...files: File[]) {
   const input = container.querySelector('input[type="file"]') as HTMLInputElement;
-  Object.defineProperty(input, "files", { value: fakeFileList(file), configurable: true });
+  Object.defineProperty(input, "files", { value: fakeFileList(...files), configurable: true });
   await act(async () => {
     input.dispatchEvent(new Event("change", { bubbles: true }));
   });
+  await waitFor(
+    () =>
+      files.some((file) => container.textContent?.includes(file.name)) ||
+      uploadStatement.mock.calls.length > 0,
+    "queued files",
+  );
 }
 
 const unmatchedSession: ImportSession = {
@@ -156,6 +160,14 @@ const unmatchedSession: ImportSession = {
   ],
 };
 
+function sessionFor(id: string, filename: string): ImportSession {
+  return {
+    ...unmatchedSession,
+    id,
+    statements: unmatchedSession.statements.map((statement) => ({ ...statement, filename })),
+  };
+}
+
 describe("UploadPanel", () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -164,6 +176,7 @@ describe("UploadPanel", () => {
     uploadStatement.mockReset();
     discardSession.mockReset();
     fetchImportSession.mockReset();
+    resetUploadQueue();
     sessionStorage.clear();
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -185,12 +198,13 @@ describe("UploadPanel", () => {
     const input = container.querySelector('input[type="file"]');
     expect(input).not.toBeNull();
     expect(input?.className).toContain("sr-only");
+    expect(input?.hasAttribute("multiple")).toBe(true);
     const button = container.querySelector('button[aria-label="Upload"]');
     expect(button).not.toBeNull();
     expect(button?.textContent).toBe("");
   });
 
-  it("hides the picker and shows New card! registration after a successful upload", async () => {
+  it("keeps the file picker after a successful upload and shows a resume row", async () => {
     uploadStatement.mockResolvedValue({
       ok: true,
       session: unmatchedSession,
@@ -199,15 +213,21 @@ describe("UploadPanel", () => {
     await act(async () => {
       root.render(<UploadPanel />);
     });
-    await selectFile(container, fakeFile());
+    await selectFiles(container, fakeFile());
+    await waitFor(
+      () => Boolean(container.querySelector('a[href="/upload/review/s1"]')),
+      "resume row",
+    );
 
     expect(uploadStatement).toHaveBeenCalled();
-    const nameInput = container.querySelector('input[name="label"]') as HTMLInputElement;
-    expect(nameInput?.placeholder).toBe("New card!");
-    expect(container.textContent).toContain("IBAN: DE89 3704 0044 0532 0130 00");
-    expect(container.textContent).not.toContain("bac_credit");
-    expect(container.querySelector('input[type="file"]')).toBeNull();
-    expect(container.querySelector('button[aria-label="Upload"]')).toBeNull();
+    expect(container.querySelector('input[type="file"]')).not.toBeNull();
+    expect(container.querySelector('button[aria-label="Upload"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/upload/review/s1"]')?.textContent).toBe(
+      "statement.pdf",
+    );
+    expect(container.querySelector('a[href="/upload/review/s1"]')?.getAttribute("aria-label")).toBe(
+      "Resume review: statement.pdf",
+    );
   });
 
   it("shows the unsupported-file-type error inline on a non-PDF rejection", async () => {
@@ -216,10 +236,11 @@ describe("UploadPanel", () => {
     await act(async () => {
       root.render(<UploadPanel />);
     });
-    await selectFile(container, fakeFile());
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    });
+    await selectFiles(container, fakeFile());
+    await waitFor(
+      () => container.querySelector('[role="alert"]') !== null,
+      "inline error",
+    );
 
     const alert = container.querySelector('[role="alert"]');
     expect(alert?.textContent).toBe("Only PDF files are supported.");
@@ -237,19 +258,32 @@ describe("UploadPanel", () => {
     await act(async () => {
       root.render(<UploadPanel />);
     });
-    await selectFile(container, fakeFile());
+    await selectFiles(container, fakeFile());
+    await waitFor(
+      () => container.querySelector('button[aria-busy="true"]') !== null,
+      "busy upload button",
+    );
 
     const busy = container.querySelector('button[aria-busy="true"]');
     expect(busy).not.toBeNull();
+    expect(busy?.hasAttribute("disabled")).toBe(false);
     expect(busy?.getAttribute("aria-label")).toBe("Uploading…");
     expect(container.querySelector(".animate-spin")).not.toBeNull();
+
+    const row = [...container.querySelectorAll("li")].find((item) =>
+      item.textContent?.includes("statement.pdf"),
+    );
+    expect(row).toBeDefined();
+    expect(row?.querySelector(".animate-spin")).not.toBeNull();
+    expect(row?.querySelector('button[aria-label="Remove"]')).toBeNull();
+    expect(row?.textContent).not.toContain("Uploading…");
 
     await act(async () => {
       release({ ok: true, session: unmatchedSession });
     });
   });
 
-  it("unmounts the file picker while a session is active", async () => {
+  it("keeps the file picker while a session is staged", async () => {
     uploadStatement.mockResolvedValue({
       ok: true,
       session: unmatchedSession,
@@ -258,20 +292,40 @@ describe("UploadPanel", () => {
     await act(async () => {
       root.render(<UploadPanel />);
     });
-    await selectFile(container, fakeFile());
+    await selectFiles(container, fakeFile());
+    await waitFor(
+      () => Boolean(container.querySelector('a[href="/upload/review/s1"]')),
+      "staged resume link",
+    );
 
     expect(uploadStatement).toHaveBeenCalledTimes(1);
-    expect(container.querySelector('input[type="file"]')).toBeNull();
+    expect(container.querySelector('input[type="file"]')).not.toBeNull();
   });
 
-  it("hydrates from initialSession without sessionStorage", async () => {
+  it("restores remaining staged files after leaving review", async () => {
+    writeUploadQueue([
+      {
+        id: "s2",
+        state: "staged",
+        displayName: "next.pdf",
+        session: sessionFor("s2", "next.pdf"),
+      },
+    ]);
+    await act(async () => {
+      root.render(<UploadPanel />);
+    });
+    expect(container.textContent).toContain("next.pdf");
+    expect(container.querySelector('a[href="/upload/review/s2"]')).not.toBeNull();
+  });
+
+  it("hydrates from initialSession without hiding the input", async () => {
     await act(async () => {
       root.render(<UploadPanel initialSession={unmatchedSession} />);
     });
 
     expect(fetchImportSession).not.toHaveBeenCalled();
-    expect(container.querySelector('input[type="file"]')).toBeNull();
-    expect(container.textContent).toContain("IBAN: DE89 3704 0044 0532 0130 00");
+    expect(container.querySelector('input[type="file"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/upload/review/s1"]')).not.toBeNull();
   });
 
   it("does not resurrect a stale tab id when the server has no active session", async () => {
@@ -284,5 +338,332 @@ describe("UploadPanel", () => {
     expect(fetchImportSession).not.toHaveBeenCalled();
     expect(container.querySelector('input[type="file"]')).not.toBeNull();
     expect(sessionStorage.getItem("finance-helper.open-import-session-id")).toBeNull();
+  });
+
+  it("queues a pending row per selected file before upload", async () => {
+    let releaseFirst!: (value: unknown) => void;
+    uploadStatement.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releaseFirst = resolve;
+        }),
+    );
+
+    await act(async () => {
+      root.render(<UploadPanel />);
+    });
+    await selectFiles(container, fakeFile("a.pdf", "%PDF-a"), fakeFile("b.pdf", "%PDF-b"));
+
+    expect(container.textContent).toContain("a.pdf");
+    expect(container.textContent).toContain("b.pdf");
+    expect(uploadStatement).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      releaseFirst({ ok: true, session: sessionFor("sa", "a.pdf") });
+    });
+  });
+
+  it("removes a pending entry without calling uploadStatement for that file", async () => {
+    let release!: (value: unknown) => void;
+    uploadStatement.mockImplementation(
+      (file: File) =>
+        new Promise((resolve) => {
+          if (file.name === "first.pdf") {
+            release = resolve;
+            return;
+          }
+          resolve({ ok: true, session: sessionFor("second", file.name) });
+        }),
+    );
+
+    await act(async () => {
+      root.render(<UploadPanel />);
+    });
+    await selectFiles(
+      container,
+      fakeFile("first.pdf", "%PDF-first"),
+      fakeFile("second.pdf", "%PDF-second"),
+    );
+
+    expect(container.textContent).toContain("second.pdf");
+    const remove = container.querySelector('button[aria-label="Remove"]') as HTMLButtonElement;
+    expect(remove).not.toBeNull();
+    await act(async () => {
+      remove.click();
+    });
+    expect(container.textContent).not.toContain("second.pdf");
+
+    await act(async () => {
+      release({ ok: true, session: sessionFor("first", "first.pdf") });
+    });
+    expect(uploadStatement.mock.calls.map((call) => (call[0] as File).name)).toEqual(["first.pdf"]);
+  });
+
+  it("uploads only one of two identical files in a single selection", async () => {
+    uploadStatement.mockResolvedValue({
+      ok: true,
+      session: unmatchedSession,
+    });
+
+    await act(async () => {
+      root.render(<UploadPanel />);
+    });
+    const bytes = "%PDF-same-bytes";
+    await selectFiles(container, fakeFile("one.pdf", bytes), fakeFile("two.pdf", bytes));
+    await waitFor(
+      () => Boolean(container.querySelector('[aria-label="Already added."]')),
+      "duplicate copy",
+    );
+
+    expect(uploadStatement).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain("two.pdf");
+    expect(container.querySelector('[aria-label="Already added."]')).not.toBeNull();
+    expect(container.querySelector('[role="tooltip"]')?.textContent).toBe("Already added.");
+    expect(container.querySelector('[role="alert"]')?.textContent).not.toBe("Already added.");
+  });
+
+  it("shows a duplicate server hit as an error icon and drops it from the stored queue", async () => {
+    uploadStatement
+      .mockResolvedValueOnce({
+        ok: false,
+        error: "This statement has already been uploaded.",
+      })
+      .mockResolvedValueOnce({ ok: true, session: sessionFor("sb", "b.pdf") });
+
+    await act(async () => {
+      root.render(<UploadPanel />);
+    });
+    await selectFiles(container, fakeFile("a.pdf", "%PDF-a"), fakeFile("b.pdf", "%PDF-b"));
+    await waitFor(
+      () =>
+        Boolean(
+          container.querySelector('[aria-label="This statement has already been uploaded."]'),
+        ) && Boolean(container.querySelector('a[href="/upload/review/sb"]')),
+      "duplicate error icon and remaining staged file",
+    );
+
+    expect(container.textContent).toContain("a.pdf");
+    expect(
+      container.querySelector('[aria-label="This statement has already been uploaded."]'),
+    ).not.toBeNull();
+    expect(container.querySelector('[role="tooltip"]')?.textContent).toBe(
+      "This statement has already been uploaded.",
+    );
+    expect(readUploadQueue().some((entry) => entry.state === "duplicate")).toBe(false);
+    expect(readUploadQueue().some((entry) => entry.displayName === "a.pdf")).toBe(false);
+
+    await act(async () => {
+      root.unmount();
+    });
+    root = createRoot(container);
+    await act(async () => {
+      root.render(<UploadPanel />);
+    });
+    expect(container.textContent).not.toContain("a.pdf");
+    expect(container.querySelector('a[href="/upload/review/sb"]')).not.toBeNull();
+  });
+
+  it("uploads queued files sequentially in selection order", async () => {
+    const order: string[] = [];
+    const releases: Array<(value: unknown) => void> = [];
+    uploadStatement.mockImplementation(
+      (file: File) =>
+        new Promise((resolve) => {
+          order.push(file.name);
+          releases.push(resolve);
+        }),
+    );
+
+    await act(async () => {
+      root.render(<UploadPanel />);
+    });
+    await selectFiles(container, fakeFile("a.pdf", "%PDF-a"), fakeFile("b.pdf", "%PDF-b"));
+
+    expect(order).toEqual(["a.pdf"]);
+    expect(releases).toHaveLength(1);
+
+    await act(async () => {
+      releases[0]({ ok: true, session: sessionFor("sa", "a.pdf") });
+    });
+    await waitFor(() => order.length === 2, "second upload");
+    expect(order).toEqual(["a.pdf", "b.pdf"]);
+
+    await act(async () => {
+      releases[1]({ ok: true, session: sessionFor("sb", "b.pdf") });
+    });
+  });
+
+  it("continues the remaining queue when one upload is rejected", async () => {
+    uploadStatement
+      .mockResolvedValueOnce({ ok: false, error: "Could not read this PDF." })
+      .mockResolvedValueOnce({ ok: true, session: sessionFor("sb", "b.pdf") });
+
+    await act(async () => {
+      root.render(<UploadPanel />);
+    });
+    await selectFiles(container, fakeFile("a.pdf", "%PDF-a"), fakeFile("b.pdf", "%PDF-b"));
+    await waitFor(() => uploadStatement.mock.calls.length === 2, "both uploads");
+    await waitFor(
+      () => Boolean(container.textContent?.includes("Could not read this PDF.")),
+      "failed row copy",
+    );
+
+    expect(uploadStatement).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toContain("Could not read this PDF.");
+    expect(container.querySelector('a[href="/upload/review/sb"]')).not.toBeNull();
+  });
+
+  it("snapshots selected files before resetting the live FileList", async () => {
+    uploadStatement.mockResolvedValue({
+      ok: true,
+      session: unmatchedSession,
+    });
+
+    await act(async () => {
+      root.render(<UploadPanel />);
+    });
+
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = fakeFile();
+    let items: File[] = [file];
+    const list: Record<number, File | undefined> & {
+      length: number;
+      item: (i: number) => File | null;
+    } = {
+      get 0() {
+        return items[0];
+      },
+      get length() {
+        return items.length;
+      },
+      item: (i: number) => items[i] ?? null,
+    };
+    Object.defineProperty(input, "files", { get: () => list, configurable: true });
+    Object.defineProperty(input, "value", {
+      configurable: true,
+      get: () => (items.length > 0 ? "C:\\fakepath\\statement.pdf" : ""),
+      set: () => {
+        items = [];
+      },
+    });
+
+    await act(async () => {
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await waitFor(
+      () => Boolean(container.querySelector('a[href="/upload/review/s1"]')),
+      "upload after live FileList reset",
+    );
+    expect(uploadStatement).toHaveBeenCalledTimes(1);
+  });
+
+  it("discards a staged row via discardSession with that session id", async () => {
+    discardSession.mockResolvedValue({ ok: true });
+
+    await act(async () => {
+      root.render(<UploadPanel initialSession={unmatchedSession} />);
+    });
+
+    const close = container.querySelector('button[aria-label="Close"]') as HTMLButtonElement;
+    expect(close).not.toBeUndefined();
+    await act(async () => {
+      close?.click();
+    });
+
+    expect(discardSession).toHaveBeenCalledWith(
+      "s1",
+      expect.objectContaining({ errorDuplicateStatement: expect.any(String) }),
+    );
+    expect(container.querySelector('a[href="/upload/review/s1"]')).toBeNull();
+  });
+
+  it("shows a discard error on the staged resume row", async () => {
+    discardSession.mockResolvedValue({ ok: false, error: "Something went wrong. Try again." });
+
+    await act(async () => {
+      root.render(<UploadPanel initialSession={unmatchedSession} />);
+    });
+
+    const close = container.querySelector('button[aria-label="Close"]') as HTMLButtonElement;
+    await act(async () => {
+      close.click();
+    });
+
+    expect(container.querySelector('a[href="/upload/review/s1"]')).not.toBeNull();
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe(
+      "Something went wrong. Try again.",
+    );
+  });
+
+  it("lets the user dismiss a failed row", async () => {
+    uploadStatement.mockResolvedValue({ ok: false, error: "Could not read this PDF." });
+
+    await act(async () => {
+      root.render(<UploadPanel />);
+    });
+    await selectFiles(container, fakeFile("bad.pdf", "%PDF-bad"));
+    await waitFor(
+      () => Boolean(container.textContent?.includes("Could not read this PDF.")),
+      "failed row",
+    );
+
+    const remove = container.querySelector('button[aria-label="Remove"]') as HTMLButtonElement;
+    expect(remove).not.toBeNull();
+    await act(async () => {
+      remove.click();
+    });
+    expect(container.textContent).not.toContain("bad.pdf");
+  });
+
+  it("links a server duplicate to the blocking session", async () => {
+    uploadStatement.mockResolvedValue({
+      ok: false,
+      error: "This statement has already been uploaded.",
+      duplicateSessionId: "existing-session",
+    });
+
+    await act(async () => {
+      root.render(<UploadPanel />);
+    });
+    await selectFiles(container, fakeFile("dup.pdf", "%PDF-dup"));
+    await waitFor(
+      () => Boolean(container.querySelector('a[href="/upload/review/existing-session"]')),
+      "duplicate resume link",
+    );
+
+    expect(container.querySelector('a[href="/upload/review/existing-session"]')?.textContent).toBe(
+      "dup.pdf",
+    );
+    expect(
+      container.querySelector('[aria-label="This statement has already been uploaded."]'),
+    ).not.toBeNull();
+  });
+
+  it("finishes an in-flight upload into the store after leaving the page", async () => {
+    let release!: (value: unknown) => void;
+    uploadStatement.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+
+    await act(async () => {
+      root.render(<UploadPanel />);
+    });
+    await selectFiles(container, fakeFile("leave.pdf", "%PDF-leave"));
+    await waitFor(() => uploadStatement.mock.calls.length === 1, "upload started");
+
+    await act(async () => {
+      root.unmount();
+    });
+    await act(async () => {
+      release({ ok: true, session: sessionFor("left", "leave.pdf") });
+    });
+    await tick();
+
+    expect(readUploadQueue().some((entry) => entry.session?.id === "left")).toBe(true);
+
+    root = createRoot(container);
   });
 });

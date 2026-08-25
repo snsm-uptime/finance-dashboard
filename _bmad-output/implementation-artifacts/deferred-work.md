@@ -269,3 +269,17 @@
 ## Deferred from: code review of 4-13-1-import-review-sheet.md (2026-08-25)
 
 - Save/Change-List per-row mutation loops (`ui/app/upload/uploadClient.ts`) can't distinguish "mutation succeeded but the response was lost" from a real failure — `postRowMutation`'s catch returns a generic `{ok:false}`, so a dropped connection after a successful delete/unassign leaves the client stuck retrying (now legitimately 409ing) with no path forward short of a full page reload. Pre-existing generic fetch-error handling shared across all row mutations, not introduced by this story; low likelihood, recoverable via reload.
+
+## Deferred from: code review of 4-16-multi-file-upload-pending-queue-dedup.md (2026-08-25)
+
+- Upload 409 is an undeclared `JSONResponse` beside a 201 `response_model` (`api/api/routes/import_sessions.py:200`) — same pattern as the existing 422 upload catches; OpenAPI still advertises only 201 `ImportSessionResponse`.
+- Concurrent same-hash uploads can both pass the application check (`api/application/import_session.py:464`) — deferred to a later hardening story: UI drain is sequential; spec forbids a unique `content_hash` constraint. Two overlapping POSTs of the same bytes can both `save` and both insert sessions until `get_db` commits. A partial UNIQUE on active `(user_id, content_hash)` would close it without permanently blocking re-upload after discard/finalize.
+- Unrelated `uploadMessages` rewrites in the 4.16 queue diff (`ui/lib/i18n/upload.ts`) — completion strings and `individualReviewNoDefaultList` (cards → account) belong with Group C side-UI/docs, not the queue ACs.
+- 10-file cap and SubtleCrypto fallback hashing have no `UploadPanel` tests — Task 6.1 listed other cases; add coverage in a follow-up if the queue stays this shape.
+- SoftLedgerSelect blur-after-choose (keyboard vs pointer) — **shipped** on the 4.16 branch: listbox arrows, Enter/Space confirm, blur-after-choose; ↑ opens the picker from individual review.
+- ~~Chrome back no longer discards; completion Continue removed; receipt layout, owe-colored sheet Discard, bulk/session spinners, Personal seed default, and SoftLedgerSelect blur are implemented but not written into 4.14 / 4.13.1 / 4.16 Completion Notes — Group D docs (author intent).~~ **Done in Group D (2026-08-25):** 4.16 story-close, 4.14 AC #7 / Tasks 5.2 & 6.4 / completion notes, and 4.13.1 AC #3 + Deviations now match shipped UI.
+- Signup still creates Personal without `default_import_list_id`; only `seed_dev_user.py` sets it.
+- Settle refund uses abs-amount then sign invert (`api/domain/settle.py`); extra cases (classified reversal, split overrides, payer not in allocations) untested; out of 4.16 ACs.
+- Review/bulk/completion files were on 4.16’s “leave alone unless compile error” list; they shipped on this branch anyway.
+- `hasRemainingUploadWork` is the in-memory tab queue only (`ui/app/upload/uploadQueueStore.ts`). After a reload, finalized chrome Back lands on the list even if sibling files existed in an earlier queue — 4.16 tab-lifetime by design.
+- Sheet Discard still stages `deleteRow` at Save rather than unassign-to-pending (`ImportReviewSheet.tsx`) — already recorded in 4.13.1 Deviations; Change List is the unassign path.

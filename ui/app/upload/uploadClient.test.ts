@@ -19,6 +19,7 @@ const messages = {
   errorUnknownStatement: "unknown",
   errorAmbiguousStatement: "ambiguous",
   errorUnreadableStatement: "unreadable",
+  errorDuplicateStatement: "duplicate",
   errorGeneric: "generic",
   errorUnauthorized: "unauthorized",
 };
@@ -176,6 +177,28 @@ describe("uploadClient", () => {
 
     const result = await uploadStatement(fakeFile(), messages);
     expect(result).toEqual({ ok: false, error: "unauthorized" });
+  });
+
+  it("maps 409 duplicate_statement_upload to errorDuplicateStatement", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: async () => ({
+          code: "duplicate_statement_upload",
+          detail: "This statement has already been uploaded.",
+          session_id: "existing-session",
+        }),
+      }),
+    );
+
+    const result = await uploadStatement(fakeFile(), messages);
+    expect(result).toEqual({
+      ok: false,
+      error: "duplicate",
+      duplicateSessionId: "existing-session",
+    });
   });
 
   it("discardSession returns ok on success", async () => {

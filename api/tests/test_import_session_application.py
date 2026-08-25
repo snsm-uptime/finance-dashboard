@@ -7,6 +7,7 @@ test_cards_application.py's _FakeCardRepo style.
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
@@ -47,6 +48,7 @@ from application.import_session import (
 from domain.canonical_line import CanonicalLine, canonical_identity_key
 from domain.errors import (
     AmbiguousBankAdapterError,
+    DuplicateStatementUploadError,
     ImportRowNotAvailableError,
     ImportRowNotDiscardableError,
     ImportRowNotFoundError,
@@ -248,6 +250,8 @@ class _FakeImportSessionRepo:
     unassign_calls: list[UUID] = field(default_factory=list)
     # Row ids that currently have a fake ledger entry (non-duplicate assigns).
     open_ledger_row_ids: set[UUID] = field(default_factory=set)
+    # Story 4.16: content_hash per session, mirroring the real column.
+    content_hashes: dict[UUID, str] = field(default_factory=dict)
 
     def create_session(
         self,
@@ -256,6 +260,7 @@ class _FakeImportSessionRepo:
         user_id: UUID,
         statements: list[DetectedStatement],
         pdf_paths: dict[int, str],
+        content_hash: str | None = None,
     ) -> ImportSessionRecord:
         self.create_calls.append(
             {
@@ -263,8 +268,11 @@ class _FakeImportSessionRepo:
                 "user_id": user_id,
                 "statements": statements,
                 "pdf_paths": pdf_paths,
+                "content_hash": content_hash,
             }
         )
+        if content_hash is not None:
+            self.content_hashes[session_id] = content_hash
         staged: list[StagedStatementRecord] = []
         for index, detected in enumerate(statements):
             rows = _candidate_records(detected.candidate_rows)
@@ -302,6 +310,17 @@ class _FakeImportSessionRepo:
         if record is None or record.user_id != user_id:
             return None
         return record
+
+    def find_active_session_by_content_hash(self, user_id: UUID, content_hash: str) -> UUID | None:
+        for session_id, record in self.sessions.items():
+            if (
+                record.user_id == user_id
+                and record.discarded_at is None
+                and record.finalized_at is None
+                and self.content_hashes.get(session_id) == content_hash
+            ):
+                return session_id
+        return None
 
     def find_active_session(self, user_id: UUID) -> ImportSessionRecord | None:
         candidates = [
@@ -754,6 +773,76 @@ def test_upload_mixed_staged_and_failed_persist_in_same_session() -> None:
     assert session.statements[1].status == STATEMENT_STATUS_FAILED
     assert session.statements[1].candidate_row_count == 0
     assert storage.deleted == []
+
+
+# --- Story 4.16 Task 3.3: duplicate content-hash rejection ------------------------
+
+
+def test_upload_same_bytes_while_first_still_active_raises_duplicate() -> None:
+    adapter = FakeAdapter()
+    storage = _FakePdfStorage()
+    repo = _FakeImportSessionRepo()
+    user_id = uuid4()
+    service = UploadStatementPdfService(storage, [adapter], repo, _FakeCardMatch())
+
+    first = service.execute(
+        UploadStatementPdfCommand(actor_user_id=user_id, filename="a.pdf", content=PDF_BYTES)
+    )
+    saved_before = list(storage.saved)
+
+    with pytest.raises(DuplicateStatementUploadError) as exc_info:
+        service.execute(
+            UploadStatementPdfCommand(actor_user_id=user_id, filename="b.pdf", content=PDF_BYTES)
+        )
+
+    assert storage.saved == saved_before
+    assert exc_info.value.session_id == first.id
+    assert repo.create_calls[0]["content_hash"] == hashlib.sha256(PDF_BYTES).hexdigest()
+
+
+def test_upload_same_bytes_after_first_discarded_succeeds() -> None:
+    storage = _FakePdfStorage()
+    repo = _FakeImportSessionRepo()
+    user_id = uuid4()
+
+    first = UploadStatementPdfService(storage, [FakeAdapter()], repo, _FakeCardMatch()).execute(
+        UploadStatementPdfCommand(actor_user_id=user_id, filename="a.pdf", content=PDF_BYTES)
+    )
+    repo.discard_session(first.id, user_id)
+
+    second = UploadStatementPdfService(storage, [FakeAdapter()], repo, _FakeCardMatch()).execute(
+        UploadStatementPdfCommand(actor_user_id=user_id, filename="b.pdf", content=PDF_BYTES)
+    )
+    assert second.id != first.id
+
+
+def test_upload_same_bytes_after_first_finalized_succeeds() -> None:
+    storage = _FakePdfStorage()
+    repo = _FakeImportSessionRepo()
+    user_id = uuid4()
+
+    first = UploadStatementPdfService(storage, [FakeAdapter()], repo, _FakeCardMatch()).execute(
+        UploadStatementPdfCommand(actor_user_id=user_id, filename="a.pdf", content=PDF_BYTES)
+    )
+    repo.mark_session_finalized(session_id=first.id, user_id=user_id)
+
+    second = UploadStatementPdfService(storage, [FakeAdapter()], repo, _FakeCardMatch()).execute(
+        UploadStatementPdfCommand(actor_user_id=user_id, filename="b.pdf", content=PDF_BYTES)
+    )
+    assert second.id != first.id
+
+
+def test_upload_same_bytes_different_user_both_succeed() -> None:
+    storage = _FakePdfStorage()
+    repo = _FakeImportSessionRepo()
+
+    first = UploadStatementPdfService(storage, [FakeAdapter()], repo, _FakeCardMatch()).execute(
+        UploadStatementPdfCommand(actor_user_id=uuid4(), filename="a.pdf", content=PDF_BYTES)
+    )
+    second = UploadStatementPdfService(storage, [FakeAdapter()], repo, _FakeCardMatch()).execute(
+        UploadStatementPdfCommand(actor_user_id=uuid4(), filename="b.pdf", content=PDF_BYTES)
+    )
+    assert second.id != first.id
 
 
 # --- Task 5.2: DiscardImportSessionService ----------------------------------------

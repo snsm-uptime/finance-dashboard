@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 
 import { Sheet } from "@/app/lists/Sheet";
 import { IconButton } from "@/components/IconButton";
@@ -28,6 +27,7 @@ import {
   stageSheetDiscards,
   useStagedImportDiscards,
 } from "../../stagedImportDiscards";
+import { removeUploadQueueSession } from "../../uploadQueueStore";
 import { formatRowAmount, formatRowDate } from "./IndividualReviewPanel";
 
 type ImportReviewSheetProps = {
@@ -180,12 +180,11 @@ export function ImportReviewSheet({
 }: ImportReviewSheetProps) {
   const { locale } = usePreferences();
   const t = uploadCopy(locale);
-  const router = useRouter();
   const { staged } = useStagedImportDiscards(sessionId);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   // Save/Change List keep awaiting network calls after Close/Esc/backdrop
-  // navigates away; guards the post-await router.push so a late success
-  // doesn't force a second, surprise navigation once the user has left.
+  // unmounts the sheet; skip onSessionUpdate so a late success does not
+  // write into an unmounted tree.
   const mountedRef = useRef(true);
   useEffect(
     () => () => {
@@ -309,13 +308,9 @@ export function ImportReviewSheet({
     const result = await finalizeSession(sessionId, messages);
     if (result.ok) {
       clearStagedImportDiscards(sessionId);
+      removeUploadQueueSession(sessionId);
       if (mountedRef.current) {
         onSessionUpdate(result.session);
-        router.push(
-          result.session.landing_list_id
-            ? `/lists/${encodeURIComponent(result.session.landing_list_id)}`
-            : "/lists",
-        );
       }
     }
     return result;
@@ -360,7 +355,7 @@ export function ImportReviewSheet({
   const errorMessage = saveAction.error ?? changeListAction.error;
 
   const STICKY_BUTTON_CLASS =
-    "m-0 flex-1 cursor-pointer rounded-sm border border-border bg-surface px-3 py-[9px] text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-55 enabled:hover:brightness-105";
+    "m-0 flex-1 cursor-pointer rounded-sm border bg-surface px-3 py-[9px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-55 enabled:hover:brightness-105";
   const STICKY_BUTTON_STYLE = {
     fontFamily: "var(--type-button-face)",
     fontSize: "var(--type-button-size)",
@@ -375,7 +370,7 @@ export function ImportReviewSheet({
           type="button"
           disabled={busy}
           onClick={() => stageDiscard(selectedDiscardableIds)}
-          className={STICKY_BUTTON_CLASS}
+          className={`${STICKY_BUTTON_CLASS} border-owe text-owe`}
           style={STICKY_BUTTON_STYLE}
         >
           {t.importReviewSheetDiscard}
@@ -387,7 +382,7 @@ export function ImportReviewSheet({
             saveAction.clearError();
             void changeListAction.submit(undefined);
           }}
-          className={STICKY_BUTTON_CLASS}
+          className={`${STICKY_BUTTON_CLASS} border-border text-foreground`}
           style={STICKY_BUTTON_STYLE}
         >
           {changeListAction.pending
