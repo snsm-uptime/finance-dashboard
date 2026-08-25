@@ -25,11 +25,15 @@ async function fetchActiveImportSessionOnServer(): Promise<ImportSession | null>
       },
       cache: "no-store",
     });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      console.error("fetchActiveImportSessionOnServer: upstream error", response.status);
+      return null;
+    }
     const body: unknown = await response.json();
     if (body === null) return null;
     return asImportSession(body);
-  } catch {
+  } catch (error) {
+    console.error("fetchActiveImportSessionOnServer: request failed", error);
     return null;
   }
 }

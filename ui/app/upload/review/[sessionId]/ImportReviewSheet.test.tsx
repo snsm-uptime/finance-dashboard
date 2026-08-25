@@ -5,12 +5,7 @@ import type { ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  groupAssignedRows,
-  groupRowsByDay,
-  ImportReviewSheet,
-  projectCompletionSummary,
-} from "./ImportReviewSheet";
+import { groupAssignedRows, groupRowsByDay, ImportReviewSheet } from "./ImportReviewSheet";
 import type { CandidateRow, ImportSession, StagedStatement } from "../../uploadClient";
 import { formatRowDate } from "./IndividualReviewPanel";
 
@@ -187,32 +182,6 @@ describe("groupAssignedRows", () => {
     expect(groups[0].days.map((d) => d.dateKey)).toEqual(["2026-01-15", "2026-01-16"]);
     expect(groups[0].days[0].rows.map((r) => r.id)).toEqual(["home-b"]);
     expect(groups[0].days[1].rows.map((r) => r.id)).toEqual(["home-a"]);
-  });
-});
-
-describe("projectCompletionSummary", () => {
-  it("projects staged pending and assigned discards without mutating the session", () => {
-    const session = makeSession({
-      imported_new_count: 2,
-      deleted_count: 1,
-      committed_by_list: [{ list_id: "list-home", name: "Home", count: 2 }],
-      statements: [
-        makeStatement({
-          rows: [makeRow({ id: "pending", status: "pending" })],
-          assigned_rows: [makeRow({ id: "keep" }), makeRow({ id: "discard" })],
-        }),
-      ],
-    });
-
-    const projected = projectCompletionSummary(session, ["pending", "discard"]);
-
-    expect(projected.deleted_count).toBe(3);
-    expect(projected.imported_new_count).toBe(1);
-    expect(projected.committed_by_list).toEqual([
-      { list_id: "list-home", name: "Home", count: 1 },
-    ]);
-    expect(session.deleted_count).toBe(1);
-    expect(session.committed_by_list[0].count).toBe(2);
   });
 });
 
@@ -401,9 +370,20 @@ describe("ImportReviewSheet", () => {
     expect(descriptions).toEqual(["Coffee", "Netflix", "Lunch", "Mystery"]);
   });
 
-  it("Save preserves staged discards; a failed Continue still allows Back and Restore", async () => {
+  it("on Save deletes sheet-staged discarded assigned rows then finalizes; delete failure skips finalize", async () => {
     const onSessionUpdate = vi.fn();
     deleteRow.mockResolvedValueOnce({ ok: false, error: "cannot delete" });
+    const remainingAssigned = session.statements[0].assigned_rows.filter(
+      (row) => row.id !== "r-coffee",
+    );
+    const afterDelete = {
+      ...session,
+      statements: [{ ...session.statements[0], assigned_rows: remainingAssigned }],
+    };
+    finalizeSession.mockResolvedValue({
+      ok: true,
+      session: { ...afterDelete, finalized_at: "2026-08-24T00:00:00Z" },
+    });
 
     await act(async () => {
       root.render(
@@ -427,22 +407,6 @@ describe("ImportReviewSheet", () => {
     );
     await act(async () => {
       [...container.querySelectorAll("button")].find((b) => b.textContent === "Save")?.click();
-    });
-
-    expect(deleteRow).not.toHaveBeenCalled();
-    expect(unassignRow).not.toHaveBeenCalled();
-    expect(finalizeSession).not.toHaveBeenCalled();
-    expect(onSessionUpdate).not.toHaveBeenCalled();
-    expect(container.textContent).toContain("Import complete");
-    expect(container.textContent).toContain("1 deleted");
-    expect(container.textContent).toContain("Back to review");
-    expect(push).not.toHaveBeenCalled();
-    expect(sessionStorage.getItem("finance-helper.staged-import-discards.s1")).toContain(
-      "r-coffee",
-    );
-
-    await act(async () => {
-      [...container.querySelectorAll("button")].find((b) => b.textContent === "Continue")?.click();
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -454,16 +418,24 @@ describe("ImportReviewSheet", () => {
       "r-coffee",
     );
 
+    deleteRow.mockReset();
+    deleteRow.mockResolvedValue({ ok: true, session: afterDelete });
+    fetchImportSession.mockResolvedValue({ ok: true, session: afterDelete });
+
     await act(async () => {
-      [...container.querySelectorAll("button")]
-        .find((b) => b.textContent === "Back to review")
-        ?.click();
+      [...container.querySelectorAll("button")].find((b) => b.textContent === "Save")?.click();
+      await Promise.resolve();
+      await Promise.resolve();
     });
-    expect(container.textContent).toContain("Coffee");
-    expect(container.textContent).toContain("Restore");
-    await act(async () => {
-      [...container.querySelectorAll("button")].find((b) => b.textContent === "Restore")?.click();
-    });
+
+    expect(unassignRow).not.toHaveBeenCalled();
+    expect(deleteRow.mock.calls.map((call) => call[1])).toEqual(["r-coffee"]);
+    expect(finalizeSession).toHaveBeenCalledTimes(1);
+    expect(deleteRow.mock.invocationCallOrder[0]).toBeLessThan(
+      finalizeSession.mock.invocationCallOrder[0],
+    );
+    expect(onSessionUpdate).toHaveBeenCalledTimes(3);
+    expect(push).toHaveBeenCalledWith("/lists/list-home");
     expect(sessionStorage.getItem("finance-helper.staged-import-discards.s1")).toBeNull();
   });
 
@@ -490,7 +462,7 @@ describe("ImportReviewSheet", () => {
     ).toBeUndefined();
   });
 
-  it("Save deletes card and sheet discards before preview; Continue finalizes", async () => {
+  it("Save deletes card-staged pending and leaked sheet discards then finalizes remaining assigned rows", async () => {
     const onSessionUpdate = vi.fn();
     const keepers = session.statements[0].assigned_rows.filter((row) => row.id !== "r-coffee");
     const pendingTrash = makeRow({
@@ -562,18 +534,6 @@ describe("ImportReviewSheet", () => {
 
     await act(async () => {
       [...container.querySelectorAll("button")].find((b) => b.textContent === "Save")?.click();
-    });
-
-    expect(unassignRow).not.toHaveBeenCalled();
-    expect(deleteRow).not.toHaveBeenCalled();
-    expect(finalizeSession).not.toHaveBeenCalled();
-    expect(container.textContent).toContain("Import complete");
-    expect(sessionStorage.getItem("finance-helper.staged-import-discards.s1")).toContain(
-      "r-trash",
-    );
-
-    await act(async () => {
-      [...container.querySelectorAll("button")].find((b) => b.textContent === "Continue")?.click();
       await Promise.resolve();
       await Promise.resolve();
     });

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useId, useState } from "react";
+import { FormEvent, useEffect, useId, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { useFormSubmission, useFormStateSync } from "@/hooks";
@@ -143,6 +143,19 @@ export function ManualExpenseForm({
   );
   const [percentages, setPercentages] = useState<Record<string, string>>(() =>
     percentMapFromDefault(members, defaultSplit),
+  );
+
+  // SoftLedgerSelect no longer falls back to the first option for an
+  // unmatched value (it renders unselected instead) — derive a
+  // membership-valid value so payer/assignee never silently target the
+  // wrong member if `members` is ever missing the current selection.
+  const activePayerId = useMemo(
+    () => (members.some((m) => m.user_id === payerId) ? payerId : ""),
+    [members, payerId],
+  );
+  const activeAssigneeId = useMemo(
+    () => (members.some((m) => m.user_id === assigneeId) ? assigneeId : ""),
+    [members, assigneeId],
   );
 
   useEffect(() => {
@@ -300,7 +313,7 @@ export function ManualExpenseForm({
             id={`${baseId}-payer`}
             name="payer_id"
             required
-            value={payerId}
+            value={activePayerId}
             options={memberOptions}
             disabled={pending}
             aria-labelledby={`${baseId}-payer-label`}
@@ -375,7 +388,7 @@ export function ManualExpenseForm({
               </span>
               <SoftLedgerSelect
                 id={`${baseId}-assignee`}
-                value={assigneeId}
+                value={activeAssigneeId}
                 options={memberOptions}
                 disabled={pending}
                 aria-labelledby={`${baseId}-assignee-label`}
