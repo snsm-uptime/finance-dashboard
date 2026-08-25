@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { CardsPanel } from "@/app/cards/CardsPanel";
 import { DefaultImportListControl } from "@/app/cards/DefaultImportListControl";
 import { MoonIcon, SunIcon, SystemIcon } from "@/app/icons";
 import { fetchLists, type ListItem } from "@/app/lists/listsClient";
@@ -106,7 +106,7 @@ export function AccountMenu() {
 
   const choiceButtonClass = `font-inherit text-[0.85rem] font-semibold py-[0.5rem] px-[0.85rem] rounded-[8px] border border-border bg-surface text-foreground cursor-pointer ${styles.choice}`;
   const choiceButtonActiveClass = `font-inherit text-[0.85rem] font-semibold py-[0.5rem] px-[0.85rem] rounded-[8px] border border-accent bg-accent text-on-accent cursor-pointer ${styles.choiceActive}`;
-  const resetLinkClass = `inline-block font-inherit text-[0.95rem] font-semibold p-0 border-0 bg-transparent text-accent no-underline cursor-pointer ${styles.resetLink}`;
+  const ghostClass = `font-inherit text-[0.9rem] font-semibold py-[0.55rem] px-[1rem] rounded-[8px] border-0 bg-transparent text-muted cursor-pointer ${styles.ghost}`;
   const signOutClass = `font-inherit text-[0.9rem] font-semibold py-[0.55rem] px-[1rem] rounded-[8px] border border-border bg-surface text-foreground cursor-pointer ${styles.signOut}`;
 
   return (
@@ -123,49 +123,49 @@ export function AccountMenu() {
       ) : null}
 
       <div className="mb-6 flex flex-row flex-wrap items-start gap-x-8 gap-y-6">
-      <section aria-labelledby="account-language">
-        <h2 id="account-language" className="m-0 mb-[0.6rem] text-[0.72rem] font-[550] text-muted tracking-[0.02rem]">
-          {t.language}
-        </h2>
-        {/* TODO: Add RTL-aware layout (dir attribute on parent or logical CSS properties) */}
-        <div className="flex flex-wrap gap-2" role="group" aria-label={t.language}>
-          <button
-            type="button"
-            className={locale === "en" ? choiceButtonActiveClass : choiceButtonClass}
-            aria-pressed={locale === "en"}
-            disabled={controlsDisabled}
-            onClick={() => void onLanguage("en")}
-          >
-            {t.en}
-          </button>
-          <button
-            type="button"
-            className={locale === "es" ? choiceButtonActiveClass : choiceButtonClass}
-            aria-pressed={locale === "es"}
-            disabled={controlsDisabled}
-            onClick={() => void onLanguage("es")}
-          >
-            {t.es}
-          </button>
-        </div>
-      </section>
+        <section aria-labelledby="account-language">
+          <h2 id="account-language" className="m-0 mb-[0.6rem] text-[0.72rem] font-[550] text-muted tracking-[0.02rem]">
+            {t.language}
+          </h2>
+          {/* TODO: Add RTL-aware layout (dir attribute on parent or logical CSS properties) */}
+          <div className="flex flex-wrap gap-2" role="group" aria-label={t.language}>
+            <button
+              type="button"
+              className={locale === "en" ? choiceButtonActiveClass : choiceButtonClass}
+              aria-pressed={locale === "en"}
+              disabled={controlsDisabled}
+              onClick={() => void onLanguage("en")}
+            >
+              {t.en}
+            </button>
+            <button
+              type="button"
+              className={locale === "es" ? choiceButtonActiveClass : choiceButtonClass}
+              aria-pressed={locale === "es"}
+              disabled={controlsDisabled}
+              onClick={() => void onLanguage("es")}
+            >
+              {t.es}
+            </button>
+          </div>
+        </section>
 
-      <section aria-labelledby="account-theme">
-        <h2 id="account-theme" className="m-0 mb-[0.6rem] text-[0.72rem] font-[550] text-muted tracking-[0.02rem]">
-          {t.theme}
-        </h2>
-        <TriSwitch
-          aria-label={t.theme}
-          value={theme}
-          disabled={controlsDisabled}
-          onChange={(next) => void onTheme(next)}
-          options={[
-            { value: "light", label: t.light, icon: <SunIcon /> },
-            { value: "system", label: t.system, icon: <SystemIcon /> },
-            { value: "dark", label: t.dark, icon: <MoonIcon /> },
-          ]}
-        />
-      </section>
+        <section aria-labelledby="account-theme">
+          <h2 id="account-theme" className="m-0 mb-[0.6rem] text-[0.72rem] font-[550] text-muted tracking-[0.02rem]">
+            {t.theme}
+          </h2>
+          <TriSwitch
+            aria-label={t.theme}
+            value={theme}
+            disabled={controlsDisabled}
+            onChange={(next) => void onTheme(next)}
+            options={[
+              { value: "light", label: t.light, icon: <SunIcon /> },
+              { value: "system", label: t.system, icon: <SystemIcon /> },
+              { value: "dark", label: t.dark, icon: <MoonIcon /> },
+            ]}
+          />
+        </section>
       </div>
 
       {lists.length > 0 ? (
@@ -183,32 +183,32 @@ export function AccountMenu() {
         </div>
       ) : null}
 
-      <section className="mb-6">
-        <Link className={resetLinkClass} href="/cards">
+      <section className="mb-6" aria-labelledby="account-cards">
+        <h2 id="account-cards" className="m-0 mb-[0.6rem] text-[0.72rem] font-[550] text-muted tracking-[0.02rem]">
           {t.manageCards}
-        </Link>
+        </h2>
+        <CardsPanel />
       </section>
 
       <section className="mb-6">
-        <button
-          type="button"
-          className={resetLinkClass}
-          disabled={signingOut}
-          onClick={() => void onPasswordReset()}
-        >
-          {t.passwordReset}
-        </button>
-      </section>
-
-      <section className="mb-6">
-        <button
-          type="button"
-          className={signOutClass}
-          disabled={signingOut}
-          onClick={() => void onSignOut()}
-        >
-          {signingOut ? t.signingOut : t.signOut}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className={ghostClass}
+            disabled={signingOut}
+            onClick={() => void onPasswordReset()}
+          >
+            {t.passwordReset}
+          </button>
+          <button
+            type="button"
+            className={signOutClass}
+            disabled={signingOut}
+            onClick={() => void onSignOut()}
+          >
+            {signingOut ? t.signingOut : t.signOut}
+          </button>
+        </div>
       </section>
 
       {error ? (

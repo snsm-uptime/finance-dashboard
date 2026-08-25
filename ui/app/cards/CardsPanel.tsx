@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useId, useMemo, useState } from "react";
 
 import { CopyButton } from "@/components/CopyButton";
@@ -20,19 +19,15 @@ function maskIban(iban: string): string {
   return `•••• ${iban.slice(-4)}`;
 }
 
-type Props = {
-  /** Skips the standalone page chrome (main/header/title) for use inside another page's layout, e.g. Home. */
-  embedded?: boolean;
-};
-
-export function CardsPanel({ embedded = false }: Props) {
+/** Embeds into another page's layout (e.g. Home, Account) — no standalone page chrome. */
+export function CardsPanel() {
   const { locale } = usePreferences();
   const t = cardsCopy(locale);
   const baseId = useId();
   const listTitleId = `${baseId}-list-title`;
   const registerTitleId = `${baseId}-register-title`;
-  // Embedded contexts (e.g. Home) nest Cards under their own <h2>, so these drop a level to <h3>.
-  const HeadingTag = embedded ? "h3" : "h2";
+  // Nested under the host page's own <h2>, so these drop a level to <h3>.
+  const HeadingTag = "h3";
   const [cards, setCards] = useState<CardItem[]>([]);
   const lists = useMembershipLists() ?? [];
   const [loading, setLoading] = useState(true);
@@ -97,9 +92,7 @@ export function CardsPanel({ embedded = false }: Props) {
     // md:flex-col-reverse restores desktop (list, then Register).
     // md:justify-end keeps a reversed column top-aligned if a parent stretches it.
     // Tailwind md is 768px — same breakpoint as Home's lists/cards split (home.module.scss).
-    <div
-      className={`flex flex-col gap-8 md:flex-col-reverse md:justify-end ${embedded ? "" : "max-w-[32rem]"}`}
-    >
+    <div className="flex flex-col gap-8 md:flex-col-reverse md:justify-end">
       <section aria-labelledby={registerTitleId}>
         <HeadingTag
           id={registerTitleId}
@@ -175,23 +168,5 @@ export function CardsPanel({ embedded = false }: Props) {
     </div>
   );
 
-  if (embedded) {
-    return sections;
-  }
-
-  return (
-    <main className="py-[2.5rem] px-[1.5rem]" style={{ fontFamily: "var(--font-ui), Manrope, system-ui, sans-serif" }}>
-      <div className="flex items-center justify-between gap-4 mb-2">
-        <span />
-        <Link className="text-accent font-semibold no-underline text-[0.9rem]" href="/account">
-          {t.backToAccount}
-        </Link>
-      </div>
-      <h1 className="m-0 mb-[0.35rem] text-[1.75rem] font-[550] text-foreground">{t.title}</h1>
-      <p className="m-0 mb-[1.75rem] max-w-[28rem] text-muted leading-[1.45] text-[0.95rem]">
-        {t.subtitle}
-      </p>
-      {sections}
-    </main>
-  );
+  return sections;
 }

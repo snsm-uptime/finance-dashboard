@@ -8,7 +8,6 @@ describe("showsAppChrome", () => {
     expect(showsAppChrome("/lists/abc")).toBe(true);
     expect(showsAppChrome("/upload")).toBe(true);
     expect(showsAppChrome("/account")).toBe(true);
-    expect(showsAppChrome("/cards")).toBe(true);
   });
 
   it("hides the tab bar on auth and setup routes", () => {
@@ -18,6 +17,7 @@ describe("showsAppChrome", () => {
     expect(showsAppChrome("/alias")).toBe(false);
     expect(showsAppChrome("/invites/accept")).toBe(false);
     expect(showsAppChrome("/forgot-password")).toBe(false);
+    expect(showsAppChrome("/cards")).toBe(false);
   });
 });
 
@@ -30,9 +30,5 @@ describe("tabKeyFromPath", () => {
   it("marks Upload and Account from their routes", () => {
     expect(tabKeyFromPath("/upload")).toBe("upload");
     expect(tabKeyFromPath("/account")).toBe("account");
-  });
-
-  it("leaves cards without a current tab", () => {
-    expect(tabKeyFromPath("/cards")).toBeUndefined();
   });
 });

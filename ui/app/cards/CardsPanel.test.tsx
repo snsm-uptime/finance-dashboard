@@ -96,7 +96,7 @@ describe("CardsPanel", () => {
 
   it("keeps Register then list in source order", async () => {
     await act(async () => {
-      root.render(<CardsPanel embedded />);
+      root.render(<CardsPanel />);
     });
     await waitForDom(() => container.textContent?.includes(card.label));
 
@@ -125,7 +125,7 @@ describe("CardsPanel", () => {
       ],
     });
     await act(async () => {
-      root.render(<CardsPanel embedded />);
+      root.render(<CardsPanel />);
     });
     await waitForDom(() => container.textContent?.includes(card.label));
 

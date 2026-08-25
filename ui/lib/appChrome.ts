@@ -1,6 +1,6 @@
 import type { TabKey } from "@/components/soft-ledger/TabBar";
 
-const APP_CHROME_PREFIXES = ["/home", "/lists", "/upload", "/account", "/cards"] as const;
+const APP_CHROME_PREFIXES = ["/home", "/lists", "/upload", "/account"] as const;
 
 /** Authenticated product surfaces that keep the bottom tab bar mounted. */
 export function showsAppChrome(pathname: string): boolean {

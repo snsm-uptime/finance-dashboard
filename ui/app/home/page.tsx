@@ -95,7 +95,7 @@ export default async function Home() {
             <p className={listsStyles.copy}>{tCards.subtitle}</p>
           </div>
           <div className={styles.columnBody}>
-            <CardsPanel embedded />
+            <CardsPanel />
           </div>
         </section>
       </div>

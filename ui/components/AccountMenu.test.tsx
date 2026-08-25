@@ -6,6 +6,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const fetchLists = vi.fn();
+const fetchCards = vi.fn();
 
 vi.mock("@/app/lists/listsClient", async () => {
   const actual = await vi.importActual<typeof import("@/app/lists/listsClient")>(
@@ -14,6 +15,16 @@ vi.mock("@/app/lists/listsClient", async () => {
   return {
     ...actual,
     fetchLists: (...args: unknown[]) => fetchLists(...args),
+  };
+});
+
+vi.mock("@/app/cards/cardsClient", async () => {
+  const actual = await vi.importActual<typeof import("@/app/cards/cardsClient")>(
+    "@/app/cards/cardsClient",
+  );
+  return {
+    ...actual,
+    fetchCards: (...args: unknown[]) => fetchCards(...args),
   };
 });
 
@@ -78,6 +89,8 @@ describe("AccountMenu", () => {
     localStorage.clear();
     fetchLists.mockReset();
     fetchLists.mockResolvedValue({ ok: true, lists: [] });
+    fetchCards.mockReset();
+    fetchCards.mockResolvedValue({ ok: true, cards: [] });
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
@@ -105,7 +118,17 @@ describe("AccountMenu", () => {
     expect(host.querySelector('[aria-label="Light"]')).toBeTruthy();
     expect(host.querySelector('[aria-label="Dark"]')).toBeTruthy();
     expect(host.querySelector('[aria-label="System"]')).toBeTruthy();
-    expect(findButton(host, "Password reset")).toBeTruthy();
+    const resetBtn = findButton(host, "Password reset");
+    const signOutBtn = findButton(host, "Sign out");
+    expect(resetBtn).toBeTruthy();
+    expect(signOutBtn).toBeTruthy();
+    expect(
+      Boolean(
+        resetBtn &&
+          signOutBtn &&
+          resetBtn.compareDocumentPosition(signOutBtn) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ),
+    ).toBe(true);
     unmount();
   });
 
