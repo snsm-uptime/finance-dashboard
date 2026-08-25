@@ -43,6 +43,11 @@ export function DefaultImportListControl({ lists, messages }: Props) {
     };
   }, []);
 
+  // Membership can drop the previously-loaded default out of `lists` —
+  // derive instead of syncing via effect so a stale id never renders as
+  // selected.
+  const activeListId = lists.some((list) => list.id === listId) ? listId : "";
+
   if (lists.length === 0) return null;
 
   async function onChange(nextListId: string) {
@@ -70,7 +75,7 @@ export function DefaultImportListControl({ lists, messages }: Props) {
       <p className="m-0 mb-[0.5rem] text-muted text-[0.85rem]">{messages.defaultListHint}</p>
       <SoftLedgerSelect
         aria-label={messages.defaultListTitle}
-        value={listId}
+        value={activeListId}
         disabled={pending}
         options={lists.map((l) => ({ value: l.id, label: l.name }))}
         onChange={onChange}

@@ -8,6 +8,7 @@ import {
   clearPrefsCache,
   usePreferences,
 } from "@/components/PreferencesProvider";
+import { resetMembershipListsStore } from "@/app/lists/membershipListsStore";
 import { TriSwitch } from "@/components/TriSwitch";
 import { accountCopy } from "@/lib/i18n/account";
 import type { Locale, ThemePreference } from "@/lib/i18n/locale";
@@ -50,6 +51,7 @@ export function AccountMenu() {
   async function onSignOut() {
     setSigningOut(true);
     clearPrefsCache();
+    resetMembershipListsStore();
     try {
       await fetch("/api/auth/sign-out", {
         method: "POST",
@@ -58,6 +60,7 @@ export function AccountMenu() {
       });
     } finally {
       clearPrefsCache();
+      resetMembershipListsStore();
       window.location.assign("/sign-in");
     }
   }
@@ -65,6 +68,7 @@ export function AccountMenu() {
   async function onPasswordReset() {
     setSigningOut(true);
     clearPrefsCache();
+    resetMembershipListsStore();
     try {
       await fetch("/api/auth/sign-out", {
         method: "POST",
@@ -73,6 +77,7 @@ export function AccountMenu() {
       });
     } finally {
       clearPrefsCache();
+      resetMembershipListsStore();
       window.location.assign("/forgot-password");
     }
   }

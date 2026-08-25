@@ -25,6 +25,7 @@ vi.mock("./lists.module.scss", () => ({
 }));
 
 import { ListsPanel } from "./ListsPanel";
+import { resetMembershipListsStore } from "./membershipListsStore";
 
 const t = listsMessages.en;
 
@@ -71,6 +72,7 @@ describe("ListsPanel roster chips", () => {
       root.unmount();
     });
     container.remove();
+    resetMembershipListsStore();
   });
 
   it("omits the owner bookmark and hides a settled-zero row on a solo list", () => {

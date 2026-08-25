@@ -11,7 +11,9 @@ from application.import_session import (
     CandidateRowRecord,
     CommitOutcome,
     CommitRow,
+    CommittedByListRecord,
     DetectedStatement,
+    FailedStatementRecord,
     ImportBatchRecord,
     ImportSessionRecord,
     StagedStatementRecord,
@@ -31,6 +33,7 @@ from domain.import_session import (
     ROW_STATUS_EXCLUDED_ZERO_AMOUNT,
     ROW_STATUS_PENDING,
     STATEMENT_STATUS_COMMITTED,
+    STATEMENT_STATUS_FAILED,
     STATEMENT_STATUS_STAGED,
     UNDO_ACTION_ASSIGN,
     UNDO_ACTION_DELETE,
@@ -49,28 +52,57 @@ from adapters.persistence.models import (
     ImportSessionModel,
     ImportStatementModel,
     LedgerEntryModel,
+    ListModel,
 )
 
 
-def _session_record(row: ImportSessionModel) -> ImportSessionRecord:
+def _session_record(
+    row: ImportSessionModel, *, list_names: dict[UUID, str] | None = None
+) -> ImportSessionRecord:
     # Counts and landing target are derived here from rows the selectinload
     # already fetched — no extra query, and no drift (Story 4.12, AC #4/#6).
     # Two integer counters on the session would be the obvious move and would
     # be wrong: undo returns a row to pending and the counters would not follow
     # it, so the Story 4.14 summary would lie after any undo.
+    names = list_names or {}
     imported_new = 0
     skipped_duplicate = 0
+    deleted_count = 0
+    zero_amount_excluded = 0
+    by_list: dict[UUID, int] = {}
     landed: list[tuple[UUID, datetime]] = []
+    failed_statements: list[FailedStatementRecord] = []
     for statement in row.statements:
+        if statement.status == STATEMENT_STATUS_FAILED:
+            failed_statements.append(
+                FailedStatementRecord(
+                    id=statement.id,
+                    product_id=statement.product_id,
+                    filename=statement.original_filename,
+                )
+            )
         for candidate in statement.candidate_rows:
+            if candidate.status == ROW_STATUS_DELETED:
+                deleted_count += 1
+                continue
+            if candidate.status == ROW_STATUS_EXCLUDED_ZERO_AMOUNT:
+                zero_amount_excluded += 1
+                continue
             if candidate.status != ROW_STATUS_COMMITTED:
                 continue
             if candidate.dedup_skipped:
                 skipped_duplicate += 1
                 continue
             imported_new += 1
+            if candidate.resolved_list_id is not None:
+                by_list[candidate.resolved_list_id] = by_list.get(candidate.resolved_list_id, 0) + 1
             if candidate.resolved_list_id is not None and candidate.resolved_at is not None:
                 landed.append((candidate.resolved_list_id, candidate.resolved_at))
+
+    committed_by_list = [
+        CommittedByListRecord(list_id=list_id, name=names.get(list_id, ""), count=count)
+        for list_id, count in sorted(by_list.items(), key=lambda item: str(item[0]))
+    ]
 
     return ImportSessionRecord(
         id=row.id,
@@ -83,6 +115,10 @@ def _session_record(row: ImportSessionModel) -> ImportSessionRecord:
         imported_new_count=imported_new,
         skipped_duplicate_count=skipped_duplicate,
         landing_list_id=select_landing_list_id(landed),
+        deleted_count=deleted_count,
+        zero_amount_excluded_count=zero_amount_excluded,
+        failed_statements=failed_statements,
+        committed_by_list=committed_by_list,
         statements=[
             StagedStatementRecord(
                 id=statement.id,
@@ -130,6 +166,25 @@ def _candidate_row(
 class SqlAlchemyImportSessionRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
+
+    def _list_names(self, list_ids: set[UUID]) -> dict[UUID, str]:
+        if not list_ids:
+            return {}
+        rows = self._session.execute(
+            select(ListModel.id, ListModel.name).where(ListModel.id.in_(list_ids))
+        ).all()
+        return {list_id: name for list_id, name in rows}
+
+    def _to_record(self, row: ImportSessionModel) -> ImportSessionRecord:
+        list_ids = {
+            candidate.resolved_list_id
+            for statement in row.statements
+            for candidate in statement.candidate_rows
+            if candidate.status == ROW_STATUS_COMMITTED
+            and not candidate.dedup_skipped
+            and candidate.resolved_list_id is not None
+        }
+        return _session_record(row, list_names=self._list_names(list_ids))
 
     def _load_session(self, session_id: UUID, user_id: UUID) -> ImportSessionModel | None:
         return self._session.scalar(
@@ -201,13 +256,33 @@ class SqlAlchemyImportSessionRepository:
                     statement_row.status = STATEMENT_STATUS_COMMITTED
 
         self._session.flush()
-        return _session_record(session_row)
+        return self._to_record(session_row)
 
     def get_session(self, session_id: UUID, user_id: UUID) -> ImportSessionRecord | None:
         row = self._load_session(session_id, user_id)
         if row is None:
             return None
-        return _session_record(row)
+        return self._to_record(row)
+
+    def find_active_session(self, user_id: UUID) -> ImportSessionRecord | None:
+        row = self._session.scalar(
+            select(ImportSessionModel)
+            .options(
+                selectinload(ImportSessionModel.statements).selectinload(
+                    ImportStatementModel.candidate_rows
+                )
+            )
+            .where(
+                ImportSessionModel.user_id == user_id,
+                ImportSessionModel.discarded_at.is_(None),
+                ImportSessionModel.finalized_at.is_(None),
+            )
+            .order_by(ImportSessionModel.created_at.desc(), ImportSessionModel.id.desc())
+            .limit(1)
+        )
+        if row is None:
+            return None
+        return self._to_record(row)
 
     def discard_session(self, session_id: UUID, user_id: UUID) -> ImportSessionRecord:
         row = self._load_session(session_id, user_id)
@@ -216,7 +291,7 @@ class SqlAlchemyImportSessionRepository:
         if row.discarded_at is None:
             row.discarded_at = datetime.now(UTC)
             self._session.flush()
-        return _session_record(row)
+        return self._to_record(row)
 
     def set_statement_card_id(
         self, *, session_id: UUID, user_id: UUID, statement_id: UUID, card_id: UUID
@@ -466,7 +541,7 @@ class SqlAlchemyImportSessionRepository:
             row.last_resolved_prior_status = ROW_STATUS_PENDING
             self._session.flush()
             self._reload_statement(statement_row)
-            return _session_record(row)
+            return self._to_record(row)
 
         # ImportReviewSheet Save: drop an already-assigned row without
         # returning it to pending (that would 409 finalize). Reverse the
@@ -488,7 +563,7 @@ class SqlAlchemyImportSessionRepository:
         self._clear_pointer_on(row)
         self._session.flush()
         self._reload_statement(statement_row)
-        return _session_record(row)
+        return self._to_record(row)
 
     def update_candidate_row_description(
         self,
@@ -524,7 +599,7 @@ class SqlAlchemyImportSessionRepository:
 
         self._session.flush()
         self._reload_statement(statement_row)
-        return _session_record(row)
+        return self._to_record(row)
 
     def set_undo_pointer(
         self,
@@ -609,7 +684,7 @@ class SqlAlchemyImportSessionRepository:
         self._clear_pointer_on(row)
         self._session.flush()
         self._reload_statement(statement_row)
-        return _session_record(row)
+        return self._to_record(row)
 
     def unassign_candidate_row(
         self, *, session_id: UUID, user_id: UUID, row_id: UUID
@@ -652,7 +727,7 @@ class SqlAlchemyImportSessionRepository:
         self._clear_pointer_on(row)
         self._session.flush()
         self._reload_statement(statement_row)
-        return _session_record(row)
+        return self._to_record(row)
 
     def _hard_delete_ledger_for_row(self, row_id: UUID) -> None:
         entry = self._session.scalar(
@@ -783,7 +858,7 @@ class SqlAlchemyImportSessionRepository:
         if row.finalized_at is None:
             row.finalized_at = datetime.now(UTC)
             self._session.flush()
-        return _session_record(row)
+        return self._to_record(row)
 
     def clear_statement_pdf_paths(self, session_id: UUID, user_id: UUID) -> None:
         row = self._session.scalar(

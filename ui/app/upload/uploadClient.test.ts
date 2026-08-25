@@ -6,6 +6,7 @@ import {
   deleteRow,
   discardSession,
   editRowDescription,
+  fetchActiveImportSession,
   fetchImportSession,
   finalizeSession,
   unassignRow,
@@ -59,6 +60,10 @@ const emptySessionFields = {
   imported_new_count: 0,
   skipped_duplicate_count: 0,
   landing_list_id: null,
+  deleted_count: 0,
+  zero_amount_excluded_count: 0,
+  failed_statements: [] as const,
+  committed_by_list: [] as const,
 };
 
 function fakeFile(): File {
@@ -341,6 +346,23 @@ describe("uploadClient", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/import/sessions/s1",
       expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("fetchActiveImportSession treats HTTP 200 null as no active session", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => null,
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await fetchActiveImportSession(messages);
+
+    expect(result).toEqual({ ok: true, session: null });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/import/sessions/active",
+      expect.objectContaining({ method: "GET", cache: "no-store" }),
     );
   });
 

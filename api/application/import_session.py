@@ -219,6 +219,20 @@ class CommitRow:
 
 
 @dataclass(frozen=True, slots=True)
+class FailedStatementRecord:
+    id: UUID
+    product_id: str
+    filename: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CommittedByListRecord:
+    list_id: UUID
+    name: str
+    count: int
+
+
+@dataclass(frozen=True, slots=True)
 class ImportSessionRecord:
     id: UUID
     user_id: UUID
@@ -234,11 +248,17 @@ class ImportSessionRecord:
     # Derived from row state every time the record is built, never incremented
     # counters (Story 4.12, AC #4): undo returns a row to pending and counters
     # would drift, so the 4.14 summary would lie after any undo.
+    # Session-lifetime scope (Story 4.14) — not the same as BulkCommitResponse
+    # imported_new_count / skipped_duplicate_count, which cover one bulk call.
     imported_new_count: int = 0
     skipped_duplicate_count: int = 0
     # The list that received the most newly imported rows this session, or None
     # when the session imported nothing new (AC #6).
     landing_list_id: UUID | None = None
+    deleted_count: int = 0
+    zero_amount_excluded_count: int = 0
+    failed_statements: list[FailedStatementRecord] = field(default_factory=list)
+    committed_by_list: list[CommittedByListRecord] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -280,6 +300,10 @@ class ImportSessionRepository(Protocol):
     ) -> ImportSessionRecord: ...
 
     def get_session(self, session_id: UUID, user_id: UUID) -> ImportSessionRecord | None: ...
+
+    def find_active_session(self, user_id: UUID) -> ImportSessionRecord | None:
+        """Owner's most recent session that is neither discarded nor finalized."""
+        ...
 
     def discard_session(self, session_id: UUID, user_id: UUID) -> ImportSessionRecord:
         """Set discarded_at. Idempotent — calling twice does not error."""
@@ -504,6 +528,16 @@ class DiscardImportSessionCommand:
     session_id: UUID
 
 
+class GetActiveImportSessionService:
+    """Most recent in-flight session for the caller, or None (Story 4.14)."""
+
+    def __init__(self, session_repo: ImportSessionRepository) -> None:
+        self._session_repo = session_repo
+
+    def execute(self, actor_user_id: UUID) -> ImportSessionRecord | None:
+        return self._session_repo.find_active_session(actor_user_id)
+
+
 class DiscardImportSessionService:
     """Drop uncommitted session state only — no ledger writes (AC #4, AD-3/AD-4)."""
 
@@ -517,17 +551,12 @@ class DiscardImportSessionService:
             raise ImportSessionNotFoundError()
 
         updated = self._session_repo.discard_session(command.session_id, command.actor_user_id)
-
-        distinct_paths = {
-            statement.pdf_path for statement in updated.statements if statement.pdf_path
-        }
-        for path in distinct_paths:
-            try:
-                self._pdf_storage.delete(path)
-            except OSError:
-                logger.warning("import_session_discard_cleanup_failed pdf_path=%s", path)
-
-        return updated
+        _release_source_pdf_if_idle(
+            session=updated,
+            session_repo=self._session_repo,
+            pdf_storage=self._pdf_storage,
+        )
+        return self._session_repo.get_session(command.session_id, command.actor_user_id) or updated
 
 
 def _release_source_pdf_if_idle(

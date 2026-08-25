@@ -32,6 +32,7 @@ from application.import_session import (
     EditCandidateRowService,
     FinalizeImportSessionCommand,
     FinalizeImportSessionService,
+    GetActiveImportSessionService,
     ImportBatchRecord,
     ImportSessionRecord,
     StagedStatementRecord,
@@ -302,15 +303,21 @@ class _FakeImportSessionRepo:
             return None
         return record
 
+    def find_active_session(self, user_id: UUID) -> ImportSessionRecord | None:
+        candidates = [
+            record
+            for record in self.sessions.values()
+            if record.user_id == user_id
+            and record.discarded_at is None
+            and record.finalized_at is None
+        ]
+        if not candidates:
+            return None
+        return max(candidates, key=lambda record: record.created_at)
+
     def discard_session(self, session_id: UUID, user_id: UUID) -> ImportSessionRecord:
         record = self.sessions[session_id]
-        updated = ImportSessionRecord(
-            id=record.id,
-            user_id=record.user_id,
-            created_at=record.created_at,
-            discarded_at=datetime.now(UTC),
-            statements=record.statements,
-        )
+        updated = replace(record, discarded_at=datetime.now(UTC))
         self.sessions[session_id] = updated
         return updated
 
@@ -775,7 +782,7 @@ def test_discard_another_users_session_not_found() -> None:
         )
 
 
-def test_discard_own_session_sets_discarded_at_and_deletes_pdf() -> None:
+def test_discard_own_session_sets_discarded_at_and_keeps_pdf_while_staged() -> None:
     repo = _FakeImportSessionRepo()
     storage = _FakePdfStorage()
     owner = uuid4()
@@ -787,7 +794,133 @@ def test_discard_own_session_sets_discarded_at_and_deletes_pdf() -> None:
     )
 
     assert result.discarded_at is not None
+    assert storage.deleted == []
+
+
+def test_discard_releases_pdf_when_statements_are_idle() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    owner = uuid4()
+    session_id = _upload_session(repo, storage, user_id=owner)
+    record = repo.sessions[session_id]
+    repo.sessions[session_id] = replace(
+        record,
+        statements=[
+            _copy_statement(s, status=STATEMENT_STATUS_COMMITTED) for s in record.statements
+        ],
+    )
+    storage.deleted.clear()
+
+    DiscardImportSessionService(repo, storage).execute(
+        DiscardImportSessionCommand(actor_user_id=owner, session_id=session_id)
+    )
+
     assert len(storage.deleted) == 1
+
+
+def test_discard_keeps_failed_statement_pdf() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    owner = uuid4()
+    session_id = _direct_session(
+        repo,
+        user_id=owner,
+        statements=[
+            DetectedStatement(
+                product_id="fake_product",
+                status=STATEMENT_STATUS_FAILED,
+                candidate_rows=[],
+            )
+        ],
+    )
+    storage.saved.append((owner, "failed.pdf", PDF_BYTES))
+    storage.deleted.clear()
+
+    DiscardImportSessionService(repo, storage).execute(
+        DiscardImportSessionCommand(actor_user_id=owner, session_id=session_id)
+    )
+
+    assert storage.deleted == []
+
+
+def test_get_active_session_none_when_empty() -> None:
+    repo = _FakeImportSessionRepo()
+    assert GetActiveImportSessionService(repo).execute(uuid4()) is None
+
+
+def test_get_active_session_skips_discarded_and_finalized_and_other_users() -> None:
+    repo = _FakeImportSessionRepo()
+    owner = uuid4()
+    stranger = uuid4()
+    older = uuid4()
+    newer = uuid4()
+    discarded_id = uuid4()
+    finalized_id = uuid4()
+    stranger_id = uuid4()
+    statements = [
+        DetectedStatement(
+            product_id="fake_product", status=STATEMENT_STATUS_STAGED, candidate_rows=[_row()]
+        )
+    ]
+    repo.create_session(
+        session_id=older, user_id=owner, statements=statements, pdf_paths={0: "/a.pdf"}
+    )
+    repo.create_session(
+        session_id=newer, user_id=owner, statements=statements, pdf_paths={0: "/b.pdf"}
+    )
+    repo.create_session(
+        session_id=discarded_id, user_id=owner, statements=statements, pdf_paths={0: "/c.pdf"}
+    )
+    repo.create_session(
+        session_id=finalized_id, user_id=owner, statements=statements, pdf_paths={0: "/d.pdf"}
+    )
+    repo.create_session(
+        session_id=stranger_id, user_id=stranger, statements=statements, pdf_paths={0: "/e.pdf"}
+    )
+    repo.sessions[older] = replace(
+        repo.sessions[older], created_at=datetime(2026, 1, 1, tzinfo=UTC)
+    )
+    repo.sessions[newer] = replace(
+        repo.sessions[newer], created_at=datetime(2026, 1, 2, tzinfo=UTC)
+    )
+    repo.sessions[discarded_id] = replace(
+        repo.sessions[discarded_id], discarded_at=datetime.now(UTC)
+    )
+    repo.sessions[finalized_id] = replace(
+        repo.sessions[finalized_id], finalized_at=datetime.now(UTC)
+    )
+
+    active = GetActiveImportSessionService(repo).execute(owner)
+    assert active is not None
+    assert active.id == newer
+
+
+def test_get_active_session_includes_zero_pending_unfinalized() -> None:
+    repo = _FakeImportSessionRepo()
+    owner = uuid4()
+    session_id = _direct_session(
+        repo,
+        user_id=owner,
+        statements=[
+            DetectedStatement(
+                product_id="fake_product",
+                status=STATEMENT_STATUS_STAGED,
+                candidate_rows=[],
+            )
+        ],
+    )
+    record = repo.sessions[session_id]
+    repo.sessions[session_id] = replace(
+        record,
+        statements=[
+            _copy_statement(s, status=STATEMENT_STATUS_COMMITTED) for s in record.statements
+        ],
+        finalized_at=None,
+    )
+
+    active = GetActiveImportSessionService(repo).execute(owner)
+    assert active is not None
+    assert active.id == session_id
 
 
 def test_discard_already_discarded_session_does_not_raise() -> None:

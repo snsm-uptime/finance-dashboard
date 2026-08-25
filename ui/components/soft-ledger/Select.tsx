@@ -48,7 +48,7 @@ export function SoftLedgerSelect({
   const rootRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
 
-  const selected = options.find((o) => o.value === value) ?? options[0];
+  const selected = options.find((o) => o.value === value);
   const selectedIndex = Math.max(
     0,
     options.findIndex((o) => o.value === (selected?.value ?? "")),

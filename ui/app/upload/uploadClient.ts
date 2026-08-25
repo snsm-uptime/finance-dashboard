@@ -32,6 +32,18 @@ export type StagedStatement = {
   assigned_rows: CandidateRow[];
 };
 
+export type FailedStatement = {
+  id: string;
+  product_id: string;
+  filename: string | null;
+};
+
+export type CommittedByList = {
+  list_id: string;
+  name: string;
+  count: number;
+};
+
 export type ImportSession = {
   id: string;
   created_at: string;
@@ -40,12 +52,17 @@ export type ImportSession = {
   undo: { row_id: string; action: "assign" | "delete" } | null;
   // Story 4.12. Counts are derived server-side from row state, so an undo
   // moves them back with the row.
+  // Session-lifetime scope (Story 4.14) — not BulkCommitResponse's one-call counts.
   finalized_at: string | null;
   imported_new_count: number;
   skipped_duplicate_count: number;
   // Where to land when the session completes; null when the session imported
   // nothing new — the caller stays put rather than guessing.
   landing_list_id: string | null;
+  deleted_count: number;
+  zero_amount_excluded_count: number;
+  failed_statements: FailedStatement[];
+  committed_by_list: CommittedByList[];
 };
 
 export type UploadMessages = {
@@ -268,9 +285,12 @@ function asStagedStatement(data: unknown): StagedStatement | null {
   };
 }
 
-function asImportSession(data: unknown): ImportSession | null {
+export function asImportSession(data: unknown): ImportSession | null {
   if (!data || typeof data !== "object") return null;
-  const row = data as Partial<ImportSession>;
+  const row = data as Partial<ImportSession> & {
+    failed_statements?: unknown;
+    committed_by_list?: unknown;
+  };
   if (
     typeof row.id !== "string" ||
     typeof row.created_at !== "string" ||
@@ -282,6 +302,38 @@ function asImportSession(data: unknown): ImportSession | null {
   for (const item of row.statements) {
     const parsed = asStagedStatement(item);
     if (parsed) statements.push(parsed);
+  }
+  const failed_statements: FailedStatement[] = [];
+  if (Array.isArray(row.failed_statements)) {
+    for (const item of row.failed_statements) {
+      if (!item || typeof item !== "object") continue;
+      const failed = item as Partial<FailedStatement>;
+      if (typeof failed.id !== "string" || typeof failed.product_id !== "string") continue;
+      failed_statements.push({
+        id: failed.id,
+        product_id: failed.product_id,
+        filename: typeof failed.filename === "string" ? failed.filename : null,
+      });
+    }
+  }
+  const committed_by_list: CommittedByList[] = [];
+  if (Array.isArray(row.committed_by_list)) {
+    for (const item of row.committed_by_list) {
+      if (!item || typeof item !== "object") continue;
+      const group = item as Partial<CommittedByList>;
+      if (
+        typeof group.list_id !== "string" ||
+        typeof group.name !== "string" ||
+        typeof group.count !== "number"
+      ) {
+        continue;
+      }
+      committed_by_list.push({
+        list_id: group.list_id,
+        name: group.name,
+        count: group.count,
+      });
+    }
   }
   return {
     id: row.id,
@@ -297,6 +349,11 @@ function asImportSession(data: unknown): ImportSession | null {
     skipped_duplicate_count:
       typeof row.skipped_duplicate_count === "number" ? row.skipped_duplicate_count : 0,
     landing_list_id: typeof row.landing_list_id === "string" ? row.landing_list_id : null,
+    deleted_count: typeof row.deleted_count === "number" ? row.deleted_count : 0,
+    zero_amount_excluded_count:
+      typeof row.zero_amount_excluded_count === "number" ? row.zero_amount_excluded_count : 0,
+    failed_statements,
+    committed_by_list,
   };
 }
 
@@ -409,6 +466,31 @@ export async function bulkCommitSession(
     ok: true,
     result: { session_id: data.session_id, list_id: data.list_id, batches },
   };
+}
+
+/** Story 4.14: HTTP 200 + JSON null means no in-flight session. */
+export async function fetchActiveImportSession(
+  messages: UploadMessages,
+): Promise<{ ok: true; session: ImportSession | null } | ErrorResult> {
+  let response: Response;
+  try {
+    response = await fetch("/api/import/sessions/active", {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  const body = await parseJson(response);
+  if (!response.ok) {
+    return { ok: false, error: mapError(response.status, body as { detail?: unknown; code?: unknown } | null, messages) };
+  }
+  if (body === null) return { ok: true, session: null };
+  const session = asImportSession(body);
+  if (!session) return { ok: false, error: messages.errorGeneric };
+  return { ok: true, session };
 }
 
 /** Individual review: (re)fetch the live session state (Story 4.8). */

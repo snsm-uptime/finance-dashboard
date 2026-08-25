@@ -54,6 +54,18 @@ class StagedStatementResponse(BaseModel):
     assigned_rows: list[CandidateRowResponse] = Field(default_factory=list)
 
 
+class FailedStatementResponse(BaseModel):
+    id: UUID
+    product_id: str
+    filename: str | None = None
+
+
+class CommittedByListResponse(BaseModel):
+    list_id: UUID
+    name: str
+    count: int
+
+
 class ImportSessionResponse(BaseModel):
     id: UUID
     created_at: datetime
@@ -63,12 +75,18 @@ class ImportSessionResponse(BaseModel):
     # Story 4.12. All four default so an older client parsing this payload is
     # unaffected. The counts are derived from row state server-side, never
     # incremented — undo moves them back with the row.
+    # Session-lifetime scope (Story 4.14): these are not BulkCommitResponse's
+    # imported_new_count / skipped_duplicate_count, which cover one bulk call.
     finalized_at: datetime | None = None
     imported_new_count: int = 0
     skipped_duplicate_count: int = 0
     # Which list to land on when the session completes; null when the session
     # imported nothing new, so the caller stays put rather than guessing.
     landing_list_id: UUID | None = None
+    deleted_count: int = 0
+    zero_amount_excluded_count: int = 0
+    failed_statements: list[FailedStatementResponse] = Field(default_factory=list)
+    committed_by_list: list[CommittedByListResponse] = Field(default_factory=list)
 
 
 class BulkCommitBody(BaseModel):
@@ -97,6 +115,8 @@ class BulkCommitResponse(BaseModel):
     batches: list[ImportBatchResponse] = Field(default_factory=list)
     # Story 4.12: a fully-duplicate statement contributes no batch, so the
     # batch list alone no longer describes what the commit did.
+    # One-call scope only — not the session-lifetime fields of the same name
+    # on ImportSessionResponse (Story 4.14; names kept for 4.12 clients).
     imported_new_count: int = 0
     skipped_duplicate_count: int = 0
 

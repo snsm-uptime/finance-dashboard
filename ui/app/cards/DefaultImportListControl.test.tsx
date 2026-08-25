@@ -120,4 +120,25 @@ describe("DefaultImportListControl", () => {
 
     expect(container.querySelector('[role="alert"]')?.textContent).toBe(messages.errorForbidden);
   });
+
+  it("clears the selected value when that list leaves the options", async () => {
+    await act(async () => {
+      root.render(<DefaultImportListControl lists={lists} messages={messages} />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const trigger = container.querySelector('button[aria-haspopup="listbox"]') as HTMLButtonElement;
+    expect(trigger.textContent).toBe("Household");
+
+    await act(async () => {
+      root.render(
+        <DefaultImportListControl
+          lists={[{ id: "list-2", name: "Trip", owner_id: "u1", role: "owner" }]}
+          messages={messages}
+        />,
+      );
+    });
+    expect(trigger.textContent).toBe("");
+  });
 });

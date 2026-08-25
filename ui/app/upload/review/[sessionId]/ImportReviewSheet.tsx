@@ -28,6 +28,7 @@ import {
   stageSheetDiscards,
   useStagedImportDiscards,
 } from "../../stagedImportDiscards";
+import { ImportCompletionSummary } from "./ImportCompletionSummary";
 import { formatRowAmount, formatRowDate } from "./IndividualReviewPanel";
 
 type ImportReviewSheetProps = {
@@ -160,13 +161,57 @@ function sessionHasRow(session: ImportSession, rowId: string): boolean {
   return false;
 }
 
+export function projectCompletionSummary(
+  session: ImportSession,
+  discardIds: string[],
+): ImportSession {
+  const discarded = new Set(discardIds);
+  const counted = new Set<string>();
+  const removedByList = new Map<string, number>();
+  let deletedCount = 0;
+  let importedNewCount = 0;
+
+  for (const statement of session.statements) {
+    for (const row of statement.rows) {
+      if (!discarded.has(row.id) || counted.has(row.id)) continue;
+      counted.add(row.id);
+      deletedCount += 1;
+    }
+    for (const row of statement.assigned_rows) {
+      if (!discarded.has(row.id) || counted.has(row.id)) continue;
+      counted.add(row.id);
+      deletedCount += 1;
+      if (!row.dedup_skipped) importedNewCount += 1;
+      if (row.resolved_list_id) {
+        removedByList.set(
+          row.resolved_list_id,
+          (removedByList.get(row.resolved_list_id) ?? 0) + 1,
+        );
+      }
+    }
+  }
+
+  return {
+    ...session,
+    deleted_count: session.deleted_count + deletedCount,
+    imported_new_count: Math.max(0, session.imported_new_count - importedNewCount),
+    committed_by_list: session.committed_by_list
+      .map((group) => ({
+        ...group,
+        count: group.count - (removedByList.get(group.list_id) ?? 0),
+      }))
+      .filter((group) => group.count > 0),
+  };
+}
+
 /**
  * Confirm gate after individual review (Story 4.13.1): assigned rows grouped
  * by destination list and posted day, Save pinned in the sheet footer,
  * per-row and multi-select discard staged locally (suppressed for
- * dedup_skipped rows) until Save deletes staged discards then finalizes. Reuses the
- * existing `Sheet` — no new portal/focus trap — and Tailwind + Warm Balance
- * tokens only, per AD-23.
+ * dedup_skipped rows). Save previews the projected completion summary without
+ * persisting those discards. Continue applies them, finalizes, and navigates;
+ * Back keeps every staged row restorable. Reuses the existing `Sheet` and
+ * Tailwind + Warm Balance tokens only, per AD-23.
  */
 export function ImportReviewSheet({
   sessionId,
@@ -180,6 +225,7 @@ export function ImportReviewSheet({
   const router = useRouter();
   const { staged } = useStagedImportDiscards(sessionId);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [summarySession, setSummarySession] = useState<ImportSession | null>(null);
 
   const messages: IndividualReviewMessages = {
     errorForbidden: t.individualReviewErrorForbidden,
@@ -263,6 +309,21 @@ export function ImportReviewSheet({
 
   const saveAction = useFormSubmission(async () => {
     const discardIds = uniqueIds([...staged.deleteIds, ...staged.unassignIds]);
+    const unstagedPending = pendingRowIds(session).filter((rowId) => !discardIds.includes(rowId));
+    if (unstagedPending.length) {
+      console.error(
+        "import save: pending rows were not staged as discarded; sheet should not have opened",
+        unstagedPending,
+      );
+      return { ok: false as const, error: t.errorGeneric };
+    }
+
+    setSummarySession(projectCompletionSummary(session, discardIds));
+    return { ok: true as const };
+  });
+
+  const continueAction = useFormSubmission(async () => {
+    const discardIds = uniqueIds([...staged.deleteIds, ...staged.unassignIds]);
     let latest = session;
 
     for (const rowId of discardIds) {
@@ -279,35 +340,19 @@ export function ImportReviewSheet({
       onSessionUpdate(latest);
     }
 
-    const leftoverPending = pendingRowIds(latest);
-    const unstagedPending: string[] = [];
-    for (const rowId of leftoverPending) {
-      if (!discardIds.includes(rowId)) {
-        unstagedPending.push(rowId);
-        continue;
-      }
-      const deleted = await deleteRow(sessionId, rowId, messages);
-      if (!deleted.ok) return deleted;
-      latest = deleted.session;
-      onSessionUpdate(latest);
-    }
-    if (unstagedPending.length) {
-      console.error(
-        "import save: pending rows were not staged as discarded; sheet should not have opened",
-        unstagedPending,
-      );
-    }
     const stillPending = pendingRowIds(latest);
     if (stillPending.length) {
-      console.error("import save: pending rows remain after discard deletes", stillPending);
+      console.error("import continue: pending rows remain after discard deletes", stillPending);
+      return { ok: false as const, error: t.errorGeneric };
     }
 
     const result = await finalizeSession(sessionId, messages);
     if (result.ok) {
       clearStagedImportDiscards(sessionId);
-      onSessionUpdate(result.session);
       router.push(
-        result.session.landing_list_id ? `/lists/${result.session.landing_list_id}` : "/lists",
+        result.session.landing_list_id
+          ? `/lists/${encodeURIComponent(result.session.landing_list_id)}`
+          : "/lists",
       );
     }
     return result;
@@ -348,8 +393,8 @@ export function ImportReviewSheet({
     restoreStagedDiscard(sessionId, rowId);
   }
 
-  const busy = saveAction.pending || changeListAction.pending;
-  const errorMessage = saveAction.error ?? changeListAction.error;
+  const busy = saveAction.pending || changeListAction.pending || continueAction.pending;
+  const errorMessage = saveAction.error ?? changeListAction.error ?? continueAction.error;
 
   const STICKY_BUTTON_CLASS =
     "m-0 flex-1 cursor-pointer rounded-sm border border-border bg-surface px-3 py-[9px] text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-55 enabled:hover:brightness-105";
@@ -361,7 +406,7 @@ export function ImportReviewSheet({
   } as const;
 
   const selectionBar =
-    selectedDiscardableIds.length > 0 ? (
+    !summarySession && selectedDiscardableIds.length > 0 ? (
       <div className="flex w-full gap-2">
         <button
           type="button"
@@ -391,7 +436,7 @@ export function ImportReviewSheet({
       open
       onClose={onClose}
       closeLabel={t.importReviewSheetClose}
-      title={t.importReviewSheetTitle}
+      title={summarySession ? t.completionTitle : t.importReviewSheetTitle}
       fillBelowChrome
       body={
         <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
@@ -401,15 +446,21 @@ export function ImportReviewSheet({
             </p>
           ) : null}
 
-          {selectionBar ? (
+          {summarySession ? (
+            <ImportCompletionSummary
+              session={summarySession}
+              showContinue={false}
+              showTitle={false}
+            />
+          ) : selectionBar ? (
             <div className="sticky top-0 z-10 shrink-0 bg-surface pb-3">
               {selectionBar}
             </div>
           ) : null}
 
-          {groups.length === 0 && discardedRows.length === 0 ? (
+          {!summarySession && groups.length === 0 && discardedRows.length === 0 ? (
             <p className="m-0 text-muted text-[0.85rem]">{t.importReviewSheetEmpty}</p>
-          ) : (
+          ) : !summarySession ? (
             <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
               {groups.map((group) => (
                 <div key={group.listId} className="flex flex-col gap-2">
@@ -513,17 +564,38 @@ export function ImportReviewSheet({
                 </section>
               ) : null}
             </div>
-          )}
+          ) : null}
         </div>
       }
       footer={
-        <PrimaryButton
-          className="w-full"
-          disabled={busy}
-          onClick={() => void saveAction.submit(undefined)}
-        >
-          {saveAction.pending ? t.importReviewSheetSaving : t.importReviewSheetSave}
-        </PrimaryButton>
+        summarySession ? (
+          <div className="flex w-full gap-2">
+            <button
+              type="button"
+              className={STICKY_BUTTON_CLASS}
+              style={STICKY_BUTTON_STYLE}
+              disabled={busy}
+              onClick={() => setSummarySession(null)}
+            >
+              {t.completionBackToReview}
+            </button>
+            <PrimaryButton
+              className="flex-1"
+              disabled={busy}
+              onClick={() => void continueAction.submit(undefined)}
+            >
+              {t.completionContinue}
+            </PrimaryButton>
+          </div>
+        ) : (
+          <PrimaryButton
+            className="w-full"
+            disabled={busy}
+            onClick={() => void saveAction.submit(undefined)}
+          >
+            {saveAction.pending ? t.importReviewSheetSaving : t.importReviewSheetSave}
+          </PrimaryButton>
+        )
       }
     />
   );

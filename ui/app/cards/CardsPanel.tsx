@@ -6,7 +6,12 @@ import { useEffect, useId, useMemo, useState } from "react";
 import { CopyButton } from "@/components/CopyButton";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { cardsCopy } from "@/lib/i18n/cards";
-import { fetchLists, type ListItem } from "../lists/listsClient";
+import { fetchLists } from "../lists/listsClient";
+import {
+  getMembershipListsSnapshot,
+  replaceMembershipLists,
+  useMembershipLists,
+} from "../lists/membershipListsStore";
 import { fetchCards, type CardItem, type CardsClientMessages } from "./cardsClient";
 import { CardRoutingControl } from "./CardRoutingControl";
 import { DefaultImportListControl } from "./DefaultImportListControl";
@@ -30,7 +35,7 @@ export function CardsPanel({ embedded = false }: Props) {
   // Embedded contexts (e.g. Home) nest Cards under their own <h2>, so these drop a level to <h3>.
   const HeadingTag = embedded ? "h3" : "h2";
   const [cards, setCards] = useState<CardItem[]>([]);
-  const [lists, setLists] = useState<ListItem[]>([]);
+  const lists = useMembershipLists() ?? [];
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [registeredStatus, setRegisteredStatus] = useState("");
@@ -50,24 +55,28 @@ export function CardsPanel({ embedded = false }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([
-      fetchCards(messages),
-      fetchLists({
-        errorGeneric: t.errorGeneric,
-        errorInvalidName: t.errorGeneric,
-        errorForbidden: t.errorForbidden,
-        errorUnauthorized: t.errorUnauthorized,
-      }),
-    ]).then(([cardsResult, listsResult]) => {
+    async function load() {
+      const cardsResult = await fetchCards(messages);
       if (cancelled) return;
       if (!cardsResult.ok) {
         setLoadError(cardsResult.error);
       } else {
         setCards(cardsResult.cards);
       }
-      if (listsResult.ok) setLists(listsResult.lists);
-      setLoading(false);
-    });
+      // Home already seeded membership from SSR; skip GET so an in-flight
+      // refetch cannot resurrect a list the user just deleted.
+      if (getMembershipListsSnapshot() === null) {
+        const listsResult = await fetchLists({
+          errorGeneric: t.errorGeneric,
+          errorInvalidName: t.errorGeneric,
+          errorForbidden: t.errorForbidden,
+          errorUnauthorized: t.errorUnauthorized,
+        });
+        if (listsResult.ok) replaceMembershipLists(listsResult.lists);
+      }
+      if (!cancelled) setLoading(false);
+    }
+    void load();
     return () => {
       cancelled = true;
     };

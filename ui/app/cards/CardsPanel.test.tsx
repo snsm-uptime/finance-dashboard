@@ -34,6 +34,7 @@ vi.mock("../lists/listsClient", async () => {
 });
 
 import { CardsPanel } from "./CardsPanel";
+import { replaceMembershipLists, resetMembershipListsStore } from "../lists/membershipListsStore";
 
 const t = cardsMessages.en;
 
@@ -98,6 +99,7 @@ describe("CardsPanel", () => {
     });
     container.remove();
     vi.unstubAllGlobals();
+    resetMembershipListsStore();
   });
 
   it("keeps Register, default destination, then list in source order", async () => {
@@ -130,5 +132,34 @@ describe("CardsPanel", () => {
     expect(wrapper.children).toHaveLength(3);
     expect(wrapper.children[1].childElementCount).toBe(0);
     expect(headingTexts(container)).toEqual([t.submit, t.listTitle]);
+  });
+
+  it("drops a deleted list from destination dropdowns without a remount", async () => {
+    fetchLists.mockResolvedValue({
+      ok: true,
+      lists: [
+        { id: "list-1", name: "Household", owner_id: "u1", role: "owner" },
+        { id: "list-2", name: "Trip", owner_id: "u1", role: "owner" },
+      ],
+    });
+    await act(async () => {
+      root.render(<CardsPanel embedded />);
+    });
+    await waitForDom(() => container.textContent?.includes(card.label));
+
+    const trigger = container.querySelector('button[aria-haspopup="listbox"]') as HTMLButtonElement;
+    await act(async () => {
+      trigger.click();
+    });
+    expect(
+      Array.from(container.querySelectorAll('[role="option"]')).map((el) => el.textContent),
+    ).toEqual(["Household", "Trip"]);
+
+    await act(async () => {
+      replaceMembershipLists([{ id: "list-1", name: "Household", owner_id: "u1", role: "owner" }]);
+    });
+    expect(
+      Array.from(container.querySelectorAll('[role="option"]')).map((el) => el.textContent),
+    ).toEqual(["Household"]);
   });
 });

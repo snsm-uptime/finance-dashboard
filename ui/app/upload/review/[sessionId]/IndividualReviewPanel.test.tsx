@@ -5,7 +5,12 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppShell } from "@/components/AppShell";
-import { IndividualReviewPanel, nextReviewableRow, titleTextareaHeightPx } from "./IndividualReviewPanel";
+import { resetMembershipListsStore } from "@/app/lists/membershipListsStore";
+import {
+  IndividualReviewPanel,
+  nextReviewableRow,
+  titleTextareaHeightPx,
+} from "./IndividualReviewPanel";
 import { formatIbanGroups } from "../../CreditCardFace";
 import type { CandidateRow, ImportSession, StagedStatement } from "../../uploadClient";
 
@@ -91,18 +96,19 @@ function makeRow(overrides: Partial<CandidateRow> = {}): CandidateRow {
 }
 
 function makeStatement(overrides: Partial<StagedStatement> = {}): StagedStatement {
+  const rows = overrides.rows ?? [makeRow()];
   return {
     id: "st1",
     product_id: "bac_credit",
     status: "staged",
-    candidate_row_count: 3,
     iban: null,
     filename: "statement.pdf",
     card_id: null,
     zero_amount_excluded_count: 0,
-    rows: [makeRow()],
-    assigned_rows: [],
     ...overrides,
+    rows: overrides.rows ?? rows,
+    assigned_rows: overrides.assigned_rows ?? [],
+    candidate_row_count: overrides.candidate_row_count ?? (overrides.rows ?? rows).length,
   };
 }
 
@@ -117,6 +123,10 @@ function makeSession(overrides: Partial<ImportSession> = {}): ImportSession {
     imported_new_count: 0,
     skipped_duplicate_count: 0,
     landing_list_id: null,
+    deleted_count: 0,
+    zero_amount_excluded_count: 0,
+    failed_statements: [],
+    committed_by_list: [],
     ...overrides,
   };
 }
@@ -266,11 +276,15 @@ describe("IndividualReviewPanel", () => {
     });
     container.remove();
     vi.unstubAllGlobals();
+    resetMembershipListsStore();
   });
 
   it("has no full-screen dark overlay", async () => {
     fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
-    fetchLists.mockResolvedValue({ ok: true, lists: [] });
+    fetchLists.mockResolvedValue({
+      ok: true,
+      lists: [{ id: "l2", name: "Personal", owner_id: "u1", role: "owner" }],
+    });
     stubAuthMeFetch(null);
 
     await act(async () => {
@@ -408,13 +422,13 @@ describe("IndividualReviewPanel", () => {
     expect(assignRow).toHaveBeenCalledWith("s1", "r1", "l1", expect.anything());
   });
 
-  it("default-list Add commits with default_import_list_id without requiring a picker selection", async () => {
+  it("default-list Add commits to Personal without requiring a picker selection", async () => {
     fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
     fetchLists.mockResolvedValue({
       ok: true,
-      lists: [{ id: "l2", name: "Household", owner_id: "u1", role: "member" }],
+      lists: [{ id: "l2", name: "Personal", owner_id: "u1", role: "owner" }],
     });
-    stubAuthMeFetch("l2");
+    stubAuthMeFetch(null);
     assignRow.mockResolvedValue({
       ok: true,
       session: makeSession({ statements: [makeStatement({ rows: [] })] }),
@@ -428,7 +442,7 @@ describe("IndividualReviewPanel", () => {
       await Promise.resolve();
     });
 
-    const defaultButton = selectByLabel(container, "Add to Household");
+    const defaultButton = selectByLabel(container, "Add to Personal");
     expect(defaultButton.disabled).toBe(false);
 
     await act(async () => {
@@ -448,10 +462,10 @@ describe("IndividualReviewPanel", () => {
       ok: true,
       lists: [
         { id: "l1", name: "Groceries", owner_id: "u1", role: "owner" },
-        { id: "l2", name: "Household", owner_id: "u1", role: "member" },
+        { id: "l2", name: "Personal", owner_id: "u1", role: "owner" },
       ],
     });
-    stubAuthMeFetch("l2");
+    stubAuthMeFetch(null);
 
     await act(async () => {
       root.render(<IndividualReviewPanel sessionId="s1" />);
@@ -469,7 +483,7 @@ describe("IndividualReviewPanel", () => {
       (el) => el.textContent,
     );
     expect(optionLabels).toContain("Groceries");
-    expect(optionLabels).not.toContain("Household");
+    expect(optionLabels).not.toContain("Personal");
   });
 
   it("Delete stages the row without calling deleteRow or assign", async () => {
@@ -553,11 +567,11 @@ describe("IndividualReviewPanel", () => {
     fetchImportSession.mockResolvedValue({ ok: true, session });
     fetchLists.mockResolvedValue({
       ok: true,
-      lists: [{ id: "l1", name: "Groceries", owner_id: "u1", role: "owner" }],
+      lists: [{ id: "l-personal", name: "Personal", owner_id: "u1", role: "owner" }],
     });
     // Also stands in for the identify-card fetch: its shape has no `matched`
     // field, so identifyCardForStatement fails and needsRegistration flips on.
-    stubAuthMeFetch("l1");
+    stubAuthMeFetch(null);
 
     await act(async () => {
       root.render(<IndividualReviewPanel sessionId="s1" />);
@@ -568,7 +582,7 @@ describe("IndividualReviewPanel", () => {
       await Promise.resolve();
     });
 
-    const defaultButton = selectByLabel(container, "Add to Groceries");
+    const defaultButton = selectByLabel(container, "Add to Personal");
     const chosenButton = selectByLabel(container, "Accept to Choose list");
     const deleteButton = selectByLabel(container, "Delete");
 
@@ -698,9 +712,12 @@ describe("IndividualReviewPanel", () => {
     fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
     fetchLists.mockResolvedValue({
       ok: true,
-      lists: [{ id: "l1", name: "Groceries", owner_id: "u1", role: "owner" }],
+      lists: [
+        { id: "l1", name: "Groceries", owner_id: "u1", role: "owner" },
+        { id: "l2", name: "Personal", owner_id: "u1", role: "owner" },
+      ],
     });
-    stubAuthMeFetch("l2");
+    stubAuthMeFetch(null);
     assignRow.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
 
     await act(async () => {
@@ -797,8 +814,11 @@ describe("IndividualReviewPanel", () => {
 
   it("ArrowLeft key accepts to the default list", async () => {
     fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
-    fetchLists.mockResolvedValue({ ok: true, lists: [] });
-    stubAuthMeFetch("l2");
+    fetchLists.mockResolvedValue({
+      ok: true,
+      lists: [{ id: "l2", name: "Personal", owner_id: "u1", role: "owner" }],
+    });
+    stubAuthMeFetch(null);
     assignRow.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
 
     await act(async () => {
@@ -822,7 +842,10 @@ describe("IndividualReviewPanel", () => {
 
   it("arrow keys still preventDefault while a throw is in flight so the page cannot pan", async () => {
     fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
-    fetchLists.mockResolvedValue({ ok: true, lists: [] });
+    fetchLists.mockResolvedValue({
+      ok: true,
+      lists: [{ id: "l2", name: "Personal", owner_id: "u1", role: "owner" }],
+    });
     stubAuthMeFetch("l2");
     assignRow.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
 
@@ -854,8 +877,11 @@ describe("IndividualReviewPanel", () => {
 
   it("arrow keys are ignored while the title input is focused", async () => {
     fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
-    fetchLists.mockResolvedValue({ ok: true, lists: [] });
-    stubAuthMeFetch("l2");
+    fetchLists.mockResolvedValue({
+      ok: true,
+      lists: [{ id: "l2", name: "Personal", owner_id: "u1", role: "owner" }],
+    });
+    stubAuthMeFetch(null);
 
     await act(async () => {
       root.render(<IndividualReviewPanel sessionId="s1" />);
@@ -890,9 +916,12 @@ describe("IndividualReviewPanel", () => {
     fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
     fetchLists.mockResolvedValue({
       ok: true,
-      lists: [{ id: "l1", name: "Groceries", owner_id: "u1", role: "owner" }],
+      lists: [
+        { id: "l1", name: "Groceries", owner_id: "u1", role: "owner" },
+        { id: "l2", name: "Personal", owner_id: "u1", role: "owner" },
+      ],
     });
-    stubAuthMeFetch("l2");
+    stubAuthMeFetch(null);
 
     await act(async () => {
       root.render(<IndividualReviewPanel sessionId="s1" />);
@@ -1298,7 +1327,7 @@ describe("IndividualReviewPanel", () => {
       expect(selectByLabel(document.body, "Discard")).toBeNull();
     });
 
-    it("Save calls finalizeSession and lands on landing_list_id", async () => {
+    it("Save previews the summary; Back returns to review; Continue finalizes and lands", async () => {
       const session = makeSession({
         statements: [
           makeStatement({ rows: [], assigned_rows: [assignedRow({ id: "r1" })] }),
@@ -1323,11 +1352,30 @@ describe("IndividualReviewPanel", () => {
         await Promise.resolve();
       });
 
+      expect(finalizeSession).not.toHaveBeenCalled();
+      expect(document.body.textContent).toContain("Import complete");
+      expect(push).not.toHaveBeenCalled();
+      await act(async () => {
+        selectByText(document.body, "Back to review").click();
+      });
+      expect(document.body.textContent).toContain("Confirm placements");
+      expect(finalizeSession).not.toHaveBeenCalled();
+      await act(async () => {
+        selectByText(document.body, "Save").click();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(document.body.textContent).toContain("Import complete");
+      await act(async () => {
+        selectByText(document.body, "Continue").click();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
       expect(finalizeSession).toHaveBeenCalledWith("s1", expect.anything());
       expect(push).toHaveBeenCalledWith("/lists/l1");
     });
 
-    it("Save lands on /lists when landing_list_id is null", async () => {
+    it("Save shows the summary and Continue lands on /lists when landing_list_id is null", async () => {
       const session = makeSession({
         statements: [
           makeStatement({ rows: [], assigned_rows: [assignedRow({ id: "r1" })] }),
@@ -1352,6 +1400,11 @@ describe("IndividualReviewPanel", () => {
         await Promise.resolve();
       });
 
+      expect(document.body.textContent).toContain("Import complete");
+      expect(push).not.toHaveBeenCalled();
+      await act(async () => {
+        selectByText(document.body, "Continue").click();
+      });
       expect(push).toHaveBeenCalledWith("/lists");
     });
 
@@ -1424,7 +1477,7 @@ describe("IndividualReviewPanel", () => {
       expect(selectByLabel(document.body, "Delete")).toBeTruthy();
     });
 
-    it("Save after card trash deletes the staged row then finalizes", async () => {
+    it("Save keeps card trash staged; Continue deletes and finalizes", async () => {
       fetchImportSession.mockResolvedValue({
         ok: true,
         session: SESSION_ONE_PENDING,
@@ -1455,6 +1508,10 @@ describe("IndividualReviewPanel", () => {
         ok: true,
         session: makeSession({ statements: [makeStatement({ rows: [] })] }),
       });
+      fetchImportSession.mockResolvedValue({
+        ok: true,
+        session: makeSession({ statements: [makeStatement({ rows: [] })] }),
+      });
       finalizeSession.mockResolvedValue({
         ok: true,
         session: makeSession({
@@ -1472,9 +1529,57 @@ describe("IndividualReviewPanel", () => {
         await Promise.resolve();
       });
 
+      expect(deleteRow).not.toHaveBeenCalled();
+      expect(finalizeSession).not.toHaveBeenCalled();
+      expect(document.body.textContent).toContain("Import complete");
+      expect(push).not.toHaveBeenCalled();
+      await act(async () => {
+        selectByText(document.body, "Continue").click();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
       expect(deleteRow).toHaveBeenCalledWith("s1", "r1", expect.anything());
       expect(finalizeSession).toHaveBeenCalledWith("s1", expect.anything());
       expect(push).toHaveBeenCalledWith("/lists/l1");
     });
+  });
+
+  it("does not show the completion summary on an empty queue that is not finalized", async () => {
+    fetchImportSession.mockResolvedValue({
+      ok: true,
+      session: makeSession({ statements: [makeStatement({ rows: [] })] }),
+    });
+    fetchLists.mockResolvedValue({ ok: true, lists: [] });
+    await act(async () => {
+      root.render(<IndividualReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(document.body.textContent).toContain("Confirm placements");
+    expect(container.textContent).not.toContain("Import complete");
+  });
+
+  it("shows the completion summary when the session is finalized", async () => {
+    fetchImportSession.mockResolvedValue({
+      ok: true,
+      session: makeSession({
+        statements: [makeStatement({ rows: [] })],
+        finalized_at: "2026-08-24T01:00:00Z",
+        imported_new_count: 2,
+        deleted_count: 1,
+      }),
+    });
+    fetchLists.mockResolvedValue({ ok: true, lists: [] });
+    await act(async () => {
+      root.render(<IndividualReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(container.textContent).toContain("Import complete");
+    expect(container.textContent).not.toContain("All caught up for now.");
   });
 });

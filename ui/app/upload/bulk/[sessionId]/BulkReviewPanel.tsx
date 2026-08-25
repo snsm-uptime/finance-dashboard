@@ -7,7 +7,8 @@ import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { useFormSubmission } from "@/hooks";
-import { fetchLists, type ListItem } from "@/app/lists/listsClient";
+import { fetchLists } from "@/app/lists/listsClient";
+import { replaceMembershipLists, useMembershipLists } from "@/app/lists/membershipListsStore";
 import { uploadCopy } from "@/lib/i18n/upload";
 import { bulkCommitSession, type BulkCommitMessages } from "../../uploadClient";
 
@@ -27,8 +28,8 @@ export function BulkReviewPanel({ sessionId }: BulkReviewPanelProps) {
   const searchParams = useSearchParams();
   const selectId = useId();
 
-  const [lists, setLists] = useState<ListItem[] | null>(null);
   const [listsError, setListsError] = useState<string | null>(null);
+  const lists = useMembershipLists();
   const [listId, setListId] = useState<string>("");
 
   useEffect(() => {
@@ -45,7 +46,7 @@ export function BulkReviewPanel({ sessionId }: BulkReviewPanelProps) {
         setListsError(result.error);
         return;
       }
-      setLists(result.lists);
+      replaceMembershipLists(result.lists);
       // AC #2 / UX-DR23: pre-select the originating list when the upload was
       // launched from inside one — only if it's actually one the actor belongs to.
       const preselect = searchParams.get("listId");
