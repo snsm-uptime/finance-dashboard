@@ -265,3 +265,8 @@
 ## Deferred from: code review of 4-14-resume-entry-point-session-completion-summary.md (2026-08-24)
 
 - Discard no longer deletes the source PDF for untouched/partially-reviewed sessions, with no cleanup job to ever reclaim it (`api/application/import_session.py:548-559`) — accepted as designed per user decision: this is exactly what Story 4.14's own AC #6 / Task 5.3 directed (route through `_release_source_pdf_if_idle` instead of the prior unconditional delete). Since `discard_session` never transitions a statement's status away from `staged`, `_PDF_RETAIN_STATUSES` keeps the PDF forever for every "Close" on an unstarted or partially-reviewed import. PDF garbage collection for permanently-`staged` discarded sessions is out of this story's scope; belongs in a future dedicated cleanup story.
+
+## Deferred from: code review of 4-16-multi-file-upload-pending-queue-dedup.md (2026-08-25)
+
+- Upload 409 is an undeclared `JSONResponse` beside a 201 `response_model` (`api/api/routes/import_sessions.py:200`) — same pattern as the existing 422 upload catches; OpenAPI still advertises only 201 `ImportSessionResponse`.
+- Concurrent same-hash uploads can both pass the application check (`api/application/import_session.py:464`) — deferred to a later hardening story: UI drain is sequential; spec forbids a unique `content_hash` constraint. Two overlapping POSTs of the same bytes can both `save` and both insert sessions until `get_db` commits. A partial UNIQUE on active `(user_id, content_hash)` would close it without permanently blocking re-upload after discard/finalize.

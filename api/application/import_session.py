@@ -19,6 +19,7 @@ from uuid import UUID, uuid4
 from domain.canonical_line import CanonicalLine, canonical_identity_key
 from domain.cards import normalize_iban
 from domain.errors import (
+    DuplicateStatementUploadError,
     ImportRowNotAvailableError,
     ImportRowNotFoundError,
     ImportSessionDiscardedError,
@@ -34,6 +35,7 @@ from domain.import_session import (
     ROW_STATUS_PENDING,
     STATEMENT_STATUS_FAILED,
     STATEMENT_STATUS_STAGED,
+    compute_pdf_content_hash,
     normalize_row_description,
     session_needs_source_pdf,
     validate_bulk_candidate_row,
@@ -297,12 +299,18 @@ class ImportSessionRepository(Protocol):
         user_id: UUID,
         statements: list[DetectedStatement],
         pdf_paths: dict[int, str],
+        content_hash: str | None = None,
     ) -> ImportSessionRecord: ...
 
     def get_session(self, session_id: UUID, user_id: UUID) -> ImportSessionRecord | None: ...
 
     def find_active_session(self, user_id: UUID) -> ImportSessionRecord | None:
         """Owner's most recent session that is neither discarded nor finalized."""
+        ...
+
+    def find_active_session_by_content_hash(self, user_id: UUID, content_hash: str) -> UUID | None:
+        """Id of a non-discarded, non-finalized session already holding this
+        exact PDF hash for the user, or None (Story 4.16, AC #4)."""
         ...
 
     def discard_session(self, session_id: UUID, user_id: UUID) -> ImportSessionRecord:
@@ -453,6 +461,13 @@ class UploadStatementPdfService:
     def execute(self, command: UploadStatementPdfCommand) -> ImportSessionRecord:
         validate_pdf_upload(command.filename, command.content)
 
+        content_hash = compute_pdf_content_hash(command.content)
+        blocking_session_id = self._session_repo.find_active_session_by_content_hash(
+            command.actor_user_id, content_hash
+        )
+        if blocking_session_id is not None:
+            raise DuplicateStatementUploadError(blocking_session_id)
+
         whole_pdf_path = self._pdf_storage.save(
             user_id=command.actor_user_id, filename=command.filename, content=command.content
         )
@@ -501,6 +516,7 @@ class UploadStatementPdfService:
                 user_id=command.actor_user_id,
                 statements=detected_with_cards,
                 pdf_paths=pdf_paths,
+                content_hash=content_hash,
             )
             # A statement that parses to zero rows (zero-activity month) or to
             # nothing but excluded zero-amount rows is stamped `committed` at

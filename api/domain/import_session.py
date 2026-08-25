@@ -5,6 +5,7 @@ Pure domain: no FastAPI / SQLAlchemy / pdfplumber imports (AD-1).
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Sequence
 from datetime import datetime
 from decimal import Decimal
@@ -101,6 +102,16 @@ def validate_pdf_upload(filename: str, content: bytes) -> None:
     """
     if not content.startswith(PDF_MAGIC_HEADER):
         raise UnsupportedFileTypeError()
+
+
+def compute_pdf_content_hash(content: bytes) -> str:
+    """SHA-256 of the raw uploaded bytes (Story 4.16, AC #4).
+
+    Exact bytes only — never filename, mtime, or parsed content. Two
+    different exports of "the same" statement hash differently; that is a
+    4.12 commit-time identity concern, not this one.
+    """
+    return hashlib.sha256(content).hexdigest()
 
 
 def validate_bulk_commit_eligible(

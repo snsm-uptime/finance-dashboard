@@ -208,8 +208,9 @@ class SqlAlchemyImportSessionRepository:
         user_id: UUID,
         statements: list[DetectedStatement],
         pdf_paths: dict[int, str],
+        content_hash: str | None = None,
     ) -> ImportSessionRecord:
-        session_row = ImportSessionModel(id=session_id, user_id=user_id)
+        session_row = ImportSessionModel(id=session_id, user_id=user_id, content_hash=content_hash)
         self._session.add(session_row)
 
         for index, detected in enumerate(statements):
@@ -266,6 +267,20 @@ class SqlAlchemyImportSessionRepository:
         if row is None:
             return None
         return self._to_record(row)
+
+    def find_active_session_by_content_hash(self, user_id: UUID, content_hash: str) -> UUID | None:
+        """Story 4.16, AC #4: id of a non-discarded, non-finalized session
+        already holding this exact PDF's bytes, or None."""
+        return self._session.scalar(
+            select(ImportSessionModel.id)
+            .where(
+                ImportSessionModel.user_id == user_id,
+                ImportSessionModel.content_hash == content_hash,
+                ImportSessionModel.discarded_at.is_(None),
+                ImportSessionModel.finalized_at.is_(None),
+            )
+            .limit(1)
+        )
 
     def find_active_session(self, user_id: UUID) -> ImportSessionRecord | None:
         row = self._session.scalar(

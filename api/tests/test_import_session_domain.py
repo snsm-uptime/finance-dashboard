@@ -23,6 +23,7 @@ from domain.import_session import (
     UNDO_ACTION_ASSIGN,
     UNDO_ACTION_DELETE,
     UNDO_ACTIONS,
+    compute_pdf_content_hash,
     normalize_row_description,
     row_is_zero_amount,
     select_landing_list_id,
@@ -296,3 +297,25 @@ def test_select_landing_list_id_is_order_independent() -> None:
 
 def test_select_landing_list_id_single_row_returns_that_list() -> None:
     assert select_landing_list_id([(_LIST_A, _at(1))]) == _LIST_A
+
+
+# --- Story 4.16 Task 1.2: compute_pdf_content_hash ---
+
+
+def test_compute_pdf_content_hash_same_bytes_same_hash() -> None:
+    content = b"%PDF-1.4\nsome statement bytes"
+    assert compute_pdf_content_hash(content) == compute_pdf_content_hash(content)
+
+
+def test_compute_pdf_content_hash_different_bytes_different_hash() -> None:
+    assert compute_pdf_content_hash(b"%PDF-1.4\nfile a") != compute_pdf_content_hash(
+        b"%PDF-1.4\nfile b"
+    )
+
+
+def test_compute_pdf_content_hash_is_sha256_hexdigest() -> None:
+    import hashlib
+
+    content = b"%PDF-1.4\nsome statement bytes"
+    assert compute_pdf_content_hash(content) == hashlib.sha256(content).hexdigest()
+    assert len(compute_pdf_content_hash(content)) == 64

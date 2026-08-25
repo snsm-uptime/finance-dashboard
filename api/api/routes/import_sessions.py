@@ -48,6 +48,7 @@ from application.ports import PdfStorage
 from domain.errors import (
     AmbiguousBankAdapterError,
     CardIbanAlreadyRegisteredError,
+    DuplicateStatementUploadError,
     FxAuthenticationError,
     FxCurrencyNotSupportedError,
     FxFutureDateError,
@@ -236,6 +237,15 @@ async def upload_statement_pdf(
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             content={"detail": str(exc), "code": "invalid_canonical_line"},
+        )
+    except DuplicateStatementUploadError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "detail": str(exc),
+                "code": exc.CODE,
+                "session_id": str(exc.session_id),
+            },
         )
     logger.info(
         "import_session_created session_id=%s user_id=%s statement_count=%s",

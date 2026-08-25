@@ -1,5 +1,7 @@
 """Domain errors for account and list operations."""
 
+from uuid import UUID
+
 
 class DomainError(Exception):
     """Base domain error."""
@@ -534,6 +536,18 @@ class ImportNothingToUndoError(DomainError):
     CODE = "import_nothing_to_undo"
 
     def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
+class DuplicateStatementUploadError(DomainError):
+    """Raised when an uploaded PDF's content hash matches an active import
+    session for this user (Story 4.16, AC #4)."""
+
+    MESSAGE = "This statement has already been uploaded."
+    CODE = "duplicate_statement_upload"
+
+    def __init__(self, session_id: UUID) -> None:
+        self.session_id = session_id
         super().__init__(self.MESSAGE)
 
 

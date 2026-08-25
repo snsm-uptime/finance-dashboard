@@ -410,6 +410,18 @@ class ImportSessionModel(Base):
     no ledger writes" (AC #4) stays auditable."""
 
     __tablename__ = "import_sessions"
+    # Non-unique (Story 4.16): application check is the contract. Partial
+    # index matches Alembic 0026 — discarded/finalized hashes must not block
+    # re-upload.
+    __table_args__ = (
+        Index(
+            "ix_import_sessions_user_id_content_hash_active",
+            "user_id",
+            "content_hash",
+            unique=False,
+            postgresql_where=text("discarded_at IS NULL AND finalized_at IS NULL"),
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -434,6 +446,10 @@ class ImportSessionModel(Base):
     )
     last_resolved_action: Mapped[str | None] = mapped_column(String(16), nullable=True)
     last_resolved_prior_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
+    # SHA-256 of the uploaded PDF bytes (Story 4.16, AC #4). Nullable — no
+    # backfill for pre-4.16 sessions, whose source PDF may already be gone.
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     user: Mapped[UserModel] = relationship(back_populates="import_sessions")
     statements: Mapped[list[ImportStatementModel]] = relationship(

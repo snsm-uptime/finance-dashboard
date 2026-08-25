@@ -188,12 +188,17 @@ describe("uploadClient", () => {
         json: async () => ({
           code: "duplicate_statement_upload",
           detail: "This statement has already been uploaded.",
+          session_id: "existing-session",
         }),
       }),
     );
 
     const result = await uploadStatement(fakeFile(), messages);
-    expect(result).toEqual({ ok: false, error: "duplicate" });
+    expect(result).toEqual({
+      ok: false,
+      error: "duplicate",
+      duplicateSessionId: "existing-session",
+    });
   });
 
   it("discardSession returns ok on success", async () => {

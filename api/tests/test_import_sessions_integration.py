@@ -15,6 +15,8 @@ import time
 from collections.abc import Iterator
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from hashlib import sha256
+from itertools import count
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -139,12 +141,19 @@ def _own_list_id(client: TestClient) -> str:
     return listed.json()["lists"][0]["id"]
 
 
+_bac_upload_variant = count()
+
+
 def _upload_bac_session(client: TestClient) -> str:
-    with _ACCEPTANCE_BAR_PDF.open("rb") as fh:
-        created = client.post(
-            "/import/sessions",
-            files={"file": ("bac_credit_acceptance_bar.pdf", fh, "application/pdf")},
-        )
+    """Each call must hash differently so Story 4.16's active-session dedup
+    does not 409 tests that re-import the same fixture (4.12 commit-time
+    identity still matches — trailing PDF comments do not change parse)."""
+    marker = f"\n% variant {next(_bac_upload_variant)}\n".encode()
+    content = _ACCEPTANCE_BAR_PDF.read_bytes() + marker
+    created = client.post(
+        "/import/sessions",
+        files={"file": ("bac_credit_acceptance_bar.pdf", content, "application/pdf")},
+    )
     assert created.status_code == 201, created.text
     return created.json()["id"]
 
@@ -214,6 +223,56 @@ def test_upload_real_bac_fixture_happy_path(client: TestClient) -> None:
     statement = body["statements"][0]
     assert statement["status"] == "staged"
     assert statement["candidate_row_count"] == len(goldens.GOLDENS)
+
+
+def test_upload_same_bytes_twice_while_active_rejected_with_409(
+    client: TestClient, db_session: Session
+) -> None:
+    """Story 4.16, AC #4/Task 4.2: re-uploading the exact same PDF bytes while
+    the first session is still active (not discarded/finalized) is a 409, no
+    second session row, and no second file on disk."""
+    _register(client, "uploaddupe@example.com")
+
+    with _ACCEPTANCE_BAR_PDF.open("rb") as fh:
+        first = client.post(
+            "/import/sessions",
+            files={"file": ("bac_credit_acceptance_bar.pdf", fh, "application/pdf")},
+        )
+    assert first.status_code == 201, first.text
+    first_id = first.json()["id"]
+
+    with _ACCEPTANCE_BAR_PDF.open("rb") as fh:
+        second = client.post(
+            "/import/sessions",
+            files={"file": ("bac_credit_acceptance_bar_again.pdf", fh, "application/pdf")},
+        )
+    assert second.status_code == 409, second.text
+    assert second.json()["code"] == "duplicate_statement_upload"
+    assert second.json()["session_id"] == first_id
+
+    db_session.expire_all()
+    user_id = db_session.scalar(
+        select(ImportSessionModel.user_id).where(ImportSessionModel.id == UUID(first_id))
+    )
+    session_rows = db_session.scalars(
+        select(ImportSessionModel).where(ImportSessionModel.user_id == user_id)
+    ).all()
+    assert len(session_rows) == 1
+    assert session_rows[0].content_hash == sha256(_ACCEPTANCE_BAR_PDF.read_bytes()).hexdigest()
+
+    user_pdf_dir = _pdf_storage_base() / str(user_id)
+    saved_pdfs = list(user_pdf_dir.glob("*.pdf")) if user_pdf_dir.exists() else []
+    assert len(saved_pdfs) == 1
+
+    discarded = client.delete(f"/import/sessions/{first_id}")
+    assert discarded.status_code == 200, discarded.text
+
+    with _ACCEPTANCE_BAR_PDF.open("rb") as fh:
+        third = client.post(
+            "/import/sessions",
+            files={"file": ("bac_credit_acceptance_bar_reupload.pdf", fh, "application/pdf")},
+        )
+    assert third.status_code == 201, third.text
 
 
 def test_discard_nonexistent_session_not_found(client: TestClient) -> None:

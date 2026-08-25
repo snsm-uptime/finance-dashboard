@@ -11,6 +11,7 @@ export type UploadQueueEntry = {
   fallbackKey?: string;
   state: UploadQueueState;
   session?: ImportSession;
+  duplicateSessionId?: string;
   error?: string;
   displayName: string;
 };

@@ -4,7 +4,7 @@ baseline_commit: 8b30ed608c6074c6b32b6d0617ce1be58e59999a
 
 # Story 4.16: Multi-file upload — pending queue, per-item removal, duplicate detection
 
-Status: ready-for-dev
+Status: review
 
 > **Renumbered 2026-08-20: was Story 4.10.** Epic 4 was reordered so numeric order matches build
 > order (Sprint Change Proposal 2026-08-20). Independent of review granularity; can ship in
@@ -46,45 +46,57 @@ so that I can queue several statements in one pass instead of uploading them one
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Domain — content-hash + error (AC: #4)
-  - [ ] 1.1 `api/domain/errors.py`: `DuplicateStatementUploadError(DomainError)` with `CODE = "duplicate_statement_upload"` and a MESSAGE like `"This statement has already been uploaded."` — same shape as `UnsupportedFileTypeError`.
-  - [ ] 1.2 `api/domain/import_session.py`: `compute_pdf_content_hash(content: bytes) -> str` = `hashlib.sha256(content).hexdigest()` (64 lowercase hex). Stdlib only (AD-1). Exact bytes only — not filename, period, or product.
+- [x] Task 1: Domain — content-hash + error (AC: #4)
+  - [x] 1.1 `api/domain/errors.py`: `DuplicateStatementUploadError(DomainError)` with `CODE = "duplicate_statement_upload"` and a MESSAGE like `"This statement has already been uploaded."` — same shape as `UnsupportedFileTypeError`.
+  - [x] 1.2 `api/domain/import_session.py`: `compute_pdf_content_hash(content: bytes) -> str` = `hashlib.sha256(content).hexdigest()` (64 lowercase hex). Stdlib only (AD-1). Exact bytes only — not filename, period, or product.
 
-- [ ] Task 2: Persistence (AC: #4)
-  - [ ] 2.1 `ImportSessionModel`: `content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)`. **No backfill** — pre-4.16 sessions never participate in hash dedup (PDF may already be deleted).
-  - [ ] 2.2 Alembic **`0026_import_session_content_hash.py`**, `revision = "0026_import_session_content_hash"` (keep id ≤ 32 chars), **`down_revision = "0025_import_reviewed_at"`**. `ADD COLUMN content_hash VARCHAR(64) NULL`. Non-unique index on `(user_id, content_hash)` with `postgresql_where=text("discarded_at IS NULL AND finalized_at IS NULL")` if used as defense-in-depth — **application check is the contract**. Reconfirm HEAD is still `0025_import_reviewed_at` before writing.
-  - [ ] 2.3 `SqlAlchemyImportSessionRepository.create_session`: persist `content_hash` (`str | None = None` so existing test factories that mint sessions without an upload stay valid). Production upload **must** pass the hash.
-  - [ ] 2.4 Add `find_active_session_by_content_hash(user_id: UUID, content_hash: str) -> bool`: `SELECT 1 … WHERE user_id AND content_hash AND discarded_at IS NULL AND finalized_at IS NULL LIMIT 1`.
-  - [ ] 2.5 Protocol `ImportSessionRepository` in `api/application/import_session.py`: same method + `create_session(..., content_hash: str | None = None)`.
+- [x] Task 2: Persistence (AC: #4)
+  - [x] 2.1 `ImportSessionModel`: `content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)`. **No backfill** — pre-4.16 sessions never participate in hash dedup (PDF may already be deleted).
+  - [x] 2.2 Alembic **`0026_import_session_content_hash.py`**, `revision = "0026_import_session_content_hash"` (keep id ≤ 32 chars), **`down_revision = "0025_import_reviewed_at"`**. `ADD COLUMN content_hash VARCHAR(64) NULL`. Non-unique index on `(user_id, content_hash)` with `postgresql_where=text("discarded_at IS NULL AND finalized_at IS NULL")` if used as defense-in-depth — **application check is the contract**. Reconfirm HEAD is still `0025_import_reviewed_at` before writing.
+  - [x] 2.3 `SqlAlchemyImportSessionRepository.create_session`: persist `content_hash` (`str | None = None` so existing test factories that mint sessions without an upload stay valid). Production upload **must** pass the hash.
+  - [x] 2.4 Add `find_active_session_by_content_hash(user_id: UUID, content_hash: str) -> bool`: `SELECT 1 … WHERE user_id AND content_hash AND discarded_at IS NULL AND finalized_at IS NULL LIMIT 1`.
+  - [x] 2.5 Protocol `ImportSessionRepository` in `api/application/import_session.py`: same method + `create_session(..., content_hash: str | None = None)`.
 
-- [ ] Task 3: Application — check **before** disk (AC: #4, #5)
-  - [ ] 3.1 In `UploadStatementPdfService.execute()`: after `validate_pdf_upload`, **before** `pdf_storage.save`: compute hash; if `find_active_session_by_content_hash` → raise `DuplicateStatementUploadError` (no save, no pipeline). Then save → existing `try` / `except Exception` PDF delete (Story 4.6 review patch) unchanged.
-  - [ ] 3.2 Pass `content_hash=` into `create_session`.
-  - [ ] 3.3 Unit tests in `api/tests/test_import_session_application.py` — extend `_FakeImportSessionRepo` (do not invent a second fake): same bytes + first session still active → second raises, `storage.saved` unchanged; first discarded **or** finalized → re-upload succeeds; same bytes, different `user_id` → both succeed.
+- [x] Task 3: Application — check **before** disk (AC: #4, #5)
+  - [x] 3.1 In `UploadStatementPdfService.execute()`: after `validate_pdf_upload`, **before** `pdf_storage.save`: compute hash; if `find_active_session_by_content_hash` → raise `DuplicateStatementUploadError` (no save, no pipeline). Then save → existing `try` / `except Exception` PDF delete (Story 4.6 review patch) unchanged.
+  - [x] 3.2 Pass `content_hash=` into `create_session`.
+  - [x] 3.3 Unit tests in `api/tests/test_import_session_application.py` — extend `_FakeImportSessionRepo` (do not invent a second fake): same bytes + first session still active → second raises, `storage.saved` unchanged; first discarded **or** finalized → re-upload succeeds; same bytes, different `user_id` → both succeed.
 
-- [ ] Task 4: HTTP mapping (AC: #4, #5)
-  - [ ] 4.1 `upload_statement_pdf` in `api/api/routes/import_sessions.py`: `except DuplicateStatementUploadError` → **409** `{"detail": str(exc), "code": "duplicate_statement_upload"}` (conflict with existing state, not 422 malformed). Explicit `JSONResponse` like the other upload catches — do not stuff this into row `_ERROR_MAP` tuples.
-  - [ ] 4.2 Integration (`api/tests/test_import_sessions_integration.py`): same fixture PDF twice while first is active → 409, no second session row, no second file under `PDF_STORAGE_PATH`; discard first → 201. Optionally: finalize first (if a helper exists) → re-upload 201.
+- [x] Task 4: HTTP mapping (AC: #4, #5)
+  - [x] 4.1 `upload_statement_pdf` in `api/api/routes/import_sessions.py`: `except DuplicateStatementUploadError` → **409** `{"detail": str(exc), "code": "duplicate_statement_upload"}` (conflict with existing state, not 422 malformed). Explicit `JSONResponse` like the other upload catches — do not stuff this into row `_ERROR_MAP` tuples.
+  - [x] 4.2 Integration (`api/tests/test_import_sessions_integration.py`): same fixture PDF twice while first is active → 409, no second session row, no second file under `PDF_STORAGE_PATH`; discard first → 201. Optionally: finalize first (if a helper exists) → re-upload 201.
 
-- [ ] Task 5: UI queue (AC: #1–#6)
-  - [ ] 5.1 `UploadPanel.tsx`: replace exclusive `session | null` + hidden picker (`session ? SessionReviewPanel : picker`) with a **queue** plus a picker that **stays available**. Suggested:
+- [x] Task 5: UI queue (AC: #1–#6)
+  - [x] 5.1 `UploadPanel.tsx`: replace exclusive `session | null` + hidden picker (`session ? SessionReviewPanel : picker`) with a **queue** plus a picker that **stays available**. Suggested:
 
     `type QueueEntry = { id: string; file?: File; contentHash?: string; state: "pending" | "uploading" | "staged" | "failed" | "duplicate"; session?: ImportSession; error?: string; displayName: string }`
 
     Seed one `staged` row from `initialSession` when present (Story 4.14 SSR). Do **not** keep `if (!file || session) return`.
-  - [ ] 5.2 `<input multiple accept="application/pdf">`. On change, iterate **all** `FileList` entries. Client SHA-256 via `crypto.subtle.digest("SHA-256", await file.arrayBuffer())` → 64-char hex (same as Python `hexdigest()`). Match against queue entries in `pending` | `uploading` | `staged` that already have a hash; duplicates become `duplicate` rows with inline copy — **not** uploaded. Fallback if SubtleCrypto unavailable: `name`+`size`+`lastModified` and document in Completion Notes. Server remains authority for other-tab / prior-visit actives.
-  - [ ] 5.3 Soft cap 10: if a selection would push pending+uploading+staged above 10, show cap copy and do not enqueue the overflow. No silent truncate.
-  - [ ] 5.4 Drain **sequentially** (`for` + `await`, single in-flight upload). If the user adds more files while a drain is running, append `pending` and let the same drain (or a re-entrant-safe continuation) pick them up — **never** start a second parallel drain. Do **not** use `useFormSubmission` as the batch engine (it is one-shot global pending); per-row `state` is the source of truth. `UploadButton` may show busy while **any** row is `uploading`, but the file input must remain usable to append.
-  - [ ] 5.5 Row UI (Tailwind only, no new `.module.css`): pending → Remove (no API); uploading → busy; staged → reuse discard via `discardSession(session.id)` **and** keep resume (`SessionReviewPanel` **or** compact row + link to `/upload/review/{id}` — do not mount N full review panels). failed → mapped error; duplicate → client or server copy. After discard of the hydrated 4.14 session, `forgetOpenImportSession` as today.
-  - [ ] 5.6 `uploadClient.ts` `mapError` + `UploadMessages`: map `duplicate_statement_upload` → new `errorDuplicateStatement`. Do not reuse unknown/ambiguous/unreadable keys. `uploadStatement` / `discardSession` signatures stay per-file / per-id.
-  - [ ] 5.7 `ui/lib/i18n/upload.ts` EN+ES: remove-pending label, in-queue already-added, `errorDuplicateStatement`, 10-file cap. Same `uploadMessages` object — no new i18n file.
-  - [ ] 5.8 `rememberOpenImportSession`: still **one** id — last successfully staged session in this tab (including `initialSession` effect). Do not invent multi-id storage in this story.
+  - [x] 5.2 `<input multiple accept="application/pdf">`. On change, iterate **all** `FileList` entries. Client SHA-256 via `crypto.subtle.digest("SHA-256", await file.arrayBuffer())` → 64-char hex (same as Python `hexdigest()`). Match against queue entries in `pending` | `uploading` | `staged` that already have a hash; duplicates become `duplicate` rows with inline copy — **not** uploaded. Fallback if SubtleCrypto unavailable: `name`+`size`+`lastModified` and document in Completion Notes. Server remains authority for other-tab / prior-visit actives.
+  - [x] 5.3 Soft cap 10: if a selection would push pending+uploading+staged above 10, show cap copy and do not enqueue the overflow. No silent truncate.
+  - [x] 5.4 Drain **sequentially** (`for` + `await`, single in-flight upload). If the user adds more files while a drain is running, append `pending` and let the same drain (or a re-entrant-safe continuation) pick them up — **never** start a second parallel drain. Do **not** use `useFormSubmission` as the batch engine (it is one-shot global pending); per-row `state` is the source of truth. `UploadButton` may show busy while **any** row is `uploading`, but the file input must remain usable to append.
+  - [x] 5.5 Row UI (Tailwind only, no new `.module.css`): pending → Remove (no API); uploading → busy; staged → reuse discard via `discardSession(session.id)` **and** keep resume (`SessionReviewPanel` **or** compact row + link to `/upload/review/{id}` — do not mount N full review panels). failed → mapped error; duplicate → client or server copy. After discard of the hydrated 4.14 session, `forgetOpenImportSession` as today.
+  - [x] 5.6 `uploadClient.ts` `mapError` + `UploadMessages`: map `duplicate_statement_upload` → new `errorDuplicateStatement`. Do not reuse unknown/ambiguous/unreadable keys. `uploadStatement` / `discardSession` signatures stay per-file / per-id.
+  - [x] 5.7 `ui/lib/i18n/upload.ts` EN+ES: remove-pending label, in-queue already-added, `errorDuplicateStatement`, 10-file cap. Same `uploadMessages` object — no new i18n file.
+  - [x] 5.8 `rememberOpenImportSession`: still **one** id — last successfully staged session in this tab (including `initialSession` effect). Do not invent multi-id storage in this story.
 
-- [ ] Task 6: UI tests (AC: #1, #2, #4, #5, #6)
-  - [ ] 6.1 `UploadPanel.test.tsx`: replace **"unmounts the file picker while a session is active"** — picker must remain. Cover: N pending rows from `multiple`; pending Remove never calls `uploadStatement` for that file; two identical files in one selection → one upload; sequential order (mock resolve order); mid-batch reject leaves other rows; staged discard calls `discardSession` with that id; `initialSession` seeds a staged row **without** hiding the input.
-  - [ ] 6.2 `uploadClient.test.ts`: 409 + `duplicate_statement_upload` → new message.
+- [x] Task 6: UI tests (AC: #1, #2, #4, #5, #6)
+  - [x] 6.1 `UploadPanel.test.tsx`: replace **"unmounts the file picker while a session is active"** — picker must remain. Cover: N pending rows from `multiple`; pending Remove never calls `uploadStatement` for that file; two identical files in one selection → one upload; sequential order (mock resolve order); mid-batch reject leaves other rows; staged discard calls `discardSession` with that id; `initialSession` seeds a staged row **without** hiding the input.
+  - [x] 6.2 `uploadClient.test.ts`: 409 + `duplicate_statement_upload` → new message.
 
-- [ ] Task 7: Story-close overview (four-section template in Completion Notes) before `done`.
+- [x] Task 7: Story-close overview (four-section template in Completion Notes) before `done`.
+
+### Review Findings
+
+Group A (API hash/dedup) — 2026-08-25
+
+- [x] [Review][Patch] Put the blocking session id on 409 so the client can discard/resume that session [api/api/routes/import_sessions.py:241]
+- [x] [Review][Patch] Use `DuplicateStatementUploadError.CODE` in the 409 JSON body [api/api/routes/import_sessions.py:244]
+- [x] [Review][Patch] Mirror the Alembic partial index on `ImportSessionModel.__table_args__` [api/adapters/persistence/models.py:411]
+- [x] [Review][Patch] Assert `content_hash` is persisted (application `create_calls` + integration surviving row) [api/tests/test_import_session_application.py:1837] [api/tests/test_import_sessions_integration.py:251]
+
+- [x] [Review][Defer] Concurrent same-hash uploads can both pass the application check [api/application/import_session.py:464] — deferred, later hardening story: UI drain is sequential; spec forbids a unique `content_hash` constraint
+- [x] [Review][Defer] Upload 409 is an undeclared `JSONResponse` beside a 201 `response_model` [api/api/routes/import_sessions.py:200] — deferred, pre-existing
 
 ## Dev Notes
 
@@ -197,14 +209,66 @@ Paste the four sections from `_bmad-output/implementation-artifacts/story-close-
 
 ### Agent Model Used
 
+Cursor Grok 4.6 (UI, Tasks 5-7) + Claude Sonnet 5 (backend, Tasks 1-4)
+
 ### Debug Log References
+
+- Existing integration tests that re-upload the BAC fixture now append a trailing PDF comment so 4.16 byte-hash 409 does not collide with 4.12 identity tests (`_upload_bac_session`).
+- SubtleCrypto fallback (name+size+lastModified) is used only when `crypto.subtle` is missing; server 409 remains authority for other tabs / prior visits.
 
 ### Completion Notes List
 
+## Story-close overview — 4.16
+
+**Request path:**
+browser file picker → `UploadPanel` sequential `POST /api/import/sessions` (existing BFF) → `upload_statement_pdf` → `UploadStatementPdfService.execute` (hash + active-session lookup **before** `pdf_storage.save`) → `SqlAlchemyImportSessionRepository.create_session(content_hash=)` / 409 `duplicate_statement_upload`. Staged discard stays `DELETE /api/import/sessions/{id}`.
+
+**Key components:**
+`DuplicateStatementUploadError` + `compute_pdf_content_hash`; Alembic `0026_import_session_content_hash`; `find_active_session_by_content_hash`; `UploadPanel` queue (pending/uploading/staged/failed/duplicate); `uploadClient.mapError`; EN/ES keys on `uploadMessages`.
+
+**Why this shape:**
+No worker/batch-upload API (AD-2). Dedup is exact PDF bytes among **active** sessions only (discarded/finalized may re-upload). Client SHA-256 covers same-tab queue; server 409 covers other tabs. Compact resume rows instead of N `SessionReviewPanel`s.
+
+**What not to break:**
+`GET /import/sessions/active` still returns only the newest active session. `rememberOpenImportSession` is still one id. Do not unique-constrain `content_hash`. Do not start parallel `uploadStatement` calls. 4.12 commit identity is unchanged.
+
 ### File List
+
+- api/domain/errors.py
+- api/domain/import_session.py
+- api/application/import_session.py
+- api/adapters/persistence/models.py
+- api/adapters/persistence/import_sessions.py
+- api/adapters/persistence/migrations/versions/0026_import_session_content_hash.py
+- api/api/routes/import_sessions.py
+- api/tests/test_import_session_domain.py
+- api/tests/test_import_session_application.py
+- api/tests/test_import_sessions_integration.py
+- ui/app/upload/UploadPanel.tsx
+- ui/app/upload/UploadPanel.test.tsx
+- ui/app/upload/uploadClient.ts
+- ui/app/upload/uploadClient.test.ts
+- ui/app/upload/uploadQueueStore.ts
+- ui/lib/i18n/upload.ts
+- ui/app/upload/SessionReviewPanel.tsx
+- ui/app/upload/review/[sessionId]/IndividualReviewPanel.tsx
+- ui/app/upload/review/[sessionId]/IndividualReviewPanel.test.tsx
+- ui/app/upload/review/[sessionId]/ImportCompletionSummary.tsx
+- ui/app/upload/review/[sessionId]/ImportCompletionSummary.test.tsx
+- ui/app/upload/review/[sessionId]/ImportReviewSheet.tsx
+- ui/app/upload/review/[sessionId]/ImportReviewSheet.test.tsx
+- ui/app/upload/bulk/[sessionId]/BulkReviewPanel.tsx
+- ui/app/icons/AlertIcon.tsx
+- ui/app/icons/index.ts
+- api/scripts/seed_dev_user.py
+- _bmad-output/implementation-artifacts/sprint-status.yaml
+- _bmad-output/implementation-artifacts/4-16-multi-file-upload-pending-queue-dedup.md
 
 ## Change Log
 
 - 2026-08-19: Story created via `bmad-create-story` (then numbered 4.10). Threading deferred; status ready-for-dev.
 - 2026-08-20: Renumbered to 4.16; sprint-status key `4-16-multi-file-upload-pending-queue-dedup`.
 - 2026-08-24: Recreated via `bmad-create-story` against HEAD `8b30ed6`. Refreshed Alembic head (`0026` after `0025`), 4.14 picker coexistence, optional `create_session` hash for test factories, duplicate scope = active (`discarded_at` and `finalized_at` null). Status → ready-for-dev.
+- 2026-08-24/25: UI queue (Tasks 5-7) implemented and committed on this branch by a concurrent Cursor/Grok 4.6 session (commits `8bdaf21`, `353a357`, `c73f05a`, `d9d0dfb`).
+- 2026-08-25: Backend (Tasks 1-4) implemented by Claude Sonnet 5: domain error + `compute_pdf_content_hash`, `content_hash` column + Alembic `0026`, `find_active_session_by_content_hash`, pre-save duplicate check in `UploadStatementPdfService`, 409 HTTP mapping, unit + integration tests (adjusted pre-existing `_upload_bac_session` fixture to vary bytes per call so it doesn't collide with the new active-session dedup). Full backend + UI suites green. Status → review.
+- 2026-08-25: Group A code review patches: 409 includes blocking `session_id` (`exc.CODE`); ORM mirrors non-unique partial index; tests assert stored hash. Concurrent same-hash race deferred.

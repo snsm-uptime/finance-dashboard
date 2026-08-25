@@ -182,6 +182,7 @@ export function UploadPanel({ initialSession = null }: { initialSession?: Import
             state: isDuplicate ? "duplicate" : "failed",
             error: result.error,
             file: undefined,
+            duplicateSessionId: result.duplicateSessionId,
           });
         }
       }
