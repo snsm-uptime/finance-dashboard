@@ -70,6 +70,7 @@ export type UploadMessages = {
   errorUnknownStatement: string;
   errorAmbiguousStatement: string;
   errorUnreadableStatement: string;
+  errorDuplicateStatement: string;
   errorGeneric: string;
   errorUnauthorized: string;
 };
@@ -136,6 +137,7 @@ function mapError(
   if (code === "unknown_bank_adapter") return messages.errorUnknownStatement;
   if (code === "ambiguous_bank_adapter") return messages.errorAmbiguousStatement;
   if (code === "invalid_canonical_line") return messages.errorUnreadableStatement;
+  if (code === "duplicate_statement_upload") return messages.errorDuplicateStatement;
   return messages.errorGeneric;
 }
 

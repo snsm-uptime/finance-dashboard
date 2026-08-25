@@ -1,12 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { ChangeEvent, useEffect, useId, useRef, useState } from "react";
 
+import { IconButton } from "@/components/IconButton";
 import { usePreferences } from "@/components/PreferencesProvider";
-import { useFormSubmission } from "@/hooks";
+import { AlertIcon, CloseIcon, SpinnerIcon } from "@/app/icons";
 import { uploadCopy } from "@/lib/i18n/upload";
 import { UploadButton } from "./UploadButton";
 import {
+  discardSession,
   uploadStatement,
   type ImportSession,
   type UploadMessages,
@@ -15,50 +18,242 @@ import {
   forgetOpenImportSession,
   rememberOpenImportSession,
 } from "./openImportSession";
-import { SessionReviewPanel } from "./SessionReviewPanel";
+import {
+  readUploadQueue,
+  writeUploadQueue,
+  type UploadQueueEntry,
+} from "./uploadQueueStore";
+
+const QUEUE_CAP = 10;
+const ACTIVE_STATES = new Set(["pending", "uploading", "staged"]);
+
+type QueueEntry = UploadQueueEntry;
+
+function newEntryId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `q-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function bytesToHex(buffer: ArrayBuffer): string {
+  return Array.from(new Uint8Array(buffer))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function hashFile(file: File): Promise<{ contentHash?: string; fallbackKey: string }> {
+  const fallbackKey = `${file.name}:${file.size}:${file.lastModified}`;
+  const subtle = globalThis.crypto?.subtle;
+  if (!subtle) return { fallbackKey };
+  const digest = await subtle.digest("SHA-256", await file.arrayBuffer());
+  return { contentHash: bytesToHex(digest), fallbackKey };
+}
+
+function isInQueueDuplicate(
+  queue: QueueEntry[],
+  hashed: { contentHash?: string; fallbackKey: string },
+): boolean {
+  return queue.some((entry) => {
+    if (!ACTIVE_STATES.has(entry.state)) return false;
+    if (hashed.contentHash && entry.contentHash) {
+      return entry.contentHash === hashed.contentHash;
+    }
+    return entry.fallbackKey === hashed.fallbackKey;
+  });
+}
+
+function activeCount(queue: QueueEntry[]): number {
+  return queue.filter((entry) => ACTIVE_STATES.has(entry.state)).length;
+}
+
+function lastStagedSessionId(queue: QueueEntry[]): string | null {
+  for (let index = queue.length - 1; index >= 0; index -= 1) {
+    const entry = queue[index];
+    if (entry.state === "staged" && entry.session) return entry.session.id;
+  }
+  return null;
+}
+
+function rememberLastStaged(queue: QueueEntry[]) {
+  const id = lastStagedSessionId(queue);
+  if (id) rememberOpenImportSession(id);
+  else forgetOpenImportSession();
+}
+
+function seedFromSession(initialSession: ImportSession): QueueEntry {
+  return {
+    id: initialSession.id,
+    state: "staged",
+    session: initialSession,
+    displayName: initialSession.statements[0]?.filename ?? initialSession.id,
+  };
+}
+
+function initialQueue(initialSession: ImportSession | null): QueueEntry[] {
+  const stored = readUploadQueue();
+  if (stored.length > 0) {
+    if (
+      initialSession &&
+      !stored.some((entry) => entry.session?.id === initialSession.id)
+    ) {
+      return [...stored, seedFromSession(initialSession)];
+    }
+    return stored;
+  }
+  return initialSession ? [seedFromSession(initialSession)] : [];
+}
 
 export function UploadPanel({ initialSession = null }: { initialSession?: ImportSession | null }) {
   const { locale } = usePreferences();
   const t = uploadCopy(locale);
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [session, setSession] = useState<ImportSession | null>(initialSession);
-  const [discarded, setDiscarded] = useState(false);
+  const [queue, setQueue] = useState<QueueEntry[]>(() => initialQueue(initialSession));
+  const queueRef = useRef<QueueEntry[]>(queue);
+  const drainingRef = useRef(false);
+  const aliveRef = useRef(true);
+  const [capMessage, setCapMessage] = useState<string | null>(null);
 
   const messages: UploadMessages = {
     errorUnsupportedFileType: t.errorUnsupportedFileType,
     errorUnknownStatement: t.errorUnknownStatement,
     errorAmbiguousStatement: t.errorAmbiguousStatement,
     errorUnreadableStatement: t.errorUnreadableStatement,
+    errorDuplicateStatement: t.errorDuplicateStatement,
     errorGeneric: t.errorGeneric,
     errorUnauthorized: t.errorUnauthorized,
   };
 
-  const upload = useFormSubmission(async (file: File) => {
-    const result = await uploadStatement(file, messages);
-    if (result.ok) {
-      setSession(result.session);
-      setDiscarded(false);
-      rememberOpenImportSession(result.session.id);
-    }
-    return result;
-  });
+  function commitQueue(next: QueueEntry[]) {
+    queueRef.current = next;
+    writeUploadQueue(next);
+    setQueue(next);
+  }
+
+  function patchEntry(id: string, patch: Partial<QueueEntry>) {
+    commitQueue(queueRef.current.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)));
+  }
 
   useEffect(() => {
-    if (initialSession) {
-      rememberOpenImportSession(initialSession.id);
-      return;
-    }
-    forgetOpenImportSession();
+    aliveRef.current = true;
+    writeUploadQueue(queueRef.current);
+    void drainQueue();
+    return () => {
+      aliveRef.current = false;
+    };
+    // Resume any leftover pending uploads after returning from review.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only drain
+  }, []);
+
+  useEffect(() => {
+    rememberLastStaged(queueRef.current);
   }, [initialSession]);
 
-  async function onFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file || session) return;
-    setDiscarded(false);
-    await upload.submit(file);
+  async function drainQueue() {
+    if (drainingRef.current) return;
+    drainingRef.current = true;
+    try {
+      for (;;) {
+        if (!aliveRef.current) return;
+        const next = queueRef.current.find((entry) => entry.state === "pending" && entry.file);
+        if (!next || !next.file) break;
+        patchEntry(next.id, { state: "uploading", error: undefined });
+        const result = await uploadStatement(next.file, messages);
+        if (!aliveRef.current) return;
+        if (result?.ok) {
+          const updated = queueRef.current.map((entry) =>
+            entry.id === next.id
+              ? {
+                  ...entry,
+                  state: "staged" as const,
+                  session: result.session,
+                  file: undefined,
+                  error: undefined,
+                  displayName: result.session.statements[0]?.filename ?? next.displayName,
+                }
+              : entry,
+          );
+          commitQueue(updated);
+          rememberOpenImportSession(result.session.id);
+        } else {
+          const isDuplicate = result.error === messages.errorDuplicateStatement;
+          patchEntry(next.id, {
+            state: isDuplicate ? "duplicate" : "failed",
+            error: result.error,
+            file: undefined,
+          });
+        }
+      }
+    } finally {
+      drainingRef.current = false;
+      if (aliveRef.current && queueRef.current.some((entry) => entry.state === "pending")) {
+        void drainQueue();
+      }
+    }
   }
+
+  async function onFileChange(event: ChangeEvent<HTMLInputElement>) {
+    // Snapshot before clearing — FileList is live and becomes empty when value is reset.
+    const picked = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (picked.length === 0) return;
+
+    setCapMessage(null);
+    const additions: QueueEntry[] = [];
+    let overflow = false;
+    let occupied = activeCount(queueRef.current);
+
+    for (const file of picked) {
+      const hashed = await hashFile(file);
+      const against = [...queueRef.current, ...additions];
+      if (isInQueueDuplicate(against, hashed)) {
+        additions.push({
+          id: newEntryId(),
+          ...hashed,
+          state: "duplicate",
+          displayName: file.name,
+          error: t.errorAlreadyQueued,
+        });
+        continue;
+      }
+      if (occupied >= QUEUE_CAP) {
+        overflow = true;
+        continue;
+      }
+      occupied += 1;
+      additions.push({
+        id: newEntryId(),
+        file,
+        ...hashed,
+        state: "pending",
+        displayName: file.name,
+      });
+    }
+
+    if (additions.length > 0) {
+      commitQueue([...queueRef.current, ...additions]);
+    }
+    if (overflow) setCapMessage(t.queueCap);
+    void drainQueue();
+  }
+
+  function removePending(id: string) {
+    commitQueue(queueRef.current.filter((entry) => entry.id !== id));
+  }
+
+  async function discardStaged(id: string, sessionId: string) {
+    const result = await discardSession(sessionId, messages);
+    if (!result.ok) {
+      patchEntry(id, { error: result.error });
+      return;
+    }
+    const remaining = queueRef.current.filter((entry) => entry.id !== id);
+    commitQueue(remaining);
+    rememberLastStaged(remaining);
+  }
+
+  const uploading = queue.some((entry) => entry.state === "uploading");
 
   return (
     <main
@@ -67,51 +262,114 @@ export function UploadPanel({ initialSession = null }: { initialSession?: Import
     >
       <h1 className="sr-only">{t.title}</h1>
 
-      {session ? (
-        <div className="flex flex-1 flex-col items-center justify-center px-[1.5rem] py-[2.5rem]">
-          <SessionReviewPanel
-            session={session}
-            onSessionChanged={setSession}
-            onDiscarded={() => {
-              forgetOpenImportSession();
-              setSession(null);
-              setDiscarded(true);
-            }}
+      <div className="flex-1 flex flex-col items-center justify-center px-[1.5rem] py-[2.5rem]">
+        <div className="flex flex-col items-center">
+          <UploadButton
+            pending={uploading}
+            label={t.uploadCta}
+            pendingLabel={t.uploading}
+            onClick={() => inputRef.current?.click()}
+          />
+          <input
+            ref={inputRef}
+            id={inputId}
+            type="file"
+            multiple
+            accept="application/pdf"
+            onChange={onFileChange}
+            className="sr-only"
+            aria-label={t.pickFile}
           />
         </div>
-      ) : (
-        <div className="flex-1 flex flex-col items-center justify-center px-[1.5rem] py-[2.5rem]">
-          <div className="flex flex-col items-center">
-            <UploadButton
-              pending={upload.pending}
-              label={t.uploadCta}
-              pendingLabel={t.uploading}
-              onClick={() => inputRef.current?.click()}
-            />
-            <input
-              ref={inputRef}
-              id={inputId}
-              type="file"
-              accept="application/pdf"
-              disabled={upload.pending}
-              onChange={onFileChange}
-              className="sr-only"
-              aria-label={t.pickFile}
-            />
-          </div>
 
-          <div className="mt-6 min-h-[1.25rem] text-center" aria-live="polite">
-            {upload.error ? (
-              <p className="text-owe text-[0.9rem] m-0" role="alert">
-                {upload.error}
-              </p>
-            ) : null}
-            {discarded ? (
-              <p className="text-muted text-[0.85rem] m-0">{t.discarded}</p>
-            ) : null}
-          </div>
+        <div className="mt-6 w-full max-w-[26rem]" aria-live="polite">
+          {capMessage ? (
+            <p className="text-owe text-[0.9rem] m-0 mb-3 text-center" role="alert">
+              {capMessage}
+            </p>
+          ) : null}
+          {queue.length > 0 ? (
+            <ul className="m-0 p-0 list-none flex flex-col gap-2">
+              {queue.map((entry) => {
+                const reviewHref =
+                  entry.state === "staged" && entry.session
+                    ? `/upload/review/${encodeURIComponent(entry.session.id)}`
+                    : null;
+                return (
+                  <li
+                    key={entry.id}
+                    className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2"
+                  >
+                    {reviewHref ? (
+                      <Link
+                        href={reviewHref}
+                        className="min-w-0 flex-1 truncate text-[0.9rem] text-foreground no-underline"
+                        aria-label={`${t.resumeReview}: ${entry.displayName}`}
+                      >
+                        {entry.displayName}
+                      </Link>
+                    ) : (
+                      <div className="min-w-0 flex-1">
+                        <p className="m-0 truncate text-[0.9rem] text-foreground">
+                          {entry.displayName}
+                        </p>
+                        {entry.error && entry.state !== "duplicate" ? (
+                          <p className="m-0 mt-1 text-owe text-[0.8rem]" role="alert">
+                            {entry.error}
+                          </p>
+                        ) : null}
+                      </div>
+                    )}
+                    {entry.state === "pending" ? (
+                      <IconButton
+                        variant="ghost"
+                        label={t.removePending}
+                        icon={<CloseIcon className="size-5" />}
+                        onClick={() => removePending(entry.id)}
+                      />
+                    ) : null}
+                    {entry.state === "uploading" ? (
+                      <span
+                        className="grid size-5 shrink-0 place-items-center"
+                        aria-label={t.uploading}
+                        aria-busy="true"
+                      >
+                        <SpinnerIcon className="col-start-1 row-start-1 size-5 animate-spin motion-reduce:animate-none" />
+                      </span>
+                    ) : null}
+                    {reviewHref ? (
+                      <IconButton
+                        variant="ghost"
+                        label={t.close}
+                        icon={<CloseIcon className="size-5" />}
+                        onClick={() => {
+                          const sessionId = entry.session?.id;
+                          if (sessionId) void discardStaged(entry.id, sessionId);
+                        }}
+                      />
+                    ) : null}
+                    {entry.state === "duplicate" ? (
+                      <span
+                        className="group relative shrink-0 text-owe"
+                        tabIndex={0}
+                        aria-label={entry.error ?? t.errorDuplicateStatement}
+                      >
+                        <AlertIcon className="block size-5" />
+                        <span
+                          role="tooltip"
+                          className="pointer-events-none absolute right-0 top-full z-10 mt-1 hidden w-max max-w-[16rem] rounded-sm bg-foreground px-2 py-1 text-left text-[0.75rem] leading-snug text-background group-hover:block group-focus-visible:block"
+                        >
+                          {entry.error ?? t.errorDuplicateStatement}
+                        </span>
+                      </span>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
         </div>
-      )}
+      </div>
     </main>
   );
 }
