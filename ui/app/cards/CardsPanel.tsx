@@ -14,7 +14,6 @@ import {
 } from "../lists/membershipListsStore";
 import { fetchCards, type CardItem, type CardsClientMessages } from "./cardsClient";
 import { CardRoutingControl } from "./CardRoutingControl";
-import { DefaultImportListControl } from "./DefaultImportListControl";
 import { RegisterCardForm } from "./RegisterCardForm";
 
 function maskIban(iban: string): string {
@@ -94,11 +93,10 @@ export function CardsPanel({ embedded = false }: Props) {
   }
 
   const sections = (
-    // Source order = mobile stack (Register, default destination, list).
-    // md:flex-col-reverse restores desktop (list, default, Register).
+    // Source order = mobile stack (Register, then list).
+    // md:flex-col-reverse restores desktop (list, then Register).
     // md:justify-end keeps a reversed column top-aligned if a parent stretches it.
     // Tailwind md is 768px — same breakpoint as Home's lists/cards split (home.module.scss).
-    // Keep these three children in this order; a new sibling would reverse on desktop.
     <div
       className={`flex flex-col gap-8 md:flex-col-reverse md:justify-end ${embedded ? "" : "max-w-[32rem]"}`}
     >
@@ -120,19 +118,6 @@ export function CardsPanel({ embedded = false }: Props) {
           onRegistered={onRegistered}
         />
       </section>
-
-      <div className="empty:hidden">
-        <DefaultImportListControl
-          lists={lists}
-          messages={{
-            defaultListTitle: t.defaultListTitle,
-            defaultListHint: t.defaultListHint,
-            errorGeneric: t.errorGeneric,
-            errorUnauthorized: t.errorUnauthorized,
-            errorForbidden: t.errorForbidden,
-          }}
-        />
-      </div>
 
       <section aria-labelledby={listTitleId}>
         <HeadingTag

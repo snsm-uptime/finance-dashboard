@@ -67,7 +67,7 @@ export const uploadMessages = {
     individualReviewDeleting: "Deleting…",
     individualReviewUndo: "Undo",
     individualReviewUndoing: "Undoing…",
-    individualReviewNoDefaultList: "No default list configured — set one from your cards page.",
+    individualReviewNoDefaultList: "No default list configured — set one from your account page.",
     individualReviewNoDefaultListShort: "No default list",
     individualReviewCommitting: "Committing…",
     individualReviewNoLists: "You don't belong to any list yet.",
@@ -182,7 +182,7 @@ export const uploadMessages = {
     individualReviewUndo: "Deshacer",
     individualReviewUndoing: "Deshaciendo…",
     individualReviewNoDefaultList:
-      "No hay lista predeterminada configurada — configúrala desde tu página de tarjetas.",
+      "No hay lista predeterminada configurada — configúrala desde tu página de cuenta.",
     individualReviewNoDefaultListShort: "Sin lista predeterminada",
     individualReviewCommitting: "Confirmando…",
     individualReviewNoLists: "Todavía no perteneces a ninguna lista.",
