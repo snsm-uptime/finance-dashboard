@@ -459,6 +459,7 @@ class SqlAlchemyListRepository:
             external_ref=row.external_ref,
             origin_kind=row.origin_kind,
             origin_card_id=row.origin_card_id,
+            import_reviewed_at=row.import_reviewed_at,
         )
 
     def list_ledger_entries(self, list_id: UUID):
@@ -502,6 +503,7 @@ class SqlAlchemyListRepository:
                     external_ref=row.external_ref,
                     origin_kind=row.origin_kind,
                     origin_card_id=row.origin_card_id,
+                    import_reviewed_at=row.import_reviewed_at,
                 )
             )
         return result
@@ -560,8 +562,11 @@ class SqlAlchemyListRepository:
             raise SubjectNotFoundError()
         if row.payer_id != actor_user_id:
             raise NotEntryPayerError()
+        from datetime import UTC, datetime
+
         row.origin_kind = origin_kind
         row.origin_card_id = origin_card_id
+        row.import_reviewed_at = datetime.now(UTC)
         self._session.flush()
         return LedgerEntryRecord(
             id=row.id,
@@ -583,6 +588,48 @@ class SqlAlchemyListRepository:
             external_ref=row.external_ref,
             origin_kind=row.origin_kind,
             origin_card_id=row.origin_card_id,
+            import_reviewed_at=row.import_reviewed_at,
+        )
+
+    def mark_ledger_entry_reviewed(self, *, list_id, entry_id, actor_user_id):
+        from datetime import UTC, datetime
+
+        from application.expenses import LedgerEntryRecord
+
+        row = self._session.get(LedgerEntryModel, entry_id)
+        if (
+            row is None
+            or row.list_id != list_id
+            or row.normalized_description is None
+            or row.payer_id is None
+            or row.provenance is None
+            or row.line_type is None
+            or row.posted_date is None
+        ):
+            raise SubjectNotFoundError()
+        row.import_reviewed_at = datetime.now(UTC)
+        self._session.flush()
+        return LedgerEntryRecord(
+            id=row.id,
+            list_id=row.list_id,
+            amount=Decimal(str(row.amount)),
+            currency=row.currency,
+            normalized_description=row.normalized_description,
+            payer_id=row.payer_id,
+            provenance=row.provenance,
+            line_type=row.line_type,
+            posted_date=row.posted_date,
+            created_at=row.created_at,
+            amount_crc=Decimal(str(row.amount_crc)),
+            fx_rate=Decimal(str(row.fx_rate)),
+            fx_rate_date=row.fx_rate_date,
+            fx_fallback=row.fx_fallback,
+            receipt_id=row.receipt_id,
+            product_id=row.product_id,
+            external_ref=row.external_ref,
+            origin_kind=row.origin_kind,
+            origin_card_id=row.origin_card_id,
+            import_reviewed_at=row.import_reviewed_at,
         )
 
     def list_members_with_alias(self, list_id: UUID):

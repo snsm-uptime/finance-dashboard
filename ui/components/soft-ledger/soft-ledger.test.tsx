@@ -188,6 +188,20 @@ describe("Soft-Ledger primitives", () => {
     expect(host.textContent).toContain("Delete");
   });
 
+  it("renders an accent New chip after the amount when newBadgeLabel is set", () => {
+    act(() => {
+      root.render(
+        <ReceiptRow title="Coffee" amount="₡10" newBadgeLabel="New" />,
+      );
+    });
+    const amountEl = Array.from(host.querySelectorAll("span")).find(
+      (el) => el.textContent === "₡10",
+    );
+    const badge = amountEl?.nextElementSibling as HTMLElement | null;
+    expect(badge?.textContent).toBe("New");
+    expect(badge?.className).toContain("border-accent");
+  });
+
   it("hides direction, net, and payer alias when those props are omitted", () => {
     act(() => {
       root.render(<ReceiptRow title="Coffee" when="2026-08-19" amount="₡10" />);

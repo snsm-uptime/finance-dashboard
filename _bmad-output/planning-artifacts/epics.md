@@ -1480,21 +1480,19 @@ So that I can find them to adjust splits without hunting through history.
 
 **Acceptance Criteria:**
 
-**Given** a row-level commit creates a ledger entry
-**When** the entry is written
-**Then** ledger_entries.import_reviewed_at is null
-
 **Given** a ledger entry in a list view
-**When** it has provenance 'parser' and a null import_reviewed_at
-**Then** ReceiptRow renders a badge via a new optional prop, using the existing Chip / ChipTone component rather than a bespoke element
+**When** it has provenance `parser` and its `created_at` calendar date in `America/Costa_Rica` is today
+**Then** ReceiptRow renders a "New" badge via an optional localized Chip (`tone="accent"`) near the amount — not a bespoke element
+**And** the statement transaction date (`posted_date`) does not affect the badge
 
-**Given** I interact with a badged entry
-**When** I edit it in any way
-**Then** import_reviewed_at is set and the badge clears — dismissal is not gated on split fields specifically, so it stays correct once a split-edit control exists
+**Given** a parser-imported ledger entry
+**When** its `created_at` calendar date in `America/Costa_Rica` is no longer today
+**Then** the badge is not shown
+**And** there is no explicit "mark reviewed" control — the badge is not dismissed by origin edit or any other row action
 
-**Given** no split-edit control is wired into ReceiptRow yet
-**When** I want to clear a badge I have finished with
-**Then** an explicit dismissal affordance exists, so the badge cannot become permanently stuck
+**Given** a hand-entered ledger entry (`provenance` `hand`)
+**When** I view the list
+**Then** no New badge, regardless of `created_at`
 
 **Given** this story's scope
 **When** the badge points the user at adjusting a split
