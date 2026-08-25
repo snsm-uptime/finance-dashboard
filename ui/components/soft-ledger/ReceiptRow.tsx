@@ -23,6 +23,8 @@ export type ReceiptRowProps = {
   netLabel?: string;
   netPolarity?: "owe" | "owed";
   menu?: ReceiptRowMenuMessages;
+  /** Localized "New" chip text for freshly imported parser rows (Story 4.15). */
+  newBadgeLabel?: string;
   /** Empty settle surface — muted placeholder, no invented totals. */
   emptyLabel?: string;
   /** FX audit detail (Story 3.5 AC #3) — rate/date, keyboard-accessible via <details>. */
@@ -105,6 +107,7 @@ export function ReceiptRow({
   netLabel,
   netPolarity,
   menu,
+  newBadgeLabel,
   emptyLabel,
   fxSummary,
   fxDetail,
@@ -156,6 +159,7 @@ export function ReceiptRow({
               {amount}
             </span>
           ) : null}
+          {newBadgeLabel ? <Chip tone="accent">{newBadgeLabel}</Chip> : null}
         </div>
 
         {directionLabel ? (

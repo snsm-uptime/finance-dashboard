@@ -117,6 +117,7 @@ function asExpenses(data: unknown): ExpenseItem[] {
       origin_kind: typeof e.origin_kind === "string" ? e.origin_kind : null,
       origin_card_id: typeof e.origin_card_id === "string" ? e.origin_card_id : null,
       origin_card_label: typeof e.origin_card_label === "string" ? e.origin_card_label : null,
+      import_reviewed_at: typeof e.import_reviewed_at === "string" ? e.import_reviewed_at : null,
       viewer_share_kind:
         e.viewer_share_kind === "percentage" || e.viewer_share_kind === "absolute"
           ? e.viewer_share_kind
@@ -214,6 +215,35 @@ export function originChipFrom(
   }
   if (e.payer_id !== currentUserId) return t.expenseOriginUnknown;
   return t.expenseOriginNone;
+}
+
+const COSTA_RICA_TZ = "America/Costa_Rica";
+
+/** Calendar date (YYYY-MM-DD) in America/Costa_Rica for an ISO timestamp. */
+export function calendarDateInCostaRica(isoDatetime: string): string | null {
+  const ms = Date.parse(isoDatetime);
+  if (!Number.isFinite(ms)) return null;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: COSTA_RICA_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(ms));
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  if (!year || !month || !day) return null;
+  return `${year}-${month}-${day}`;
+}
+
+export function newBadgeLabelFrom(
+  e: ExpenseItem,
+  t: { receiptNewBadge: string },
+  today: string,
+): string | undefined {
+  if (e.provenance !== "parser") return undefined;
+  const createdOn = calendarDateInCostaRica(e.created_at);
+  return createdOn !== null && createdOn === today ? t.receiptNewBadge : undefined;
 }
 
 /** Roster alias for a receipt row; short id if the payer has not claimed one yet. */
@@ -452,6 +482,7 @@ export default async function ListDetailPage({
     balances?.balance_crc,
     t,
   );
+  const todayCr = calendarDateInCostaRica(new Date().toISOString()) ?? "";
 
   return (
     <main className={styles.softMain}>
@@ -580,6 +611,7 @@ export default async function ListDetailPage({
                         }),
                         netLabel: net?.label,
                         netPolarity: net?.polarity,
+                        newBadgeLabel: newBadgeLabelFrom(e, t, todayCr),
                         menu: {
                           menuAria: t.receiptMenuAria,
                           editLabel: t.receiptEdit,

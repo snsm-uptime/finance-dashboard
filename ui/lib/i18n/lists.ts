@@ -89,6 +89,7 @@ export const listsMessages = {
     receiptMenuAria: "Expense options",
     receiptEdit: "Edit",
     receiptDelete: "Delete",
+    receiptNewBadge: "New",
   },
   es: {
     title: "Inicio",
@@ -179,6 +180,7 @@ export const listsMessages = {
     receiptMenuAria: "Opciones del gasto",
     receiptEdit: "Editar",
     receiptDelete: "Eliminar",
+    receiptNewBadge: "Nuevo",
   },
 } as const;
 

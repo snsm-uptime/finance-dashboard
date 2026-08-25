@@ -83,11 +83,9 @@ Stops being flipped directly by a commit action. After every per-row assign/dele
 
 ### `ledger_entries` — "new" badge
 
-```
-import_reviewed_at   TIMESTAMPTZ NULL
-```
+Badge visibility is **not** a persisted review timestamp. A parser-imported row shows "New" while `created_at`'s calendar date in `America/Costa_Rica` is today. `posted_date` (statement transaction date) is ignored. Hand rows never show the badge. There is no explicit dismissal control; the badge drops off at Costa Rica midnight after the import day.
 
-`NULL` when a row-level commit creates the entry; set to `now()` the first time the user interacts with that row afterward. Badge visibility = `provenance == 'parser' AND import_reviewed_at IS NULL`. Additive; does not touch `split_overrides`.
+(`import_reviewed_at` was an earlier draft of this feature and is not the visibility rule.)
 
 ### Bulk review consistency
 
@@ -236,9 +234,9 @@ This is deliberately **not** the native `dblclick` event. It is explicit click-c
 
 ## 7. "New" badge in the destination list
 
-`ReceiptRow` gets one optional prop (`newBadge?: boolean`), rendered as a `Chip` near the amount — reusing the existing `Chip`/`ChipTone` component rather than a bespoke element. `ui/app/lists/[listId]/page.tsx` wires it from `provenance === 'parser' && import_reviewed_at === null`.
+`ReceiptRow` gets one optional prop (`newBadgeLabel?: string`), rendered as a `Chip` (`tone="accent"`) near the amount — reusing the existing `Chip`/`ChipTone` component rather than a bespoke element. `ui/app/lists/[listId]/page.tsx` wires it from `newBadgeLabelFrom`: `provenance === 'parser'` and `created_at`'s calendar date in `America/Costa_Rica` equals today. The statement `posted_date` is not used.
 
-Dismissal (`import_reviewed_at` → `now()`) fires on **any** edit to that entry, not gated on split fields — future-proofing for whenever the split-edit control from conflict #3 gets wired in. Until that control exists, the badge also needs an explicit "got it" dismissal so it is not permanently stuck on.
+The badge is not dismissed by editing the row. It lasts until the Costa Rica calendar day of `created_at` is over. There is no "mark reviewed" menu item.
 
 ---
 

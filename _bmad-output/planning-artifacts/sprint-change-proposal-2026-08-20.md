@@ -365,6 +365,8 @@ So that I can find them to adjust splits without hunting through history.
 
 Rationale: the badge is buildable now and independently useful. Its scope boundary is called out explicitly because the badge implies a split-edit affordance that does not yet persist — shipping the badge without naming that gap would create a dead-end for the user.
 
+**Amended 2026-08-24:** Story 4.15 ACs in `epics.md` no longer use `import_reviewed_at` or an explicit "mark reviewed" dismissal. The shipped rule is: parser rows whose `created_at` calendar date in `America/Costa_Rica` is today. The block above is the original proposal text.
+
 ### sprint-status.yaml — new backlog entries
 
 ```yaml
@@ -396,7 +398,7 @@ Inserted after `4-9-bac-credit-real-statement-compatibility-fix`, before `epic-4
 
 - **4.9 first** (already in `review`). Without a working BAC adapter, real uploads yield `candidate_row_count == 0` — there are no real rows to review, so nothing downstream is verifiable against a real statement.
 - **4.12 (commit batch) sits mid-sequence, not first.** Under its old number 4.9 it was next in line, but amending its ACs to per-transaction semantics made it depend on 4.10/4.11: its batch journaling, dedup, and PDF-cleanup criteria all attach to a per-row commit path that does not exist until then. The renumber is what puts it back in buildable order.
-- **4.15** (badge) depends only on 4.11 — entries must be created with a null `import_reviewed_at` — and can run in parallel with 4.13–4.14.
+- **4.15** (badge) depends only on 4.11 — committed parser rows must exist in the destination list — and can run in parallel with 4.13–4.14.
 - **4.16** (multi-file upload) is independent — entirely upload-stage, never touching review granularity — and can run at any point.
 - **Story files renamed** to match: `4-11-bac-credit-…` → `4-9-bac-credit-…`, `4-10-multi-file-…` → `4-16-multi-file-…`. Story 4.9's shipped branches and PRs (#61, #62, #63) still carry `4-11` in their names; that is recorded inside the story file rather than rewritten.
 - **Completed story files (4.1–4.8) were deliberately left unedited.** They carry range expressions like *"Stories 4.4–4.9"* describing the original import pipeline; renumbering those would make historical statements false in a new way. A decode table lives in `epics.md` under Epic 4.
