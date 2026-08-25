@@ -9,6 +9,7 @@ import { usePreferences } from "@/components/PreferencesProvider";
 import { useFormSubmission } from "@/hooks";
 import { fetchLists } from "@/app/lists/listsClient";
 import { replaceMembershipLists, useMembershipLists } from "@/app/lists/membershipListsStore";
+import { SpinnerIcon } from "@/app/icons";
 import { uploadCopy } from "@/lib/i18n/upload";
 import { bulkCommitSession, type BulkCommitMessages } from "../../uploadClient";
 
@@ -100,7 +101,13 @@ export function BulkReviewPanel({ sessionId }: BulkReviewPanelProps) {
         ) : null}
 
         {lists === null && !listsError ? (
-          <p className="text-muted text-[0.85rem] m-0">{t.bulkReviewLoadingLists}</p>
+          <span
+            className="grid size-5 place-items-center text-muted"
+            aria-label={t.bulkReviewLoadingLists}
+            aria-busy="true"
+          >
+            <SpinnerIcon className="size-5 animate-spin motion-reduce:animate-none" />
+          </span>
         ) : null}
 
         {lists !== null && lists.length === 0 ? (
