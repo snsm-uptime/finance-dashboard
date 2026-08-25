@@ -928,6 +928,8 @@ class DeleteCandidateRowService:
 
         if session.discarded_at is not None:
             raise ImportSessionDiscardedError()
+        if session.finalized_at is not None:
+            raise ImportRowNotAvailableError()
 
         # No PDF release here (Story 4.12, AC #7) — see AssignCandidateRowService.
         return self._session_repo.mark_candidate_row_deleted(
@@ -951,10 +953,10 @@ class UnassignCandidateRowService:
     last-action-only, and the sheet must be able to discard an arbitrary
     assigned row, not just the most recent one.
 
-    Not-found / discarded checks mirror every other row-endpoint service; the
-    pending-only guard and the `dedup_skipped` block both live in the
-    repository, same as `DeleteCandidateRowService` leans on the repo's
-    guarded UPDATE rather than duplicating the check here.
+    Not-found / discarded / finalized checks mirror every other row-endpoint
+    service; the pending-only guard and the `dedup_skipped` block both live
+    in the repository, same as `DeleteCandidateRowService` leans on the
+    repo's guarded UPDATE rather than duplicating the check here.
 
     No FX, no PDF release: discard makes the session less resolved, never
     more, so AD-3's retain rule can only move toward keeping the file (same
@@ -973,6 +975,8 @@ class UnassignCandidateRowService:
 
         if session.discarded_at is not None:
             raise ImportSessionDiscardedError()
+        if session.finalized_at is not None:
+            raise ImportRowNotAvailableError()
 
         return self._session_repo.unassign_candidate_row(
             session_id=command.session_id,

@@ -476,6 +476,8 @@ class _FakeImportSessionRepo:
                     continue
                 if candidate.status != ROW_STATUS_COMMITTED:
                     raise ImportRowNotAvailableError()
+                if candidate.dedup_skipped:
+                    raise ImportRowNotDiscardableError()
                 self.open_ledger_row_ids.discard(candidate.id)
                 self.cleared_undo_pointers.append(session_id)
                 updated_rows.append(
@@ -483,6 +485,7 @@ class _FakeImportSessionRepo:
                         candidate,
                         status=ROW_STATUS_DELETED,
                         resolved_list_id=None,
+                        resolved_at=datetime.now(UTC),
                     )
                 )
             status = (
@@ -1554,6 +1557,64 @@ def test_unassign_dedup_skipped_row_raises_not_discardable_and_stays_committed()
     unchanged = repo.get_session(session_id, actor).statements[0].candidate_rows[0]
     assert unchanged.status == ROW_STATUS_COMMITTED
     assert unchanged.dedup_skipped is True
+
+
+def test_delete_dedup_skipped_row_raises_not_discardable_and_stays_committed() -> None:
+    """Review finding (Story 4.13.1): the sheet's Discard control actually
+    calls delete, not unassign — the dedup_skipped guard must hold there
+    too, mirroring test_unassign_dedup_skipped_row_raises_not_discardable_and_stays_committed."""
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    line = _row("already-here")
+    actor, list_id, lookup, session_id = _assign_fixture(repo, storage, [line])
+    repo.existing_identities.add(canonical_identity_key(line))
+    target = repo.get_session(session_id, actor).statements[0].candidate_rows[0]
+    AssignCandidateRowService(repo, lookup, _FakeFxService()).execute(
+        AssignCandidateRowCommand(
+            actor_user_id=actor, session_id=session_id, row_id=target.id, list_id=list_id
+        )
+    )
+    assert repo.get_session(session_id, actor).statements[0].candidate_rows[0].dedup_skipped is True
+
+    with pytest.raises(ImportRowNotDiscardableError):
+        DeleteCandidateRowService(repo).execute(
+            DeleteCandidateRowCommand(actor_user_id=actor, session_id=session_id, row_id=target.id)
+        )
+
+    unchanged = repo.get_session(session_id, actor).statements[0].candidate_rows[0]
+    assert unchanged.status == ROW_STATUS_COMMITTED
+    assert unchanged.dedup_skipped is True
+
+
+def test_delete_and_unassign_on_a_finalized_session_raise_not_available() -> None:
+    """Review finding (Story 4.13.1): only discarded_at was checked, never
+    finalized_at — this story's sheet is what extends the committed-but-
+    unfinalized window, so a stale tab must not be able to mutate a row
+    after finalize already released the PDF and landed the user."""
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    actor, list_id, lookup, session_id = _assign_fixture(repo, storage, [_row()])
+    target = repo.get_session(session_id, actor).statements[0].candidate_rows[0]
+    AssignCandidateRowService(repo, lookup, _FakeFxService()).execute(
+        AssignCandidateRowCommand(
+            actor_user_id=actor, session_id=session_id, row_id=target.id, list_id=list_id
+        )
+    )
+    FinalizeImportSessionService(repo, storage).execute(
+        FinalizeImportSessionCommand(actor_user_id=actor, session_id=session_id)
+    )
+
+    with pytest.raises(ImportRowNotAvailableError):
+        DeleteCandidateRowService(repo).execute(
+            DeleteCandidateRowCommand(actor_user_id=actor, session_id=session_id, row_id=target.id)
+        )
+
+    with pytest.raises(ImportRowNotAvailableError):
+        UnassignCandidateRowService(repo).execute(
+            UnassignCandidateRowCommand(
+                actor_user_id=actor, session_id=session_id, row_id=target.id
+            )
+        )
 
 
 def test_unassign_committed_row_returns_to_pending_and_clears_pointer() -> None:

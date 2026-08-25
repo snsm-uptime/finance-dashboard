@@ -311,59 +311,6 @@ describe("expense client", () => {
     if (result.ok) {
       expect(result.expense.description).toBe("Coffee");
       expect(result.expense.provenance).toBe("hand");
-      expect(result.expense.import_reviewed_at).toBeNull();
-    }
-  });
-
-  it("parses import_reviewed_at as a string and treats missing or invalid as null", async () => {
-    const { fetchExpenses } = await import("./listsClient");
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          expenses: [
-            {
-              id: "e1",
-              list_id: "l1",
-              amount: "10.00",
-              currency: "CRC",
-              description: "Coffee",
-              payer_id: "u1",
-              provenance: "parser",
-              line_type: "purchase",
-              posted_date: "2026-08-06",
-              created_at: "2026-08-06T12:00:00Z",
-              amount_crc: "10.00",
-              fx_rate: "1",
-              import_reviewed_at: "2026-08-24T12:00:00Z",
-            },
-            {
-              id: "e2",
-              list_id: "l1",
-              amount: "11.00",
-              currency: "CRC",
-              description: "Tea",
-              payer_id: "u1",
-              provenance: "parser",
-              line_type: "purchase",
-              posted_date: "2026-08-06",
-              created_at: "2026-08-06T12:00:00Z",
-              amount_crc: "11.00",
-              fx_rate: "1",
-              import_reviewed_at: 12,
-            },
-          ],
-        }),
-      }),
-    );
-
-    const result = await fetchExpenses("l1", messages);
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.expenses[0]?.import_reviewed_at).toBe("2026-08-24T12:00:00Z");
-      expect(result.expenses[1]?.import_reviewed_at).toBeNull();
     }
   });
 });

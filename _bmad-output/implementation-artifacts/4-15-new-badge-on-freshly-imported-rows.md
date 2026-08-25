@@ -4,7 +4,7 @@ baseline_commit: a737a06
 
 # Story 4.15: "New" badge on freshly imported rows
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -196,7 +196,7 @@ The Tasks/Subtasks below record the first implementation pass (`import_reviewed_
 
 **Amended 2026-08-24 (current):** Badge visibility is `provenance === "parser"` and `created_at`'s calendar date in `America/Costa_Rica` equals today. No explicit dismissal. Origin edits do not hide the badge. `Chip` stays display-only.
 
-Earlier pass (superseded for the product rule): dismissal via `import_reviewed_at` + `ReceiptRowMenu` "Mark reviewed" + origin PATCH. That work may still exist on the API/schema; it does not gate the badge.
+Earlier pass (superseded): dismissal via `import_reviewed_at` + `ReceiptRowMenu` "Mark reviewed" + origin PATCH. Removed in 2026-08-25 code review (`0026_drop_import_reviewed_at`).
 
 ### Project structure
 
@@ -269,6 +269,7 @@ Do not show the badge on `provenance != 'parser'`. Do not use `posted_date` for 
 ### File List
 
 - api/adapters/persistence/migrations/versions/0025_import_reviewed_at.py
+- api/adapters/persistence/migrations/versions/0026_drop_import_reviewed_at.py
 - api/adapters/persistence/models.py
 - api/adapters/persistence/repositories.py
 - api/application/expenses.py
@@ -292,9 +293,18 @@ Do not show the badge on `provenance != 'parser'`. Do not use `posted_date` for 
 ## Change Log
 
 - 2026-08-24: Added list-view "New" badge for parser rows imported today (`created_at` in `America/Costa_Rica`), Chip near the amount.
-- 2026-08-24 (amendment): Badge lifetime is the Costa Rica calendar day of `created_at`, not `import_reviewed_at` / mark-reviewed / origin-edit dismissal. User-story ACs in `epics.md` updated to match.
+- 2026-08-25: Code review — stripped leftover `import_reviewed_at` / mark-reviewed write surface (`0026_drop_import_reviewed_at`); `todayCr` no longer falls back to `""`.
 
 ## Review Findings
 
-No findings from this implementation pass (explicit zero-findings). Ready for independent `code-review`.
+Implementation pass (2026-08-24): explicit zero-findings before independent `code-review`.
+
+Independent code review (2026-08-25) of `17fdcfd` vs amended ACs:
+
+- [x] [Review][Decision] Dead mark-reviewed stack — **resolved 2026-08-25: strip now** (route, service, origin side-write, DTO/client field, tests, and a follow-up migration to drop the column).
+
+- [x] [Review][Patch] Strip unused `import_reviewed_at` / mark-reviewed write surface and drop the column [api/api/routes/lists.py:535]
+- [x] [Review][Patch] Model comment still describes the old badge rule [api/adapters/persistence/models.py:304] — subsumed when the column was dropped
+- [x] [Review][Patch] `todayCr` falls back to `""` when Costa Rica formatting fails, suppressing every New badge [ui/app/lists/[listId]/page.tsx:485]
+- [x] [Review][Dismiss] Unit test that set `import_reviewed_at` still yields New — superseded by stripping the field
 

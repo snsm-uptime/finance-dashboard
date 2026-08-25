@@ -266,6 +266,10 @@
 
 - Discard no longer deletes the source PDF for untouched/partially-reviewed sessions, with no cleanup job to ever reclaim it (`api/application/import_session.py:548-559`) — accepted as designed per user decision: this is exactly what Story 4.14's own AC #6 / Task 5.3 directed (route through `_release_source_pdf_if_idle` instead of the prior unconditional delete). Since `discard_session` never transitions a statement's status away from `staged`, `_PDF_RETAIN_STATUSES` keeps the PDF forever for every "Close" on an unstarted or partially-reviewed import. PDF garbage collection for permanently-`staged` discarded sessions is out of this story's scope; belongs in a future dedicated cleanup story.
 
+## Deferred from: code review of 4-13-1-import-review-sheet.md (2026-08-25)
+
+- Save/Change-List per-row mutation loops (`ui/app/upload/uploadClient.ts`) can't distinguish "mutation succeeded but the response was lost" from a real failure — `postRowMutation`'s catch returns a generic `{ok:false}`, so a dropped connection after a successful delete/unassign leaves the client stuck retrying (now legitimately 409ing) with no path forward short of a full page reload. Pre-existing generic fetch-error handling shared across all row mutations, not introduced by this story; low likelihood, recoverable via reload.
+
 ## Deferred from: code review of 4-16-multi-file-upload-pending-queue-dedup.md (2026-08-25)
 
 - Upload 409 is an undeclared `JSONResponse` beside a 201 `response_model` (`api/api/routes/import_sessions.py:200`) — same pattern as the existing 422 upload catches; OpenAPI still advertises only 201 `ImportSessionResponse`.

@@ -117,7 +117,6 @@ function asExpenses(data: unknown): ExpenseItem[] {
       origin_kind: typeof e.origin_kind === "string" ? e.origin_kind : null,
       origin_card_id: typeof e.origin_card_id === "string" ? e.origin_card_id : null,
       origin_card_label: typeof e.origin_card_label === "string" ? e.origin_card_label : null,
-      import_reviewed_at: typeof e.import_reviewed_at === "string" ? e.import_reviewed_at : null,
       viewer_share_kind:
         e.viewer_share_kind === "percentage" || e.viewer_share_kind === "absolute"
           ? e.viewer_share_kind
@@ -482,7 +481,7 @@ export default async function ListDetailPage({
     balances?.balance_crc,
     t,
   );
-  const todayCr = calendarDateInCostaRica(new Date().toISOString()) ?? "";
+  const todayCr = calendarDateInCostaRica(new Date().toISOString());
 
   return (
     <main className={styles.softMain}>
@@ -611,7 +610,9 @@ export default async function ListDetailPage({
                         }),
                         netLabel: net?.label,
                         netPolarity: net?.polarity,
-                        newBadgeLabel: newBadgeLabelFrom(e, t, todayCr),
+                        newBadgeLabel: todayCr
+                          ? newBadgeLabelFrom(e, t, todayCr)
+                          : undefined,
                         menu: {
                           menuAria: t.receiptMenuAria,
                           editLabel: t.receiptEdit,

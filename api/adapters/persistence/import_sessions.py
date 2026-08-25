@@ -564,6 +564,13 @@ class SqlAlchemyImportSessionRepository:
         # ImportReviewSheet Save: drop an already-assigned row without
         # returning it to pending (that would 409 finalize). Reverse the
         # ledger write from assign; a dedup_skipped row has none.
+        candidate_row = next((c for c in statement_row.candidate_rows if c.id == row_id), None)
+        # Same rule as unassign_candidate_row: a dedup_skipped row never had a
+        # ledger entry, so deleting it here would silently drop it from
+        # assigned_rows despite AC #5 requiring Discard stay blocked (UI + API).
+        if candidate_row is not None and candidate_row.dedup_skipped:
+            raise ImportRowNotDiscardableError()
+
         assigned = self._session.execute(
             update(ImportCandidateRowModel)
             .where(
@@ -571,7 +578,7 @@ class SqlAlchemyImportSessionRepository:
                 ImportCandidateRowModel.statement_id == statement_id,
                 ImportCandidateRowModel.status == ROW_STATUS_COMMITTED,
             )
-            .values(status=ROW_STATUS_DELETED, resolved_list_id=None)
+            .values(status=ROW_STATUS_DELETED, resolved_list_id=None, resolved_at=datetime.now(UTC))
         )
         if assigned.rowcount == 0:
             raise ImportRowNotAvailableError()

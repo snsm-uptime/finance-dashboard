@@ -301,11 +301,6 @@ class LedgerEntryModel(Base):
         nullable=True,
         index=True,
     )
-    # Set when a parser-imported row is acknowledged (Story 4.15). Null means
-    # the list-view "New" badge still applies (gated on provenance == parser).
-    import_reviewed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
     # FX materialized at commit (Story 3.5 / AD-7) — CRC entries pass through 1:1.
     amount_crc: Mapped[Decimal] = mapped_column(Numeric(19, 2), nullable=False, server_default="0")
     fx_rate: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False, server_default="1")

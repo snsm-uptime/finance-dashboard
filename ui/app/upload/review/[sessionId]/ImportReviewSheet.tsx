@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Sheet } from "@/app/lists/Sheet";
 import { IconButton } from "@/components/IconButton";
@@ -182,6 +182,16 @@ export function ImportReviewSheet({
   const t = uploadCopy(locale);
   const { staged } = useStagedImportDiscards(sessionId);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  // Save/Change List keep awaiting network calls after Close/Esc/backdrop
+  // unmounts the sheet; skip onSessionUpdate so a late success does not
+  // write into an unmounted tree.
+  const mountedRef = useRef(true);
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
 
   const messages: IndividualReviewMessages = {
     errorForbidden: t.individualReviewErrorForbidden,
@@ -222,11 +232,11 @@ export function ImportReviewSheet({
 
   const liveUnassignIds = useMemo(() => {
     const live = new Set<string>();
-    for (const id of staged.unassignIds) {
+    for (const id of staged.sheetDiscardIds) {
       if (assignedById.has(id)) live.add(id);
     }
     return live;
-  }, [staged.unassignIds, assignedById]);
+  }, [staged.sheetDiscardIds, assignedById]);
 
   const groups = useMemo(
     () => omitDiscardedRows(assignedGroups, liveUnassignIds),
@@ -236,7 +246,7 @@ export function ImportReviewSheet({
   const discardedRows = useMemo(() => {
     const rows: CandidateRow[] = [];
     const seen = new Set<string>();
-    for (const id of [...staged.unassignIds, ...staged.deleteIds]) {
+    for (const id of [...staged.sheetDiscardIds, ...staged.deleteIds]) {
       if (seen.has(id)) continue;
       const row = assignedById.get(id) ?? pendingById.get(id);
       if (!row) continue;
@@ -244,7 +254,7 @@ export function ImportReviewSheet({
       rows.push(row);
     }
     return rows;
-  }, [staged.unassignIds, staged.deleteIds, assignedById, pendingById]);
+  }, [staged.sheetDiscardIds, staged.deleteIds, assignedById, pendingById]);
 
   const discardableIds = useMemo(() => {
     const ids = new Set<string>();
@@ -264,7 +274,7 @@ export function ImportReviewSheet({
   );
 
   const saveAction = useFormSubmission(async () => {
-    const discardIds = uniqueIds([...staged.deleteIds, ...staged.unassignIds]);
+    const discardIds = uniqueIds([...staged.deleteIds, ...staged.sheetDiscardIds]);
     const unstagedPending = pendingRowIds(session).filter((rowId) => !discardIds.includes(rowId));
     if (unstagedPending.length) {
       console.error(
@@ -299,7 +309,9 @@ export function ImportReviewSheet({
     if (result.ok) {
       clearStagedImportDiscards(sessionId);
       removeUploadQueueSession(sessionId);
-      onSessionUpdate(result.session);
+      if (mountedRef.current) {
+        onSessionUpdate(result.session);
+      }
     }
     return result;
   });
@@ -366,7 +378,10 @@ export function ImportReviewSheet({
         <button
           type="button"
           disabled={busy}
-          onClick={() => void changeListAction.submit(undefined)}
+          onClick={() => {
+            saveAction.clearError();
+            void changeListAction.submit(undefined);
+          }}
           className={`${STICKY_BUTTON_CLASS} border-border text-foreground`}
           style={STICKY_BUTTON_STYLE}
         >
@@ -380,7 +395,9 @@ export function ImportReviewSheet({
   return (
     <Sheet
       open
-      onClose={onClose}
+      onClose={() => {
+        if (!busy) onClose();
+      }}
       closeLabel={t.importReviewSheetClose}
       title={t.importReviewSheetTitle}
       fillBelowChrome
@@ -511,7 +528,10 @@ export function ImportReviewSheet({
         <PrimaryButton
           className="w-full"
           disabled={busy}
-          onClick={() => void saveAction.submit(undefined)}
+          onClick={() => {
+            changeListAction.clearError();
+            void saveAction.submit(undefined);
+          }}
         >
           {saveAction.pending ? t.importReviewSheetSaving : t.importReviewSheetSave}
         </PrimaryButton>

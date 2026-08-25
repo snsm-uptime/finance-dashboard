@@ -388,7 +388,6 @@ def test_bulk_commit_happy_path_lands_ledger_rows_payer_is_actor(
     assert len({row.import_candidate_row_id for row in ledger_rows}) == len(ledger_rows)
     assert all(row.origin_kind is None for row in ledger_rows)
     assert all(row.origin_card_id is None for row in ledger_rows)
-    assert all(row.import_reviewed_at is None for row in ledger_rows)
 
     _assert_source_pdf_released(db_session, session_id=session_id, user_id=me["user_id"])
 
@@ -2082,3 +2081,62 @@ def test_delete_assigned_row_reverses_ledger_leaves_no_pending_and_finalizes(
     finalized = client.post(f"/import/sessions/{session_id}/finalize")
     assert finalized.status_code == 200, finalized.text
     assert finalized.json()["finalized_at"] is not None
+
+
+def test_delete_dedup_skipped_row_is_409_and_stays_committed(
+    client_with_fx: TestClient, db_session: Session
+) -> None:
+    """Same guard as unassign (Story 4.13.1 review finding): the sheet's
+    Discard control actually calls .../delete, not .../unassign — a
+    dedup_skipped row must be blocked there too, not just on unassign."""
+    client = client_with_fx
+    _register(client, "deletededup@example.com")
+    list_id = _own_list_id(client)
+    first_session = _upload_bac_session(client)
+    first_row = _first_pending(client, first_session)
+    identity = _identity_of(db_session, first_row["id"])
+    assert _assign(client, first_session, first_row["id"], list_id).status_code == 200
+
+    second_session = _upload_bac_session(client)
+    duplicate = next(
+        item
+        for item in _pending_rows(client.get(f"/import/sessions/{second_session}").json())
+        if _identity_of(db_session, item["id"]) == identity
+    )
+    assert _assign(client, second_session, duplicate["id"], list_id).status_code == 200
+    db_session.expire_all()
+    assert db_session.get(ImportCandidateRowModel, UUID(duplicate["id"])).dedup_skipped is True
+
+    response = client.post(f"/import/sessions/{second_session}/rows/{duplicate['id']}/delete")
+
+    assert response.status_code == 409, response.text
+    assert response.json()["code"] == "import_row_not_discardable"
+    db_session.expire_all()
+    candidate = db_session.get(ImportCandidateRowModel, UUID(duplicate["id"]))
+    assert candidate.status == ROW_STATUS_COMMITTED
+    assert candidate.dedup_skipped is True
+
+
+def test_delete_and_unassign_on_a_finalized_session_are_409(client_with_fx: TestClient) -> None:
+    """Story 4.13.1 review finding: neither guard checked finalized_at, only
+    discarded_at — a stale tab or race could mutate a committed row after
+    the session was already finalized (PDF released, landing done)."""
+    client = client_with_fx
+    _register(client, "mutateafterfinalize@example.com")
+    list_id = _own_list_id(client)
+    session_id = _upload_bac_session(client)
+    rows = _pending_rows(client.get(f"/import/sessions/{session_id}").json())
+    for row in rows:
+        assert _assign(client, session_id, row["id"], list_id).status_code == 200
+
+    finalized = client.post(f"/import/sessions/{session_id}/finalize")
+    assert finalized.status_code == 200, finalized.text
+    assert finalized.json()["finalized_at"] is not None
+
+    delete_response = client.post(f"/import/sessions/{session_id}/rows/{rows[0]['id']}/delete")
+    assert delete_response.status_code == 409, delete_response.text
+    assert delete_response.json()["code"] == "import_row_not_available"
+
+    unassign_response = client.post(f"/import/sessions/{session_id}/rows/{rows[0]['id']}/unassign")
+    assert unassign_response.status_code == 409, unassign_response.text
+    assert unassign_response.json()["code"] == "import_row_not_available"
