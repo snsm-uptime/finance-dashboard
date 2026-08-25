@@ -1,5 +1,5 @@
 # generated: 2026-08-03T22:46:31
-# last_updated: 2026-08-24
+# last_updated: 2026-08-25
 
 # project: finance-dashboard
 # project_key: NOKEY
@@ -123,7 +123,7 @@ development_status:
   4-13-1-import-review-sheet: review
   4-14-resume-entry-point-session-completion-summary: done
   4-15-new-badge-on-freshly-imported-rows: review
-  4-16-multi-file-upload-pending-queue-dedup: review
+  4-16-multi-file-upload-pending-queue-dedup: done
   epic-4-retrospective: optional
 
   epic-5: backlog

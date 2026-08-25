@@ -4,7 +4,7 @@ baseline_commit: 8b30ed608c6074c6b32b6d0617ce1be58e59999a
 
 # Story 4.16: Multi-file upload — pending queue, per-item removal, duplicate detection
 
-Status: review
+Status: done
 
 > **Renumbered 2026-08-20: was Story 4.10.** Epic 4 was reordered so numeric order matches build
 > order (Sprint Change Proposal 2026-08-20). Independent of review granularity; can ship in
@@ -98,6 +98,46 @@ Group A (API hash/dedup) — 2026-08-25
 - [x] [Review][Defer] Concurrent same-hash uploads can both pass the application check [api/application/import_session.py:464] — deferred, later hardening story: UI drain is sequential; spec forbids a unique `content_hash` constraint
 - [x] [Review][Defer] Upload 409 is an undeclared `JSONResponse` beside a 201 `response_model` [api/api/routes/import_sessions.py:200] — deferred, pre-existing
 
+Group B (upload queue UI) — 2026-08-25
+
+- [x] [Review][Decision] Duplicate rows use a hover/focus tooltip instead of inline copy — kept icon + tooltip (side-UI cue; spec treated as satisfied)
+
+- [x] [Review][Patch] Show staged discard errors on the row [ui/app/upload/UploadPanel.tsx:304]
+- [x] [Review][Patch] Don't leave in-flight rows stuck `uploading` after leaving the page [ui/app/upload/UploadPanel.tsx:157]
+- [x] [Review][Patch] Catch `hashFile` failures and fall back to name+size+mtime [ui/app/upload/UploadPanel.tsx:45]
+- [x] [Review][Patch] Keep the picker usable while a row is `uploading` (Task 5.4) [ui/app/upload/UploadPanel.tsx:268]
+- [x] [Review][Patch] Serialize overlapping `onFileChange` so a second pick cannot overwrite the first batch [ui/app/upload/UploadPanel.tsx:197]
+- [x] [Review][Patch] Let the user dismiss a `failed` row [ui/app/upload/UploadPanel.tsx:317]
+- [x] [Review][Patch] Use 409 `duplicateSessionId` as the resume/discard target [ui/app/upload/UploadPanel.tsx:179]
+
+- [x] [Review][Defer] Unrelated `uploadMessages` rewrites (completion copy, account-page default-list) [ui/lib/i18n/upload.ts] — deferred, Group C side-UI/docs
+- [x] [Review][Defer] 10-file cap and SubtleCrypto fallback have no UI tests [ui/app/upload/UploadPanel.test.tsx] — deferred, Task 6.1 did not require them
+
+Group C (side UI/behavior) — 2026-08-25
+
+- [x] [Review][Defer] SoftLedgerSelect blurs the trigger after choose, including keyboard Enter/Space [ui/components/soft-ledger/Select.tsx] — shipped: listbox ArrowUp/Down + Enter/Space confirm, blur-after-choose so review keys work; ↑ opens the picker from the card
+
+- [x] [Review][Patch] Manual expense submit still sends stale `payerId` / `assigneeId` when the select shows empty [ui/app/lists/ManualExpenseForm.tsx:250]
+- [x] [Review][Patch] Default-list Accept is enabled when `default_import_list_id` is not in loaded memberships [ui/app/upload/review/[sessionId]/IndividualReviewPanel.tsx:415]
+- [x] [Review][Patch] Chrome Back sets `leavingRef` before `router.push` and never clears it [ui/app/upload/review/[sessionId]/IndividualReviewPanel.tsx:346]
+- [x] [Review][Patch] Card-identification spinner reuses session-loading `aria-label` [ui/app/upload/review/[sessionId]/IndividualReviewPanel.tsx:931]
+
+- [x] [Review][Defer] Chrome back no longer discards; Continue removed; receipt/owe Discard/spinner/seed/blur undocumented [ui/app/upload/review/[sessionId]/IndividualReviewPanel.tsx:346] — **documented in Group D** (4.16 close + 4.14/4.13.1 notes)
+- [x] [Review][Defer] Signup still creates Personal without `default_import_list_id` [api/application/signup.py] — deferred, seed-only (`seed_dev_user.py` **does** set Personal); production signup still empty default
+- [x] [Review][Defer] Settle refund polarity extra cases (reversal line type, overrides) [api/domain/settle.py:108] — deferred, out of 4.16 ACs; abs+sign invert is the intended refund fix
+- [x] [Review][Defer] Review/bulk/completion rewrites were out of 4.16 “leave alone” list [ui/app/upload/review] — deferred, shipped on this branch by design
+
+Group D (docs vs shipped UI) — 2026-08-25
+
+- [x] [Review][Patch] 4.16 story-close omits SubtleCrypto fallback, 409-vs-422, no hash backfill, review chrome/keyboard/Select/seed-vs-signup, and `Select.tsx` from the File List [_bmad-output/implementation-artifacts/4-16-multi-file-upload-pending-queue-dedup.md:248]
+- [x] [Review][Patch] 4.14 still requires Continue and chrome-Back discard; Completion Notes empty; review bullets still describe `saveAction` `router.push` and summary Back “home” [_bmad-output/implementation-artifacts/4-14-resume-entry-point-session-completion-summary.md:37]
+- [x] [Review][Patch] 4.13.1 AC #3 still says Save lands on `landing_list_id`; owe-colored sheet Discard is undocumented [_bmad-output/implementation-artifacts/4-13-1-import-review-sheet.md:37]
+- [x] [Review][Patch] Group C findings still say seed does not set `default_import_list_id` and Select blur is unimplemented [_bmad-output/implementation-artifacts/4-16-multi-file-upload-pending-queue-dedup.md:118]
+
+- [x] [Review][Defer] Signup still creates Personal without `default_import_list_id` [api/application/signup.py] — deferred, pre-existing; only `seed_dev_user.py` sets the preference
+- [x] [Review][Defer] `hasRemainingUploadWork` is in-memory tab queue only [ui/app/upload/uploadQueueStore.ts:41] — deferred, 4.16 tab-lifetime by design; reload makes finalized Back land on the list
+- [x] [Review][Defer] Sheet Discard still deletes at Save rather than unassign-to-pending [ui/app/upload/review/[sessionId]/ImportReviewSheet.tsx:266] — deferred, already recorded in 4.13.1 Deviations (Change List is unassign)
+
 ## Dev Notes
 
 ### Why this is smaller than it sounds
@@ -172,8 +212,11 @@ Backend **already allows** many non-discarded, non-finalized sessions per user (
 
 - `ui/app/upload/page.tsx` (SSR active session)
 - `ui/app/api/import/**` (BFF already forwards multipart)
-- Review/bulk routes, `SessionReviewPanel.tsx` (compose from queue rows; edit only if types require it)
 - `compute_canonical_identity` / commit/finalize services
+
+This branch **also shipped** review/bulk/completion/`Select.tsx`/`seed_dev_user.py` changes (author intent). Do not revert those to match older 4.14/4.13.1 story text; the story-close and 4.14/4.13.1 notes below are the live contract.
+
+- Review/bulk routes / `SessionReviewPanel.tsx` — originally “compose only”; rewritten on this branch (see Completion Notes).
 
 ### Testing
 
@@ -221,16 +264,16 @@ Cursor Grok 4.6 (UI, Tasks 5-7) + Claude Sonnet 5 (backend, Tasks 1-4)
 ## Story-close overview — 4.16
 
 **Request path:**
-browser file picker → `UploadPanel` sequential `POST /api/import/sessions` (existing BFF) → `upload_statement_pdf` → `UploadStatementPdfService.execute` (hash + active-session lookup **before** `pdf_storage.save`) → `SqlAlchemyImportSessionRepository.create_session(content_hash=)` / 409 `duplicate_statement_upload`. Staged discard stays `DELETE /api/import/sessions/{id}`.
+browser file picker → `UploadPanel` sequential `POST /api/import/sessions` (existing BFF) → `upload_statement_pdf` → `UploadStatementPdfService.execute` (SHA-256 **before** `pdf_storage.save`; 409 `duplicate_statement_upload` + blocking `session_id`, not 422) → `create_session(content_hash=)`. No backfill of `content_hash` on pre-4.16 rows. Staged discard stays `DELETE /import/sessions/{id}`. Client hash: SubtleCrypto SHA-256, else `name`+`size`+`lastModified` (server 409 still wins other tabs).
 
 **Key components:**
-`DuplicateStatementUploadError` + `compute_pdf_content_hash`; Alembic `0026_import_session_content_hash`; `find_active_session_by_content_hash`; `UploadPanel` queue (pending/uploading/staged/failed/duplicate); `uploadClient.mapError`; EN/ES keys on `uploadMessages`.
+`DuplicateStatementUploadError` + `compute_pdf_content_hash`; Alembic `0026_import_session_content_hash`; `find_active_session_by_content_hash`; `UploadPanel` queue; `uploadQueueStore` (tab-lifetime); `SoftLedgerSelect` listbox keyboard + blur-after-confirm; individual-review chrome (Back → `/upload` without discard; after finalize, chrome Back lands on `landing_list_id` / `/lists`, or `/upload` if `hasRemainingUploadWork`); zigzag `ImportCompletionSummary` (no Continue); keyboard legend ↑ list / ←↓→ / ⌫ delete; session/card/bulk loading spinners; `seed_dev_user.py` sets Personal `default_import_list_id` (signup does not).
 
 **Why this shape:**
-No worker/batch-upload API (AD-2). Dedup is exact PDF bytes among **active** sessions only (discarded/finalized may re-upload). Client SHA-256 covers same-tab queue; server 409 covers other tabs. Compact resume rows instead of N `SessionReviewPanel`s.
+No worker/batch-upload API (AD-2). Dedup is exact PDF bytes among **active** sessions only. Sequential drain. Review/completion chrome on this branch is author-intent product, not a 4.16 AC — recorded here so 4.14/4.13.1 text is not the live contract.
 
 **What not to break:**
-`GET /import/sessions/active` still returns only the newest active session. `rememberOpenImportSession` is still one id. Do not unique-constrain `content_hash`. Do not start parallel `uploadStatement` calls. 4.12 commit identity is unchanged.
+`GET /import/sessions/active` still newest active only. `rememberOpenImportSession` is still one id. Do not unique-constrain `content_hash`. Do not start parallel `uploadStatement` calls. 4.12 commit identity is unchanged. Chrome Back on an in-progress review must not `discardSession`. Save must leave the user on the receipt until they use chrome Back.
 
 ### File List
 
@@ -250,7 +293,11 @@ No worker/batch-upload API (AD-2). Dedup is exact PDF bytes among **active** ses
 - ui/app/upload/uploadClient.test.ts
 - ui/app/upload/uploadQueueStore.ts
 - ui/lib/i18n/upload.ts
+- ui/components/soft-ledger/Select.tsx
+- ui/components/soft-ledger/soft-ledger.test.tsx
 - ui/app/upload/SessionReviewPanel.tsx
+- ui/app/lists/ManualExpenseForm.tsx
+- ui/app/lists/ManualExpenseForm.test.tsx
 - ui/app/upload/review/[sessionId]/IndividualReviewPanel.tsx
 - ui/app/upload/review/[sessionId]/IndividualReviewPanel.test.tsx
 - ui/app/upload/review/[sessionId]/ImportCompletionSummary.tsx
@@ -272,3 +319,6 @@ No worker/batch-upload API (AD-2). Dedup is exact PDF bytes among **active** ses
 - 2026-08-24/25: UI queue (Tasks 5-7) implemented and committed on this branch by a concurrent Cursor/Grok 4.6 session (commits `8bdaf21`, `353a357`, `c73f05a`, `d9d0dfb`).
 - 2026-08-25: Backend (Tasks 1-4) implemented by Claude Sonnet 5: domain error + `compute_pdf_content_hash`, `content_hash` column + Alembic `0026`, `find_active_session_by_content_hash`, pre-save duplicate check in `UploadStatementPdfService`, 409 HTTP mapping, unit + integration tests (adjusted pre-existing `_upload_bac_session` fixture to vary bytes per call so it doesn't collide with the new active-session dedup). Full backend + UI suites green. Status → review.
 - 2026-08-25: Group A code review patches: 409 includes blocking `session_id` (`exc.CODE`); ORM mirrors non-unique partial index; tests assert stored hash. Concurrent same-hash race deferred.
+- 2026-08-25: Group B review: keep duplicate icon+tooltip; drain persists after leave-review; picker stays clickable while busy; discard/failed/409 session-id row fixes.
+- 2026-08-25: Group C review patches: submit uses membership-valid payer/assignee; default-list Accept requires the id in loaded lists; chrome Back releases `leavingRef` after a failed/no-op push; card-identification spinner has its own aria-label.
+- 2026-08-25: Group D patches applied: 4.16/4.14/4.13.1 notes match shipped chrome. Status → done.

@@ -34,7 +34,7 @@ so that a long review survives interruption and never leaves a half-reviewed ses
 
 6. **Given** a partially reviewed session (resolved rows exist), **when** I discard it, **then** already-committed ledger rows are retained — only remaining `pending` rows are abandoned. **And** the confirmation copy states this explicitly, because “discard” otherwise reads as “undo everything”. **And** PDF release follows `_release_source_pdf_if_idle` (AD-3), not a parallel delete path invented here. **And** `DiscardImportSessionService` today deletes every statement PDF unconditionally — this story must route discard cleanup through the idle helper so `staged`/`failed` retention still holds.
 
-7. **Given** the user Saves on ImportReviewSheet (Story 4.13.1) and the session is finalized, **when** the completion surface renders, **then** it reports: rows committed **by destination list**, rows **deleted**, **zero-amount excluded** across all statements, **statements that failed to parse**, and the **imported-new / skipped-duplicate** counts Story 4.12 already exposes on `ImportSessionResponse`. **And** this story owns that surface; 4.12 owns commit correctness and the **post-summary** land (`landing_list_id`). **And** the summary does **not** run when the pending queue first hits zero without Save. **And** failed-statement reporting here replaces Story 4.8’s per-statement skip card (FR-18). **And** a Continue (or equivalent) control then navigates to `/lists/{landing_list_id}` when that id is non-null, else `/lists` — do not auto-skip the summary.
+7. **Given** the user Saves on ImportReviewSheet (Story 4.13.1) and the session is finalized, **when** the completion surface renders, **then** it reports: rows committed **by destination list**, rows **deleted**, **zero-amount excluded** across all statements, **statements that failed to parse**, and the **imported-new / skipped-duplicate** counts Story 4.12 already exposes on `ImportSessionResponse`. **And** this story owns that surface; 4.12 owns commit correctness and the **post-summary** land (`landing_list_id`). **And** the summary does **not** run when the pending queue first hits zero without Save. **And** failed-statement reporting here replaces Story 4.8’s per-statement skip card (FR-18). **And** the user is **not** auto-skipped off the summary. **Shipped (4.16 branch):** there is **no Continue** control. Land is chrome Back after the zigzag receipt: `/lists/{landing_list_id}` or `/lists` when the tab queue has no remaining work, else `/upload` (`hasRemainingUploadWork`).
 
 ## Tasks / Subtasks
 
@@ -87,7 +87,7 @@ GET returns **pending-only** `rows`. After Save there are zero pending rows, so 
 ### Task 5 — Discard confirmation copy (AC: 6)
 
 - [ ] 5.1 For `partial` and `sheet-waiting` (committed ledger rows may exist), discard requires an explicit confirm (dialog — reuse Warm Balance patterns; `ui/app/lists/Sheet.tsx` is `role="dialog"`). Copy (EN+ES in `ui/lib/i18n/upload.ts`): discarding **does not undo** expenses already assigned; only unreviewed transactions are abandoned. Untouched sessions may keep a lighter confirm or today’s one-click Close — but the **explicit retention sentence is mandatory** whenever any row is already resolved.
-- [ ] 5.2 Apply the same copy to Individual review “Dismiss file” / chrome back discard when the session is `partial` or `sheet-waiting` (`IndividualReviewPanel` `onBack` currently discards with no warning — that is the same product action).
+- [x] 5.2 **Superseded (4.16 branch):** Individual-review chrome Back does **not** discard. It `forgetOpenImportSession` and `router.push("/upload")` while the session is in progress (queue Discard on `/upload` remains the product discard + Task 5.1 confirm). After finalize, chrome Back is the land control (see AC #7 shipped note).
 - [ ] 5.3 `DiscardImportSessionService.execute`: after `discard_session`, call existing `_release_source_pdf_if_idle` instead of the unconditional `pdf_storage.delete` loop. Keep idempotent discard. Keep “ledger untouched” (`test_dismiss_after_partial_row_commit_leaves_committed_ledger_untouched`). Update application tests that asserted unconditional delete if idle-retention now keeps a `failed` statement PDF.
 
 ### Task 6 — Completion summary surface (AC: 7)
@@ -100,13 +100,13 @@ GET returns **pending-only** `rows`. After Save there are zero pending rows, so 
   - Zero-amount excluded total + hint to check the PDF if they expected a line
   - Failed statements (filename / product) so they know to enter by hand
   - `imported_new_count` / `skipped_duplicate_count` (session fields)
-- [ ] 6.4 Continue: `router.push(/lists/{landing_list_id})` when id present, else `/lists`. **Do not** call `finalizeSession` from this component. **Do not** insert Epic 5 conflict UI. Comment: Story 5.7 runs after this screen, before land.
+- [x] 6.4 **Superseded (4.16 branch):** `ImportCompletionSummary` has no Continue and does not `router.push`. **Do not** call `finalizeSession` from this component. **Do not** insert Epic 5 conflict UI. Land is chrome Back (AC #7 shipped note). Story 5.7 still runs after this screen, before land.
 - [ ] 6.5 4.13.1 Save must: `finalizeSession` → set session from response (includes `finalized_at` + counts) → **stop**; 4.14’s `finalized_at` branch takes over. If 4.13.1 currently redirects to `landing_list_id`, that is a bug against 4.12/4.14 — fix it here only if that redirect exists when you start; as of `4e5753a` it does not (placeholder only).
 
 ### Task 7 — Tests and close
 
 - [ ] 7.1 API: Task 1.6 + 2.4 + discard idle-release. Integration on Postgres 16, not SQLite.
-- [ ] 7.2 UI: `UploadPanel` / `SessionReviewPanel` — server `initialSession` resume without `sessionStorage`; `partial` hides Bulk; `sheet-waiting` Resume still goes to `/upload/review/...`; classifier unit tests; completion summary renders counts and Continue; empty-queue **without** `finalized_at` does **not** show summary.
+- [x] 7.2 UI: `UploadPanel` / `SessionReviewPanel` — server `initialSession` resume without `sessionStorage`; `partial` hides Bulk; `sheet-waiting` Resume still goes to `/upload/review/...`; classifier unit tests; completion summary renders counts on the zigzag receipt (**no** Continue); empty-queue **without** `finalized_at` does **not** show summary.
 - [ ] 7.3 Full gate: `ui` typecheck + lint + vitest; `api` pytest for touched tests. No Playwright required (project-context: not every PR).
 - [ ] 7.4 How/why overview (`story-close-overview-checklist.md`); Review Findings section; sync this file’s Status with `sprint-status.yaml`; mark `deferred-work.md` count-name collision as **documented in schema comments**, still not renamed.
 
@@ -120,7 +120,7 @@ GET returns **pending-only** `rows`. After Save there are zero pending rows, so 
 |---|---|---|
 | Pending rows exist | 4.13 | Card + four actions |
 | Zero pending, `finalized_at == null` | 4.13.1 | ImportReviewSheet; Save → `POST /finalize` |
-| `finalized_at != null` | **4.14** | Completion summary → Continue → land |
+| `finalized_at != null` | **4.14** | Zigzag receipt summary; chrome Back lands (list or `/upload` if more queue work) |
 
 Resume URL is always `/upload/review/{sessionId}`. Do not add `/upload/sheet/{id}`.
 
@@ -148,7 +148,7 @@ Resume URL is always `/upload/review/{sessionId}`. Do not add `/upload/sheet/{id
 
 **`ui/app/upload/openImportSession.ts`** — Convenience for Home → Upload in the same browser. **Change:** subordinate to server active. **Preserve:** helpers; do not delete unless unused.
 
-**`ui/app/upload/review/[sessionId]/IndividualReviewPanel.tsx`** — Row card; empty queue placeholder; back = discard. **Change:** discard confirm when partial/sheet-waiting; mount summary when `finalized_at` set. **Preserve:** gestures, title edit, card ID, `nextReviewableRow`, no auto-finalize on last card.
+**`ui/app/upload/review/[sessionId]/IndividualReviewPanel.tsx`** — Row card; empty queue → sheet; `finalized_at` → receipt. Chrome Back does **not** discard (returns to `/upload`); after finalize it is the land control. **Preserve:** gestures, title edit, card ID, `nextReviewableRow`, no auto-finalize on last card.
 
 **`api/api/routes/import_sessions.py`** — GET-by-id, discard, finalize, row ops. **Change:** `GET /active` first. **Preserve:** error maps, `_session_response`.
 
@@ -241,6 +241,20 @@ GPT-5.6 Sol
 
 ### Completion Notes List
 
+## Story-close overview — 4.14 (shipped land, 4.16 branch)
+
+**Request path:**
+Save on ImportReviewSheet → `finalizeSession` → `onSessionUpdate` with `finalized_at` → `ImportCompletionSummary` (zigzag receipt: per-list imported, deleted, zero-excluded, failed statements, imported-new / skipped-duplicate). No Continue. Chrome Back: `landing_list_id` → `/lists/{id}` else `/lists`, unless tab queue still has work → `/upload`. In-progress chrome Back → `/upload` without `discardSession`.
+
+**Key components:**
+`ImportCompletionSummary.tsx` · `IndividualReviewPanel` `onBack` / chrome title (`completionReturnHome` / `completionReviewAnotherFile`) · `hasRemainingUploadWork` · upload-page Discard confirm (Task 5.1) for queue rows.
+
+**Why this shape:**
+UX-DR22 is summary **then** land. Continue was removed so chrome Back is the single exit. Queue-aware land keeps 4.16 sibling files reachable.
+
+**What not to break:**
+Do not auto-skip the receipt. Do not discard from review chrome Back. Do not `finalizeSession` from the summary component.
+
 ### File List
 
 ### Review Findings
@@ -250,8 +264,8 @@ Adversarial review (bmad-code-review) against `git diff a737a06..3a8f36d` — st
 - [x] [Review][Patch] Revert Save to finalize directly per spec — `ui/app/upload/review/[sessionId]/ImportReviewSheet.tsx:310-359` — decision: revert to spec (2026-08-24). **Fixed:** Save now calls `finalizeSession` directly (single action, matching pre-4.14 shape); `projectCompletionSummary`/`summarySession`/`continueAction` removed; the real `ImportCompletionSummary` (gated on `session.finalized_at`) is what renders, per AC 7 / Task 6.2 / 6.5. Removed the now-dead `showContinue`/`showTitle` props and the `completionBackToReview` i18n key. Tests reverted to match (`ImportReviewSheet.test.tsx`, `IndividualReviewPanel.test.tsx`).
 - [x] [Review][Defer] Discard no longer deletes the source PDF for untouched/partial sessions, with no cleanup job to ever reclaim it [api/application/import_session.py:548-559] — deferred, accepted as designed: matches AC #6 / Task 5.3 exactly (route through `_release_source_pdf_if_idle`, not unconditional delete); PDF garbage collection for permanently-`staged` discarded sessions is out of this story's scope and belongs in a future story, not a patch here (2026-08-24).
 - [x] [Review][Verified] New Postgres-only integration tests were never run against real Postgres per the Dev Agent Record — decision: run the suite now (2026-08-24). Ran `docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm --no-deps api pytest -q tests/test_import_sessions_integration.py tests/test_import_session_application.py` against the worktree's Compose Postgres 16: **125 passed**, 0 failures. AC #1.6's Postgres-integration mandate is now satisfied; no bugs surfaced.
-- [x] [Review][Patch] `classifyActiveImportSession` misclassifies finalized sessions as "partial" [ui/app/upload/classifyActiveImportSession.ts:20] — **Fixed:** `IndividualReviewPanel.tsx`'s `onBack` now guards on `session.finalized_at` before classifying or offering the retention warning, and no longer calls `discardSession` on a finalized session; chrome-back on the completion summary just navigates home.
-- [x] [Review][Patch] `continueAction` drops `onSessionUpdate(result.session)` before navigating away after finalize [ui/app/upload/review/[sessionId]/ImportReviewSheet.tsx:349-357] — **Resolved** as part of the Save/Continue revert above; `continueAction` no longer exists, and the restored single `saveAction` calls `onSessionUpdate(result.session)` before `router.push`.
+- [x] [Review][Patch] `classifyActiveImportSession` misclassifies finalized sessions as "partial" [ui/app/upload/classifyActiveImportSession.ts:20] — **Fixed then superseded:** chrome Back no longer classifies for discard. After finalize it lands via `landing_list_id` / `/lists` or `/upload`; it does not “navigate home” as a discard.
+- [x] [Review][Patch] `continueAction` drops `onSessionUpdate(result.session)` before navigating away after finalize [ui/app/upload/review/[sessionId]/ImportReviewSheet.tsx:349-357] — **Resolved:** `continueAction` does not exist. `saveAction` `onSessionUpdate`s the finalized session and **does not** `router.push`; the receipt stays on the review URL.
 - [x] [Review][Patch] Default-list quick action resolves via hardcoded "Personal" name match instead of the account's saved `default_import_list_id` [ui/app/upload/review/[sessionId]/IndividualReviewPanel.tsx:78,312-313] — **Fixed:** restored the `/api/auth/me` fetch of `default_import_list_id` into `defaultListId` state; removed `PERSONAL_LIST_NAME`. Tests updated (`stubAuthMeFetch` restored to real ids at the call sites that exercise the default-list action).
 - [x] [Review][Patch] `DiscardConfirmDialog` is a new bespoke modal that skips the Escape-key/focus-trap handling of the `Sheet` pattern it was directed to reuse (Task 5.1) [ui/app/upload/DiscardConfirmDialog.tsx] — **Fixed:** wired the existing shared `useFocusTrap` hook (same one `Sheet` uses) — Escape now cancels, initial focus lands on Cancel, Tab is trapped in the dialog.
 - [x] [Review][Patch] `fetchActiveImportSessionOnServer` collapses network errors, non-2xx, and malformed JSON into a silent "no active session" with no logging [ui/app/upload/page.tsx:19-33] — **Fixed:** added `console.error` on both the non-ok-response and caught-exception paths, distinguishing a real failure from a genuine empty result.
