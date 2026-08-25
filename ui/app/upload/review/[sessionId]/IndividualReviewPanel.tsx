@@ -14,7 +14,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useDrag } from "@use-gesture/react";
 
-import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
+import { SoftLedgerSelect, type SoftLedgerSelectHandle } from "@/components/soft-ledger/Select";
 import { IconButton } from "@/components/IconButton";
 import { useChromeHeader } from "@/components/ChromeBack";
 import { usePreferences } from "@/components/PreferencesProvider";
@@ -176,25 +176,80 @@ export function formatRowDate(iso: string, locale: Locale): string {
   return locale === "es" ? `${dayName}, ${day} ${monthAbbr}` : `${dayName}, ${monthAbbr} ${day}`;
 }
 
-function ArrowKeyKbd({ arrow }: { arrow: "←" | "→" }) {
+function ReviewKeycap({
+  glyph,
+  tooltip,
+  wide = false,
+}: {
+  glyph: string;
+  tooltip: string;
+  wide?: boolean;
+}) {
+  const tooltipId = useId();
   return (
-    <kbd
-      aria-hidden
-      className="inline-flex box-border h-[1.25rem] min-h-[1.25rem] min-w-[1.25rem] shrink-0 items-center justify-center rounded-[4px] border border-border bg-surface px-1 align-middle text-[0.75rem] leading-none font-[550] !text-accent"
+    <span
+      className="group relative inline-flex"
+      tabIndex={0}
+      aria-label={tooltip}
+      aria-describedby={tooltipId}
     >
-      {arrow}
-    </kbd>
+      <kbd
+        aria-hidden
+        className={`inline-flex box-border h-[1.25rem] min-h-[1.25rem] shrink-0 items-center justify-center rounded-[4px] border border-border bg-surface px-1 align-middle text-[0.75rem] leading-none font-[550] !text-accent ${
+          wide ? "min-w-[2.25rem]" : "min-w-[1.25rem]"
+        }`}
+      >
+        {glyph}
+      </kbd>
+      <span
+        id={tooltipId}
+        role="tooltip"
+        className="pointer-events-none absolute left-1/2 top-full z-10 mt-1 hidden w-max max-w-[12rem] -translate-x-1/2 rounded-sm bg-foreground px-2 py-1 text-center text-[0.75rem] leading-snug text-background group-hover:block group-focus-visible:block"
+      >
+        {tooltip}
+      </span>
+    </span>
+  );
+}
+
+function KeyboardLegend({
+  groupLabel,
+  up,
+  left,
+  down,
+  right,
+  backspace,
+}: {
+  groupLabel: string;
+  up: string;
+  left: string;
+  down: string;
+  right: string;
+  backspace: string;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label={groupLabel}
+      className="flex w-full items-end justify-center gap-3"
+    >
+      <div className="grid w-fit grid-cols-3 grid-rows-2 gap-1">
+        <span aria-hidden className="min-w-[1.25rem]" />
+        <ReviewKeycap glyph="↑" tooltip={up} />
+        <span aria-hidden className="min-w-[1.25rem]" />
+        <ReviewKeycap glyph="←" tooltip={left} />
+        <ReviewKeycap glyph="↓" tooltip={down} />
+        <ReviewKeycap glyph="→" tooltip={right} />
+      </div>
+      <ReviewKeycap glyph="⌫" tooltip={backspace} wide />
+    </div>
   );
 }
 
 function DirectionHint({ template }: { template: string }) {
   return (
     <p className="m-0 inline-flex w-full items-center justify-center gap-1 text-center text-muted text-[0.68rem]">
-      {template.split(/(\{left\}|\{right\})/g).map((part, index) => {
-        if (part === "{left}") return <ArrowKeyKbd key={index} arrow="←" />;
-        if (part === "{right}") return <ArrowKeyKbd key={index} arrow="→" />;
-        return <span key={index}>{part}</span>;
-      })}
+      {template}
     </p>
   );
 }
@@ -210,6 +265,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   const router = useRouter();
   const selectId = useId();
   const cardRef = useRef<HTMLDivElement>(null);
+  const listSelectRef = useRef<SoftLedgerSelectHandle>(null);
   const { staged, discardedIds } = useStagedImportDiscards(sessionId);
 
   const [session, setSession] = useState<ImportSession | null>(null);
@@ -347,12 +403,23 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     if (leavingRef.current) return;
     leavingRef.current = true;
     forgetOpenImportSession();
-    if (session?.finalized_at && !hasRemainingUploadWork(session.id)) {
-      const landing = session.landing_list_id;
-      router.push(landing ? `/lists/${encodeURIComponent(landing)}` : "/lists");
+    const href =
+      session?.finalized_at && !hasRemainingUploadWork(session.id)
+        ? session.landing_list_id
+          ? `/lists/${encodeURIComponent(session.landing_list_id)}`
+          : "/lists"
+        : "/upload";
+    try {
+      router.push(href);
+    } catch {
+      leavingRef.current = false;
       return;
     }
-    router.push("/upload");
+    // push() does not unmount on a no-op/failed client transition; release
+    // the guard so Back still works if this panel is still on screen.
+    queueMicrotask(() => {
+      leavingRef.current = false;
+    });
   }, [router, session]);
   useEffect(() => {
     if (!session?.discarded_at) return;
@@ -408,12 +475,16 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   // Story 4.8.1 (preserved): block accept until the row's parent statement's
   // card is identified/registered when that statement carries an IBAN.
   const cardReadyOrNoIban = !current?.statement.iban || card.cardMatched;
+  const defaultListKnown =
+    lists !== null && lists.some((l) => l.id === defaultListId);
   const canAcceptChosen = !!current && !!pickedListId && cardReadyOrNoIban && !card.loading;
   // `lists !== null` guards a loading race: /api/auth/me can resolve
   // defaultListId before /api/lists resolves lists, which would otherwise
-  // render this button enabled with a blank defaultListName.
+  // render this button enabled with a blank defaultListName. Membership
+  // must also include that id — a stale default from another household
+  // must not enable Accept.
   const canAcceptDefault =
-    !!current && !!defaultListId && lists !== null && cardReadyOrNoIban && !card.loading;
+    !!current && defaultListKnown && cardReadyOrNoIban && !card.loading;
   // Delete has no card-identification gate — a pending row is always
   // deletable, since delete never touches a list (Task 3.4).
   const canDelete = !!current;
@@ -496,34 +567,48 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     { target: cardRef, eventOptions: { passive: false } },
   );
 
-  // Desktop: ← → keys mirror the left/right buttons (default/chosen accept
-  // only — delete/undo stay button-only). Ignored while a text input/select
-  // or the SoftLedgerSelect combobox (a custom listbox, not a native
-  // <select>) has focus, so it doesn't fight the title-edit field or the
-  // list picker's own arrow-key navigation.
+  // Desktop: ↑ list picker, ← ↓ → accept/undo/accept, Backspace delete.
+  // Ignored while a text input/select or the SoftLedgerSelect combobox has
+  // focus, so it doesn't fight title-edit or the list picker's own arrow-key
+  // navigation. After the picker confirms, it blurs so these keys reach the
+  // review card again.
   useEffect(() => {
     function onKeyDown(event: globalThis.KeyboardEvent) {
-      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      if (
+        event.key !== "ArrowLeft" &&
+        event.key !== "ArrowRight" &&
+        event.key !== "ArrowDown" &&
+        event.key !== "ArrowUp" &&
+        event.key !== "Backspace"
+      ) {
+        return;
+      }
       const target = event.target;
       if (
         target instanceof HTMLInputElement ||
         target instanceof HTMLTextAreaElement ||
         target instanceof HTMLSelectElement ||
-        target instanceof HTMLButtonElement ||
         (target instanceof Element &&
           target.closest('[role="listbox"], [aria-haspopup="listbox"]'))
       ) {
         return;
       }
-      // Arrow keys otherwise scroll the page. Always consume them on this
-      // screen — including while a throw is in flight, when a flung card can
-      // briefly widen the layout and make ArrowLeft pan horizontally.
+      // Arrow keys otherwise scroll the page; Backspace otherwise navigates
+      // back. Always consume them on this screen — including while a throw is
+      // in flight, when a flung card can briefly widen the layout and make
+      // ArrowLeft pan horizontally.
       event.preventDefault();
       if (!current || throwing || action.pending) return;
       if (event.key === "ArrowLeft" && canAcceptDefault) {
         flingAndSubmit({ x: -THROW_DISTANCE, y: 0 }, { kind: "acceptDefault" });
       } else if (event.key === "ArrowRight" && canAcceptChosen) {
         flingAndSubmit({ x: THROW_DISTANCE, y: 0 }, { kind: "acceptChosen" });
+      } else if (event.key === "ArrowDown" && canUndo) {
+        action.submit({ kind: "undo" });
+      } else if (event.key === "ArrowUp") {
+        listSelectRef.current?.focusAndOpen();
+      } else if (event.key === "Backspace" && canDelete) {
+        action.submit({ kind: "delete" });
       }
     }
     window.addEventListener("keydown", onKeyDown);
@@ -533,6 +618,8 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     current?.row.id,
     canAcceptDefault,
     canAcceptChosen,
+    canUndo,
+    canDelete,
     throwing,
     action.pending,
     pickedListId,
@@ -757,26 +844,19 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
 
       {current ? (
         <>
-          <div className="w-full px-2">
-            <div className="mx-auto flex w-full max-w-[26rem] flex-col gap-4">
-              <DirectionHint
-                template={
-                  isCoarsePointer
-                    ? t.individualReviewDirectionHintTouch
-                    : t.individualReviewDirectionHintKeyboard
-                }
-              />
-
-              {listOptions.length > 0 ? (
+          {listOptions.length > 0 ? (
+            <div className="w-full px-2">
+              <div className="mx-auto flex w-full max-w-[26rem] flex-col gap-4">
                 <SoftLedgerSelect
+                  ref={listSelectRef}
                   id={selectId}
                   value={pickedListId}
                   options={[{ value: "", label: t.individualReviewChooseList }, ...listOptions]}
                   onChange={setPickedListId}
                 />
-              ) : null}
+              </div>
             </div>
-          </div>
+          ) : null}
 
           <div className="grid w-full overflow-x-hidden grid-cols-[minmax(0,1fr)_minmax(0,14rem)_minmax(0,1fr)] grid-rows-[auto_auto] items-center gap-3 px-2 md:grid-cols-[minmax(0,1fr)_minmax(0,26rem)_minmax(0,1fr)]">
             <IconButton
@@ -787,14 +867,14 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
                 flingAndSubmit({ x: -THROW_DISTANCE, y: 0 }, { kind: "acceptDefault" })
               }
               label={
-                defaultListId
+                defaultListKnown
                   ? t.individualReviewAcceptDefault.replace("{list}", defaultListName)
                   : t.individualReviewNoDefaultListShort
               }
               caption={
                 action.pending && !throwing
                   ? t.individualReviewCommitting
-                  : defaultListId
+                  : defaultListKnown
                     ? defaultListName
                     : t.individualReviewNoDefaultListShort
               }
@@ -906,19 +986,39 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
             />
 
             <div />
-            <button
-              type="button"
+            <IconButton
+              className="col-start-2 row-start-2 justify-self-center"
+              variant="ghost"
               disabled={!canUndo || action.pending || throwing}
               onClick={() => action.submit({ kind: "undo" })}
-              className="col-start-2 row-start-2 justify-self-center m-0 px-3 py-[6px] rounded-sm border border-border bg-transparent text-foreground cursor-pointer font-[550] text-[0.8rem] disabled:opacity-55 disabled:cursor-not-allowed"
-            >
-              {action.pending ? t.individualReviewUndoing : t.individualReviewUndo}
-            </button>
+              label={action.pending ? t.individualReviewUndoing : t.individualReviewUndo}
+              caption={action.pending ? t.individualReviewUndoing : t.individualReviewUndo}
+              icon={<ArrowIcon className="w-4 h-4 -rotate-90" />}
+            />
             <div />
           </div>
 
           <div className="w-full px-2">
             <div className="mx-auto flex w-full max-w-[26rem] flex-col gap-4">
+              {isCoarsePointer ? (
+                <DirectionHint template={t.individualReviewDirectionHintTouch} />
+              ) : (
+                <KeyboardLegend
+                  groupLabel={t.individualReviewKeyboardLegend}
+                  up={t.individualReviewKeyTooltipUp}
+                  left={
+                    defaultListKnown
+                      ? t.individualReviewAcceptDefault.replace("{list}", defaultListName)
+                      : t.individualReviewNoDefaultListShort
+                  }
+                  down={t.individualReviewKeyTooltipDown}
+                  right={t.individualReviewAcceptChosen.replace(
+                    "{list}",
+                    chosenListName || t.individualReviewChooseList,
+                  )}
+                  backspace={t.individualReviewKeyTooltipBackspace}
+                />
+              )}
               {/* Card identification / registration (Story 4.8.1) — subordinate
                   to the four-direction card, only relevant when the row's
                   parent statement carries an IBAN. Reuses CreditCardFace, same
@@ -928,7 +1028,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
                 {card.loading ? (
                   <span
                     className="grid size-5 place-items-center text-muted"
-                    aria-label={t.individualReviewLoadingSession}
+                    aria-label={t.individualReviewLoadingCard}
                     aria-busy="true"
                   >
                     <SpinnerIcon className="size-5 animate-spin motion-reduce:animate-none" />

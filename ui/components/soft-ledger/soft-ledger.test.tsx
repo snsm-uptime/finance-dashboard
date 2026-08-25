@@ -418,9 +418,10 @@ describe("Soft-Ledger primitives", () => {
       trigger.focus();
       trigger.click();
     });
-    expect(document.activeElement).toBe(trigger);
+    const listbox = host.querySelector("[role='listbox']") as HTMLUListElement;
+    expect(document.activeElement).toBe(listbox);
     act(() => {
-      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      listbox.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     });
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
     expect(document.activeElement).toBe(trigger);
@@ -465,6 +466,63 @@ describe("Soft-Ledger primitives", () => {
     });
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
     expect(document.activeElement).not.toBe(trigger);
+  });
+
+  it("SoftLedgerSelect moves highlight with ArrowDown and confirms with Enter", () => {
+    const onChange = vi.fn();
+    act(() => {
+      root.render(
+        <SoftLedgerSelect
+          value="a"
+          options={[
+            { value: "a", label: "Alice" },
+            { value: "b", label: "Bob" },
+          ]}
+          onChange={onChange}
+          aria-label="Member"
+        />,
+      );
+    });
+    const trigger = host.querySelector("button[aria-haspopup='listbox']") as HTMLButtonElement;
+    act(() => {
+      trigger.focus();
+      trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    const listbox = host.querySelector("[role='listbox']") as HTMLUListElement;
+    expect(listbox).not.toBeNull();
+    act(() => {
+      listbox.focus();
+      listbox.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    });
+    expect(onChange).toHaveBeenCalledWith("b");
+    act(() => {
+      listbox.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).not.toBe(trigger);
+  });
+
+  it("SoftLedgerSelect opens on ArrowUp from the trigger", () => {
+    act(() => {
+      root.render(
+        <SoftLedgerSelect
+          value="a"
+          options={[
+            { value: "a", label: "Alice" },
+            { value: "b", label: "Bob" },
+          ]}
+          onChange={() => {}}
+          aria-label="Member"
+        />,
+      );
+    });
+    const trigger = host.querySelector("button[aria-haspopup='listbox']") as HTMLButtonElement;
+    act(() => {
+      trigger.focus();
+      trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+    });
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(host.querySelector("[role='listbox']")).not.toBeNull();
   });
 
   it("IncompleteDisclosure renders nothing when isIncomplete is false or undefined (AC #1)", () => {

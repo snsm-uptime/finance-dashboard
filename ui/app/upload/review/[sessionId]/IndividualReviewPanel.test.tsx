@@ -326,7 +326,7 @@ describe("IndividualReviewPanel", () => {
     );
   });
 
-  it("renders keyboard-variant direction hint with arrow keycaps, not inline unicode arrows in copy", async () => {
+  it("renders a keyboard-cluster legend with tooltips, including Backspace", async () => {
     fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
     fetchLists.mockResolvedValue({ ok: true, lists: [] });
     stubAuthMeFetch(null);
@@ -339,12 +339,21 @@ describe("IndividualReviewPanel", () => {
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain("Use the");
-    expect(container.textContent).toContain("arrow keys");
+    const legend = container.querySelector('[aria-label="Keyboard shortcuts"]');
+    expect(legend).toBeTruthy();
     const hintKbds = [...container.querySelectorAll("kbd")].filter((el) =>
       el.className.includes("bg-surface"),
     );
-    expect(hintKbds.map((el) => el.textContent)).toEqual(["←", "→"]);
+    expect(hintKbds.map((el) => el.textContent)).toEqual(["↑", "←", "↓", "→", "⌫"]);
+    expect(
+      [...legend!.querySelectorAll('[role="tooltip"]')].map((el) => el.textContent),
+    ).toEqual([
+      "Choose list",
+      "No default list",
+      "Undo",
+      "Accept to Choose list",
+      "Delete",
+    ]);
     expect(hintKbds.every((el) => el.className.includes("text-accent"))).toBe(true);
   });
 
@@ -363,7 +372,7 @@ describe("IndividualReviewPanel", () => {
     });
 
     expect(container.textContent).toContain("Drag the card to the corresponding side");
-    expect(container.textContent).not.toContain("arrow keys");
+    expect(container.querySelector('[aria-label="Keyboard shortcuts"]')).toBeNull();
     expect(container.querySelectorAll("kbd")).toHaveLength(0);
   });
 
@@ -384,6 +393,59 @@ describe("IndividualReviewPanel", () => {
     });
 
     expect(container.textContent).toContain(`IBAN: ${formatIbanGroups(statement.iban!)}`);
+    const legend = container.querySelector('[aria-label="Keyboard shortcuts"]');
+    const cardFace = [...container.querySelectorAll("article")].find((el) =>
+      el.textContent?.includes("IBAN:"),
+    );
+    expect(legend).toBeTruthy();
+    expect(cardFace).toBeTruthy();
+    expect(legend!.compareDocumentPosition(cardFace!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("card-identification spinner uses a card-specific aria-label", async () => {
+    let releaseIdentify: (value: unknown) => void = () => {};
+    const identifyPending = new Promise((resolve) => {
+      releaseIdentify = resolve;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((input: RequestInfo) => {
+        const url = String(input);
+        if (url.includes("/api/auth/me")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ default_import_list_id: null }),
+          });
+        }
+        if (url.includes("identify-card")) {
+          return identifyPending.then(() => ({
+            ok: true,
+            json: async () => ({ matched: false }),
+          }));
+        }
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      }),
+    );
+
+    const statement = makeStatement({ iban: "CR00000000000000000000" });
+    const session = makeSession({ statements: [statement] });
+    fetchImportSession.mockResolvedValue({ ok: true, session });
+    fetchLists.mockResolvedValue({ ok: true, lists: [] });
+
+    await act(async () => {
+      root.render(<IndividualReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[aria-label="Identifying your card…"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Loading your review…"]')).toBeNull();
+
+    await act(async () => {
+      releaseIdentify(undefined);
+      await Promise.resolve();
+    });
   });
 
   it("chosen-list Accept is disabled until a list is picked, then commits and advances", async () => {
@@ -458,6 +520,32 @@ describe("IndividualReviewPanel", () => {
     });
 
     expect(assignRow).toHaveBeenCalledWith("s1", "r1", "l2", expect.anything());
+  });
+
+  it("default-list Accept stays disabled when the default id is not in memberships", async () => {
+    fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
+    fetchLists.mockResolvedValue({
+      ok: true,
+      lists: [{ id: "l1", name: "Groceries", owner_id: "u1", role: "owner" }],
+    });
+    stubAuthMeFetch("l-missing");
+
+    await act(async () => {
+      root.render(<IndividualReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const defaultButton = selectByLabel(container, "No default list");
+    expect(defaultButton.disabled).toBe(true);
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    });
+    await waitOutThrow();
+    expect(assignRow).not.toHaveBeenCalled();
   });
 
   it("omits the default list from the picker", async () => {
@@ -565,6 +653,98 @@ describe("IndividualReviewPanel", () => {
     expect(container.textContent).toContain("Coffee");
   });
 
+  it("ArrowDown key undoes after a staged card-discard", async () => {
+    const session = makeSession({ statements: [makeStatement({ rows: [ROW_1, ROW_2] })] });
+    fetchImportSession.mockResolvedValue({ ok: true, session });
+    fetchLists.mockResolvedValue({ ok: true, lists: [] });
+    stubAuthMeFetch(null);
+
+    await act(async () => {
+      root.render(<IndividualReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const deleteButton = selectByLabel(container, "Delete");
+    await act(async () => {
+      deleteButton.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(undoLastResolution).not.toHaveBeenCalled();
+    expect(selectByLabel(container, "Undo").disabled).toBe(true);
+  });
+
+  it("ArrowUp key focuses and opens the list picker", async () => {
+    fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
+    fetchLists.mockResolvedValue({
+      ok: true,
+      lists: [
+        { id: "l1", name: "Groceries", owner_id: "u1", role: "owner" },
+        { id: "l2", name: "Personal", owner_id: "u1", role: "owner" },
+      ],
+    });
+    stubAuthMeFetch(null);
+
+    await act(async () => {
+      root.render(<IndividualReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[role="listbox"]')).toBeNull();
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+    });
+
+    const trigger = container.querySelector(
+      'button[aria-haspopup="listbox"]',
+    ) as HTMLButtonElement;
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(container.querySelector('[role="listbox"]')).not.toBeNull();
+  });
+
+  it("Backspace key stages a delete like the trash control", async () => {
+    fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
+    fetchLists.mockResolvedValue({ ok: true, lists: [] });
+    stubAuthMeFetch(null);
+
+    await act(async () => {
+      root.render(<IndividualReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Backspace", bubbles: true }));
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(deleteRow).not.toHaveBeenCalled();
+    expect(assignRow).not.toHaveBeenCalled();
+    expect(selectByText(document.body, "Save")).not.toBeNull();
+    expect(document.body.textContent).toContain("Discarded");
+    expect(document.body.textContent).toContain("Coffee");
+  });
+
   it("card-identification gating blocks accept for an unregistered IBAN but not delete", async () => {
     const statement = makeStatement({ iban: "CR00000000000000000000" });
     const session = makeSession({ statements: [statement] });
@@ -625,6 +805,43 @@ describe("IndividualReviewPanel", () => {
 
     expect(discardSession).not.toHaveBeenCalled();
     expect(push).toHaveBeenCalledWith("/upload");
+  });
+
+  it("chrome Back can be used again if navigation throws", async () => {
+    fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
+    fetchLists.mockResolvedValue({ ok: true, lists: [] });
+    stubAuthMeFetch(null);
+    push.mockImplementationOnce(() => {
+      throw new Error("navigation blocked");
+    });
+
+    await act(async () => {
+      root.render(
+        <AppShell>
+          <IndividualReviewPanel sessionId="s1" />
+        </AppShell>,
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const back = container.querySelector(
+      'header button[aria-label="Back"]',
+    ) as HTMLButtonElement;
+    await act(async () => {
+      back.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    await act(async () => {
+      back.click();
+    });
+
+    expect(push).toHaveBeenCalledTimes(2);
+    expect(push).toHaveBeenLastCalledWith("/upload");
   });
 
   it("chrome title is Return Home after finalize and back goes to the landing list", async () => {
