@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { groupAssignedRows, groupRowsByDay, ImportReviewSheet } from "./ImportReviewSheet";
 import type { CandidateRow, ImportSession, StagedStatement } from "../../uploadClient";
+import { resetUploadQueue } from "../../uploadQueueStore";
 import { formatRowDate } from "./IndividualReviewPanel";
 
 const push = vi.fn();
@@ -197,6 +198,7 @@ describe("ImportReviewSheet", () => {
     finalizeSession.mockReset();
     deleteRow.mockReset();
     fetchImportSession.mockReset();
+    resetUploadQueue();
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -317,7 +319,11 @@ describe("ImportReviewSheet", () => {
       (b) => b.textContent === "Change List",
     ) as HTMLButtonElement;
     expect(discard).toBeTruthy();
+    expect(discard.className).toContain("border-owe");
+    expect(discard.className).toContain("text-owe");
     expect(changeList).toBeTruthy();
+    expect(changeList.className).toContain("border-border");
+    expect(changeList.className).not.toContain("border-owe");
     const pin = discard.parentElement?.parentElement;
     expect(pin?.className).toContain("sticky");
     expect(pin?.className).toContain("top-0");
@@ -435,7 +441,7 @@ describe("ImportReviewSheet", () => {
       finalizeSession.mock.invocationCallOrder[0],
     );
     expect(onSessionUpdate).toHaveBeenCalledTimes(3);
-    expect(push).toHaveBeenCalledWith("/lists/list-home");
+    expect(push).not.toHaveBeenCalled();
     expect(sessionStorage.getItem("finance-helper.staged-import-discards.s1")).toBeNull();
   });
 
@@ -543,7 +549,7 @@ describe("ImportReviewSheet", () => {
     expect(deleteRow.mock.invocationCallOrder[1]).toBeLessThan(
       finalizeSession.mock.invocationCallOrder[0],
     );
-    expect(push).toHaveBeenCalledWith("/lists/list-home");
+    expect(push).not.toHaveBeenCalled();
     expect(container.querySelector("[role='alert']")).toBeNull();
     expect(sessionStorage.getItem("finance-helper.staged-import-discards.s1")).toBeNull();
   });
