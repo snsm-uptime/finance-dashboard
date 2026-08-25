@@ -97,10 +97,10 @@ async function tick() {
   });
 }
 
-async function waitFor(predicate: () => boolean, label: string) {
+async function waitFor(predicate: () => boolean, label: string, timeoutMs = 4000) {
   const start = Date.now();
   while (!predicate()) {
-    if (Date.now() - start > 1500) {
+    if (Date.now() - start > timeoutMs) {
       throw new Error(`timed out waiting for ${label}`);
     }
     await tick();

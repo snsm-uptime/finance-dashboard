@@ -42,12 +42,22 @@ function bytesToHex(buffer: ArrayBuffer): string {
     .join("");
 }
 
+function fnv1aHex(bytes: Uint8Array): string {
+  let hash = 2166136261;
+  for (let i = 0; i < bytes.length; i += 1) {
+    hash ^= bytes[i]!;
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
 async function hashFile(file: File): Promise<{ contentHash?: string; fallbackKey: string }> {
-  const fallbackKey = `${file.name}:${file.size}:${file.lastModified}`;
+  const buffer = await file.arrayBuffer();
+  const fallbackKey = `${file.size}:${fnv1aHex(new Uint8Array(buffer))}`;
   const subtle = globalThis.crypto?.subtle;
   if (!subtle) return { fallbackKey };
   try {
-    const digest = await subtle.digest("SHA-256", await file.arrayBuffer());
+    const digest = await subtle.digest("SHA-256", buffer);
     return { contentHash: bytesToHex(digest), fallbackKey };
   } catch {
     return { fallbackKey };
@@ -123,6 +133,7 @@ export function UploadPanel({ initialSession = null }: { initialSession?: Import
   const [queue, setQueue] = useState<QueueEntry[]>(() => initialQueue(initialSession));
   const queueRef = useRef<QueueEntry[]>(queue);
   const drainingRef = useRef(false);
+  const drainAgainRef = useRef(false);
   const aliveRef = useRef(true);
   const pickChainRef = useRef(Promise.resolve());
   const [capMessage, setCapMessage] = useState<string | null>(null);
@@ -148,7 +159,10 @@ export function UploadPanel({ initialSession = null }: { initialSession?: Import
   }
 
   async function drainQueue() {
-    if (drainingRef.current) return;
+    if (drainingRef.current) {
+      drainAgainRef.current = true;
+      return;
+    }
     drainingRef.current = true;
     try {
       for (;;) {
@@ -188,7 +202,11 @@ export function UploadPanel({ initialSession = null }: { initialSession?: Import
       }
     } finally {
       drainingRef.current = false;
-      if (queueRef.current.some((entry) => entry.state === "pending")) {
+      if (
+        drainAgainRef.current ||
+        queueRef.current.some((entry) => entry.state === "pending")
+      ) {
+        drainAgainRef.current = false;
         void drainQueue();
       }
     }
