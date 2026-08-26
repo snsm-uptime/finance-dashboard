@@ -2140,3 +2140,80 @@ def test_delete_and_unassign_on_a_finalized_session_are_409(client_with_fx: Test
     unassign_response = client.post(f"/import/sessions/{session_id}/rows/{rows[0]['id']}/unassign")
     assert unassign_response.status_code == 409, unassign_response.text
     assert unassign_response.json()["code"] == "import_row_not_available"
+
+
+_PARSE_FAILURE_MIXED_PDF = _FIXTURE_DIR / "promerica_stub_parse_failure_mixed.pdf"
+
+
+def test_upload_mixed_parse_failure_persists_evidence_no_candidate_rows_no_ledger(
+    client: TestClient, db_session: Session
+) -> None:
+    _register(client, "parsefailmix@example.com")
+    created = client.post(
+        "/import/sessions",
+        files={
+            "file": (
+                "promerica_estado.pdf",
+                _PARSE_FAILURE_MIXED_PDF.read_bytes(),
+                "application/pdf",
+            )
+        },
+    )
+    assert created.status_code == 201, created.text
+    body = created.json()
+    statements = body["statements"]
+    assert len(statements) == 2
+    failed = next(s for s in statements if s["status"] == "failed")
+    staged = next(s for s in statements if s["status"] == "staged")
+    assert failed["rows"] == []
+    assert failed["candidate_row_count"] == 0
+    evidence = failed["parse_evidence"]
+    assert evidence is not None
+    kinds = [item["kind"] for item in evidence["items"]]
+    assert "gap" in kinds
+    assert "row" in kinds
+    row_item = next(item for item in evidence["items"] if item["kind"] == "row")
+    assert isinstance(row_item["amount"], str)
+    assert staged["status"] == "staged"
+    assert staged["rows"]
+    session_id = body["id"]
+    stored = db_session.scalar(
+        select(ImportCandidateRowModel).where(
+            ImportCandidateRowModel.statement_id == UUID(failed["id"])
+        )
+    )
+    assert stored is None
+
+    pdf = client.get(f"/import/sessions/{session_id}/statements/{failed['id']}/pdf")
+    assert pdf.status_code == 200
+    assert pdf.headers.get("content-type", "").startswith("application/pdf")
+    assert pdf.content.startswith(b"%PDF")
+    assert "no-store" in pdf.headers.get("cache-control", "")
+
+    client.post("/auth/logout")
+    _register(client, "parsefailstranger@example.com")
+    forbidden = client.get(f"/import/sessions/{session_id}/statements/{failed['id']}/pdf")
+    assert forbidden.status_code == 404
+
+    client.post("/auth/logout")
+    # Original owner cookie is gone; re-registering the owner would 409.
+    # Discard coverage: register a throwaway owner of a new mixed upload.
+    _register(client, "parsefaildiscard@example.com")
+    created2 = client.post(
+        "/import/sessions",
+        files={
+            "file": (
+                "promerica_estado.pdf",
+                _PARSE_FAILURE_MIXED_PDF.read_bytes() + b"\n% discard-variant\n",
+                "application/pdf",
+            )
+        },
+    )
+    assert created2.status_code == 201, created2.text
+    failed2 = next(s for s in created2.json()["statements"] if s["status"] == "failed")
+    session2 = created2.json()["id"]
+    discarded = client.delete(f"/import/sessions/{session2}")
+    assert discarded.status_code == 200
+    after_discard = client.get(f"/import/sessions/{session2}/statements/{failed2['id']}/pdf")
+    assert after_discard.status_code == 404
+

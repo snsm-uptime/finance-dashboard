@@ -395,8 +395,11 @@ class InvalidCanonicalLineError(DomainError):
     MESSAGE = "Statement row failed contract validation."
     CODE = "invalid_canonical_line"
 
-    def __init__(self, detail: str | None = None) -> None:
+    def __init__(self, detail: str | None = None, *, evidence: object | None = None) -> None:
         super().__init__(detail or self.MESSAGE)
+        # Optional ParseEvidence — typed loosely here to avoid a domain cycle
+        # with canonical_line ↔ errors. Story 5.1 display-only; not candidate rows.
+        self.evidence = evidence
 
 
 class UnknownBankAdapterError(DomainError):

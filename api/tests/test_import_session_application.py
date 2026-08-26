@@ -34,6 +34,8 @@ from application.import_session import (
     FinalizeImportSessionCommand,
     FinalizeImportSessionService,
     GetActiveImportSessionService,
+    GetStatementPdfCommand,
+    GetStatementPdfService,
     ImportBatchRecord,
     ImportSessionRecord,
     StagedStatementRecord,
@@ -163,6 +165,8 @@ def test_run_import_pipeline_one_chunk_fails_parse_sibling_survives() -> None:
     assert result[0].candidate_rows[0].normalized_description == "r1"
     assert result[1].status == STATEMENT_STATUS_FAILED
     assert result[1].candidate_rows == []
+    assert result[1].parse_evidence is not None
+    assert any(item.kind == "gap" for item in result[1].parse_evidence.items)
 
 
 def test_run_import_pipeline_whole_file_split_failure_propagates() -> None:
@@ -180,6 +184,7 @@ def test_run_import_pipeline_whole_file_split_failure_propagates() -> None:
 @dataclass
 class _FakePdfStorage:
     saved: list[tuple[UUID, str, bytes]] = field(default_factory=list)
+    files: dict[str, bytes] = field(default_factory=dict)
     deleted: list[str] = field(default_factory=list)
     _next_path_index: int = 0
 
@@ -187,10 +192,15 @@ class _FakePdfStorage:
         self.saved.append((user_id, filename, content))
         path = f"/data/pdfs/{user_id}/{self._next_path_index}.pdf"
         self._next_path_index += 1
+        self.files[path] = content
         return path
 
     def delete(self, path: str) -> None:
         self.deleted.append(path)
+        self.files.pop(path, None)
+
+    def read(self, path: str) -> bytes | None:
+        return self.files.get(path)
 
 
 def _candidate_records(lines: list[CanonicalLine]) -> list[CandidateRowRecord]:
@@ -293,6 +303,7 @@ class _FakeImportSessionRepo:
                     card_id=detected.card_id,
                     original_filename=detected.original_filename,
                     candidate_rows=rows,
+                    parse_evidence=detected.parse_evidence,
                 )
             )
         record = ImportSessionRecord(
@@ -2152,3 +2163,51 @@ def test_finalize_retains_pdf_while_a_statement_failed() -> None:
 
     assert storage.deleted == []
     assert result.finalized_at is not None
+
+
+def test_get_statement_pdf_returns_bytes_for_owner() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    actor = uuid4()
+    session_id = _multi_statement_session(repo, storage, user_id=actor, parse_results=[[_row("a")]])
+    statement = repo.get_session(session_id, actor).statements[0]
+
+    content = GetStatementPdfService(repo, storage).execute(
+        GetStatementPdfCommand(
+            actor_user_id=actor, session_id=session_id, statement_id=statement.id
+        )
+    )
+    assert content.startswith(b"%PDF")
+
+
+def test_get_statement_pdf_foreign_user_is_not_found() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    actor = uuid4()
+    session_id = _multi_statement_session(repo, storage, user_id=actor, parse_results=[[_row("a")]])
+    statement = repo.get_session(session_id, actor).statements[0]
+    with pytest.raises(ImportSessionNotFoundError):
+        GetStatementPdfService(repo, storage).execute(
+            GetStatementPdfCommand(
+                actor_user_id=uuid4(), session_id=session_id, statement_id=statement.id
+            )
+        )
+
+
+def test_get_statement_pdf_missing_path_is_not_found() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    actor = uuid4()
+    session_id = _multi_statement_session(repo, storage, user_id=actor, parse_results=[[_row("a")]])
+    session = repo.get_session(session_id, actor)
+    statement = session.statements[0]
+    repo.sessions[session_id] = replace(
+        session,
+        statements=[_copy_statement(statement, pdf_path=None)],
+    )
+    with pytest.raises(ImportStatementNotFoundError):
+        GetStatementPdfService(repo, storage).execute(
+            GetStatementPdfCommand(
+                actor_user_id=actor, session_id=session_id, statement_id=statement.id
+            )
+        )

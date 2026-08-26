@@ -46,7 +46,7 @@ from domain.statement_row_extraction import (
     is_data_row,
 )
 
-from adapters.bank._shared import parse_amount_field, sniff_content_marker
+from adapters.bank._shared import fail_parse, parse_amount_field, sniff_content_marker
 
 _logger = logging.getLogger(__name__)
 
@@ -286,7 +286,9 @@ class BacCreditAdapter:
                     text = page.extract_text() or ""
                     lines.extend(text.splitlines())
         except Exception as exc:
-            raise InvalidCanonicalLineError("Could not read statement PDF.") from exc
+            raise fail_parse(
+                "Could not read statement PDF.", gap_raw="Could not read statement PDF."
+            ) from exc
 
         stripped_lines = [raw.strip() for raw in lines if raw.strip()]
         reference_date = statement_reference_date(metadata, stripped_lines)
@@ -316,8 +318,10 @@ class BacCreditAdapter:
                 # skip. After an unrecognized lettered header, fail loud.
                 if not seen_section_header:
                     continue
-                raise InvalidCanonicalLineError(
-                    f"Statement row found under an unmapped section: {line!r}."
+                raise fail_parse(
+                    f"Statement row found under an unmapped section: {line!r}.",
+                    rows=rows,
+                    gap_raw=line,
                 )
 
             line_type = spec.line_type
@@ -331,7 +335,11 @@ class BacCreditAdapter:
                     posted_date = parse_statement_date(tokens.date, date_format=_DATE_FORMAT)
                 currency, amount = _currency_and_amount(line, tokens.amounts)
             except (ValueError, KeyError, InvalidOperation) as exc:
-                raise InvalidCanonicalLineError(f"Malformed statement row: {line!r}.") from exc
+                raise fail_parse(
+                    f"Malformed statement row: {line!r}.",
+                    rows=rows,
+                    gap_raw=line,
+                ) from exc
 
             assert line_type is not None  # SECTION_POLICY_IGNORE rows never reach here.
             amount = _signed_amount(amount, line_type)

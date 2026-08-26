@@ -126,8 +126,11 @@ def test_one_statement_parse_failure_does_not_prevent_siblings_from_parsing(
     chunks = adapter.split(combined_statement)
     assert len(chunks) == 2
 
-    with pytest.raises(InvalidCanonicalLineError):
+    with pytest.raises(InvalidCanonicalLineError) as exc_info:
         adapter.parse(chunks[0])
+    evidence = exc_info.value.evidence
+    assert evidence is not None
+    assert any(item.kind == "gap" for item in evidence.items)
 
     rows = adapter.parse(chunks[1])
     assert len(rows) == 1
@@ -135,7 +138,26 @@ def test_one_statement_parse_failure_does_not_prevent_siblings_from_parsing(
     assert rows[0].amount == Decimal("3000.00")
 
 
-def test_account_kind_is_other(adapter: PromericaStubAdapter) -> None:
+def test_mixed_parse_failure_fixture_attaches_prior_row_and_gap(
+    adapter: PromericaStubAdapter,
+) -> None:
+    pdf_path = Path(__file__).parent / "fixtures" / "pdf" / "promerica_stub_parse_failure_mixed.pdf"
+    pdf_bytes = pdf_path.read_bytes()
+    chunks = adapter.split(pdf_bytes)
+    assert len(chunks) == 2
+    with pytest.raises(InvalidCanonicalLineError) as exc_info:
+        adapter.parse(chunks[0])
+    evidence = exc_info.value.evidence
+    assert evidence is not None
+    kinds = [item.kind for item in evidence.items]
+    assert kinds.count("row") >= 1
+    assert kinds.count("gap") >= 1
+    row = next(item for item in evidence.items if item.kind == "row")
+    assert row.amount == "1000.00"
+    assert isinstance(row.amount, str)
+    sibling = adapter.parse(chunks[1])
+    assert sibling[0].amount == Decimal("2000.00")
+
     assert adapter.account_kind == "other"
 
 
@@ -149,5 +171,8 @@ def test_parse_unmapped_section_raises_rather_than_silently_dropping(
             "05-ENE-26|CARGO MISTERIOSO|1,000.00",
         ]
     )
-    with pytest.raises(InvalidCanonicalLineError):
+    with pytest.raises(InvalidCanonicalLineError) as exc_info:
         adapter.parse(pdf_bytes)
+    evidence = exc_info.value.evidence
+    assert evidence is not None
+    assert any(item.kind == "gap" for item in evidence.items)

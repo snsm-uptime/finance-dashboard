@@ -11,6 +11,19 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class ParseEvidenceItemResponse(BaseModel):
+    kind: str
+    description: str | None = None
+    amount: str | None = None
+    currency: str | None = None
+    posted_date: str | None = None
+    raw_snippet: str | None = None
+
+
+class ParseEvidenceResponse(BaseModel):
+    items: list[ParseEvidenceItemResponse] = Field(default_factory=list)
+
+
 class CandidateRowResponse(BaseModel):
     """One reviewable transaction on the wire.
 
@@ -54,6 +67,7 @@ class StagedStatementResponse(BaseModel):
     # ImportReviewSheet. Sibling to the pending-only `rows` above — that
     # contract (Story 4.11 AC #1) stays unchanged.
     assigned_rows: list[CandidateRowResponse] = Field(default_factory=list)
+    parse_evidence: ParseEvidenceResponse | None = None
 
 
 class FailedStatementResponse(BaseModel):

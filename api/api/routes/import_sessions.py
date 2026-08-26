@@ -32,6 +32,8 @@ from application.import_session import (
     FinalizeImportSessionCommand,
     FinalizeImportSessionService,
     GetActiveImportSessionService,
+    GetStatementPdfCommand,
+    GetStatementPdfService,
     ImportSessionRecord,
     MatchStatementCardCommand,
     MatchStatementCardService,
@@ -76,7 +78,7 @@ from domain.import_session import (
     ROW_STATUS_PENDING,
 )
 from fastapi import APIRouter, Depends, File, UploadFile, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.orm import Session
 
 from api.deps import (
@@ -98,6 +100,8 @@ from api.schemas.import_sessions import (
     IdentifyCardBody,
     ImportBatchResponse,
     ImportSessionResponse,
+    ParseEvidenceItemResponse,
+    ParseEvidenceResponse,
     StagedStatementResponse,
     UndoPointerResponse,
 )
@@ -161,6 +165,26 @@ def _statement_response(statement: StagedStatementRecord) -> StagedStatementResp
             )
             for row in assigned
         ],
+        parse_evidence=_parse_evidence_response(statement),
+    )
+
+
+def _parse_evidence_response(statement: StagedStatementRecord) -> ParseEvidenceResponse | None:
+    evidence = statement.parse_evidence
+    if evidence is None or not evidence.items:
+        return None
+    return ParseEvidenceResponse(
+        items=[
+            ParseEvidenceItemResponse(
+                kind=item.kind,
+                description=item.description,
+                amount=item.amount,
+                currency=item.currency,
+                posted_date=item.posted_date,
+                raw_snippet=item.raw_snippet,
+            )
+            for item in evidence.items
+        ]
     )
 
 
@@ -309,6 +333,40 @@ def get_import_session(
             content={"detail": "Import session not found.", "code": "import_session_not_found"},
         )
     return _session_response(result)
+
+
+@router.get("/{session_id}/statements/{statement_id}/pdf", response_model=None)
+def get_statement_pdf(
+    session_id: uuid.UUID,
+    statement_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+    pdf_storage: PdfStorage = Depends(get_pdf_storage),
+) -> Response | JSONResponse:
+    service = GetStatementPdfService(SqlAlchemyImportSessionRepository(db), pdf_storage)
+    try:
+        content = service.execute(
+            GetStatementPdfCommand(
+                actor_user_id=user_id,
+                session_id=session_id,
+                statement_id=statement_id,
+            )
+        )
+    except (ImportSessionNotFoundError, ImportStatementNotFoundError) as exc:
+        code = getattr(exc, "CODE", None) or (
+            "import_session_not_found"
+            if isinstance(exc, ImportSessionNotFoundError)
+            else "import_statement_not_found"
+        )
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": str(exc), "code": code},
+        )
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Cache-Control": "private, no-store"},
+    )
 
 
 @router.delete("/{session_id}", response_model=ImportSessionResponse)
