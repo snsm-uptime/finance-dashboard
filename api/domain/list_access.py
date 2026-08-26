@@ -36,8 +36,6 @@ _ACTION_ALIASES: dict[str, str] = {
 }
 
 _MEMBER_READ_ACTIONS = frozenset(
-
-_MEMBER_READ_ACTIONS = frozenset(
     {
         "read_list",
         "read_ledger",

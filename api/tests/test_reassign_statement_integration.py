@@ -46,9 +46,7 @@ def _seed_committed_statement(
     batch_id = uuid4()
     candidate_id = uuid4()
     entry_id = uuid4()
-    db_session.add(
-        ImportSessionModel(id=session_id, user_id=actor_id, content_hash="a" * 64)
-    )
+    db_session.add(ImportSessionModel(id=session_id, user_id=actor_id, content_hash="a" * 64))
     db_session.add(
         ImportStatementModel(
             id=statement_id,
@@ -109,9 +107,7 @@ def _seed_committed_statement(
     return statement_id, batch_id, entry_id
 
 
-def test_reassign_moves_ledger_and_balances(
-    client: TestClient, db_session: Session
-) -> None:
+def test_reassign_moves_ledger_and_balances(client: TestClient, db_session: Session) -> None:
     actor_id = UUID(_register(client, "reassign-owner@example.com"))
     list_a = client.post("/lists", json={"name": "List A"}).json()["id"]
     list_b = client.post("/lists", json={"name": "List B"}).json()["id"]
