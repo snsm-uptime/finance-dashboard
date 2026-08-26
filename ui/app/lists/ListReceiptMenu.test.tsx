@@ -60,6 +60,7 @@ const messages = {
   pickerTitle: listsMessages.en.receiptMovePickerTitle,
   confirmAction: listsMessages.en.receiptMoveConfirmAction,
   cancelLabel: listsMessages.en.receiptMoveCancel,
+  emptyDestLabel: listsMessages.en.receiptMoveNoOtherList,
   errorGeneric: listsMessages.en.errorGeneric,
   errorInvalidName: listsMessages.en.errorInvalidName,
   errorForbidden: listsMessages.en.errorForbidden,
@@ -124,6 +125,80 @@ describe("ListReceiptMenu", () => {
     expect(document.body.textContent).toContain(messages.moveConfirm);
     expect(document.body.textContent).toContain("Other");
     expect(document.body.textContent).not.toContain("Current");
+  });
+
+  it("shows empty dest copy when the actor has no other list", async () => {
+    fetchLists.mockResolvedValue({
+      ok: true,
+      lists: [{ id: "list-a", name: "Current", owner_id: "u1", role: "owner" }],
+    });
+
+    act(() => {
+      root.render(
+        <ListReceiptMenu listId="list-a" statementId="stmt-1" messages={messages} />,
+      );
+    });
+
+    const trigger = container.querySelector("button") as HTMLButtonElement;
+    await act(async () => {
+      trigger.click();
+    });
+    const moveItem = Array.from(document.querySelectorAll("button")).find(
+      (el) => el.textContent === messages.moveStatementLabel,
+    );
+    await act(async () => {
+      moveItem?.click();
+    });
+
+    expect(document.body.textContent).toContain(messages.emptyDestLabel);
+  });
+
+  it("clears prior picker rows when fetchLists fails", async () => {
+    fetchLists
+      .mockResolvedValueOnce({
+        ok: true,
+        lists: [{ id: "list-b", name: "Other", owner_id: "u1", role: "owner" }],
+      })
+      .mockResolvedValueOnce({ ok: false, error: messages.errorGeneric });
+
+    act(() => {
+      root.render(
+        <ListReceiptMenu listId="list-a" statementId="stmt-1" messages={messages} />,
+      );
+    });
+
+    const trigger = container.querySelector("button") as HTMLButtonElement;
+    await act(async () => {
+      trigger.click();
+    });
+    const moveItem = Array.from(document.querySelectorAll("button")).find(
+      (el) => el.textContent === messages.moveStatementLabel,
+    );
+    await act(async () => {
+      moveItem?.click();
+    });
+    expect(document.body.textContent).toContain("Other");
+
+    const close = Array.from(document.querySelectorAll("button")).find(
+      (el) => el.textContent === messages.cancelLabel,
+    );
+    await act(async () => {
+      close?.click();
+    });
+    await act(async () => {
+      trigger.click();
+    });
+    const moveAgain = Array.from(document.querySelectorAll("button")).find(
+      (el) => el.textContent === messages.moveStatementLabel,
+    );
+    await act(async () => {
+      moveAgain?.click();
+    });
+
+    expect(document.body.textContent).not.toContain("Other");
+    expect(document.body.querySelector("[role='alert']")?.textContent).toBe(
+      messages.errorGeneric,
+    );
   });
 
   it("surfaces errorForbidden when the destination is denied", async () => {

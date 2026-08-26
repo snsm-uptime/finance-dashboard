@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Protocol
 from uuid import UUID
 
-from domain.errors import ImportStatementNotFoundError
+from domain.errors import ImportStatementNotFoundError, InvalidSplitOverrideError
 from domain.splits import SUBJECT_ITEM, SUBJECT_RECEIPT, parse_split_spec
 
 from application.list_access import AuthorizeListAccessCommand, AuthorizeListAccessService
@@ -23,6 +23,7 @@ class StatementLedgerMove:
     batch_id: UUID
     candidate_row_id: UUID | None
     receipt_id: UUID | None
+    payer_id: UUID | None
     amount_crc: Decimal
     fx_rate: Decimal
     fx_fallback: bool
@@ -52,6 +53,7 @@ class ReassignStatementRepository(Protocol):
         batch_ids: tuple[UUID, ...],
         candidate_ids: tuple[UUID, ...],
         receipt_ids: tuple[UUID, ...],
+        from_list_ids: tuple[UUID, ...],
         override_keys: tuple[tuple[str, UUID], ...],
     ) -> None: ...
 
@@ -116,8 +118,15 @@ class ReassignStatementService:
             return result
 
         dest_members = self._repo.list_member_ids(command.destination_list_id)
-        override_keys = self._override_keys(moves)
-        for kind, subject_id in override_keys:
+        dest_member_set = set(dest_members)
+        for row in moves:
+            if row.payer_id is not None and row.payer_id not in dest_member_set:
+                raise InvalidSplitOverrideError(
+                    "Payer is not a member of the destination list."
+                )
+
+        override_keys: list[tuple[str, UUID]] = []
+        for kind, subject_id in self._override_keys(moves):
             home_list = next(
                 row.list_id
                 for row in moves
@@ -134,6 +143,7 @@ class ReassignStatementService:
                 amounts=stored.amounts,
                 percentages=stored.percentages,
             )
+            override_keys.append((kind, subject_id))
 
         candidate_ids = tuple(
             row.candidate_row_id for row in moves if row.candidate_row_id is not None
@@ -146,7 +156,8 @@ class ReassignStatementService:
                 batch_ids=batch_ids,
                 candidate_ids=candidate_ids,
                 receipt_ids=receipt_ids,
-                override_keys=override_keys,
+                from_list_ids=from_list_ids,
+                override_keys=tuple(override_keys),
             )
         return result
 

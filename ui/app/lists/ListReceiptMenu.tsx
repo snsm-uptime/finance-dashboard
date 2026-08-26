@@ -23,6 +23,7 @@ export type ListReceiptMenuMessages = ListsClientMessages & {
   pickerTitle: string;
   confirmAction: string;
   cancelLabel: string;
+  emptyDestLabel: string;
 };
 
 type Props = {
@@ -44,6 +45,8 @@ export function ListReceiptMenu({ listId, statementId, messages }: Props) {
     setSelectedId(null);
     const result = await fetchLists(messages);
     if (!result.ok) {
+      setLists([]);
+      setSelectedId(null);
       setError(result.error);
       setOpen(true);
       return;
@@ -88,7 +91,10 @@ export function ListReceiptMenu({ listId, statementId, messages }: Props) {
               {messages.moveConfirm}
             </p>
             <ul className="m-0 list-none p-0">
-              {lists.map((item) => (
+              {lists.length === 0 ? (
+                <li className="py-[var(--space-3)] text-muted">{messages.emptyDestLabel}</li>
+              ) : (
+                lists.map((item) => (
                 <li key={item.id} className="border-b border-border">
                   <button
                     type="button"
@@ -99,7 +105,8 @@ export function ListReceiptMenu({ listId, statementId, messages }: Props) {
                     {item.name}
                   </button>
                 </li>
-              ))}
+                ))
+              )}
             </ul>
             {error ? (
               <p role="alert" className="m-0 text-owe">

@@ -4,7 +4,7 @@ baseline_commit: 0d2972e02b2b826b6aa3e6795a0d8db9a985e30b
 
 # Story 5.3: Reassign statement to another list
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -84,16 +84,16 @@ so that balances on both lists stay correct after the mistake.
 
 - [x] [Review][Dismiss] Confirm copy vs statement-wide gather — keep one-line share confirm only (AC 3.3); no extra AD-4 / other-list warning.
 
-- [ ] [Review][Patch] Duplicate `_MEMBER_READ_ACTIONS = frozenset(` is a SyntaxError — ACL module cannot import [`api/domain/list_access.py:38`]
-- [ ] [Review][Patch] 409 when original `payer_id` is not a member of destination B (user decision: do not rewrite payer; reject the move) [`api/application/reassign_statement.py:118`]
-- [ ] [Review][Patch] Reassign 409 `invalid_split_override` is shown as invite `errorAlreadyMember` [`ui/app/lists/listsClient.ts:60`]
-- [ ] [Review][Patch] Override validation uses `get_split_override(home_list, …)` but UPDATE matches only `(subject_kind, subject_id)` — skip-on-None can still move an override without 409 [`api/application/reassign_statement.py:127`] [`api/adapters/persistence/repositories.py:723`]
-- [ ] [Review][Patch] Empty dest picker (only one membership) has no empty state; confirm stays disabled [`ui/app/lists/ListReceiptMenu.tsx:51`]
-- [ ] [Review][Patch] Failed `fetchLists` still opens the sheet and leaves prior `lists` in state [`ui/app/lists/ListReceiptMenu.tsx:46`]
-- [ ] [Review][Patch] Integration “non-member dest” case is actually source-deny (dest owner POSTing list A) [`api/tests/test_reassign_statement_integration.py:163`]
-- [ ] [Review][Patch] Fake `list_statement_ledger_moves` ignores `statement_id`; skip-deleted test never seeds skipped candidates [`api/tests/test_reassign_statement_application.py:76`]
-- [ ] [Review][Patch] BFF test claims cookie forward but only asserts POST method [`ui/app/api/lists-invites.bff.test.ts:255`]
-- [ ] [Review][Patch] Corrupt override payload (`assignee_id` missing) is KeyError → 500, not 409 [`api/adapters/persistence/repositories.py:735`]
+- [x] [Review][Patch] Duplicate `_MEMBER_READ_ACTIONS = frozenset(` is a SyntaxError — ACL module cannot import [`api/domain/list_access.py:38`]
+- [x] [Review][Patch] 409 when original `payer_id` is not a member of destination B (user decision: do not rewrite payer; reject the move) [`api/application/reassign_statement.py:118`]
+- [x] [Review][Patch] Reassign 409 `invalid_split_override` is shown as invite `errorAlreadyMember` [`ui/app/lists/listsClient.ts:60`]
+- [x] [Review][Patch] Override validation uses `get_split_override(home_list, …)` but UPDATE matches only `(subject_kind, subject_id)` — skip-on-None can still move an override without 409 [`api/application/reassign_statement.py:127`] [`api/adapters/persistence/repositories.py:723`]
+- [x] [Review][Patch] Empty dest picker (only one membership) has no empty state; confirm stays disabled [`ui/app/lists/ListReceiptMenu.tsx:51`]
+- [x] [Review][Patch] Failed `fetchLists` still opens the sheet and leaves prior `lists` in state [`ui/app/lists/ListReceiptMenu.tsx:46`]
+- [x] [Review][Patch] Integration “non-member dest” case is actually source-deny (dest owner POSTing list A) [`api/tests/test_reassign_statement_integration.py:163`]
+- [x] [Review][Patch] Fake `list_statement_ledger_moves` ignores `statement_id`; skip-deleted test never seeds skipped candidates [`api/tests/test_reassign_statement_application.py:76`]
+- [x] [Review][Patch] BFF test claims cookie forward but only asserts POST method [`ui/app/api/lists-invites.bff.test.ts:255`]
+- [x] [Review][Patch] Corrupt override payload (`assignee_id` missing) is KeyError → 500, not 409 [`api/adapters/persistence/repositories.py:735`]
 
 - [x] [Review][Defer] GET expenses swallows `InvalidSplitOverrideError` and blanks the lens [`api/application/expenses.py:382`] — deferred, pre-existing
 - [x] [Review][Defer] `fetchLists` always `replaceMembershipLists` — picker reuse can rewrite homepage cache [`ui/app/lists/listsClient.ts:109`] — deferred, pre-existing
@@ -251,4 +251,4 @@ Do not fork/merge `import_batches.id`; 5.4 rollback still keys off `batch_id` on
 
 ## Status
 
-review
+done

@@ -36,6 +36,7 @@ export type ListsClientMessages = {
   errorInvalidEmail?: string;
   errorAlreadyMember?: string;
   errorSmtp?: string;
+  errorReassignSplit?: string;
 };
 
 type ErrorResult = { ok: false; error: string };
@@ -699,6 +700,10 @@ export async function reassignStatement(
   }
   if (!response.ok) {
     const body = (await parseJson(response)) as { detail?: unknown; code?: unknown } | null;
+    const code = typeof body?.code === "string" ? body.code : "";
+    if (response.status === 409 && code === "invalid_split_override") {
+      return { ok: false, error: messages.errorReassignSplit ?? messages.errorGeneric };
+    }
     return { ok: false, error: mapError(response.status, body, messages) };
   }
   return { ok: true };

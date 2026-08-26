@@ -95,6 +95,9 @@ export const listsMessages = {
     receiptMovePickerTitle: "Move to another list",
     receiptMoveConfirmAction: "Move statement",
     receiptMoveCancel: "Cancel",
+    receiptMoveNoOtherList: "You have no other list to move this statement to.",
+    errorReassignSplit:
+      "This statement cannot move there: a payer or split on these rows is not a member of the destination list.",
   },
   es: {
     title: "Inicio",
@@ -191,6 +194,9 @@ export const listsMessages = {
     receiptMovePickerTitle: "Mover a otra lista",
     receiptMoveConfirmAction: "Mover estado de cuenta",
     receiptMoveCancel: "Cancelar",
+    receiptMoveNoOtherList: "No tienes otra lista a la que mover este estado de cuenta.",
+    errorReassignSplit:
+      "Este estado de cuenta no se puede mover ahí: un pagador o una división de estas filas no es miembro de la lista de destino.",
   },
 } as const;
 

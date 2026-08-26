@@ -272,5 +272,7 @@ describe("lists / invites BFF smoke (coverage floor)", () => {
       "http://api.test:8000/lists/l1/statements/s1/reassign",
       expect.objectContaining({ method: "POST" }),
     );
+    const init = fetchMock.mock.calls.at(-1)?.[1] as { headers?: HeadersInit } | undefined;
+    expect(new Headers(init?.headers).get("Cookie")).toBe("fh_session=tok");
   });
 });

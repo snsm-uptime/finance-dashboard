@@ -631,10 +631,12 @@ export default async function ListDetailPage({
                               pickerTitle: t.receiptMovePickerTitle,
                               confirmAction: t.receiptMoveConfirmAction,
                               cancelLabel: t.receiptMoveCancel,
+                              emptyDestLabel: t.receiptMoveNoOtherList,
                               errorGeneric: t.errorGeneric,
                               errorInvalidName: t.errorInvalidName,
                               errorForbidden: t.errorForbidden,
                               errorUnauthorized: t.errorUnauthorized,
+                              errorReassignSplit: t.errorReassignSplit,
                             }}
                           />
                         ),

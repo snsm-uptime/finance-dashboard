@@ -29,6 +29,7 @@ from domain.errors import (
     AliasTakenError,
     DuplicateEmailError,
     InvalidDefaultSplitError,
+    InvalidSplitOverrideError,
     ListNotFoundError,
     ListWriteError,
     NotEntryPayerError,
@@ -678,6 +679,7 @@ class SqlAlchemyListRepository:
                     batch_id=batch.id,
                     candidate_row_id=entry.import_candidate_row_id,
                     receipt_id=entry.receipt_id,
+                    payer_id=entry.payer_id,
                     amount_crc=Decimal(str(entry.amount_crc)),
                     fx_rate=Decimal(str(entry.fx_rate)),
                     fx_fallback=entry.fx_fallback,
@@ -694,6 +696,7 @@ class SqlAlchemyListRepository:
         batch_ids: tuple[UUID, ...],
         candidate_ids: tuple[UUID, ...],
         receipt_ids: tuple[UUID, ...],
+        from_list_ids: tuple[UUID, ...],
         override_keys: tuple[tuple[str, UUID], ...],
     ) -> None:
         if entry_ids:
@@ -720,15 +723,17 @@ class SqlAlchemyListRepository:
                 .where(ReceiptModel.id.in_(receipt_ids))
                 .values(list_id=destination_list_id)
             )
-        for kind, subject_id in override_keys:
-            self._session.execute(
-                update(SplitOverrideModel)
-                .where(
-                    SplitOverrideModel.subject_kind == kind,
-                    SplitOverrideModel.subject_id == subject_id,
+        if override_keys and from_list_ids:
+            for kind, subject_id in override_keys:
+                self._session.execute(
+                    update(SplitOverrideModel)
+                    .where(
+                        SplitOverrideModel.subject_kind == kind,
+                        SplitOverrideModel.subject_id == subject_id,
+                        SplitOverrideModel.list_id.in_(from_list_ids),
+                    )
+                    .values(list_id=destination_list_id)
                 )
-                .values(list_id=destination_list_id)
-            )
         self._session.flush()
 
 
@@ -737,14 +742,17 @@ def _stored_override_from_row(row: SplitOverrideModel) -> StoredSplitOverride:
     amounts: dict[UUID, Decimal] | None = None
     percentages: dict[UUID, Decimal] | None = None
     payload = row.payload or {}
-    if row.kind == KIND_WHOLE_ASSIGNEE:
-        assignee_id = UUID(str(payload["assignee_id"]))
-    elif row.kind == KIND_ABSOLUTE_AMOUNTS:
-        amounts = {UUID(str(k)): Decimal(str(v)) for k, v in (payload.get("amounts") or {}).items()}
-    elif row.kind == KIND_PERCENTAGE:
-        percentages = {
-            UUID(str(k)): Decimal(str(v)) for k, v in (payload.get("percentages") or {}).items()
-        }
+    try:
+        if row.kind == KIND_WHOLE_ASSIGNEE:
+            assignee_id = UUID(str(payload["assignee_id"]))
+        elif row.kind == KIND_ABSOLUTE_AMOUNTS:
+            amounts = {UUID(str(k)): Decimal(str(v)) for k, v in (payload.get("amounts") or {}).items()}
+        elif row.kind == KIND_PERCENTAGE:
+            percentages = {
+                UUID(str(k)): Decimal(str(v)) for k, v in (payload.get("percentages") or {}).items()
+            }
+    except (KeyError, ValueError, TypeError) as exc:
+        raise InvalidSplitOverrideError() from exc
     return StoredSplitOverride(
         list_id=row.list_id,
         subject_kind=row.subject_kind,

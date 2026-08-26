@@ -156,18 +156,22 @@ def test_reassign_moves_ledger_and_balances(client: TestClient, db_session: Sess
     assert Decimal(balances_b.json()["balance_crc"]) == Decimal("40.00")
 
 
-def test_reassign_stranger_and_non_member_dest_forbidden(
-    client: TestClient, db_session: Session
-) -> None:
-    owner_a = UUID(_register(client, "reassign-src@example.com"))
+def test_reassign_dest_non_member_forbidden(client: TestClient, db_session: Session) -> None:
+    owner_a = UUID(_register(client, "reassign-src-member@example.com"))
     list_a = client.post("/lists", json={"name": "Source"}).json()["id"]
     statement_id, _, _ = _seed_committed_statement(
         db_session, actor_id=owner_a, list_id=UUID(list_a)
     )
 
     client.post("/auth/sign-out")
-    _register(client, "reassign-dst@example.com")
+    _register(client, "reassign-dst-owner@example.com")
     list_b = client.post("/lists", json={"name": "Dest"}).json()["id"]
+
+    client.post("/auth/sign-out")
+    client.post(
+        "/auth/sign-in",
+        json={"email": "reassign-src-member@example.com", "password": "password1"},
+    )
     forbidden_dest = client.post(
         f"/lists/{list_a}/statements/{statement_id}/reassign",
         json={"destination_list_id": list_b},
@@ -175,8 +179,17 @@ def test_reassign_stranger_and_non_member_dest_forbidden(
     assert forbidden_dest.status_code == 403
     assert forbidden_dest.json()["code"] == "not_list_member"
 
+
+def test_reassign_stranger_forbidden(client: TestClient, db_session: Session) -> None:
+    owner_a = UUID(_register(client, "reassign-src@example.com"))
+    list_a = client.post("/lists", json={"name": "Source"}).json()["id"]
+    statement_id, _, _ = _seed_committed_statement(
+        db_session, actor_id=owner_a, list_id=UUID(list_a)
+    )
+
     client.post("/auth/sign-out")
     _register(client, "reassign-stranger@example.com")
+    list_b = client.post("/lists", json={"name": "Stranger dest"}).json()["id"]
     stranger = client.post(
         f"/lists/{list_a}/statements/{statement_id}/reassign",
         json={"destination_list_id": list_b},

@@ -38,6 +38,8 @@ class _MoveState:
     candidate_resolved_list_id: UUID | None
     batch_list_id: UUID
     receipt_list_id: UUID | None = None
+    statement_id: UUID | None = None
+    payer_id: UUID | None = None
 
 
 @dataclass
@@ -74,7 +76,6 @@ class _FakeReassignRepo:
         return None
 
     def list_statement_ledger_moves(self, statement_id: UUID) -> list[StatementLedgerMove]:
-        del statement_id
         return [
             StatementLedgerMove(
                 entry_id=row.entry_id,
@@ -82,12 +83,14 @@ class _FakeReassignRepo:
                 batch_id=row.batch_id,
                 candidate_row_id=row.candidate_row_id,
                 receipt_id=row.receipt_id,
+                payer_id=row.payer_id,
                 amount_crc=row.amount_crc,
                 fx_rate=row.fx_rate,
                 fx_fallback=row.fx_fallback,
                 import_identity=row.import_identity,
             )
             for row in self.moves
+            if row.statement_id is None or row.statement_id == statement_id
         ]
 
     @contextmanager
@@ -102,6 +105,7 @@ class _FakeReassignRepo:
         batch_ids: tuple[UUID, ...],
         candidate_ids: tuple[UUID, ...],
         receipt_ids: tuple[UUID, ...],
+        from_list_ids: tuple[UUID, ...],
         override_keys: tuple[tuple[str, UUID], ...],
     ) -> None:
         self.write_count += 1
@@ -109,6 +113,7 @@ class _FakeReassignRepo:
         batch_set = set(batch_ids)
         candidate_set = set(candidate_ids)
         receipt_set = set(receipt_ids)
+        from_set = set(from_list_ids)
         for row in self.moves:
             if row.entry_id in entry_set:
                 row.list_id = destination_list_id
@@ -119,7 +124,7 @@ class _FakeReassignRepo:
             if row.receipt_id in receipt_set:
                 row.receipt_list_id = destination_list_id
         for ov in self.overrides:
-            if (ov.subject_kind, ov.subject_id) in override_keys:
+            if (ov.subject_kind, ov.subject_id) in override_keys and ov.list_id in from_set:
                 object.__setattr__(ov, "list_id", destination_list_id)
 
 
@@ -138,6 +143,8 @@ def _move(
     batch_id: UUID | None = None,
     receipt_id: UUID | None = None,
     candidate_id: UUID | None = None,
+    statement_id: UUID | None = None,
+    payer_id: UUID | None = None,
 ) -> _MoveState:
     batch = batch_id or uuid4()
     candidate = candidate_id if candidate_id is not None else uuid4()
@@ -154,6 +161,8 @@ def _move(
         candidate_resolved_list_id=list_id,
         batch_list_id=list_id,
         receipt_list_id=list_id if receipt_id is not None else None,
+        statement_id=statement_id,
+        payer_id=payer_id,
     )
 
 
@@ -407,21 +416,48 @@ def test_override_non_member_on_destination_is_conflict() -> None:
 
 
 def test_skips_rows_without_ledger() -> None:
-    """Deleted / dedup_skipped candidates never appear in the move set."""
+    """Only ledger rows for this statement_id move; other statements and non-listed candidates stay."""
     repo = _FakeReassignRepo()
     actor = uuid4()
     list_a, list_b = uuid4(), uuid4()
     _seed_lists(repo, actor=actor, list_a=list_a, list_b=list_b)
-    kept = _move(list_id=list_a)
-    repo.moves = [kept]
+    statement_id = uuid4()
+    other_statement = uuid4()
+    kept = _move(list_id=list_a, statement_id=statement_id)
+    other = _move(list_id=list_a, statement_id=other_statement)
+    repo.moves = [kept, other]
 
     result = ReassignStatementService(repo).execute(
         ReassignStatementCommand(
             acting_user_id=actor,
             source_list_id=list_a,
-            statement_id=uuid4(),
+            statement_id=statement_id,
             destination_list_id=list_b,
         )
     )
 
     assert result.ledger_entry_ids == (kept.entry_id,)
+    assert kept.list_id == list_b
+    assert other.list_id == list_a
+
+
+def test_payer_not_on_destination_is_conflict() -> None:
+    repo = _FakeReassignRepo()
+    actor = uuid4()
+    outsider = uuid4()
+    list_a, list_b = uuid4(), uuid4()
+    _seed_lists(repo, actor=actor, list_a=list_a, list_b=list_b)
+    row = _move(list_id=list_a, payer_id=outsider)
+    repo.moves = [row]
+
+    with pytest.raises(InvalidSplitOverrideError):
+        ReassignStatementService(repo).execute(
+            ReassignStatementCommand(
+                acting_user_id=actor,
+                source_list_id=list_a,
+                statement_id=uuid4(),
+                destination_list_id=list_b,
+            )
+        )
+    assert repo.write_count == 0
+    assert row.list_id == list_a
