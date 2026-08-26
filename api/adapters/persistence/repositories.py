@@ -746,7 +746,9 @@ def _stored_override_from_row(row: SplitOverrideModel) -> StoredSplitOverride:
         if row.kind == KIND_WHOLE_ASSIGNEE:
             assignee_id = UUID(str(payload["assignee_id"]))
         elif row.kind == KIND_ABSOLUTE_AMOUNTS:
-            amounts = {UUID(str(k)): Decimal(str(v)) for k, v in (payload.get("amounts") or {}).items()}
+            amounts = {
+                UUID(str(k)): Decimal(str(v)) for k, v in (payload.get("amounts") or {}).items()
+            }
         elif row.kind == KIND_PERCENTAGE:
             percentages = {
                 UUID(str(k)): Decimal(str(v)) for k, v in (payload.get("percentages") or {}).items()

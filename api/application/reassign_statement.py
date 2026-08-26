@@ -121,9 +121,7 @@ class ReassignStatementService:
         dest_member_set = set(dest_members)
         for row in moves:
             if row.payer_id is not None and row.payer_id not in dest_member_set:
-                raise InvalidSplitOverrideError(
-                    "Payer is not a member of the destination list."
-                )
+                raise InvalidSplitOverrideError("Payer is not a member of the destination list.")
 
         override_keys: list[tuple[str, UUID]] = []
         for kind, subject_id in self._override_keys(moves):
