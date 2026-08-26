@@ -4,7 +4,7 @@ baseline_commit: 5f52515e7efcef517ad62b1e23d721a70d892432
 
 # Story 5.1: Parse failure → side-by-side comparison
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -45,41 +45,41 @@ so that nothing enters the ledger silently and I can see the evidence (J3).
 
 ## Tasks / Subtasks
 
-- [ ] Task 0: Branch + reads
-  - [ ] 0.1 Branch: `feat/5/5-1-parse-failure-side-by-side-comparison` from current `main` (one story per branch).
-  - [ ] 0.2 Read this file, `_bmad-output/project-context.md`, AD-3 / AD-4 / AD-16 in `ARCHITECTURE-SPINE.md`, `api/application/import_session.py` (`run_import_pipeline`), `api/adapters/storage/pdf_storage.py`, `IndividualReviewPanel.tsx` (`nextReviewableRow`), `ui/app/api/import/sessions/[sessionId]/route.ts`.
+- [x] Task 0: Branch + reads
+  - [x] 0.1 Branch: `feat/5/5-1-parse-failure-side-by-side-comparison` from current `main` (one story per branch).
+  - [x] 0.2 Read this file, `_bmad-output/project-context.md`, AD-3 / AD-4 / AD-16 in `ARCHITECTURE-SPINE.md`, `api/application/import_session.py` (`run_import_pipeline`), `api/adapters/storage/pdf_storage.py`, `IndividualReviewPanel.tsx` (`nextReviewableRow`), `ui/app/api/import/sessions/[sessionId]/route.ts`.
 
-- [ ] Task 1: Parse evidence without creating reviewable rows (AC: #1, #2, #6)
-  - [ ] 1.1 **Do not** persist failed-parse lines as `pending` `import_candidate_rows`. Those would enter `nextReviewableRow` / assign / bulk and violate FR-24. Evidence is display-only.
-  - [ ] 1.2 Extend `InvalidCanonicalLineError` (or a dedicated frozen dataclass carried on it) with optional `evidence: ParseEvidence` where `ParseEvidence` lives in `api/domain/` (no FastAPI/SQLAlchemy/pdfplumber). Shape: ordered `items: list[ParseEvidenceItem]` with `kind: "row" | "gap"`. `row` = fields that **did** validate as CanonicalLine (amount as string at the JSON boundary later). `gap` = the must-parse line/text that caused fail-loud (raw snippet, no PII in fixtures). Empty evidence is not enough for AC #6.
-  - [ ] 1.3 **BAC + Promerica stub `parse()`:** before `raise InvalidCanonicalLineError`, attach evidence = already-validated rows **plus** a `gap` for the failing line. Today both adapters raise and **drop** prior `rows` — that is the silent-drop hole FR-24 / AD-11 call out. Do not change fail-loud: still raise; still no `staged` candidate rows.
-  - [ ] 1.4 `run_import_pipeline`: on per-chunk `InvalidCanonicalLineError`, set `DetectedStatement(status=failed, candidate_rows=[], parse_evidence=exc.evidence or …)`. Sibling loop **unchanged**. Detection / whole-file `split()` failures still propagate uncaught (nothing to stage).
-  - [ ] 1.5 `create_session`: persist evidence on the **statement** (JSONB column). Alembic **`0028_…`**, `down_revision = "0027_import_session_content_hash"` (HEAD today). Revision id ≤ 32 chars. Nullable JSON; no backfill.
-  - [ ] 1.6 Wire evidence onto `StagedStatementRecord` / `StagedStatementResponse` / `asImportSession` (`parse_evidence` or `extracted_items` + `gaps` — snake_case on the wire). Failed statements keep `rows: []` and `candidate_row_count` consistent with **candidate** rows (0), not evidence length.
-  - [ ] 1.7 Tests: extend `test_run_import_pipeline_one_chunk_fails_parse_sibling_survives` — failed chunk has evidence, sibling still `staged`. Adapter tests: Promerica malformed-amount (existing) and BAC unmapped/malformed path now attach gap + any prior rows. Integration: upload mixed fixture → GET session shows `status=failed`, evidence non-empty, `rows=[]`, no ledger.
+- [x] Task 1: Parse evidence without creating reviewable rows (AC: #1, #2, #6)
+  - [x] 1.1 **Do not** persist failed-parse lines as `pending` `import_candidate_rows`. Those would enter `nextReviewableRow` / assign / bulk and violate FR-24. Evidence is display-only.
+  - [x] 1.2 Extend `InvalidCanonicalLineError` (or a dedicated frozen dataclass carried on it) with optional `evidence: ParseEvidence` where `ParseEvidence` lives in `api/domain/` (no FastAPI/SQLAlchemy/pdfplumber). Shape: ordered `items: list[ParseEvidenceItem]` with `kind: "row" | "gap"`. `row` = fields that **did** validate as CanonicalLine (amount as string at the JSON boundary later). `gap` = the must-parse line/text that caused fail-loud (raw snippet, no PII in fixtures). Empty evidence is not enough for AC #6.
+  - [x] 1.3 **BAC + Promerica stub `parse()`:** before `raise InvalidCanonicalLineError`, attach evidence = already-validated rows **plus** a `gap` for the failing line. Today both adapters raise and **drop** prior `rows` — that is the silent-drop hole FR-24 / AD-11 call out. Do not change fail-loud: still raise; still no `staged` candidate rows.
+  - [x] 1.4 `run_import_pipeline`: on per-chunk `InvalidCanonicalLineError`, set `DetectedStatement(status=failed, candidate_rows=[], parse_evidence=exc.evidence or …)`. Sibling loop **unchanged**. Detection / whole-file `split()` failures still propagate uncaught (nothing to stage).
+  - [x] 1.5 `create_session`: persist evidence on the **statement** (JSONB column). Alembic **`0028_…`**, `down_revision = "0027_import_session_content_hash"` (HEAD today). Revision id ≤ 32 chars. Nullable JSON; no backfill.
+  - [x] 1.6 Wire evidence onto `StagedStatementRecord` / `StagedStatementResponse` / `asImportSession` (`parse_evidence` or `extracted_items` + `gaps` — snake_case on the wire). Failed statements keep `rows: []` and `candidate_row_count` consistent with **candidate** rows (0), not evidence length.
+  - [x] 1.7 Tests: extend `test_run_import_pipeline_one_chunk_fails_parse_sibling_survives` — failed chunk has evidence, sibling still `staged`. Adapter tests: Promerica malformed-amount (existing) and BAC unmapped/malformed path now attach gap + any prior rows. Integration: upload mixed fixture → GET session shows `status=failed`, evidence non-empty, `rows=[]`, no ledger.
 
-- [ ] Task 2: Authenticated PDF bytes (AC: #3)
-  - [ ] 2.1 Add `PdfStorage.read(path: str) -> bytes` (or `open`) on the Protocol. `FilesystemPdfStorage`: resolve, **`Path(path).resolve().is_relative_to(self._base_dir.resolve())`**, else treat as not found. Do not follow user-controlled paths outside the volume.
-  - [ ] 2.2 Application service: owner session + statement id + `pdf_path is not None` → bytes. Foreign user → same as GET session (not found / forbidden pattern already used on this router). Missing file → 404, no path in body.
-  - [ ] 2.3 FastAPI: `GET /import/sessions/{session_id}/statements/{statement_id}/pdf` → `application/pdf`, `Cache-Control: private, no-store`. **Never** JSON-encode the operator path. Register this route so it does not collide with row routes.
-  - [ ] 2.4 BFF: `ui/app/api/import/sessions/[sessionId]/statements/[statementId]/pdf/route.ts` — cookie-forward like the session GET; **stream** the body (not `JSON.stringify`). 502 on upstream down.
-  - [ ] 2.5 Integration: owner 200 + `%PDF` magic; other user 404/403; discarded session not served (match GET session); `pdf_path` None → 404.
+- [x] Task 2: Authenticated PDF bytes (AC: #3)
+  - [x] 2.1 Add `PdfStorage.read(path: str) -> bytes` (or `open`) on the Protocol. `FilesystemPdfStorage`: resolve, **`Path(path).resolve().is_relative_to(self._base_dir.resolve())`**, else treat as not found. Do not follow user-controlled paths outside the volume.
+  - [x] 2.2 Application service: owner session + statement id + `pdf_path is not None` → bytes. Foreign user → same as GET session (not found / forbidden pattern already used on this router). Missing file → 404, no path in body.
+  - [x] 2.3 FastAPI: `GET /import/sessions/{session_id}/statements/{statement_id}/pdf` → `application/pdf`, `Cache-Control: private, no-store`. **Never** JSON-encode the operator path. Register this route so it does not collide with row routes.
+  - [x] 2.4 BFF: `ui/app/api/import/sessions/[sessionId]/statements/[statementId]/pdf/route.ts` — cookie-forward like the session GET; **stream** the body (not `JSON.stringify`). 502 on upstream down.
+  - [x] 2.5 Integration: owner 200 + `%PDF` magic; other user 404/403; discarded session not served (match GET session); `pdf_path` None → 404.
 
-- [ ] Task 3: Comparison UI (AC: #3, #4, #5)
-  - [ ] 3.1 Add `react-pdf@10.4.x` in `ui/` (`package-lock.json` is the pin). **Do not** add a second `pdfjs-dist` dependency. Worker: set `pdfjs.GlobalWorkerOptions.workerSrc` in the **same module** that renders `<Document>` / `<Page>` (react-pdf 10.x). Import that module with `next/dynamic(..., { ssr: false })`. Prefer bundling the worker via `import.meta.url` (`pdfjs-dist/build/pdf.worker.min.mjs`); do not use a CDN worker as the production path.
-  - [ ] 3.2 New client component under `ui/app/upload/` (e.g. `ParseComparisonPanel.tsx`) — Tailwind only, **no new `*.module.css`**. Layout: `flex-col` on small screens (items first, PDF `flex-1` / lower half); side-by-side from `md:` up. Tokens: `--muted`, `--surface`, `--border`, `--background`, `--space-*` from `globals.css` — do not invent `--color-*`.
-  - [ ] 3.3 Regions: `role="region"` + `aria-label` from i18n for (a) extracted items (b) original PDF. Alert: existing calm copy pattern, EN+ES in `ui/lib/i18n/upload.ts` (same `uploadMessages` object — no new i18n file). Gap rows visually distinct (muted) and not presented as committed amounts.
-  - [ ] 3.4 Load PDF via BFF with `credentials: "include"` → `Blob` → `<Document file={blob}>`. Never pass a cross-origin api URL without cookies.
-  - [ ] 3.5 **Insert into review sequence** (do not only list failures on the 4.14 summary). Export a pure helper next to `nextReviewableRow` (keep that function’s row semantics): walk `session.statements` in order; `failed` → comparison step; `staged` with pending `rows` → existing card. **Visit-local** “acknowledged” failed ids: Continue advances; reload shows comparison again. While unacknowledged failed statements exist, **do not** mount `ImportReviewSheet` first. After Continue through them, existing sheet/finalize behavior stays.
-  - [ ] 3.6 Bulk page: if the session has any `failed` statement, show the same comparison **before** the list picker; Continue then shows today’s bulk UI. Clean sessions: **zero** `react-pdf` import cost on the happy path (dynamic import only from comparison module).
-  - [ ] 3.7 Tests (jsdom, test-after): helper chooses comparison vs row vs sheet; comparison not used when all `staged`; regions have accessible names (query by role/label). Mock `react-pdf` in unit tests. Do not require Playwright for this story.
+- [x] Task 3: Comparison UI (AC: #3, #4, #5)
+  - [x] 3.1 Add `react-pdf@10.4.x` in `ui/` (`package-lock.json` is the pin). **Do not** add a second `pdfjs-dist` dependency. Worker: set `pdfjs.GlobalWorkerOptions.workerSrc` in the **same module** that renders `<Document>` / `<Page>` (react-pdf 10.x). Import that module with `next/dynamic(..., { ssr: false })`. Prefer bundling the worker via `import.meta.url` (`pdfjs-dist/build/pdf.worker.min.mjs`); do not use a CDN worker as the production path.
+  - [x] 3.2 New client component under `ui/app/upload/` (e.g. `ParseComparisonPanel.tsx`) — Tailwind only, **no new `*.module.css`**. Layout: `flex-col` on small screens (items first, PDF `flex-1` / lower half); side-by-side from `md:` up. Tokens: `--muted`, `--surface`, `--border`, `--background`, `--space-*` from `globals.css` — do not invent `--color-*`.
+  - [x] 3.3 Regions: `role="region"` + `aria-label` from i18n for (a) extracted items (b) original PDF. Alert: existing calm copy pattern, EN+ES in `ui/lib/i18n/upload.ts` (same `uploadMessages` object — no new i18n file). Gap rows visually distinct (muted) and not presented as committed amounts.
+  - [x] 3.4 Load PDF via BFF with `credentials: "include"` → `Blob` → `<Document file={blob}>`. Never pass a cross-origin api URL without cookies.
+  - [x] 3.5 **Insert into review sequence** (do not only list failures on the 4.14 summary). Export a pure helper next to `nextReviewableRow` (keep that function’s row semantics): walk `session.statements` in order; `failed` → comparison step; `staged` with pending `rows` → existing card. **Visit-local** “acknowledged” failed ids: Continue advances; reload shows comparison again. While unacknowledged failed statements exist, **do not** mount `ImportReviewSheet` first. After Continue through them, existing sheet/finalize behavior stays.
+  - [x] 3.6 Bulk page: if the session has any `failed` statement, show the same comparison **before** the list picker; Continue then shows today’s bulk UI. Clean sessions: **zero** `react-pdf` import cost on the happy path (dynamic import only from comparison module).
+  - [x] 3.7 Tests (jsdom, test-after): helper chooses comparison vs row vs sheet; comparison not used when all `staged`; regions have accessible names (query by role/label). Mock `react-pdf` in unit tests. Do not require Playwright for this story.
 
-- [ ] Task 4: Synthetic failure fixture (AC: #6)
-  - [ ] 4.1 New PDF under `api/tests/fixtures/pdf/` (do **not** overwrite `bac_credit_synthetic.pdf` or `bac_credit_acceptance_bar.pdf`). Author with existing `fpdf2` / `generate_bac_fixture.py` style (or Promerica stub multi-chunk: chunk 1 malformed amount, chunk 2 good — already sketched in `test_promerica_stub_adapter.py`). Generic vocabulary only.
-  - [ ] 4.2 CI test: pipeline or upload → failed statement evidence has ≥1 `row` **or** clearly listed extracted text **and** ≥1 `gap`. UI test can feed a fixture session object rather than hitting pdf.js.
+- [x] Task 4: Synthetic failure fixture (AC: #6)
+  - [x] 4.1 New PDF under `api/tests/fixtures/pdf/` (do **not** overwrite `bac_credit_synthetic.pdf` or `bac_credit_acceptance_bar.pdf`). Author with existing `fpdf2` / `generate_bac_fixture.py` style (or Promerica stub multi-chunk: chunk 1 malformed amount, chunk 2 good — already sketched in `test_promerica_stub_adapter.py`). Generic vocabulary only.
+  - [x] 4.2 CI test: pipeline or upload → failed statement evidence has ≥1 `row` **or** clearly listed extracted text **and** ≥1 `gap`. UI test can feed a fixture session object rather than hitting pdf.js.
 
-- [ ] Task 5: Story-close overview
-  - [ ] 5.1 Fill Completion Notes using `_bmad-output/implementation-artifacts/story-close-overview-checklist.md` (Request path / Key components / Why this shape / What not to break).
+- [x] Task 5: Story-close overview
+  - [x] 5.1 Fill Completion Notes using `_bmad-output/implementation-artifacts/story-close-overview-checklist.md` (Request path / Key components / Why this shape / What not to break).
 
 ## Dev Notes
 
@@ -165,12 +165,69 @@ Follow `_bmad-output/project-context.md` (money strings, i18n objects, Tailwind,
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Cursor Grok 4.6
 
 ### Debug Log References
 
+Host pytest: 522 passed, 194 skipped (Postgres-gated integration without DATABASE_URL). UI: typecheck clean, eslint no new errors, 469 vitest passed. FastAPI PDF route needed `response_model=None` so Union[Response, JSONResponse] would load.
+
 ### Completion Notes List
 
-Ultimate context engine analysis completed - comprehensive developer guide created
+Evidence is display-only JSON on the statement; adapters still fail-loud and never persist failed lines as pending rows. Authenticated PDF bytes stay on the operator volume (BFF stream, no path on JSON). Comparison is visit-local Continue; dismiss is Story 5.2.
+
+## Story-close overview — 5.1 / 5-1-parse-failure-side-by-side-comparison
+
+**Request path:**
+browser → `ui` BFF `GET /api/import/sessions/{id}/statements/{id}/pdf` (cookie) → FastAPI `GET /import/sessions/{id}/statements/{id}/pdf` → `GetStatementPdfService` → `PdfStorage.read` (volume confinement). Session JSON: upload/GET → `run_import_pipeline` / `create_session` JSONB `parse_evidence` → `asImportSession` → `ParseComparisonPanel`.
+
+**Key components:**
+`ParseEvidence` (`api/domain/parse_evidence.py`), adapter `fail_parse`, Alembic `0028_stmt_parse_evidence`, `GetStatementPdfService`, `ParseComparisonPanel` + `react-pdf@10.4.0`, `nextReviewStep` / `nextUnacknowledgedFailedStatement`.
+
+**Why this shape:**
+AD-3 keeps bytes off JSON; AD-1 keeps evidence in domain; FR-24 forbids putting failed lines on the assign queue; AC #5 Continue must not dismiss or commit.
+
+**What not to break:**
+Failed statements stay `rows: []` / `candidate_row_count` = candidate count (0). Sibling parse still survives. `nextReviewableRow` still skips empty failed rows. Clean sessions must not load `react-pdf`. Do not light IncompleteDisclosure or add dismiss here.
 
 ### File List
+
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `api/adapters/bank/_shared.py`
+- `api/adapters/bank/bac_credit/adapter.py`
+- `api/adapters/bank/promerica_stub.py`
+- `api/adapters/persistence/import_sessions.py`
+- `api/adapters/persistence/migrations/versions/0028_stmt_parse_evidence.py`
+- `api/adapters/persistence/models.py`
+- `api/adapters/storage/pdf_storage.py`
+- `api/api/routes/import_sessions.py`
+- `api/api/schemas/import_sessions.py`
+- `api/application/import_session.py`
+- `api/application/ports.py`
+- `api/domain/errors.py`
+- `api/domain/parse_evidence.py`
+- `api/scripts/generate_parse_failure_fixture.py`
+- `api/tests/fixtures/pdf/promerica_stub_parse_failure_mixed.pdf`
+- `api/tests/test_bac_adapter.py`
+- `api/tests/test_import_session_application.py`
+- `api/tests/test_import_sessions_integration.py`
+- `api/tests/test_parse_evidence.py`
+- `api/tests/test_pdf_storage.py`
+- `api/tests/test_promerica_stub_adapter.py`
+- `ui/app/api/import/sessions/[sessionId]/statements/[statementId]/pdf/route.ts`
+- `ui/app/upload/ParseComparisonPanel.test.tsx`
+- `ui/app/upload/ParseComparisonPanel.tsx`
+- `ui/app/upload/bulk/[sessionId]/BulkReviewPanel.test.tsx`
+- `ui/app/upload/bulk/[sessionId]/BulkReviewPanel.tsx`
+- `ui/app/upload/review/[sessionId]/IndividualReviewPanel.test.tsx`
+- `ui/app/upload/review/[sessionId]/IndividualReviewPanel.tsx`
+- `ui/app/upload/reviewSequence.ts`
+- `ui/app/upload/uploadClient.test.ts`
+- `ui/app/upload/uploadClient.ts`
+- `ui/lib/i18n/upload.ts`
+- `ui/package-lock.json`
+- `ui/package.json`
+
+### Change Log
+
+- 2026-08-26: Implemented parse-failure evidence, authenticated PDF GET, and side-by-side comparison UI (Story 5.1).
+
