@@ -9,9 +9,28 @@ from __future__ import annotations
 
 import io
 import logging
+from collections.abc import Sequence
 from decimal import Decimal
+from typing import Any
 
 import pdfplumber
+from domain.errors import InvalidCanonicalLineError
+from domain.parse_evidence import parse_evidence_from_rows, parse_evidence_gap_only
+
+
+def fail_parse(
+    message: str,
+    *,
+    rows: Sequence[Any] = (),
+    gap_raw: str,
+) -> InvalidCanonicalLineError:
+    """Fail-loud with display-only evidence (Story 5.1). Still no candidate rows."""
+    evidence = (
+        parse_evidence_from_rows(rows=rows, gap_raw=gap_raw)
+        if rows
+        else parse_evidence_gap_only(gap_raw)
+    )
+    return InvalidCanonicalLineError(message, evidence=evidence)
 
 
 def parse_amount_field(raw: str) -> Decimal:

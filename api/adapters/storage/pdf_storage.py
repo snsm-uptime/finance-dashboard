@@ -26,3 +26,15 @@ class FilesystemPdfStorage:
 
     def delete(self, path: str) -> None:
         Path(path).unlink(missing_ok=True)
+
+    def read(self, path: str) -> bytes | None:
+        try:
+            resolved = Path(path).resolve()
+            base = self._base_dir.resolve()
+            if not resolved.is_relative_to(base):
+                return None
+            if not resolved.is_file():
+                return None
+            return resolved.read_bytes()
+        except OSError:
+            return None

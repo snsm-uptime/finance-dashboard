@@ -52,7 +52,12 @@ const individualReviewMessages = {
   errorUnauthorized: "unauthorized",
 };
 
-const emptyStatementFields = { rows: [], zero_amount_excluded_count: 0, assigned_rows: [] };
+const emptyStatementFields = {
+  rows: [],
+  zero_amount_excluded_count: 0,
+  assigned_rows: [],
+  parse_evidence: null,
+};
 
 // Story 4.12 added four fields that default when the payload omits them, so the
 // exact-shape assertions below spread these rather than restating them.

@@ -27,12 +27,11 @@ from domain.canonical_line import (
     CanonicalLine,
     validate_canonical_line,
 )
-from domain.errors import InvalidCanonicalLineError
 from domain.line_types import LINE_TYPE_PURCHASE
 from domain.statement_dates import parse_statement_date
 from domain.statement_layout import SectionCursor, SectionSpec, detect_statement_boundaries
 
-from adapters.bank._shared import parse_amount_field, sniff_content_marker
+from adapters.bank._shared import fail_parse, parse_amount_field, sniff_content_marker
 
 _logger = logging.getLogger(__name__)
 
@@ -78,10 +77,12 @@ class PromericaStubAdapter:
             with pdfplumber.open(io.BytesIO(pdf_bytes)) as doc:
                 pages = [(page.extract_text() or "").splitlines() for page in doc.pages]
         except Exception as exc:
-            raise InvalidCanonicalLineError("Could not read statement PDF.") from exc
+            raise fail_parse(
+                "Could not read statement PDF.", gap_raw="Could not read statement PDF."
+            ) from exc
 
         if not pages:
-            raise InvalidCanonicalLineError("Statement PDF has no pages.")
+            raise fail_parse("Statement PDF has no pages.", gap_raw="Statement PDF has no pages.")
 
         boundaries, method = detect_statement_boundaries(pages, marker=_STATEMENT_HEADER_MARKER)
         self.last_split_boundary_method = method
@@ -105,7 +106,9 @@ class PromericaStubAdapter:
                     text = page.extract_text() or ""
                     lines.extend(text.splitlines())
         except Exception as exc:
-            raise InvalidCanonicalLineError("Could not read statement PDF.") from exc
+            raise fail_parse(
+                "Could not read statement PDF.", gap_raw="Could not read statement PDF."
+            ) from exc
 
         rows: list[CanonicalLine] = []
         cursor = SectionCursor(_SECTIONS)
@@ -125,21 +128,31 @@ class PromericaStubAdapter:
             if kind == "ignored":
                 continue
             if kind == "unmapped" or spec is None:
-                raise InvalidCanonicalLineError(
-                    f"Statement row found under an unmapped section: {line!r}."
+                raise fail_parse(
+                    f"Statement row found under an unmapped section: {line!r}.",
+                    rows=rows,
+                    gap_raw=line,
                 )
 
             line_type = spec.line_type
             try:
                 date_raw, description, amount_raw = line.split("|")
             except ValueError as exc:
-                raise InvalidCanonicalLineError(f"Malformed statement row: {line!r}.") from exc
+                raise fail_parse(
+                    f"Malformed statement row: {line!r}.",
+                    rows=rows,
+                    gap_raw=line,
+                ) from exc
 
             try:
                 posted_date = parse_statement_date(date_raw, date_format=_DATE_FORMAT)
                 amount = parse_amount_field(amount_raw)
             except (ValueError, KeyError, InvalidOperation) as exc:
-                raise InvalidCanonicalLineError(f"Malformed statement row: {line!r}.") from exc
+                raise fail_parse(
+                    f"Malformed statement row: {line!r}.",
+                    rows=rows,
+                    gap_raw=line,
+                ) from exc
 
             assert line_type is not None  # SECTION_POLICY_IGNORE rows never reach here.
             canonical_line = CanonicalLine(

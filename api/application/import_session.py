@@ -42,6 +42,7 @@ from domain.import_session import (
     validate_bulk_commit_eligible,
     validate_pdf_upload,
 )
+from domain.parse_evidence import ParseEvidence, parse_evidence_gap_only
 
 from application.bank_adapters import BankAdapter, detect_bank_adapter
 from application.cards import CardRecord, MatchCardByIbanCommand, MatchCardByIbanService
@@ -77,6 +78,7 @@ class DetectedStatement:
     iban: str | None = None
     card_id: UUID | None = None  # Story 4.8.3: card identification at upload time
     original_filename: str | None = None
+    parse_evidence: ParseEvidence | None = None
 
 
 def run_import_pipeline(
@@ -137,13 +139,17 @@ def run_import_pipeline(
 
         try:
             rows = adapter.parse(chunk)
-        except InvalidCanonicalLineError:
+        except InvalidCanonicalLineError as exc:
+            evidence = exc.evidence if isinstance(exc.evidence, ParseEvidence) else None
+            if evidence is None or not evidence.items:
+                evidence = parse_evidence_gap_only(str(exc))
             detected.append(
                 DetectedStatement(
                     product_id=adapter.product_id,
                     status=STATEMENT_STATUS_FAILED,
                     candidate_rows=[],
                     iban=iban_normalized,
+                    parse_evidence=evidence,
                 )
             )
             continue
@@ -188,6 +194,7 @@ class StagedStatementRecord:
     card_id: UUID | None = None  # Story 4.8.3: identified at upload time
     original_filename: str | None = None
     candidate_rows: list[CandidateRowRecord] = field(default_factory=list)
+    parse_evidence: ParseEvidence | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -552,6 +559,33 @@ class GetActiveImportSessionService:
 
     def execute(self, actor_user_id: UUID) -> ImportSessionRecord | None:
         return self._session_repo.find_active_session(actor_user_id)
+
+
+@dataclass(frozen=True, slots=True)
+class GetStatementPdfCommand:
+    actor_user_id: UUID
+    session_id: UUID
+    statement_id: UUID
+
+
+class GetStatementPdfService:
+    """Authenticated PDF bytes for comparison (Story 5.1). Never returns the operator path."""
+
+    def __init__(self, session_repo: ImportSessionRepository, pdf_storage: PdfStorage) -> None:
+        self._session_repo = session_repo
+        self._pdf_storage = pdf_storage
+
+    def execute(self, command: GetStatementPdfCommand) -> bytes:
+        session = self._session_repo.get_session(command.session_id, command.actor_user_id)
+        if session is None or session.discarded_at is not None:
+            raise ImportSessionNotFoundError()
+        statement = _find_statement(session, command.statement_id)
+        if not statement.pdf_path:
+            raise ImportStatementNotFoundError()
+        content = self._pdf_storage.read(statement.pdf_path)
+        if content is None or not content:
+            raise ImportStatementNotFoundError()
+        return content
 
 
 class DiscardImportSessionService:

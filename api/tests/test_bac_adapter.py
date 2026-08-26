@@ -187,8 +187,11 @@ def test_parse_unmapped_section_raises_rather_than_silently_dropping(
     adapter: BacCreditAdapter, fixture_bytes: bytes
 ) -> None:
     chunks = adapter.split(fixture_bytes)
-    with pytest.raises(InvalidCanonicalLineError):
+    with pytest.raises(InvalidCanonicalLineError) as exc_info:
         adapter.parse(chunks[2])
+    evidence = exc_info.value.evidence
+    assert evidence is not None
+    assert any(item.kind == "gap" for item in evidence.items)
 
 
 def test_split_records_which_boundary_method_fired(
@@ -221,8 +224,11 @@ def test_parse_malformed_date_raises_invalid_canonical_line_error_not_raw_except
             "05-XXX-26 TIENDA SAN JOSE CRC 10,500.00",
         ]
     )
-    with pytest.raises(InvalidCanonicalLineError):
+    with pytest.raises(InvalidCanonicalLineError) as exc_info:
         adapter.parse(pdf_bytes)
+    evidence = exc_info.value.evidence
+    assert evidence is not None
+    assert any(item.kind == "gap" for item in evidence.items)
 
 
 def test_parse_real_shaped_purchase_after_column_headers(adapter: BacCreditAdapter) -> None:

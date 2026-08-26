@@ -166,3 +166,7 @@ class PdfStorage(Protocol):
     def delete(self, path: str) -> None:
         """Remove the stored file. Must not raise if the path is already gone."""
         ...
+
+    def read(self, path: str) -> bytes | None:
+        """Return file bytes if `path` is inside the volume; None if missing/unsafe."""
+        ...

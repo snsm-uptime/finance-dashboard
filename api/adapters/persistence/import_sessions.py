@@ -42,6 +42,7 @@ from domain.import_session import (
     statement_has_pending_rows,
     statement_is_fully_resolved,
 )
+from domain.parse_evidence import ParseEvidence
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
@@ -136,6 +137,7 @@ def _session_record(
                 candidate_rows=[
                     _candidate_row(candidate, statement) for candidate in statement.candidate_rows
                 ],
+                parse_evidence=ParseEvidence.from_json(statement.parse_evidence),
             )
             for statement in row.statements
         ],
@@ -223,6 +225,11 @@ class SqlAlchemyImportSessionRepository:
                 card_id=detected.card_id,  # Story 4.8.3: persist identified card
                 original_filename=detected.original_filename,
                 status=detected.status,
+                parse_evidence=(
+                    detected.parse_evidence.to_json()
+                    if detected.parse_evidence is not None
+                    else None
+                ),
             )
             self._session.add(statement_row)
             session_row.statements.append(statement_row)

@@ -18,6 +18,19 @@ export type CandidateRow = {
   dedup_skipped?: boolean;
 };
 
+export type ParseEvidenceItem = {
+  kind: "row" | "gap";
+  description?: string | null;
+  amount?: string | null;
+  currency?: string | null;
+  posted_date?: string | null;
+  raw_snippet?: string | null;
+};
+
+export type ParseEvidence = {
+  items: ParseEvidenceItem[];
+};
+
 export type StagedStatement = {
   id: string;
   product_id: string;
@@ -30,6 +43,7 @@ export type StagedStatement = {
   zero_amount_excluded_count: number;
   // Story 4.13.1: committed rows (incl. dedup_skipped), for ImportReviewSheet.
   assigned_rows: CandidateRow[];
+  parse_evidence?: ParseEvidence | null;
 };
 
 export type FailedStatement = {
@@ -273,6 +287,7 @@ function asStagedStatement(data: unknown): StagedStatement | null {
       if (parsed) assignedRows.push(parsed);
     }
   }
+  const parseEvidence = asParseEvidence((row as { parse_evidence?: unknown }).parse_evidence);
   return {
     id: row.id,
     product_id: row.product_id,
@@ -285,7 +300,31 @@ function asStagedStatement(data: unknown): StagedStatement | null {
     zero_amount_excluded_count:
       typeof row.zero_amount_excluded_count === "number" ? row.zero_amount_excluded_count : 0,
     assigned_rows: assignedRows,
+    parse_evidence: parseEvidence,
   };
+}
+
+function asParseEvidence(data: unknown): ParseEvidence | null {
+  if (!data || typeof data !== "object") return null;
+  const itemsRaw = (data as { items?: unknown }).items;
+  if (!Array.isArray(itemsRaw)) return null;
+  const items: ParseEvidenceItem[] = [];
+  for (const raw of itemsRaw) {
+    if (!raw || typeof raw !== "object") continue;
+    const item = raw as ParseEvidenceItem;
+    if (item.kind !== "row" && item.kind !== "gap") continue;
+    if (typeof item.amount === "number") continue;
+    items.push({
+      kind: item.kind,
+      description: typeof item.description === "string" ? item.description : null,
+      amount: typeof item.amount === "string" ? item.amount : null,
+      currency: typeof item.currency === "string" ? item.currency : null,
+      posted_date: typeof item.posted_date === "string" ? item.posted_date : null,
+      raw_snippet: typeof item.raw_snippet === "string" ? item.raw_snippet : null,
+    });
+  }
+  if (items.length === 0) return null;
+  return { items };
 }
 
 export function asImportSession(data: unknown): ImportSession | null {
