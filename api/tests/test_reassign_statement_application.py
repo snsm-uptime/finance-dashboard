@@ -131,8 +131,10 @@ class _FakeReassignRepo:
 def _seed_lists(repo: _FakeReassignRepo, *, actor: UUID, list_a: UUID, list_b: UUID) -> None:
     repo.lists[list_a] = ListRecord(id=list_a, name="A", owner_id=actor)
     repo.lists[list_b] = ListRecord(id=list_b, name="B", owner_id=actor)
-    repo.memberships.append(MembershipRecord(list_id=list_a, user_id=actor, role="owner"))
-    repo.memberships.append(MembershipRecord(list_id=list_b, user_id=actor, role="owner"))
+    repo.memberships.append(MembershipRecord(
+        list_id=list_a, user_id=actor, role="owner"))
+    repo.memberships.append(MembershipRecord(
+        list_id=list_b, user_id=actor, role="owner"))
     repo.member_ids[list_a] = [actor]
     repo.member_ids[list_b] = [actor]
 
@@ -171,7 +173,8 @@ def test_reassign_statement_action_normalizes_to_write_ledger() -> None:
     actor = uuid4()
     list_a = uuid4()
     repo.lists[list_a] = ListRecord(id=list_a, name="A", owner_id=actor)
-    repo.memberships.append(MembershipRecord(list_id=list_a, user_id=actor, role="owner"))
+    repo.memberships.append(MembershipRecord(
+        list_id=list_a, user_id=actor, role="owner"))
     grant = AuthorizeListAccessService(repo).execute(
         AuthorizeListAccessCommand(
             acting_user_id=actor, list_id=list_a, action="reassign_statement"
@@ -220,7 +223,8 @@ def test_dest_non_member_denied() -> None:
     list_a, list_b = uuid4(), uuid4()
     repo.lists[list_a] = ListRecord(id=list_a, name="A", owner_id=actor)
     repo.lists[list_b] = ListRecord(id=list_b, name="B", owner_id=uuid4())
-    repo.memberships.append(MembershipRecord(list_id=list_a, user_id=actor, role="owner"))
+    repo.memberships.append(MembershipRecord(
+        list_id=list_a, user_id=actor, role="owner"))
     repo.member_ids[list_a] = [actor]
     repo.moves = [_move(list_id=list_a)]
 
@@ -244,8 +248,10 @@ def test_source_non_member_denied() -> None:
     list_a, list_b = uuid4(), uuid4()
     repo.lists[list_a] = ListRecord(id=list_a, name="A", owner_id=owner)
     repo.lists[list_b] = ListRecord(id=list_b, name="B", owner_id=owner)
-    repo.memberships.append(MembershipRecord(list_id=list_a, user_id=owner, role="owner"))
-    repo.memberships.append(MembershipRecord(list_id=list_b, user_id=owner, role="owner"))
+    repo.memberships.append(MembershipRecord(
+        list_id=list_a, user_id=owner, role="owner"))
+    repo.memberships.append(MembershipRecord(
+        list_id=list_b, user_id=owner, role="owner"))
     repo.member_ids[list_a] = [owner]
     repo.member_ids[list_b] = [owner]
     repo.moves = [_move(list_id=list_a)]
@@ -268,7 +274,8 @@ def test_multi_list_gather_onto_destination() -> None:
     list_a, list_b, list_c = uuid4(), uuid4(), uuid4()
     _seed_lists(repo, actor=actor, list_a=list_a, list_b=list_b)
     repo.lists[list_c] = ListRecord(id=list_c, name="C", owner_id=actor)
-    repo.memberships.append(MembershipRecord(list_id=list_c, user_id=actor, role="owner"))
+    repo.memberships.append(MembershipRecord(
+        list_id=list_c, user_id=actor, role="owner"))
     repo.member_ids[list_c] = [actor]
     on_a = _move(list_id=list_a)
     on_c = _move(list_id=list_c)
@@ -333,7 +340,8 @@ def test_viewing_list_not_a_current_home_is_not_found() -> None:
     list_a, list_b, list_c = uuid4(), uuid4(), uuid4()
     _seed_lists(repo, actor=actor, list_a=list_a, list_b=list_b)
     repo.lists[list_c] = ListRecord(id=list_c, name="C", owner_id=actor)
-    repo.memberships.append(MembershipRecord(list_id=list_c, user_id=actor, role="owner"))
+    repo.memberships.append(MembershipRecord(
+        list_id=list_c, user_id=actor, role="owner"))
     repo.member_ids[list_c] = [actor]
     repo.moves = [_move(list_id=list_c)]
 
@@ -416,7 +424,7 @@ def test_override_non_member_on_destination_is_conflict() -> None:
 
 
 def test_skips_rows_without_ledger() -> None:
-    """Only ledger rows for this statement_id move; other statements and non-listed candidates stay."""
+    """Only this statement's ledger rows move; others stay."""
     repo = _FakeReassignRepo()
     actor = uuid4()
     list_a, list_b = uuid4(), uuid4()
