@@ -63,9 +63,9 @@ Microcopy. Brand feel (calm + clear) and visual posture live in `DESIGN.md`.
 | `Partner owes you ₡…` (amount in `{colors.owed}`) | Bank jargon, IBAN/product codes in primary labels |
 | Name the direction of debt clearly | Blame between peers (“you still haven’t…”) |
 | Errors: what happened + what to do, clear + calm | Alarmist error theatre |
-| Simplify copy: suggestion to reduce transfers | Ever saying **paid** for Simplify; ever looking like recording a settlement |
+| Simplify copy: suggestion to reduce transfers | Ever saying **paid** for Simplify; ever looking like recording a bank settlement |
 
-**Simplify (when surfaced — spine-only until mocked):** must never say “paid” and must not look like recording settlement. Settlement of money happens outside the app; v1 does not record it.
+**Simplify (Story 5.8, on the balance strip):** must never say “paid” as if the app recorded a bank payment. **Settle** means the viewer already paid their “You owe” counterparties (that column is then clean). Settlement of money still happens outside the app; v1 does not write transfer ledger lines.
 
 ## Component Patterns
 
@@ -73,7 +73,7 @@ Behavioral. Visual specs live in `DESIGN.md.Components`.
 
 | Component | Use | Behavioral rules |
 |---|---|---|
-| Settle-up strip | Shared-expenses top | Who returns what to whom in CRC. Hero amount uses `{colors.owe}` or `{colors.owed}`. Incomplete-period disclosure when any contributing statement has quarantine (see State Patterns). Not a settlement-recording control. |
+| Settle-up strip | Shared-expenses top | Three columns: You are owed · You owe · Balance (viewer net), CRC. Simplify → group plan; CopyButton → plain text. Settle clears the viewer’s payables (already paid). Incomplete-period disclosure below the island. Not a bank-settlement recording control. |
 | Receipt row | Shared-expenses below strip | Newest-first. Tap → item detail / edit when those exist. FX: show enough original + converted CRC to audit. |
 | List row | Lists homepage | Opens shared-expenses for that list. |
 | Upload entry | Global + list chrome | Global reaches ingest always. From list: Bulk may pre-select that list as destination; Individual default destination unchanged. |
@@ -87,7 +87,7 @@ Behavioral. Visual specs live in `DESIGN.md.Components`.
 | Manual expense form | Add on list | **Amount**, **description**, **payer** (defaults to signed-in user); **origin** optional — dropdown of user’s existing cards, **Cash**, or leave blank; **Adjust split** disclosure for whole-line / absolute fragments / percentage (list default until opened). Save → newest-first row + settle-up updates immediately. Filter exists later to find/assign items with no origin. |
 | Invite form | List | Email address → send. Unregistered path uses create-account email template. Invite email language matches the **inviter’s** current Account language (EN/ES). |
 | Account menu | Global chrome | Sign out; password reset; **Language EN/ES** (remembered on account; first visit defaults from browser); **Theme Light / Dark / System** (remembered on account; defaults to System). No profile, avatars-as-settings, or preferences surface in v1. |
-| Simplify suggestion | Shared-expenses `[spine-only]` | Shows reduced transfer set. Copy must not say “paid”; must not resemble settlement recording. |
+| Simplify suggestion | Shared-expenses strip (Story 5.8) | Group transfer plan (fewer payments, nets preserved). CopyButton copies plain text. Copy must not say “paid”; must not resemble bank-settlement recording. |
 
 ## State Patterns
 
@@ -205,13 +205,13 @@ Failure: statement parse fail → J3 branch; unknown IBAN → J6 blocks before r
 ### J2 — Monse checks what she owes (phone · balances-only)
 
 1. Opens app → household shared list (remembered or via homepage).
-2. Top: settle-up balances — who returns what to whom in CRC.
+2. Top: three-column settle-up — You are owed | You owe | Balance (CRC).
 3. Below: receipts newest-first (available to verify; not the goal).
-4. Simplify **not** used this session (capability exists elsewhere / spine-only).
+4. Simplify **not** used this session (capability lives on this surface in Story 5.8; this night she only reads balances).
 5. Single cycle already in view — no cycle picker tonight.
-6. **Climax:** one clear CRC amount she should send, and to whom — scannable without bank-table noise.
+6. **Climax:** scannable pairwise CRC (who owes her / whom she owes) plus her net Balance — without bank-table noise.
 
-→ Settle-up composition: [`mockups/list-settle.html`](./mockups/list-settle.html).
+→ Settle-up composition: [`mockups/list-settle.html`](./mockups/list-settle.html). Mock may still show an older single-hero strip; **spines and Story 5.8 win** until the mock is updated.
 
 ### J3 — Sebas hits parse failure mid-review (phone · branch of J1)
 
@@ -268,7 +268,7 @@ Captured product behavior **without** a named journey / mock commitment yet. Bui
 
 | Item | Notes |
 |---|---|
-| Simplify suggestions | Explicit non-payment framing; never “paid”; must not look like recording settlement |
+| Simplify suggestions | On the balance strip; group plan + CopyButton; never “paid” as bank settlement; Settle = viewer already paid payables |
 | Multi-cycle statement selector | When a list holds cards with different billing cycles |
 | Reassign statement / rollback import batch | Correction after misfile or bad batch |
 | Bulk assign upload | Mode exists in J1 choice; full session not narrated |
@@ -279,6 +279,6 @@ Captured product behavior **without** a named journey / mock commitment yet. Bui
 
 - Empty-state copy for Lists homepage / empty receipts.
 - Card→list fixed-routing UI after J6 (after registration; not journeyed as its own flow).
-- Simplify surface placement and microcopy strings (EN/ES).
+- ~~Simplify surface placement~~ **Closed 2026-08-26:** on the balance strip (Story 5.8); EN/ES microcopy still for Dev.
 
 ~~Closed 2026-08-03:~~ swipe R/L/D pinned; manual create fields (amount+description+payer+Adjust split); optional origin card/Cash/blank + no-origin filter; conflict C2 (survivor + confirmed not-same); locale in Account menu remembered; **theme Light/Dark/System in Account menu (default System)**.

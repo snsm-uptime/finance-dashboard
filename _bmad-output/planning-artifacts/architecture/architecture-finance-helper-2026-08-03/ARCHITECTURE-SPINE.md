@@ -235,7 +235,7 @@ flowchart LR
 
 - **Binds:** FR-39–45; PRD v2 settlement OPEN
 - **Prevents:** Double-counting statement transfers vs recorded payments; inventing a payment ledger in v1
-- **Rule:** v1 settle-up is **computed shares only** (no recording of actual payments). Taxonomy MUST include a line type for inter-member transfers so such rows can be stored without feeding settle allocations. Recording/reconciling settlement payments is **out of v1**.
+- **Rule:** v1 settle-up is **computed shares** (pairwise viewer-vs-member edges + member nets). **Simplify** is a pure function: fewer suggested transfers that preserve nets. **Copy** is UI clipboard only (`CopyButton`). Taxonomy MUST include a line type for inter-member transfers so such rows can be stored without feeding settle allocations. **Recording/reconciling bank settlement payments is out of v1.** **Settle (viewer):** assumes the actor already paid their payables; their “You owe” side is clean; inbound “You are owed” remains for a later remind-to-pay feature. v1 may persist a **minimal payable-settled assertion** for that actor — it MUST NOT write transfer lines as if money moved in the app.
 
 ### AD-22 — Operational envelope [ADOPTED]
 

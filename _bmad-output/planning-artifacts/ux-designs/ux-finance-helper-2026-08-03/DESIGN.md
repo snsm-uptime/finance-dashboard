@@ -276,7 +276,7 @@ Specs below distill the Soft-Ledger hybrid panel. Dark mode swaps `*-dark` color
 
 ### Balance strip (`components.balance-strip`)
 
-Hero of the shared-list surface. Anatomy: who-line (`{typography.strip-who}`, `{colors.muted}`) · amount (`{typography.strip-amount}`, owe/owed) · primary CTA (grid column 2, vertically centered). Island inset from screen edges. Always show the settle number — never bury it below receipts.
+Hero of the shared-list surface. Anatomy (list **detail**, Story 5.8): three columns — **You are owed** (CRC + member names) · **You owe** (CRC + member names) · **Balance** (viewer signed net, owe/owed color by sign). Island inset from screen edges. Actions: **Simplify** (group transfer plan, fewer payments, nets preserved) and **Copy** (`CopyButton`, plain-text plan). **Settle** means the viewer already paid “You owe”; that column is then empty/clean; “You are owed” remains for later reminders. Never label a control as recording a bank payment. Lists **homepage** may keep a compact glimpse (UX-DR7). Do not use a single who-line + hero amount as the primary list-detail settle read.
 
 ### Button — primary (`components.button-primary`)
 

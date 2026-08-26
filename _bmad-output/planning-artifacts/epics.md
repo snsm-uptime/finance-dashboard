@@ -98,7 +98,7 @@ FR-39: The view’s default period aligns to statement/billing cycles; when card
 
 FR-40: Shared balances and settle-up figures are in CRC; non-CRC amounts convert using exchange rate for purchase/statement date; original amounts retained for audit; converted lines show enough original + CRC to audit FX.
 
-FR-41: Top of the view shows how much each person needs to pay (CRC) to settle the period, with optional simplify into fewer suggested transfers; simplify preserves net balances and does not record payments (v2).
+FR-41: Top of the view is a viewer-centric balance grid (You are owed / You owe / Balance) in CRC, with optional simplify into a group transfer plan (fewer payments, nets preserved) and plain-text copy; Settle means the viewer already paid their payables (that column is clean); inbound “owed to me” remains for later pay-up reminders; simplify/copy/settle do not write a bank payment ledger (v2).
 
 FR-42: Below settle-up, the view lists items for the period newest-first in a receipt-like format; incomplete/quarantined contribution is disclosed on this screen.
 
@@ -157,7 +157,7 @@ NFR-13: PostgreSQL schema evolution is supported via migrations; upgrades must n
 - CanonicalLine shared staging/ledger contract; adapters emit CanonicalLine; domain alone computes dedup identity at commit (AD-16, AD-18).
 - Quarantine durable on Statement after accept-with-quarantine; balance views disclose incompleteness (AD-17).
 - Membership ACL only; cards first-class (label + IBAN); unknown IBAN blocks import until registration (AD-19, AD-20).
-- v1 settle-up is computed shares only; taxonomy must allow inter-member transfer line type without feeding settle; no payment recording (AD-21).
+- v1 settle-up is computed shares (pairwise + nets); Simplify is a suggestion; Copy is clipboard; Settle may persist a payable-clean assertion for the actor; no bank payment ledger / transfer lines as money-moved (AD-21).
 - Ops: local + homelab Compose overlays; Alembic on api startup; `/health` on api and ui; volumes/secrets outside repo; structured logs + healthchecks (AD-22).
 - Stack pins (verified 2026-08-03): FastAPI 0.141.x, SQLAlchemy 2.0.x, Alembic 1.18.x, pdfplumber 0.11.x, aiosmtplib ≥5.1.2, react-pdf 10.4.x, @use-gesture/react 10.3.x, PostgreSQL 16.
 - Dates in America/Costa_Rica after ISO-8601 normalization; EN+ES i18n keys in ui; no raw statement PII at info log level.
@@ -171,7 +171,7 @@ UX-DR2: Load and apply locked typography: Petrona (brand, strip amounts, inline 
 
 UX-DR3: Implement Soft-Ledger hybrid spacing/shape tokens (4px rhythm, strip-inset, page-gutter, nav-x, row-y; rounded sm 8 / md 10 / lg 12; no pill primary CTAs).
 
-UX-DR4: Build Balance strip (settle-up strip island) component: who-line muted, hero amount in owe/owed color by polarity, optional primary CTA; inset island with surface fill and 1px border; always lead list surfaces with settle number.
+UX-DR4: Build Balance strip (settle-up strip island) as a three-column grid — You are owed | You owe | Balance (viewer net) — CRC with owe/owed polarity; inset island with surface fill and 1px border; lead list detail with this grid. Actions: Simplify (group transfer plan) and Copy (existing CopyButton, plain-text plan). Settle assumes the viewer already paid “You owe”; that column is then clean. Never a settlement-recording CTA. (Single who-line + hero amount is not the list-detail settle UI; lists homepage may stay a compact glimpse — UX-DR7.)
 
 UX-DR5: Build Receipt row component: two-column title/when left + amount right; bottom hairline only; airier row padding; newest-first; FX audit shows original + converted CRC when needed.
 
@@ -255,7 +255,7 @@ FR-37: Epic 4 — Register and match cards by IBAN
 FR-38: Epic 3 — Shared-expenses view per list
 FR-39: Epic 5 — Statement-cycle period selector
 FR-40: Epic 3 — Convert non-CRC to CRC for balances
-FR-41: Epic 5 — Settle-up simplify
+FR-41: Epic 5 — Settle-up pairwise grid, simplify group plan, copy, payable-clean settle
 FR-42: Epic 3 — Receipt-style item list
 FR-43: Epic 3 (pattern) / Epic 5 (wire) — Incomplete balance disclosure
 FR-44: Epic 3 — Balance shape ready for settlement
@@ -316,7 +316,7 @@ Users register cards by IBAN, set optional manual-expense origin (card / Cash / 
 | 4.10 | **4.16** | Multi-file upload |
 
 ### Epic 5: Import resilience (then settle polish)
-Ordered: parse failure/quarantine/hand-fix → wire FR-43 on strip → reassign/rollback → same-price + aliases → then simplify (FR-41) + statement-cycle selector (FR-39).
+Ordered: parse failure/quarantine/hand-fix → wire FR-43 on strip → reassign/rollback → same-price + aliases → then settle polish (FR-41) + statement-cycle selector (FR-39).
 **FRs covered:** FR-22, FR-23, FR-24, FR-25, FR-26, FR-27, FR-28, FR-29, FR-30, FR-39, FR-41, FR-43 (wire)
 **Demo gate:** J3 + J7 before simplify stories
 
@@ -799,7 +799,7 @@ So that I can see who owes whom at a glance (J2).
 
 **Given** I am a member of a list
 **When** I open shared-expenses for that list
-**Then** I see the Soft-Ledger balance strip island first (who-line + hero amount polarity owe/owed when totals exist) and receipts below newest-first (FR-38, FR-42, UX-DR4/5)
+**Then** I see the Soft-Ledger balance strip island first (until Story 5.8: who-line + hero amount is an interim layout; 5.8 replaces it with You are owed | You owe | Balance plus Simplify/copy) and receipts below newest-first (FR-38, FR-42, UX-DR4/5)
 **And** non-members cannot open it (FR-8)
 
 **Given** there are no receipt items yet
@@ -817,7 +817,7 @@ So that I can see who owes whom at a glance (J2).
 
 **Given** totals are not yet computed (before Story 3.4)
 **When** the strip renders
-**Then** layout and empty/zero states still work; live who-owes-whom numbers wire in 3.4
+**Then** layout and empty/zero states still work; live who-owes-whom numbers wire in 3.4; the pairwise 3-column settle UI is Story 5.8 (this story does not claim the final strip anatomy)
 
 ### Story 3.4: Settle-up from shares, payer, and line types
 
@@ -830,7 +830,7 @@ So that the strip shows who should return what in CRC and stays ready for v2 pay
 **Given** committed expenses with share allocations and an explicit payer
 **When** settle-up is computed for the list period
 **Then** suggested balances preserve net positions from those allocations (FR-44)
-**And** Soft-Ledger strip shows plain who-owes-whom in CRC with owe/owed polarity (UX-DR17)
+**And** Soft-Ledger may show those nets on the interim strip (owe/owed polarity, UX-DR17); viewer pairwise columns, Balance, simplify group plan, copy, and payable-clean Settle are Story 5.8 — 3.4 must not treat a single household hero number as the finished settle UI
 
 **Given** lines with excluded types (payment, interest, fee, voluntary_service, installment_schedule, balance_forward, unclassified credit_note, etc.)
 **When** settle-up runs
@@ -1529,13 +1529,15 @@ So that I can queue several statements in one pass instead of uploading them one
 
 ## Epic 5: Import resilience (then settle polish)
 
-Ordered: parse failure → dismiss → reassign/rollback → same-price + aliases → wire FR-43 on strip → then simplify (FR-41) + statement-cycle selector (FR-39).
+Ordered: parse failure → dismiss → reassign/rollback → same-price + aliases → wire FR-43 on strip → then settle polish (FR-41 pairwise grid, simplify group plan, copy, payable-clean settle) + statement-cycle selector (FR-39).
 
 **FRs covered:** FR-22, FR-23, FR-24, FR-25, FR-26, FR-28, FR-29, FR-30, FR-39, FR-41, FR-43 (wire)  
 **Demo gate:** J3 + J7 before simplify stories  
 **Sprint order:** Do not start Stories 5.8 / 5.9 until Stories 5.1–5.7 are demonstrable for the J3 + J7 demo gate.
 
 **Scope change (2026-08-25):** Story 4.10's row-level review model (per-transaction assign/delete/undo before Save on ImportReviewSheet) made statement-level quarantine redundant — rows that parse already resolve independently before Save, so there is no "partial statement" state left to hold in limbo. Old Story 5.2 ("Accept with quarantine or dismiss") is replaced by dismiss-only; old Story 5.3 ("Hand-edit unresolved rows against PDF") is cut — there is no unresolved-row bucket to hand-fix (manual expense entry, FR-21, remains the general hand-entry path). FR-27 is removed from v1; FR-26, FR-28, and FR-43 are reworded. FR-43's incomplete-disclosure trigger now sources solely from unresolved same-price conflicts (Story 5.7, was 5.4) instead of quarantine, so disclosure-wiring now builds after conflict review rather than before it. Stories renumbered 5.5–5.10 → 5.3–5.9 accordingly. AD-3, AD-4, and AD-17 are amended by Sprint Change Proposal 2026-08-25. See that proposal for full rationale.
+
+**Scope change (2026-08-26):** Story 5.8 is settle polish, not “simplify overlay on a single hero amount.” List-detail Balance strip is a viewer-centric three-column grid (You are owed | You owe | Balance), Simplify produces a group transfer plan, CopyButton copies that plan as plain text, and Settle means the viewer already paid their payables (column clean for them; inbound balances remain for later pay-up reminders). See Sprint Change Proposal 2026-08-26. Stories 3.3–3.4 stay done (docs/traceability only).
 
 ### Story 5.1: Parse failure → side-by-side comparison
 
@@ -1762,18 +1764,38 @@ So that I never trust a confident total that silently omits unresolved purchases
 **When** the period is complete again
 **Then** the incomplete disclosure clears and the strip returns to a confident settle figure
 
-### Story 5.8: Settle-up simplify (suggested transfers)
+### Story 5.8: Settle-up pairwise grid, simplify group plan, copy to share
 
 As a list member,
-I want an optional simplify that suggests fewer CRC transfers to settle the period,
-So that I can see a shorter payment plan without the app recording that anyone paid.
+I want the balance component to show who owes me and whom I owe, a net Balance, a Simplify group plan with fewer payments, and a way to copy that plan as plain text,
+So that I can settle with fewer transactions and, when I settle, my payables are treated as already paid (clean for me) while others still owing me can be reminded later.
 
 **Acceptance Criteria:**
 
-**Given** Soft-Ledger shows who owes whom for the period
-**When** I open Simplify
-**Then** I see suggested transfers that preserve net balances in CRC (FR-41)
-**And** simplify does not record payments (v2) — no “Mark settled” / payment CTA (UX-DR20, AD-21)
+**Given** I am a member of a list
+**When** I open shared-expenses for that list
+**Then** the balance component is a three-column grid: **You are owed** (members who owe me, CRC + name) | **You owe** (members I owe, CRC + name) | **Balance** (my signed net vs the rest of the list)
+**And** amounts are CRC with Warm Balance owe/owed polarity; empty columns have no fake zero rows
+**And** a member appears on both sides only when pairwise nets require it
+
+**Given** Soft-Ledger shows my pairwise balances
+**When** I use **Simplify** (control on the balance component)
+**Then** I see a **group transfer plan** that preserves every member’s net in CRC and reduces the number of payments (FR-41)
+**And** example of intent: instead of me paying A and B separately, the plan may be me → A only and B → A (smaller)
+**And** simplify does not write a bank/payment ledger — no “Mark settled” as “money moved in-app” (UX-DR20, AD-21)
+
+**Given** I **Settle**
+**When** I confirm
+**Then** the product assumes I **already paid** the people in **You owe**; that column is **clean for me**
+**And** **You are owed** remains (inbound balances) so a later notification feature can remind those members to pay up
+**And** v1 does not record inter-member transfer lines as if the bank moved money; a minimal “my payables are done” assertion may be persisted so notifications can query it (Dev Notes: prefer persist if we will notify without a rewrite)
+
+**Given** the group plan is visible
+**When** I copy
+**Then** the UI uses existing `ui/components/CopyButton` (`CopyButton.tsx`) — do not add a second copy component
+**And** clipboard text is the group plan in plain text (names, CRC, direction), shareable outside the app
+**And** copy never says “paid” and must not look like recording settlement (UX-DR17)
+**And** EN/ES chrome is localized; amounts stay CRC-first (UX-DR18)
 
 **Given** unresolved same-price conflicts remain for the period (Story 5.5)
 **When** I view Soft-Ledger
@@ -1784,13 +1806,8 @@ So that I can see a shorter payment plan without the app recording that anyone p
 **Then** Simplify remains available but may show empty / no-op suggestions
 **And** it never invents debts
 
-**Given** Simplify copy
-**When** it is shown
-**Then** it never says “paid” and must not look like recording settlement (UX-DR17)
-**And** EN/ES chrome is localized; amounts stay CRC-first (UX-DR18)
-
 **Given** I dismiss Simplify
-**When** I return to the strip
+**When** I return to the pairwise grid
 **Then** underlying net balances are unchanged
 
 ### Story 5.9: Statement-cycle period selector

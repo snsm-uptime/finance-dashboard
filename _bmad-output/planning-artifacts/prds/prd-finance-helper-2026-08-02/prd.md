@@ -141,7 +141,7 @@ Each shared list has a view whose job is to answer: **given what was imported an
 
 **Layout.**
 
-1. **Top — settle up.** How much each person needs to pay (in CRC) so the period is even. Includes an option to **simplify** the settlement: recompute who should pay whom so the group makes fewer transfers, without recording that anyone has paid yet. Actual payment recording remains v2; simplify is a suggested transfer plan only.
+1. **Top — settle up.** Viewer-centric grid in CRC: **You are owed**, **You owe**, and **Balance** (my net). **Simplify** produces a **group transfer plan** (fewer payments, nets preserved). **Copy** shares that plan as plain text. **Settle** means the viewer **already paid** who they owed — their payable column is clean; remaining “owed to me” is what later reminders can target. Bank/payment ledger recording remains v2; simplify/copy do not write that anyone’s bank paid.
 2. **Below — receipt list.** Items for the period, **most recent first**, in a receipt-like format so members can verify "my items vs yours" the way they already do on paper. Foreign-currency lines show enough original amount + converted CRC to audit the FX step. Incomplete/quarantined data for the period is disclosed on this screen.
 
 **Simplify** minimizes the number of person-to-person transfers while preserving net balances; it does not invent debt or change item splits.
@@ -711,7 +711,7 @@ When a statement is parsed:
 
 ### Shared expenses, FX, and settle-up
 
-**Description:** Shared lists show who should pay whom in CRC for a statement-cycle period. Non-CRC amounts convert using a purchase/statement-date rate. The top of the view is settle-up (with optional transfer simplification); below is a receipt-style item list newest-first. Incomplete/quarantined data is disclosed. Recording actual payments is v2.
+**Description:** Shared lists show, for the signed-in member, who owes them and whom they owe in CRC for a statement-cycle period, plus a net Balance. Non-CRC amounts convert using a purchase/statement-date rate. The top of the view is this settle-up grid (Simplify group plan, plain-text copy, Settle = payables already paid / clean for the actor). Below is a receipt-style item list newest-first. Incomplete data is disclosed. Recording actual bank payments is v2.
 
 #### FR-38: Shared-expenses view per list
 
@@ -743,12 +743,15 @@ Shared balances and settle-up figures are expressed in CRC. Non-CRC amounts conv
 
 #### FR-41: Settle-up summary and simplify
 
-The top of the view shows how much each person needs to pay (in CRC) to settle the period, with an option to **simplify** into fewer suggested transfers. Simplify does not record that anyone paid.
+The top of the view is a **viewer-centric** balance component in CRC: **You are owed**, **You owe**, and **Balance**. An option to **simplify** produces a **group transfer plan** (who should pay whom) with fewer transfers. The user can **copy** that plan as plain text. **Settle** assumes the actor **already paid** their counterparties; their payable side is clean; inbound balances remain for later pay-up notifications. Simplify, copy, and settle do not write a bank payment ledger (v2).
 
 **Consequences (testable):**
 
+- Pairwise columns are from the signed-in member’s perspective.
 - Suggested transfers preserve net balances.
-- No payment ledger writes occur when simplify is used (settlement recording is v2).
+- Clipboard text is the group plan in plain text (existing CopyButton).
+- After Settle, the viewer’s **You owe** column is clean; **You are owed** remains.
+- No payment ledger writes occur when simplify/copy/settle are used (settlement payment recording is v2).
 
 #### FR-42: Receipt-style item list
 
@@ -866,7 +869,7 @@ PostgreSQL schema evolution is supported via migrations as the data model change
 - Manual item entry to a list without waiting for statement import
 - Same-price manual/import comparison review at end of upload; confirmed matches store manual label as alias of bank description (ML use is post-v1)
 - Purchase/statement-date FX: non-CRC amounts converted into CRC for shared balances; original currency retained
-- One shared-expenses view per list: statement-cycle period; top settle-up summary in CRC with optional transfer simplification; below that a receipt-style item list newest-first; FX originals auditable; incomplete-data disclosure
+- One shared-expenses view per list: statement-cycle period; viewer-centric You are owed / You owe / Balance grid in CRC; Simplify group plan + plain-text copy; Settle = payables already paid (clean for the actor); receipt-style list newest-first; FX originals auditable; incomplete-data disclosure
 - A Promerica stub or contract-test adapter proving extension without modifying core import, dedup, or list logic
 - Register cards keyed by IBAN (user-chosen label); matching IBAN reuses that card and its label as the import identifier
 - Anonymized or synthetic fixtures committed to the repository, since real statements live outside it
