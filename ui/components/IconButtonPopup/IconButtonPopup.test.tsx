@@ -84,6 +84,7 @@ describe("IconButtonPopup", () => {
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
     expect(trigger.getAttribute("aria-controls")).toBeTruthy();
     expect(container.querySelector('[role="menu"]')?.textContent).toContain("Invite");
+    expect(container.firstElementChild?.className).toContain("open");
   });
 
   it("does not close when clicking non-item content inside the popup", async () => {
@@ -217,6 +218,8 @@ describe("IconButtonPopup.module.scss", () => {
     expect(css).toContain("top: calc(100% + 0.35rem);");
     expect(css).toContain("min-width: var(--icon-button-popup-min-width, 11rem);");
     expect(css).toContain("animation: slideDown 0.15s ease-out;");
+    expect(css).toContain(".root.open");
+    expect(css).toContain("z-index: 5;");
     expect(css).not.toContain("background: var(--surface);");
   });
 });

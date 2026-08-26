@@ -2,6 +2,13 @@
   position: relative;
 }
 
+/* Two-class selector so this beats host z-index (e.g. lists .menuContainer).
+   Each list row's menu is its own stacking context; later rows otherwise
+   paint their 3-dot trigger over an earlier row's open panel. */
+.root.open {
+  z-index: 5;
+}
+
 .panel {
   position: absolute;
   top: calc(100% + 0.35rem);

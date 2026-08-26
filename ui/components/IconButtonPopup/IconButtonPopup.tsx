@@ -140,8 +140,12 @@ export function IconButtonPopup({
     .filter(Boolean)
     .join(" ");
 
+  const rootClass = [styles.root, open ? styles.open : null, className]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <div ref={rootRef} className={className}>
+    <div ref={rootRef} className={rootClass} data-open={open || undefined}>
       <div className={styles.anchored}>
         {trigger}
         {open ? (
