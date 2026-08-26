@@ -26,13 +26,19 @@ vi.mock("@/app/lists/listsClient", async () => {
 });
 
 const bulkCommitSession = vi.fn();
+const fetchImportSession = vi.fn();
 vi.mock("../../uploadClient", async () => {
   const actual = await vi.importActual<typeof import("../../uploadClient")>("../../uploadClient");
   return {
     ...actual,
     bulkCommitSession: (...args: unknown[]) => bulkCommitSession(...args),
+    fetchImportSession: (...args: unknown[]) => fetchImportSession(...args),
   };
 });
+
+vi.mock("next/dynamic", () => ({
+  default: () => () => null,
+}));
 
 vi.mock("@/components/PreferencesProvider", () => ({
   usePreferences: () => ({ locale: "en", theme: "light" }),
@@ -64,6 +70,38 @@ describe("BulkReviewPanel", () => {
   beforeEach(() => {
     fetchLists.mockReset();
     bulkCommitSession.mockReset();
+    fetchImportSession.mockReset();
+    fetchImportSession.mockResolvedValue({
+      ok: true,
+      session: {
+        id: "s1",
+        created_at: "2026-01-01T00:00:00Z",
+        discarded_at: null,
+        undo: null,
+        statements: [
+          {
+            id: "st1",
+            product_id: "bac_credit",
+            status: "staged",
+            candidate_row_count: 1,
+            iban: null,
+            filename: "a.pdf",
+            card_id: null,
+            rows: [],
+            assigned_rows: [],
+            zero_amount_excluded_count: 0,
+          },
+        ],
+        finalized_at: null,
+        imported_new_count: 0,
+        skipped_duplicate_count: 0,
+        landing_list_id: null,
+        deleted_count: 0,
+        zero_amount_excluded_count: 0,
+        failed_statements: [],
+        committed_by_list: [],
+      },
+    });
     push.mockReset();
     searchParamsValue = "";
     container = document.createElement("div");

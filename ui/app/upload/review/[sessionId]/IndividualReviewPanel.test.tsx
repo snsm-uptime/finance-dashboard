@@ -10,6 +10,7 @@ import { resetUploadQueue, writeUploadQueue } from "../../uploadQueueStore";
 import {
   IndividualReviewPanel,
   nextReviewableRow,
+  nextReviewStep,
   titleTextareaHeightPx,
 } from "./IndividualReviewPanel";
 import { formatIbanGroups } from "../../CreditCardFace";
@@ -20,6 +21,10 @@ const replace = vi.fn();
 vi.mock("next/navigation", () => ({
   usePathname: () => "/upload/review/s1",
   useRouter: () => ({ push, replace }),
+}));
+
+vi.mock("next/dynamic", () => ({
+  default: () => () => null,
 }));
 
 const fetchLists = vi.fn();
@@ -237,6 +242,37 @@ describe("nextReviewableRow", () => {
     const session = makeSession({ statements: [statement] });
     expect(nextReviewableRow(session, new Set(["r1"]))).toEqual({ row: ROW_2, statement });
     expect(nextReviewableRow(session, new Set(["r1", "r2"]))).toBeNull();
+  });
+});
+
+describe("nextReviewStep", () => {
+  it("picks comparison for an unacknowledged failed statement before rows", () => {
+    const failed = makeStatement({ id: "st-failed", status: "failed", rows: [] });
+    const staged = makeStatement({ id: "st-staged", rows: [ROW_2] });
+    const session = makeSession({ statements: [failed, staged] });
+    expect(nextReviewStep(session)).toEqual({ kind: "comparison", statement: failed });
+  });
+
+  it("skips comparison after Continue acknowledgement and uses the pending row", () => {
+    const failed = makeStatement({ id: "st-failed", status: "failed", rows: [] });
+    const staged = makeStatement({ id: "st-staged", rows: [ROW_2] });
+    const session = makeSession({ statements: [failed, staged] });
+    expect(nextReviewStep(session, new Set(["st-failed"]))).toEqual({
+      kind: "row",
+      row: ROW_2,
+      statement: staged,
+    });
+  });
+
+  it("does not use comparison when every statement is staged", () => {
+    const session = makeSession({ statements: [makeStatement({ rows: [ROW_1] })] });
+    expect(nextReviewStep(session).kind).toBe("row");
+  });
+
+  it("returns sheet when failed statements are acknowledged and no pending rows remain", () => {
+    const failed = makeStatement({ id: "st-failed", status: "failed", rows: [] });
+    const session = makeSession({ statements: [failed] });
+    expect(nextReviewStep(session, new Set(["st-failed"]))).toEqual({ kind: "sheet" });
   });
 });
 

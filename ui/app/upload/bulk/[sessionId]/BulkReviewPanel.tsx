@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import dynamic from "next/dynamic";
 
 import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
@@ -11,7 +12,19 @@ import { fetchLists } from "@/app/lists/listsClient";
 import { replaceMembershipLists, useMembershipLists } from "@/app/lists/membershipListsStore";
 import { SpinnerIcon } from "@/app/icons";
 import { uploadCopy } from "@/lib/i18n/upload";
-import { bulkCommitSession, type BulkCommitMessages } from "../../uploadClient";
+import {
+  bulkCommitSession,
+  fetchImportSession,
+  type BulkCommitMessages,
+  type ImportSession,
+  type IndividualReviewMessages,
+} from "../../uploadClient";
+import { nextUnacknowledgedFailedStatement } from "../../reviewSequence";
+
+const ParseComparisonPanel = dynamic(
+  () => import("../../ParseComparisonPanel").then((mod) => mod.ParseComparisonPanel),
+  { ssr: false },
+);
 
 type BulkReviewPanelProps = {
   sessionId: string;
@@ -32,6 +45,36 @@ export function BulkReviewPanel({ sessionId }: BulkReviewPanelProps) {
   const [listsError, setListsError] = useState<string | null>(null);
   const lists = useMembershipLists();
   const [listId, setListId] = useState<string>("");
+  const [session, setSession] = useState<ImportSession | null>(null);
+  const [acknowledgedFailedIds, setAcknowledgedFailedIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+
+  const reviewMessages: IndividualReviewMessages = {
+    errorForbidden: t.bulkReviewErrorForbidden,
+    errorSessionNotFound: t.bulkReviewErrorSessionNotFound,
+    errorStatementNotFound: t.bulkReviewErrorSessionNotFound,
+    errorSessionDiscarded: t.bulkReviewErrorSessionDiscarded,
+    errorStatementNotAvailable: t.bulkReviewErrorAlreadyCommitted,
+    errorRowNotFound: t.bulkReviewErrorRowNotAvailable,
+    errorRowNotAvailable: t.bulkReviewErrorRowNotAvailable,
+    errorNothingToUndo: t.errorGeneric,
+    errorFxUnavailable: t.bulkReviewErrorFxUnavailable,
+    errorGeneric: t.errorGeneric,
+    errorUnauthorized: t.errorUnauthorized,
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchImportSession(sessionId, reviewMessages).then((result) => {
+      if (cancelled) return;
+      if (result.ok) setSession(result.session);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,6 +126,25 @@ export function BulkReviewPanel({ sessionId }: BulkReviewPanelProps) {
   });
 
   const listOptions = (lists ?? []).map((l) => ({ value: l.id, label: l.name }));
+  const failedStatement = nextUnacknowledgedFailedStatement(session, acknowledgedFailedIds);
+
+  if (failedStatement) {
+    return (
+      <ParseComparisonPanel
+        key={failedStatement.id}
+        sessionId={sessionId}
+        statement={failedStatement}
+        locale={locale}
+        onContinue={() =>
+          setAcknowledgedFailedIds((prev) => {
+            const next = new Set(prev);
+            next.add(failedStatement.id);
+            return next;
+          })
+        }
+      />
+    );
+  }
 
   return (
     <main

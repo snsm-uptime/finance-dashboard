@@ -39,6 +39,14 @@ export const uploadMessages = {
     queueCap: "You can queue up to 10 files at a time.",
     errorGeneric: "Something went wrong. Try again.",
     errorUnauthorized: "Sign in to upload a statement.",
+    parseFailureAlert:
+      "This statement could not be parsed. Nothing was added to your lists. Review the extracted items against the original PDF.",
+    parseFailureItemsRegion: "Extracted items",
+    parseFailurePdfRegion: "Original statement PDF",
+    parseFailureContinue: "Continue",
+    parseFailureGapLabel: "Could not parse",
+    parseFailurePdfLoading: "Loading PDF…",
+    parseFailurePdfError: "Could not load the original PDF.",
     // Bulk review (Story 4.7)
     bulkReviewTitle: "Assign to a list",
     bulkReviewChooseList: "Choose list",
@@ -153,6 +161,14 @@ export const uploadMessages = {
     queueCap: "Puedes poner hasta 10 archivos en la cola.",
     errorGeneric: "Algo salió mal. Inténtalo de nuevo.",
     errorUnauthorized: "Inicia sesión para subir un estado de cuenta.",
+    parseFailureAlert:
+      "No se pudo leer este estado de cuenta. No se agregó nada a tus listas. Revisa los ítems extraídos junto al PDF original.",
+    parseFailureItemsRegion: "Ítems extraídos",
+    parseFailurePdfRegion: "PDF original del estado de cuenta",
+    parseFailureContinue: "Continuar",
+    parseFailureGapLabel: "No se pudo leer",
+    parseFailurePdfLoading: "Cargando PDF…",
+    parseFailurePdfError: "No se pudo cargar el PDF original.",
     // Bulk review (Story 4.7)
     bulkReviewTitle: "Asignar a una lista",
     bulkReviewChooseList: "Elegir lista",

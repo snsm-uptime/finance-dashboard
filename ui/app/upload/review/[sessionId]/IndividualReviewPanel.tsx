@@ -12,6 +12,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { useDrag } from "@use-gesture/react";
 
 import { SoftLedgerSelect, type SoftLedgerSelectHandle } from "@/components/soft-ledger/Select";
@@ -43,6 +44,7 @@ import {
   forgetOpenImportSession,
   rememberOpenImportSession,
 } from "../../openImportSession";
+import { nextReviewStep } from "../../reviewSequence";
 import {
   hasRemainingUploadWork,
   removeUploadQueueSession,
@@ -77,6 +79,8 @@ const DESCRIPTION_MAX_LENGTH = 500;
 const TITLE_TEXT_CLASS =
   "m-0 w-full min-w-0 text-[1.05rem] leading-snug font-[550] text-foreground break-words";
 
+const EMPTY_SKIPPED: ReadonlySet<string> = new Set();
+
 /** Grow a title field in whole line-height steps, never below `minHeight`. */
 export function titleTextareaHeightPx(
   scrollHeight: number,
@@ -107,7 +111,12 @@ export function nextReviewableRow(
   return null;
 }
 
-const EMPTY_SKIPPED: ReadonlySet<string> = new Set();
+export { nextReviewStep } from "../../reviewSequence";
+
+const ParseComparisonPanel = dynamic(
+  () => import("../../ParseComparisonPanel").then((mod) => mod.ParseComparisonPanel),
+  { ssr: false },
+);
 
 // Mirrors SessionReviewPanel.tsx's statementPeriodBounds — same StagedStatement
 // shape, kept local per this codebase's co-located-pure-function convention.
@@ -269,6 +278,9 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   const { staged, discardedIds } = useStagedImportDiscards(sessionId);
 
   const [session, setSession] = useState<ImportSession | null>(null);
+  const [acknowledgedFailedIds, setAcknowledgedFailedIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [sessionError, setSessionError] = useState<string | null>(null);
   const lists = useMembershipLists();
   const [listsError, setListsError] = useState<string | null>(null);
@@ -380,7 +392,8 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     };
   }, []);
 
-  const current = nextReviewableRow(session, discardedIds);
+  const step = nextReviewStep(session, acknowledgedFailedIds, discardedIds);
+  const current = step.kind === "row" ? { row: step.row, statement: step.statement } : null;
   const remainingCount = session
     ? session.statements.reduce(
         (sum, statement) =>
@@ -842,7 +855,21 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
         </div>
       ) : null}
 
-      {current ? (
+      {step.kind === "comparison" ? (
+        <ParseComparisonPanel
+          key={step.statement.id}
+          sessionId={sessionId}
+          statement={step.statement}
+          locale={locale}
+          onContinue={() =>
+            setAcknowledgedFailedIds((prev) => {
+              const next = new Set(prev);
+              next.add(step.statement.id);
+              return next;
+            })
+          }
+        />
+      ) : current ? (
         <>
           {listOptions.length > 0 ? (
             <div className="w-full px-2">
@@ -1118,7 +1145,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
         >
           <SpinnerIcon className="size-8 animate-spin motion-reduce:animate-none" />
         </span>
-      ) : session.discarded_at ? null : !session.finalized_at ? (
+      ) : session.discarded_at ? null : step.kind === "sheet" ? (
         <ImportReviewSheet
           sessionId={sessionId}
           session={session}
