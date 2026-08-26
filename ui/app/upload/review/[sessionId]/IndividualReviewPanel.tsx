@@ -870,6 +870,8 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
               return next;
             })
           }
+          onDismissStatement={(nextSession) => setSession(nextSession)}
+          onDismissFile={() => router.push("/upload")}
         />
       ) : current ? (
         <>

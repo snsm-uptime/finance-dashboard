@@ -27,6 +27,8 @@ from application.import_session import (
     DeleteCandidateRowService,
     DiscardImportSessionCommand,
     DiscardImportSessionService,
+    DismissFailedStatementCommand,
+    DismissFailedStatementService,
     EditCandidateRowCommand,
     EditCandidateRowService,
     FinalizeImportSessionCommand,
@@ -63,6 +65,7 @@ from domain.errors import (
     ImportSessionDiscardedError,
     ImportSessionHasPendingRowsError,
     ImportSessionNotFoundError,
+    ImportStatementNotFailedError,
     ImportStatementNotFoundError,
     InvalidCanonicalLineError,
     InvalidCardIbanError,
@@ -367,6 +370,49 @@ def get_statement_pdf(
         media_type="application/pdf",
         headers={"Cache-Control": "private, no-store"},
     )
+
+
+@router.post(
+    "/{session_id}/statements/{statement_id}/dismiss",
+    response_model=ImportSessionResponse,
+)
+def dismiss_failed_statement(
+    session_id: uuid.UUID,
+    statement_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+    pdf_storage: PdfStorage = Depends(get_pdf_storage),
+) -> ImportSessionResponse | JSONResponse:
+    service = DismissFailedStatementService(SqlAlchemyImportSessionRepository(db), pdf_storage)
+    try:
+        result = service.execute(
+            DismissFailedStatementCommand(
+                actor_user_id=user_id,
+                session_id=session_id,
+                statement_id=statement_id,
+            )
+        )
+    except (ImportSessionNotFoundError, ImportStatementNotFoundError) as exc:
+        code = getattr(exc, "CODE", None) or (
+            "import_session_not_found"
+            if isinstance(exc, ImportSessionNotFoundError)
+            else "import_statement_not_found"
+        )
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": str(exc), "code": code},
+        )
+    except ImportSessionDiscardedError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"detail": str(exc), "code": "import_session_discarded"},
+        )
+    except ImportStatementNotFailedError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"detail": str(exc), "code": "import_statement_not_failed"},
+        )
+    return _session_response(result)
 
 
 @router.delete("/{session_id}", response_model=ImportSessionResponse)

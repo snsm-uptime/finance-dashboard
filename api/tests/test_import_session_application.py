@@ -29,6 +29,8 @@ from application.import_session import (
     DetectedStatement,
     DiscardImportSessionCommand,
     DiscardImportSessionService,
+    DismissFailedStatementCommand,
+    DismissFailedStatementService,
     EditCandidateRowCommand,
     EditCandidateRowService,
     FinalizeImportSessionCommand,
@@ -57,6 +59,7 @@ from domain.errors import (
     ImportSessionDiscardedError,
     ImportSessionHasPendingRowsError,
     ImportSessionNotFoundError,
+    ImportStatementNotFailedError,
     ImportStatementNotFoundError,
     InvalidCanonicalLineError,
     NoCleanStatementsToCommitError,
@@ -72,6 +75,7 @@ from domain.import_session import (
     ROW_STATUS_PENDING,
     STATEMENT_STATUS_COMMITTED,
     STATEMENT_STATUS_FAILED,
+    STATEMENT_STATUS_SKIPPED,
     STATEMENT_STATUS_STAGED,
     row_is_zero_amount,
     statement_is_fully_resolved,
@@ -614,6 +618,46 @@ class _FakeImportSessionRepo:
             statements=updated_statements,
         )
 
+    def set_statement_status(
+        self, *, session_id: UUID, user_id: UUID, statement_id: UUID, status: str
+    ) -> ImportSessionRecord:
+        record = self.sessions.get(session_id)
+        if record is None or record.user_id != user_id:
+            raise ImportSessionNotFoundError()
+        updated_statements: list[StagedStatementRecord] = []
+        found = False
+        for statement in record.statements:
+            if statement.id != statement_id:
+                updated_statements.append(statement)
+                continue
+            found = True
+            updated_statements.append(_copy_statement(statement, status=status))
+        if not found:
+            raise ImportStatementNotFoundError()
+        updated = replace(record, discarded_at=record.discarded_at, statements=updated_statements)
+        self.sessions[session_id] = updated
+        return updated
+
+    def clear_statement_pdf_path(
+        self, *, session_id: UUID, user_id: UUID, statement_id: UUID
+    ) -> ImportSessionRecord:
+        record = self.sessions.get(session_id)
+        if record is None or record.user_id != user_id:
+            raise ImportSessionNotFoundError()
+        updated_statements: list[StagedStatementRecord] = []
+        found = False
+        for statement in record.statements:
+            if statement.id != statement_id:
+                updated_statements.append(statement)
+                continue
+            found = True
+            updated_statements.append(_copy_statement(statement, pdf_path=None))
+        if not found:
+            raise ImportStatementNotFoundError()
+        updated = replace(record, discarded_at=record.discarded_at, statements=updated_statements)
+        self.sessions[session_id] = updated
+        return updated
+
     def unassign_candidate_row(
         self, *, session_id: UUID, user_id: UUID, row_id: UUID
     ) -> ImportSessionRecord:
@@ -885,7 +929,7 @@ def test_discard_another_users_session_not_found() -> None:
         )
 
 
-def test_discard_own_session_sets_discarded_at_and_keeps_pdf_while_staged() -> None:
+def test_discard_own_session_sets_discarded_at_and_releases_pdf() -> None:
     repo = _FakeImportSessionRepo()
     storage = _FakePdfStorage()
     owner = uuid4()
@@ -897,7 +941,8 @@ def test_discard_own_session_sets_discarded_at_and_keeps_pdf_while_staged() -> N
     )
 
     assert result.discarded_at is not None
-    assert storage.deleted == []
+    assert storage.deleted != []
+    assert all(s.pdf_path is None for s in result.statements)
 
 
 def test_discard_releases_pdf_when_statements_are_idle() -> None:
@@ -921,7 +966,7 @@ def test_discard_releases_pdf_when_statements_are_idle() -> None:
     assert len(storage.deleted) == 1
 
 
-def test_discard_keeps_failed_statement_pdf() -> None:
+def test_discard_releases_failed_statement_pdf() -> None:
     repo = _FakeImportSessionRepo()
     storage = _FakePdfStorage()
     owner = uuid4()
@@ -943,6 +988,224 @@ def test_discard_keeps_failed_statement_pdf() -> None:
         DiscardImportSessionCommand(actor_user_id=owner, session_id=session_id)
     )
 
+    assert storage.deleted != []
+
+
+def test_dismiss_failed_statement_skips_and_deletes_pdf_when_failed_only() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    owner = uuid4()
+    session_id = _direct_session(
+        repo,
+        user_id=owner,
+        statements=[
+            DetectedStatement(
+                product_id="fake_product",
+                status=STATEMENT_STATUS_FAILED,
+                candidate_rows=[],
+            )
+        ],
+    )
+    path = repo.sessions[session_id].statements[0].pdf_path
+    assert path is not None
+    storage.files[path] = PDF_BYTES
+    storage.deleted.clear()
+    failed_id = repo.sessions[session_id].statements[0].id
+
+    result = DismissFailedStatementService(repo, storage).execute(
+        DismissFailedStatementCommand(
+            actor_user_id=owner, session_id=session_id, statement_id=failed_id
+        )
+    )
+
+    assert result.statements[0].status == STATEMENT_STATUS_SKIPPED
+    assert result.statements[0].candidate_row_count == 0
+    assert storage.deleted == [path]
+    assert result.statements[0].pdf_path is None
+
+
+def test_dismiss_failed_shared_path_does_not_delete_while_sibling_staged() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    owner = uuid4()
+    session_id = uuid4()
+    shared = f"/data/pdfs/{owner}/shared.pdf"
+    repo.create_session(
+        session_id=session_id,
+        user_id=owner,
+        statements=[
+            DetectedStatement(
+                product_id="fake_product",
+                status=STATEMENT_STATUS_FAILED,
+                candidate_rows=[],
+            ),
+            DetectedStatement(
+                product_id="fake_product",
+                status=STATEMENT_STATUS_STAGED,
+                candidate_rows=[_row("keep")],
+            ),
+        ],
+        pdf_paths={0: shared, 1: shared},
+    )
+    storage.files[shared] = PDF_BYTES
+    failed = next(
+        s for s in repo.sessions[session_id].statements if s.status == STATEMENT_STATUS_FAILED
+    )
+    staged = next(
+        s for s in repo.sessions[session_id].statements if s.status == STATEMENT_STATUS_STAGED
+    )
+
+    result = DismissFailedStatementService(repo, storage).execute(
+        DismissFailedStatementCommand(
+            actor_user_id=owner, session_id=session_id, statement_id=failed.id
+        )
+    )
+
+    by_id = {s.id: s for s in result.statements}
+    assert by_id[failed.id].status == STATEMENT_STATUS_SKIPPED
+    assert by_id[failed.id].pdf_path is None
+    assert by_id[staged.id].status == STATEMENT_STATUS_STAGED
+    assert by_id[staged.id].pdf_path == shared
+    assert storage.deleted == []
+    assert shared in storage.files
+
+
+def test_dismiss_failed_does_not_commit_statement_batch() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    owner = uuid4()
+    session_id = _direct_session(
+        repo,
+        user_id=owner,
+        statements=[
+            DetectedStatement(
+                product_id="fake_product",
+                status=STATEMENT_STATUS_FAILED,
+                candidate_rows=[],
+            ),
+            DetectedStatement(
+                product_id="fake_product",
+                status=STATEMENT_STATUS_COMMITTED,
+                candidate_rows=[_row("already")],
+            ),
+        ],
+    )
+    failed = next(
+        s for s in repo.sessions[session_id].statements if s.status == STATEMENT_STATUS_FAILED
+    )
+
+    DismissFailedStatementService(repo, storage).execute(
+        DismissFailedStatementCommand(
+            actor_user_id=owner, session_id=session_id, statement_id=failed.id
+        )
+    )
+
+    assert repo.commit_calls == []
+
+
+def test_dismiss_failed_foreign_user_not_found() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    owner = uuid4()
+    session_id = _direct_session(
+        repo,
+        user_id=owner,
+        statements=[
+            DetectedStatement(
+                product_id="fake_product",
+                status=STATEMENT_STATUS_FAILED,
+                candidate_rows=[],
+            )
+        ],
+    )
+    failed_id = repo.sessions[session_id].statements[0].id
+    with pytest.raises(ImportSessionNotFoundError):
+        DismissFailedStatementService(repo, storage).execute(
+            DismissFailedStatementCommand(
+                actor_user_id=uuid4(), session_id=session_id, statement_id=failed_id
+            )
+        )
+
+
+def test_dismiss_failed_discarded_session_conflict() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    owner = uuid4()
+    session_id = _direct_session(
+        repo,
+        user_id=owner,
+        statements=[
+            DetectedStatement(
+                product_id="fake_product",
+                status=STATEMENT_STATUS_FAILED,
+                candidate_rows=[],
+            )
+        ],
+    )
+    failed_id = repo.sessions[session_id].statements[0].id
+    DiscardImportSessionService(repo, storage).execute(
+        DiscardImportSessionCommand(actor_user_id=owner, session_id=session_id)
+    )
+    with pytest.raises(ImportSessionDiscardedError):
+        DismissFailedStatementService(repo, storage).execute(
+            DismissFailedStatementCommand(
+                actor_user_id=owner, session_id=session_id, statement_id=failed_id
+            )
+        )
+
+
+def test_dismiss_failed_staged_statement_conflict() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    owner = uuid4()
+    session_id = _direct_session(
+        repo,
+        user_id=owner,
+        statements=[
+            DetectedStatement(
+                product_id="fake_product",
+                status=STATEMENT_STATUS_STAGED,
+                candidate_rows=[_row()],
+            )
+        ],
+    )
+    staged_id = repo.sessions[session_id].statements[0].id
+    with pytest.raises(ImportStatementNotFailedError):
+        DismissFailedStatementService(repo, storage).execute(
+            DismissFailedStatementCommand(
+                actor_user_id=owner, session_id=session_id, statement_id=staged_id
+            )
+        )
+
+
+def test_dismiss_failed_already_skipped_is_idempotent() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    owner = uuid4()
+    session_id = _direct_session(
+        repo,
+        user_id=owner,
+        statements=[
+            DetectedStatement(
+                product_id="fake_product",
+                status=STATEMENT_STATUS_FAILED,
+                candidate_rows=[],
+            )
+        ],
+    )
+    failed_id = repo.sessions[session_id].statements[0].id
+    DismissFailedStatementService(repo, storage).execute(
+        DismissFailedStatementCommand(
+            actor_user_id=owner, session_id=session_id, statement_id=failed_id
+        )
+    )
+    storage.deleted.clear()
+    again = DismissFailedStatementService(repo, storage).execute(
+        DismissFailedStatementCommand(
+            actor_user_id=owner, session_id=session_id, statement_id=failed_id
+        )
+    )
+    assert again.statements[0].status == STATEMENT_STATUS_SKIPPED
     assert storage.deleted == []
 
 

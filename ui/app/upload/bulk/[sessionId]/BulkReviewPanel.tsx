@@ -181,6 +181,8 @@ export function BulkReviewPanel({ sessionId }: BulkReviewPanelProps) {
             return next;
           })
         }
+        onDismissStatement={(nextSession) => setSession(nextSession)}
+        onDismissFile={() => router.push("/upload")}
       />
     );
   }

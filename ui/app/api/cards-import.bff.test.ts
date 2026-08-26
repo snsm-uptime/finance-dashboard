@@ -329,4 +329,36 @@ describe("cards / import BFF smoke (coverage floor)", () => {
       ).status,
     ).toBe(502);
   });
+
+  it("POST dismiss failed statement forwards cookie and 502 on dead upstream", async () => {
+    const dismiss = await import(
+      "@/app/api/import/sessions/[sessionId]/statements/[statementId]/dismiss/route"
+    );
+    const ctx = { params: Promise.resolve({ sessionId: "s1", statementId: "st1" }) };
+    const ok = await dismiss.POST(
+      cookieRequest("http://localhost/api/import/sessions/s1/statements/st1/dismiss", {
+        method: "POST",
+      }),
+      ctx,
+    );
+    expect(ok.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test:8000/import/sessions/s1/statements/st1/dismiss",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(cookieOnLastFetch()).toBe("fh_session=tok");
+
+    fetchMock.mockImplementation(() => Promise.reject(new Error("ECONNREFUSED")));
+    const failed = await dismiss.POST(
+      cookieRequest("http://localhost/api/import/sessions/s1/statements/st1/dismiss", {
+        method: "POST",
+      }),
+      ctx,
+    );
+    expect(failed.status).toBe(502);
+    expect(await failed.json()).toEqual({
+      detail: "Upstream unavailable.",
+      code: "bad_gateway",
+    });
+  });
 });

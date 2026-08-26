@@ -5,6 +5,7 @@ import {
   bulkCommitSession,
   deleteRow,
   discardSession,
+  dismissFailedStatement,
   editRowDescription,
   fetchActiveImportSession,
   fetchImportSession,
@@ -237,6 +238,81 @@ describe("uploadClient", () => {
 
     const result = await discardSession("s1", messages);
     expect(result).toEqual({ ok: false, error: "generic" });
+  });
+
+  const dismissMessages = {
+    ...messages,
+    errorSessionDiscarded: "discarded",
+    errorStatementNotFailed: "not-failed",
+  };
+
+  it("dismissFailedStatement returns the session on 200", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: "s1",
+          created_at: "2026-08-18T00:00:00Z",
+          discarded_at: null,
+          statements: [
+            {
+              id: "st1",
+              product_id: "p",
+              status: "skipped",
+              candidate_row_count: 0,
+              iban: null,
+              filename: "a.pdf",
+              card_id: null,
+              ...emptyStatementFields,
+            },
+          ],
+        }),
+      }),
+    );
+    const result = await dismissFailedStatement("s1", "st1", dismissMessages);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.session.statements[0]?.status).toBe("skipped");
+  });
+
+  it("dismissFailedStatement maps 409 discarded", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: async () => ({ code: "import_session_discarded" }),
+      }),
+    );
+    const result = await dismissFailedStatement("s1", "st1", dismissMessages);
+    expect(result).toEqual({ ok: false, error: "discarded" });
+  });
+
+  it("dismissFailedStatement maps 409 not-failed", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: async () => ({ code: "import_statement_not_failed" }),
+      }),
+    );
+    const result = await dismissFailedStatement("s1", "st1", dismissMessages);
+    expect(result).toEqual({ ok: false, error: "not-failed" });
+  });
+
+  it("dismissFailedStatement maps 401", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        json: async () => ({}),
+      }),
+    );
+    const result = await dismissFailedStatement("s1", "st1", dismissMessages);
+    expect(result).toEqual({ ok: false, error: "unauthorized" });
   });
 
   it("bulkCommitSession returns the parsed result and posts list_id", async () => {

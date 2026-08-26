@@ -5,7 +5,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ParseComparisonPanel } from "./ParseComparisonPanel";
-import type { StagedStatement } from "./uploadClient";
+import type { ImportSession, StagedStatement } from "./uploadClient";
+import { uploadMessages } from "@/lib/i18n/upload";
 
 vi.mock("react-pdf", () => ({
   pdfjs: { GlobalWorkerOptions: { workerSrc: "" } },
@@ -14,6 +15,17 @@ vi.mock("react-pdf", () => ({
   ),
   Page: () => <div />,
 }));
+
+const dismissFailedStatement = vi.fn();
+const discardSession = vi.fn();
+vi.mock("./uploadClient", async () => {
+  const actual = await vi.importActual<typeof import("./uploadClient")>("./uploadClient");
+  return {
+    ...actual,
+    dismissFailedStatement: (...args: unknown[]) => dismissFailedStatement(...args),
+    discardSession: (...args: unknown[]) => discardSession(...args),
+  };
+});
 
 const statement: StagedStatement = {
   id: "st-failed",
@@ -48,11 +60,17 @@ describe("ParseComparisonPanel", () => {
     act(() => root.unmount());
     container.remove();
     vi.unstubAllGlobals();
+    dismissFailedStatement.mockReset();
+    discardSession.mockReset();
   });
 
   async function renderPanel(
     onContinue: () => void = () => undefined,
     fixture: StagedStatement = statement,
+    handlers: {
+      onDismissStatement?: (session: ImportSession) => void;
+      onDismissFile?: () => void;
+    } = {},
   ) {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -69,6 +87,8 @@ describe("ParseComparisonPanel", () => {
           statement={fixture}
           locale="en"
           onContinue={onContinue}
+          onDismissStatement={handlers.onDismissStatement ?? (() => undefined)}
+          onDismissFile={handlers.onDismissFile ?? (() => undefined)}
         />,
       );
     });
@@ -111,6 +131,68 @@ describe("ParseComparisonPanel", () => {
     });
     expect(onContinue).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls.every((call) => String(call[0]).includes("/pdf"))).toBe(true);
+  });
+
+  it("Dismiss statement POSTs dismiss and does not DELETE the session", async () => {
+    const skipped: ImportSession = {
+      id: "s1",
+      created_at: "2026-08-18T00:00:00Z",
+      discarded_at: null,
+      statements: [{ ...statement, status: "skipped" }],
+      undo: null,
+      finalized_at: null,
+      imported_new_count: 0,
+      skipped_duplicate_count: 0,
+      landing_list_id: null,
+      deleted_count: 0,
+      zero_amount_excluded_count: 0,
+      failed_statements: [],
+      committed_by_list: [],
+    };
+    dismissFailedStatement.mockResolvedValue({ ok: true, session: skipped });
+    const onDismissStatement = vi.fn();
+    await renderPanel(() => undefined, statement, { onDismissStatement });
+    const button = Array.from(container.querySelectorAll("button")).find(
+      (el) => el.textContent === "Dismiss statement",
+    );
+    await act(async () => {
+      button?.click();
+    });
+    expect(dismissFailedStatement).toHaveBeenCalledWith("s1", "st-failed", expect.any(Object));
+    expect(discardSession).not.toHaveBeenCalled();
+    expect(onDismissStatement).toHaveBeenCalledWith(skipped);
+  });
+
+  it("Dismiss file opens discard confirm then discards the session", async () => {
+    discardSession.mockResolvedValue({ ok: true });
+    const onDismissFile = vi.fn();
+    await renderPanel(() => undefined, statement, { onDismissFile });
+    const fileButton = Array.from(container.querySelectorAll("button")).find(
+      (el) => el.textContent === "Dismiss file",
+    );
+    await act(async () => {
+      fileButton?.click();
+    });
+    expect(discardSession).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("Discard remaining review?");
+    const confirm = Array.from(container.querySelectorAll("button")).find(
+      (el) => el.textContent === "Discard remaining",
+    );
+    await act(async () => {
+      confirm?.click();
+    });
+    expect(discardSession).toHaveBeenCalledWith("s1", expect.any(Object));
+    expect(dismissFailedStatement).not.toHaveBeenCalled();
+    expect(onDismissFile).toHaveBeenCalledTimes(1);
+  });
+
+  it("exposes EN and ES dismiss keys", () => {
+    expect(uploadMessages.en.parseFailureDismissStatement).toBeTruthy();
+    expect(uploadMessages.es.parseFailureDismissStatement).toBeTruthy();
+    expect(uploadMessages.en.parseFailureDismissFile).toBeTruthy();
+    expect(uploadMessages.es.parseFailureDismissFile).toBeTruthy();
+    expect(uploadMessages.en.parseFailureErrorNotFailed).toBeTruthy();
+    expect(uploadMessages.es.parseFailureErrorNotFailed).toBeTruthy();
   });
 
   it("shows a visible gap empty-state when evidence items are missing", async () => {
