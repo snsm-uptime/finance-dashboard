@@ -34,9 +34,12 @@ from domain.import_session import (
     ROW_STATUS_EXCLUDED_ZERO_AMOUNT,
     ROW_STATUS_PENDING,
     STATEMENT_STATUS_FAILED,
+    STATEMENT_STATUS_SKIPPED,
     STATEMENT_STATUS_STAGED,
     compute_pdf_content_hash,
+    next_status_after_dismiss_failed,
     normalize_row_description,
+    retained_source_pdf_paths,
     session_needs_source_pdf,
     validate_bulk_candidate_row,
     validate_bulk_commit_eligible,
@@ -424,6 +427,19 @@ class ImportSessionRepository(Protocol):
         """Null out path references after the source PDF has been deleted (AD-3)."""
         ...
 
+    def set_statement_status(
+        self, *, session_id: UUID, user_id: UUID, statement_id: UUID, status: str
+    ) -> ImportSessionRecord:
+        """Set one statement's status. Raises ImportSessionNotFoundError /
+        ImportStatementNotFoundError for a foreign or missing target."""
+        ...
+
+    def clear_statement_pdf_path(
+        self, *, session_id: UUID, user_id: UUID, statement_id: UUID
+    ) -> ImportSessionRecord:
+        """Null one statement's pdf_path (Story 5.2) — not every sibling."""
+        ...
+
     def unassign_candidate_row(
         self, *, session_id: UUID, user_id: UUID, row_id: UUID
     ) -> ImportSessionRecord:
@@ -601,12 +617,29 @@ class DiscardImportSessionService:
             raise ImportSessionNotFoundError()
 
         updated = self._session_repo.discard_session(command.session_id, command.actor_user_id)
-        _release_source_pdf_if_idle(
+        _release_all_session_pdfs(
             session=updated,
             session_repo=self._session_repo,
             pdf_storage=self._pdf_storage,
         )
         return self._session_repo.get_session(command.session_id, command.actor_user_id) or updated
+
+
+def _delete_pdf_paths(
+    *,
+    session: ImportSessionRecord,
+    pdf_storage: PdfStorage,
+    paths: set[str],
+) -> None:
+    for path in paths:
+        try:
+            pdf_storage.delete(path)
+        except OSError:
+            logger.warning(
+                "import_session_commit_cleanup_failed session_id=%s pdf_path=%s",
+                session.id,
+                path,
+            )
 
 
 def _release_source_pdf_if_idle(
@@ -619,17 +652,88 @@ def _release_source_pdf_if_idle(
     if session_needs_source_pdf([statement.status for statement in session.statements]):
         return
     paths = {statement.pdf_path for statement in session.statements if statement.pdf_path}
-    for path in paths:
-        try:
-            pdf_storage.delete(path)
-        except OSError:
-            logger.warning(
-                "import_session_commit_cleanup_failed session_id=%s pdf_path=%s",
-                session.id,
-                path,
-            )
+    _delete_pdf_paths(session=session, pdf_storage=pdf_storage, paths=paths)
     if paths:
         session_repo.clear_statement_pdf_paths(session.id, session.user_id)
+
+
+def _release_all_session_pdfs(
+    *,
+    session: ImportSessionRecord,
+    session_repo: ImportSessionRepository,
+    pdf_storage: PdfStorage,
+) -> None:
+    """Abandoned session: delete remaining files even while staged/failed (Story 5.2)."""
+    paths = {statement.pdf_path for statement in session.statements if statement.pdf_path}
+    _delete_pdf_paths(session=session, pdf_storage=pdf_storage, paths=paths)
+    if paths:
+        session_repo.clear_statement_pdf_paths(session.id, session.user_id)
+
+
+def _release_pdfs_after_statement_skip(
+    *,
+    session: ImportSessionRecord,
+    session_repo: ImportSessionRepository,
+    pdf_storage: PdfStorage,
+) -> None:
+    retained = retained_source_pdf_paths(
+        [(statement.status, statement.pdf_path) for statement in session.statements]
+    )
+    candidates = {statement.pdf_path for statement in session.statements if statement.pdf_path}
+    _delete_pdf_paths(session=session, pdf_storage=pdf_storage, paths=candidates - retained)
+    for statement in session.statements:
+        if statement.status not in (STATEMENT_STATUS_STAGED, STATEMENT_STATUS_FAILED):
+            if statement.pdf_path:
+                session = session_repo.clear_statement_pdf_path(
+                    session_id=session.id,
+                    user_id=session.user_id,
+                    statement_id=statement.id,
+                )
+    _release_source_pdf_if_idle(
+        session=session,
+        session_repo=session_repo,
+        pdf_storage=pdf_storage,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class DismissFailedStatementCommand:
+    actor_user_id: UUID
+    session_id: UUID
+    statement_id: UUID
+
+
+class DismissFailedStatementService:
+    """Skip a parse-failed statement without creating review rows (Story 5.2)."""
+
+    def __init__(self, session_repo: ImportSessionRepository, pdf_storage: PdfStorage) -> None:
+        self._session_repo = session_repo
+        self._pdf_storage = pdf_storage
+
+    def execute(self, command: DismissFailedStatementCommand) -> ImportSessionRecord:
+        session = self._session_repo.get_session(command.session_id, command.actor_user_id)
+        if session is None:
+            raise ImportSessionNotFoundError()
+        if session.discarded_at is not None:
+            raise ImportSessionDiscardedError()
+        statement = _find_statement(session, command.statement_id)
+        next_status = next_status_after_dismiss_failed(statement.status)
+        if statement.status == STATEMENT_STATUS_SKIPPED:
+            return session
+        updated = self._session_repo.set_statement_status(
+            session_id=command.session_id,
+            user_id=command.actor_user_id,
+            statement_id=command.statement_id,
+            status=next_status,
+        )
+        _release_pdfs_after_statement_skip(
+            session=updated,
+            session_repo=self._session_repo,
+            pdf_storage=self._pdf_storage,
+        )
+        return (
+            self._session_repo.get_session(command.session_id, command.actor_user_id) or updated
+        )
 
 
 @dataclass(frozen=True, slots=True)

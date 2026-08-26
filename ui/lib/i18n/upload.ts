@@ -49,6 +49,9 @@ export const uploadMessages = {
     parseFailurePdfError: "Could not load the original PDF.",
     parseFailureEmptyEvidence:
       "No extracted lines were saved for this statement. The original PDF is still below.",
+    parseFailureDismissStatement: "Dismiss statement",
+    parseFailureDismissFile: "Dismiss file",
+    parseFailureErrorNotFailed: "This statement is no longer a failed parse.",
     // Bulk review (Story 4.7)
     bulkReviewTitle: "Assign to a list",
     bulkReviewChooseList: "Choose list",
@@ -174,6 +177,9 @@ export const uploadMessages = {
     parseFailurePdfError: "No se pudo cargar el PDF original.",
     parseFailureEmptyEvidence:
       "No se guardaron líneas extraídas para este estado de cuenta. El PDF original sigue abajo.",
+    parseFailureDismissStatement: "Descartar estado de cuenta",
+    parseFailureDismissFile: "Descartar archivo",
+    parseFailureErrorNotFailed: "Este estado de cuenta ya no es un fallo de lectura.",
     // Bulk review (Story 4.7)
     bulkReviewTitle: "Asignar a una lista",
     bulkReviewChooseList: "Elegir lista",

@@ -2216,3 +2216,123 @@ def test_upload_mixed_parse_failure_persists_evidence_no_candidate_rows_no_ledge
     assert discarded.status_code == 200
     after_discard = client.get(f"/import/sessions/{session2}/statements/{failed2['id']}/pdf")
     assert after_discard.status_code == 404
+
+
+def test_dismiss_failed_statement_skips_sibling_stays_staged_pdf_refcount(
+    client: TestClient, db_session: Session
+) -> None:
+    _register(client, "dismissfailmix@example.com")
+    created = client.post(
+        "/import/sessions",
+        files={
+            "file": (
+                "promerica_estado.pdf",
+                _PARSE_FAILURE_MIXED_PDF.read_bytes() + b"\n% dismiss-stmt\n",
+                "application/pdf",
+            )
+        },
+    )
+    assert created.status_code == 201, created.text
+    body = created.json()
+    session_id = body["id"]
+    failed = next(s for s in body["statements"] if s["status"] == "failed")
+    staged = next(s for s in body["statements"] if s["status"] == "staged")
+
+    dismissed = client.post(
+        f"/import/sessions/{session_id}/statements/{failed['id']}/dismiss"
+    )
+    assert dismissed.status_code == 200, dismissed.text
+    refreshed = dismissed.json()
+    by_id = {s["id"]: s for s in refreshed["statements"]}
+    assert by_id[failed["id"]]["status"] == "skipped"
+    assert by_id[failed["id"]]["rows"] == []
+    assert by_id[failed["id"]]["candidate_row_count"] == 0
+    assert by_id[staged["id"]]["status"] == "staged"
+    assert by_id[staged["id"]]["rows"]
+
+    db_session.expire_all()
+    stored = db_session.scalar(
+        select(ImportCandidateRowModel).where(
+            ImportCandidateRowModel.statement_id == UUID(failed["id"])
+        )
+    )
+    assert stored is None
+
+    failed_pdf = client.get(f"/import/sessions/{session_id}/statements/{failed['id']}/pdf")
+    assert failed_pdf.status_code == 404
+    staged_pdf = client.get(f"/import/sessions/{session_id}/statements/{staged['id']}/pdf")
+    assert staged_pdf.status_code == 200
+
+
+def test_dismiss_last_failed_statement_releases_pdf(
+    client: TestClient, db_session: Session
+) -> None:
+    _register(client, "dismissfailedonly@example.com")
+    user_id = UUID(client.get("/auth/me").json()["user_id"])
+    session_id = uuid4()
+    user_dir = _pdf_storage_base() / str(user_id)
+    user_dir.mkdir(parents=True, exist_ok=True)
+    pdf_path = user_dir / "only-failed.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\nfailed-only\n")
+    repo = SqlAlchemyImportSessionRepository(db_session)
+    record = repo.create_session(
+        session_id=session_id,
+        user_id=user_id,
+        statements=[
+            DetectedStatement(
+                product_id="fake_product",
+                status=STATEMENT_STATUS_FAILED,
+                candidate_rows=[],
+                original_filename="failed.pdf",
+            )
+        ],
+        pdf_paths={0: str(pdf_path)},
+    )
+    db_session.commit()
+    failed_id = record.statements[0].id
+
+    dismissed = client.post(f"/import/sessions/{session_id}/statements/{failed_id}/dismiss")
+    assert dismissed.status_code == 200, dismissed.text
+    assert dismissed.json()["statements"][0]["status"] == "skipped"
+
+    pdf = client.get(f"/import/sessions/{session_id}/statements/{failed_id}/pdf")
+    assert pdf.status_code == 404
+    _assert_source_pdf_released(db_session, session_id=str(session_id), user_id=str(user_id))
+
+
+def test_dismiss_file_mixed_session_abandons_pending_and_404s_pdf(
+    client_with_fx: TestClient, db_session: Session
+) -> None:
+    client = client_with_fx
+    _register(client, "dismissfilemix@example.com")
+    session_id = UUID(_upload_bac_session(client))
+    list_id = UUID(_own_list_id(client))
+    actor_id = UUID(client.get("/auth/me").json()["user_id"])
+    statement = db_session.scalars(
+        select(ImportStatementModel).where(ImportStatementModel.session_id == session_id)
+    ).one()
+    first = db_session.scalars(
+        select(ImportCandidateRowModel)
+        .where(ImportCandidateRowModel.statement_id == statement.id)
+        .order_by(ImportCandidateRowModel.sequence)
+    ).first()
+    assert first is not None
+    repo, lookup, fx, _storage = _services(db_session)
+    AssignCandidateRowService(repo, lookup, fx).execute(
+        AssignCandidateRowCommand(
+            actor_user_id=actor_id, session_id=session_id, row_id=first.id, list_id=list_id
+        )
+    )
+
+    discarded = client.delete(f"/import/sessions/{session_id}")
+    assert discarded.status_code == 200, discarded.text
+    assert discarded.json()["discarded_at"] is not None
+
+    pdf = client.get(f"/import/sessions/{session_id}/statements/{statement.id}/pdf")
+    assert pdf.status_code == 404
+
+    db_session.expire_all()
+    ledger_rows = db_session.scalars(
+        select(LedgerEntryModel).where(LedgerEntryModel.list_id == list_id)
+    ).all()
+    assert len(ledger_rows) == 1

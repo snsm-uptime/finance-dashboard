@@ -13,6 +13,7 @@ from uuid import UUID
 
 from domain.errors import (
     ImportSessionDiscardedError,
+    ImportStatementNotFailedError,
     InvalidCanonicalLineError,
     NoCleanStatementsToCommitError,
     UnsupportedFileTypeError,
@@ -201,3 +202,19 @@ def session_needs_source_pdf(statement_statuses: Sequence[str]) -> bool:
     the source of truth, so the file can go.
     """
     return any(status in _PDF_RETAIN_STATUSES for status in statement_statuses)
+
+
+def retained_source_pdf_paths(statements: Sequence[tuple[str, str | None]]) -> frozenset[str]:
+    """Paths still needed by staged or failed statements (AD-3 refcount)."""
+    return frozenset(
+        path for status, path in statements if status in _PDF_RETAIN_STATUSES and path
+    )
+
+
+def next_status_after_dismiss_failed(status: str) -> str:
+    """Durable skip of a parse-failed statement (Story 5.2). Idempotent on skipped."""
+    if status == STATEMENT_STATUS_SKIPPED:
+        return STATEMENT_STATUS_SKIPPED
+    if status != STATEMENT_STATUS_FAILED:
+        raise ImportStatementNotFailedError()
+    return STATEMENT_STATUS_SKIPPED

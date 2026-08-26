@@ -24,8 +24,39 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, replace }),
 }));
 
+const { comparisonDismissSession } = vi.hoisted(() => ({
+  comparisonDismissSession: { current: null as ImportSession | null },
+}));
+
 vi.mock("next/dynamic", () => ({
-  default: () => () => null,
+  default: () =>
+    function ParseComparisonStub(props: {
+      statement: { id: string };
+      onContinue: () => void;
+      onDismissStatement?: (session: ImportSession) => void;
+      onDismissFile?: () => void;
+    }) {
+      return (
+        <div data-testid="parse-comparison">
+          <button type="button" onClick={props.onContinue}>
+            Continue
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (comparisonDismissSession.current) {
+                props.onDismissStatement?.(comparisonDismissSession.current);
+              }
+            }}
+          >
+            Dismiss statement
+          </button>
+          <button type="button" onClick={() => props.onDismissFile?.()}>
+            Dismiss file
+          </button>
+        </div>
+      );
+    },
 }));
 
 const fetchLists = vi.fn();
@@ -247,6 +278,13 @@ describe("nextReviewableRow", () => {
 });
 
 describe("nextReviewStep", () => {
+  it("skips comparison for a skipped (dismissed) failed statement", () => {
+    const skipped = makeStatement({ id: "st-skipped", status: "skipped", rows: [] });
+    const staged = makeStatement({ id: "st-staged", rows: [ROW_2] });
+    const session = makeSession({ statements: [skipped, staged] });
+    expect(nextReviewStep(session)).toEqual({ kind: "row", row: ROW_2, statement: staged });
+  });
+
   it("picks comparison for an unacknowledged failed statement before rows", () => {
     const failed = makeStatement({ id: "st-failed", status: "failed", rows: [] });
     const staged = makeStatement({ id: "st-staged", rows: [ROW_2] });
@@ -311,6 +349,7 @@ describe("IndividualReviewPanel", () => {
     editRowDescription.mockReset();
     finalizeSession.mockReset();
     unassignRow.mockReset();
+    comparisonDismissSession.current = null;
     capturedDragHandler = undefined;
     resetUploadQueue();
     container = document.createElement("div");
@@ -325,6 +364,68 @@ describe("IndividualReviewPanel", () => {
     container.remove();
     vi.unstubAllGlobals();
     resetMembershipListsStore();
+  });
+
+  it("after dismissing a failed statement, shows the next pending row", async () => {
+    const failed = makeStatement({ id: "st-failed", status: "failed", rows: [] });
+    const staged = makeStatement({ id: "st-staged", rows: [makeRow()] });
+    const mixed = makeSession({ statements: [failed, staged] });
+    comparisonDismissSession.current = makeSession({
+      statements: [{ ...failed, status: "skipped" }, staged],
+    });
+    fetchImportSession.mockResolvedValue({
+      ok: true,
+      session: mixed,
+    });
+    fetchLists.mockResolvedValue({
+      ok: true,
+      lists: [{ id: "l2", name: "Personal", owner_id: "u1", role: "owner" }],
+    });
+    stubAuthMeFetch(null);
+
+    await act(async () => {
+      root.render(<IndividualReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[data-testid="parse-comparison"]')).not.toBeNull();
+    const dismiss = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Dismiss statement",
+    );
+    await act(async () => {
+      dismiss?.click();
+    });
+    expect(container.querySelector('[data-testid="parse-comparison"]')).toBeNull();
+    expect(container.textContent).toContain("Coffee");
+  });
+
+  it("dismiss file from comparison navigates to upload home", async () => {
+    const failed = makeStatement({ id: "st-failed", status: "failed", rows: [] });
+    fetchImportSession.mockResolvedValue({
+      ok: true,
+      session: makeSession({ statements: [failed] }),
+    });
+    fetchLists.mockResolvedValue({ ok: true, lists: [] });
+    stubAuthMeFetch(null);
+
+    await act(async () => {
+      root.render(<IndividualReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const dismissFile = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Dismiss file",
+    );
+    await act(async () => {
+      dismissFile?.click();
+    });
+    expect(push).toHaveBeenCalledWith("/upload");
   });
 
   it("has no full-screen dark overlay", async () => {

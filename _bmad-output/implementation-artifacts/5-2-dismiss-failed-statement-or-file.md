@@ -4,7 +4,7 @@ baseline_commit: 71cc0a4
 
 # Story 5.2: Dismiss failed statement or file
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -41,45 +41,45 @@ so that nothing partial enters the ledger and I'm not blocked from reviewing sta
 
 ## Tasks / Subtasks
 
-- [ ] Task 0: Branch + reads
-  - [ ] 0.1 Branch: `feat/5/5-2-dismiss-failed-statement-or-file` from current `main`.
-  - [ ] 0.2 Read this file, `_bmad-output/project-context.md`, AD-3/AD-4 in `ARCHITECTURE-SPINE.md`, `DiscardImportSessionService` + `_release_source_pdf_if_idle`, `session_needs_source_pdf`, `ParseComparisonPanel.tsx`, `reviewSequence.ts`, `discardSession` in `uploadClient.ts`, `DiscardConfirmDialog.tsx`.
+- [x] Task 0: Branch + reads
+  - [x] 0.1 Branch: `feat/5/5-2-dismiss-failed-statement-or-file` from current `main`.
+  - [x] 0.2 Read this file, `_bmad-output/project-context.md`, AD-3/AD-4 in `ARCHITECTURE-SPINE.md`, `DiscardImportSessionService` + `_release_source_pdf_if_idle`, `session_needs_source_pdf`, `ParseComparisonPanel.tsx`, `reviewSequence.ts`, `discardSession` in `uploadClient.ts`, `DiscardConfirmDialog.tsx`.
 
-- [ ] Task 1: Domain + application — dismiss statement (AC: #1, #3)
-  - [ ] 1.1 Reuse `STATEMENT_STATUS_SKIPPED`. Do **not** add `dismissed`. Failed parse never had candidate rows; skip keeps `rows: []` / `candidate_row_count === 0`.
-  - [ ] 1.2 `DismissFailedStatementService` (name flexible): owner session, statement `status == failed` → set `skipped`, clear **that** statement’s `pdf_path`. 404 foreign/missing (same non-enumerating pattern as GET PDF). 409 if discarded session (`import_session_discarded`). 409 if status is not `failed` (`import_statement_not_failed` or reuse an existing conflict code — document it). Idempotent: already `skipped` after a failed dismiss → 200 with current session.
-  - [ ] 1.3 After skip, call PDF release with **refcount**: collect remaining `pdf_path` values on statements that are still `staged` or `failed`; delete a path from storage iff no remaining retain-status statement still points at it; then `_release_source_pdf_if_idle` for the leftover “session fully idle” case. **Do not** delete the shared upload file while a sibling is `staged`.
-  - [ ] 1.4 Repository: `set_statement_status` / `clear_statement_pdf_path` for one statement (do not reuse `clear_statement_pdf_paths` which clears **all**).
-  - [ ] 1.5 Domain tests: skip failed → `session_needs_source_pdf` false when only skipped/committed remain. Mixed `failed`+`staged` sharing one path: after dismiss failed, file still present; staged `pdf_path` unchanged.
-  - [ ] 1.6 Application tests with `_FakePdfStorage`: failed-only session → `delete` called; mixed shared path → `delete` **not** called; already-committed sibling ledger untouched (no `commit_statement_batch`).
+- [x] Task 1: Domain + application — dismiss statement (AC: #1, #3)
+  - [x] 1.1 Reuse `STATEMENT_STATUS_SKIPPED`. Do **not** add `dismissed`. Failed parse never had candidate rows; skip keeps `rows: []` / `candidate_row_count === 0`.
+  - [x] 1.2 `DismissFailedStatementService` (name flexible): owner session, statement `status == failed` → set `skipped`, clear **that** statement’s `pdf_path`. 404 foreign/missing (same non-enumerating pattern as GET PDF). 409 if discarded session (`import_session_discarded`). 409 if status is not `failed` (`import_statement_not_failed` or reuse an existing conflict code — document it). Idempotent: already `skipped` after a failed dismiss → 200 with current session.
+  - [x] 1.3 After skip, call PDF release with **refcount**: collect remaining `pdf_path` values on statements that are still `staged` or `failed`; delete a path from storage iff no remaining retain-status statement still points at it; then `_release_source_pdf_if_idle` for the leftover “session fully idle” case. **Do not** delete the shared upload file while a sibling is `staged`.
+  - [x] 1.4 Repository: `set_statement_status` / `clear_statement_pdf_path` for one statement (do not reuse `clear_statement_pdf_paths` which clears **all**).
+  - [x] 1.5 Domain tests: skip failed → `session_needs_source_pdf` false when only skipped/committed remain. Mixed `failed`+`staged` sharing one path: after dismiss failed, file still present; staged `pdf_path` unchanged.
+  - [x] 1.6 Application tests with `_FakePdfStorage`: failed-only session → `delete` called; mixed shared path → `delete` **not** called; already-committed sibling ledger untouched (no `commit_statement_batch`).
 
-- [ ] Task 2: Discard file always releases PDF (AC: #2, #3)
-  - [ ] 2.1 Today `DiscardImportSessionService` + `_release_source_pdf_if_idle` **keeps** the file while statements remain `staged`/`failed` (`test_discard_own_session_sets_discarded_at_and_keeps_pdf_while_staged`). That contradicts dismiss-file + AD-3 once the session is abandoned. **Change:** after `discard_session`, always delete remaining paths for that session and clear path refs (even if statuses are still staged/failed). Committed ledger rows stay (existing AD-4). PDF GET already 404s discarded sessions — bytes must not linger.
-  - [ ] 2.2 Flip the application test in 2.1 to expect `storage.deleted` non-empty (or paths cleared). Keep “foreign user 404” and “committed ledger survives discard after partial assign” (`test_dismiss_after_partial_row_commit_leaves_committed_ledger_untouched`).
-  - [ ] 2.3 No new HTTP verb required for file dismiss if UI calls existing `DELETE /import/sessions/{id}`. Confirm BFF already forwards it.
+- [x] Task 2: Discard file always releases PDF (AC: #2, #3)
+  - [x] 2.1 Today `DiscardImportSessionService` + `_release_source_pdf_if_idle` **keeps** the file while statements remain `staged`/`failed` (`test_discard_own_session_sets_discarded_at_and_keeps_pdf_while_staged`). That contradicts dismiss-file + AD-3 once the session is abandoned. **Change:** after `discard_session`, always delete remaining paths for that session and clear path refs (even if statuses are still staged/failed). Committed ledger rows stay (existing AD-4). PDF GET already 404s discarded sessions — bytes must not linger.
+  - [x] 2.2 Flip the application test in 2.1 to expect `storage.deleted` non-empty (or paths cleared). Keep “foreign user 404” and “committed ledger survives discard after partial assign” (`test_dismiss_after_partial_row_commit_leaves_committed_ledger_untouched`).
+  - [x] 2.3 No new HTTP verb required for file dismiss if UI calls existing `DELETE /import/sessions/{id}`. Confirm BFF already forwards it.
 
-- [ ] Task 3: HTTP + BFF + client (AC: #1)
-  - [ ] 3.1 FastAPI: `POST /import/sessions/{session_id}/statements/{statement_id}/dismiss` → `ImportSessionResponse` (same mapper as GET session). Cookie auth. `response_model` consistent with other mutation routes.
-  - [ ] 3.2 BFF: `ui/app/api/import/sessions/[sessionId]/statements/[statementId]/dismiss/route.ts` — cookie-forward, JSON, 502 on upstream down (copy GET session / PDF route style).
-  - [ ] 3.3 `dismissFailedStatement(sessionId, statementId, messages)` in `uploadClient.ts` + tests for 200 / 409 discarded / 409 not-failed / 401.
+- [x] Task 3: HTTP + BFF + client (AC: #1)
+  - [x] 3.1 FastAPI: `POST /import/sessions/{session_id}/statements/{statement_id}/dismiss` → `ImportSessionResponse` (same mapper as GET session). Cookie auth. `response_model` consistent with other mutation routes.
+  - [x] 3.2 BFF: `ui/app/api/import/sessions/[sessionId]/statements/[statementId]/dismiss/route.ts` — cookie-forward, JSON, 502 on upstream down (copy GET session / PDF route style).
+  - [x] 3.3 `dismissFailedStatement(sessionId, statementId, messages)` in `uploadClient.ts` + tests for 200 / 409 discarded / 409 not-failed / 401.
 
-- [ ] Task 4: Comparison UI (AC: #1, #2, #4)
-  - [ ] 4.1 `ParseComparisonPanel`: add **Dismiss statement** and **Dismiss file** (not pill CTAs; secondary/outline for statement, destructive-or-confirm for file). Keep **Continue**. Do not put `@use-gesture` on this surface. Keyboard/click only (UX-DR19).
-  - [ ] 4.2 Dismiss file: reuse `DiscardConfirmDialog` + existing discard confirm copy (`discardConfirmTitle` / `Body` / `Action`) — same semantics as session discard (assigned rows stay). After success, parent navigates off review (same as `SessionReviewPanel` `onDiscarded` → upload home).
-  - [ ] 4.3 Dismiss statement: POST dismiss, then **refetch** session (or use returned DTO) so `nextReviewStep` / `nextUnacknowledgedFailedStatement` see `skipped` — do not only add the id to `acknowledgedFailedIds` (reload would show comparison again).
-  - [ ] 4.4 After last failed is dismissed and pending rows remain: Individual → next row; Bulk → list picker. After last failed and **no** pending rows: existing sheet/finalize path (`classifyActiveImportSession` already treats `pendingSum === 0` as `sheet-waiting`). Do not remount comparison.
-  - [ ] 4.5 Wire `onDismissStatement` / `onDismissFile` from `IndividualReviewPanel` and `BulkReviewPanel` (both already mount `ParseComparisonPanel`).
-  - [ ] 4.6 i18n keys on both `en` and `es` (e.g. `parseFailureDismissStatement`, `parseFailureDismissFile`, error for not-failed). If `upload.ts` has a key-list test, extend it.
-  - [ ] 4.7 Tests (jsdom, test-after): dismiss statement calls POST not DELETE session; dismiss file uses discard + confirm; Continue still does not call APIs; after statement dismiss parent refetch mock shows skipped and next step is row/sheet; EN/ES keys present.
+- [x] Task 4: Comparison UI (AC: #1, #2, #4)
+  - [x] 4.1 `ParseComparisonPanel`: add **Dismiss statement** and **Dismiss file** (not pill CTAs; secondary/outline for statement, destructive-or-confirm for file). Keep **Continue**. Do not put `@use-gesture` on this surface. Keyboard/click only (UX-DR19).
+  - [x] 4.2 Dismiss file: reuse `DiscardConfirmDialog` + existing discard confirm copy (`discardConfirmTitle` / `Body` / `Action`) — same semantics as session discard (assigned rows stay). After success, parent navigates off review (same as `SessionReviewPanel` `onDiscarded` → upload home).
+  - [x] 4.3 Dismiss statement: POST dismiss, then **refetch** session (or use returned DTO) so `nextReviewStep` / `nextUnacknowledgedFailedStatement` see `skipped` — do not only add the id to `acknowledgedFailedIds` (reload would show comparison again).
+  - [x] 4.4 After last failed is dismissed and pending rows remain: Individual → next row; Bulk → list picker. After last failed and **no** pending rows: existing sheet/finalize path (`classifyActiveImportSession` already treats `pendingSum === 0` as `sheet-waiting`). Do not remount comparison.
+  - [x] 4.5 Wire `onDismissStatement` / `onDismissFile` from `IndividualReviewPanel` and `BulkReviewPanel` (both already mount `ParseComparisonPanel`).
+  - [x] 4.6 i18n keys on both `en` and `es` (e.g. `parseFailureDismissStatement`, `parseFailureDismissFile`, error for not-failed). If `upload.ts` has a key-list test, extend it.
+  - [x] 4.7 Tests (jsdom, test-after): dismiss statement calls POST not DELETE session; dismiss file uses discard + confirm; Continue still does not call APIs; after statement dismiss parent refetch mock shows skipped and next step is row/sheet; EN/ES keys present.
 
-- [ ] Task 5: Integration (Postgres 16)
-  - [ ] 5.1 Upload mixed parse-failure fixture from 5.1 (`promerica_stub_parse_failure_mixed.pdf` or equivalent): dismiss failed statement → GET session `status=skipped`, sibling still `staged`, ledger empty for dismissed; PDF GET 404 for dismissed statement; sibling PDF GET still 200 if still staged.
-  - [ ] 5.2 Failed-only (or last failed) dismiss → PDF GET 404; volume delete observed via storage fake or path null on all statements when idle.
-  - [ ] 5.3 Dismiss file with mixed session → `discarded_at` set, PDF GET 404, pending rows gone from review (session discarded), previously committed rows if any remain.
+- [x] Task 5: Integration (Postgres 16)
+  - [x] 5.1 Upload mixed parse-failure fixture from 5.1 (`promerica_stub_parse_failure_mixed.pdf` or equivalent): dismiss failed statement → GET session `status=skipped`, sibling still `staged`, ledger empty for dismissed; PDF GET 404 for dismissed statement; sibling PDF GET still 200 if still staged.
+  - [x] 5.2 Failed-only (or last failed) dismiss → PDF GET 404; volume delete observed via storage fake or path null on all statements when idle.
+  - [x] 5.3 Dismiss file with mixed session → `discarded_at` set, PDF GET 404, pending rows gone from review (session discarded), previously committed rows if any remain.
 
-- [ ] Task 6: Story-close overview
-  - [ ] 6.1 Fill Completion Notes using `_bmad-output/implementation-artifacts/story-close-overview-checklist.md`.
-  - [ ] 6.2 Sync story Status with `sprint-status.yaml` at close (Epic 3.5 retro action). Include Review Findings (or explicit zero-findings) when review runs.
+- [x] Task 6: Story-close overview
+  - [x] 6.1 Fill Completion Notes using `_bmad-output/implementation-artifacts/story-close-overview-checklist.md`.
+  - [x] 6.2 Sync story Status with `sprint-status.yaml` at close (Epic 3.5 retro action). Include Review Findings (or explicit zero-findings) when review runs.
 
 ### Review Findings
 
@@ -173,12 +173,56 @@ Follow `_bmad-output/project-context.md`: Decimal/string money, i18n objects not
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Cursor Grok 4.6
 
 ### Debug Log References
 
+- Host `uv run pytest` (no `DATABASE_URL`): 536 passed, 197 skipped — Postgres integration tests including Task 5 are skipped until Compose/`DATABASE_URL`.
+- Docker socket was not available in this agent environment; run `docker compose -f docker-compose.yml -f docker-compose.test.yml -f docker-compose.worktree.yml run --rm api pytest tests/test_import_sessions_integration.py -k dismiss` locally.
+- UI: `npm test` 496 passed; `tsc --noEmit` clean; eslint 0 errors.
+
 ### Completion Notes List
 
-Ultimate context engine analysis completed - comprehensive developer guide created
+## Story-close overview — 5.2 dismiss-failed-statement-or-file
+
+**Request path:**
+Dismiss statement: comparison UI → `dismissFailedStatement` → BFF `POST /api/import/sessions/{id}/statements/{id}/dismiss` → FastAPI same path → `DismissFailedStatementService` → skip status + refcounted `PdfStorage.delete`. Dismiss file: confirm dialog → existing `DELETE /import/sessions/{id}` → `DiscardImportSessionService` now always `_release_all_session_pdfs`. Cookie auth only.
+
+**Key components:**
+`DismissFailedStatementService`, `next_status_after_dismiss_failed` / `retained_source_pdf_paths`, repo `set_statement_status` + `clear_statement_pdf_path`, `ParseComparisonPanel` dismiss actions + `DiscardConfirmDialog`, EN/ES keys on `uploadMessages`.
+
+**Why this shape:**
+AD-3: one shared upload path for split chunks — bytes stay while any sibling is `staged`/`failed`. Abandoned session (dismiss file) must not leave PDFs. Existing `skipped` status avoids a migration. Continue stays visit-local; skip is the durable exit.
+
+**What not to break:**
+Do not delete a shared PDF while a sibling is still `staged` or `failed`. Do not unwind committed batches on session discard. Failed dismiss must not create candidate rows. Continue must not call APIs. Foreign session/statement stays 404, not 403.
+
+Conflict code for non-failed dismiss: `import_statement_not_failed` (409).
 
 ### File List
+
+- api/domain/errors.py
+- api/domain/import_session.py
+- api/application/import_session.py
+- api/adapters/persistence/import_sessions.py
+- api/api/routes/import_sessions.py
+- api/tests/test_import_session_domain.py
+- api/tests/test_import_session_application.py
+- api/tests/test_import_sessions_integration.py
+- ui/app/api/import/sessions/[sessionId]/statements/[statementId]/dismiss/route.ts
+- ui/app/api/cards-import.bff.test.ts
+- ui/app/upload/uploadClient.ts
+- ui/app/upload/uploadClient.test.ts
+- ui/app/upload/ParseComparisonPanel.tsx
+- ui/app/upload/ParseComparisonPanel.test.tsx
+- ui/app/upload/review/[sessionId]/IndividualReviewPanel.tsx
+- ui/app/upload/review/[sessionId]/IndividualReviewPanel.test.tsx
+- ui/app/upload/bulk/[sessionId]/BulkReviewPanel.tsx
+- ui/app/upload/bulk/[sessionId]/BulkReviewPanel.test.tsx
+- ui/lib/i18n/upload.ts
+- _bmad-output/implementation-artifacts/5-2-dismiss-failed-statement-or-file.md
+- _bmad-output/implementation-artifacts/sprint-status.yaml
+
+### Change Log
+
+- 2026-08-26: Implemented dismiss failed statement (`skipped` + PDF refcount) and session discard always releases PDFs; comparison UI dismiss statement/file; status → review.
