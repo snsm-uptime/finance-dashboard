@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useId, useMemo, useState } from "react";
+import { FormEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { useFormSubmission, useFormStateSync } from "@/hooks";
@@ -11,6 +11,7 @@ import { TriSwitch } from "@/components/TriSwitch";
 
 import { fetchCards, type CardItem } from "../cards/cardsClient";
 import { PercentageSplitTrack } from "./PercentageSplitTrack";
+import { useOptionalListDefaultSplit } from "./ListDefaultSplitContext";
 import {
   createExpense,
   memberLabel,
@@ -123,6 +124,8 @@ export function ManualExpenseForm({
   onCanSubmitChange,
 }: Props) {
   const router = useRouter();
+  const liveSplit = useOptionalListDefaultSplit();
+  const effectiveSplit = liveSplit ? liveSplit.defaultSplit : defaultSplit;
   const baseId = useId();
   const formId = `${baseId}-form`;
   const errorId = `${baseId}-error`;
@@ -142,8 +145,20 @@ export function ManualExpenseForm({
     emptyMemberMap(members),
   );
   const [percentages, setPercentages] = useState<Record<string, string>>(() =>
-    percentMapFromDefault(members, defaultSplit),
+    percentMapFromDefault(members, effectiveSplit),
   );
+
+  const previousSplitRef = useRef(effectiveSplit);
+  useEffect(() => {
+    const previous = previousSplitRef.current;
+    previousSplitRef.current = effectiveSplit;
+    const oldBaseline = percentMapFromDefault(members, previous);
+    const newBaseline = percentMapFromDefault(members, effectiveSplit);
+    if (percentMapsEqual(oldBaseline, newBaseline)) return;
+    setPercentages((current) =>
+      percentMapsEqual(current, oldBaseline) ? newBaseline : current,
+    );
+  }, [effectiveSplit, members]);
 
   // SoftLedgerSelect no longer falls back to the first option for an
   // unmatched value (it renders unselected instead) — derive a
@@ -181,7 +196,7 @@ export function ManualExpenseForm({
     setMode("percentage");
     setAssigneeId(currentUserId);
     setAbsoluteAmounts(emptyMemberMap(members));
-    setPercentages(percentMapFromDefault(members, defaultSplit));
+    setPercentages(percentMapFromDefault(members, effectiveSplit));
   }
 
   function buildSplitOverride():
@@ -197,7 +212,7 @@ export function ManualExpenseForm({
       }
       return { ok: true, value: { kind: "absolute_amounts", amounts } };
     }
-    const baseline = percentMapFromDefault(members, defaultSplit);
+    const baseline = percentMapFromDefault(members, effectiveSplit);
     if (percentMapsEqual(percentages, baseline)) {
       return { ok: true, value: undefined };
     }
@@ -365,7 +380,7 @@ export function ManualExpenseForm({
               setMode(next);
               clearError();
               if (next === "percentage") {
-                setPercentages(percentMapFromDefault(members, defaultSplit));
+                setPercentages(percentMapFromDefault(members, effectiveSplit));
               }
             }}
             options={[
@@ -406,6 +421,7 @@ export function ManualExpenseForm({
           {mode === "percentage" ? (
             <PercentageSplitTrack
               userIds={members.map((m) => m.user_id)}
+              currentUserId={currentUserId}
               members={members}
               percents={percentages}
               onChangePercents={setPercentages}

@@ -16,6 +16,7 @@ type FormKind = "expense" | "invite" | "split" | null;
 
 type Props = {
   listId: string;
+  currentUserId: string;
   members: ListMember[];
   isOwner: boolean;
   defaultSplit: DefaultSplitPayload | null;
@@ -52,6 +53,7 @@ function FormWrapper({ title, onClose, cornerAction, children }: FormWrapperProp
 
 export function TemporalNavigation({
   listId,
+  currentUserId,
   members,
   isOwner,
   defaultSplit,
@@ -114,6 +116,7 @@ export function TemporalNavigation({
         >
           <DefaultSplitPanel
             listId={listId}
+            currentUserId={currentUserId}
             isOwner={isOwner}
             initial={defaultSplit}
             members={members}

@@ -169,6 +169,7 @@ export function ListDetailMobileActions({
           body={
             <DefaultSplitPanel
               listId={listId}
+              currentUserId={currentUserId}
               isOwner={isOwner}
               initial={defaultSplit}
               members={members}

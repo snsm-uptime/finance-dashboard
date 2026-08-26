@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 
+import { orderPercentageSplitUserIds } from "./orderPercentageSplitUserIds";
 import styles from "./PercentageSplitTrack.module.scss";
 
 export type PercentageSplitMember = {
@@ -11,6 +12,7 @@ export type PercentageSplitMember = {
 
 type Props = {
   userIds: string[];
+  currentUserId: string;
   members: PercentageSplitMember[];
   percents: Record<string, string>;
   onChangePercents: (newPercents: Record<string, string>) => void;
@@ -23,11 +25,16 @@ type Props = {
  */
 export function PercentageSplitTrack({
   userIds,
+  currentUserId,
   members,
   percents,
   onChangePercents,
   disabled = false,
 }: Props) {
+  const orderedUserIds = useMemo(
+    () => orderPercentageSplitUserIds(userIds, currentUserId),
+    [userIds, currentUserId],
+  );
   const memberMap = useMemo(() => {
     const map = new Map<string, string>();
     for (const member of members) {
@@ -39,10 +46,10 @@ export function PercentageSplitTrack({
   const [draggedHandleIndex, setDraggedHandleIndex] = useState<number | null>(null);
   const [tooltipX, setTooltipX] = useState(0);
 
-  const handleCount = userIds.length - 1;
+  const handleCount = orderedUserIds.length - 1;
   const percentValues = useMemo(() => {
-    return userIds.map((id) => Number(percents[id]) || 0);
-  }, [userIds, percents]);
+    return orderedUserIds.map((id) => Number(percents[id]) || 0);
+  }, [orderedUserIds, percents]);
 
   const handleMouseDown = (index: number) => (e: React.MouseEvent) => {
     if (disabled) return;
@@ -80,7 +87,7 @@ export function PercentageSplitTrack({
     newValues[handleIndex + 1] = maxPos - clampedPos;
 
     const updated: Record<string, string> = {};
-    userIds.forEach((id, i) => {
+    orderedUserIds.forEach((id, i) => {
       updated[id] = String(Math.max(0, Math.round(newValues[i])));
     });
 
@@ -159,7 +166,7 @@ export function PercentageSplitTrack({
     updateHandlePosition(closestHandleIndex, Math.round(clickPercent));
   };
 
-  if (userIds.length < 2) return null;
+  if (orderedUserIds.length < 2) return null;
 
   return (
     <div className={styles.sliderContainer}>
@@ -176,7 +183,7 @@ export function PercentageSplitTrack({
         aria-label="Percentage split slider"
         aria-disabled={disabled || undefined}
       >
-        {userIds.map((userId, i) => (
+        {orderedUserIds.map((userId, i) => (
           <div
             key={userId}
             className={styles.sliderSegment}
@@ -205,7 +212,7 @@ export function PercentageSplitTrack({
               onTouchStart={handleTouchStart(i)}
               onKeyDown={handleKeyDown(i)}
               role="slider"
-              aria-label={`${memberMap.get(userIds[i]) || userIds[i]} percentage`}
+              aria-label={`${memberMap.get(orderedUserIds[i]) || orderedUserIds[i]} percentage`}
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={Math.round(percentValues[i])}
@@ -223,17 +230,19 @@ export function PercentageSplitTrack({
               left: `${tooltipX}%`,
             }}
           >
-            {memberMap.get(userIds[draggedHandleIndex]) || userIds[draggedHandleIndex]}:{" "}
+            {memberMap.get(orderedUserIds[draggedHandleIndex]) ||
+              orderedUserIds[draggedHandleIndex]}
+            :{" "}
             {Math.round(percentValues[draggedHandleIndex])}% |{" "}
-            {memberMap.get(userIds[draggedHandleIndex + 1]) ||
-              userIds[draggedHandleIndex + 1]}
+            {memberMap.get(orderedUserIds[draggedHandleIndex + 1]) ||
+              orderedUserIds[draggedHandleIndex + 1]}
             : {Math.round(percentValues[draggedHandleIndex + 1])}%
           </div>
         ) : null}
       </div>
 
       <div className={styles.sliderLabels}>
-        {userIds.map((userId) => (
+        {orderedUserIds.map((userId) => (
           <div key={`label-${userId}`} className={styles.sliderLabel}>
             {memberMap.get(userId) || userId.slice(0, 8)}
           </div>

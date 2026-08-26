@@ -7,6 +7,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { listsMessages } from "@/lib/i18n/lists";
 
 import { ManualExpenseForm } from "./ManualExpenseForm";
+import {
+  ListDefaultSplitProvider,
+  useOptionalListDefaultSplit,
+} from "./ListDefaultSplitContext";
+import type { DefaultSplitPayload } from "./listsClient";
 
 vi.mock("./ManualExpenseForm.module.scss", () => ({
   default: new Proxy(
@@ -235,6 +240,125 @@ describe("ManualExpenseForm", () => {
       );
     });
 
+    expect(container.textContent).toContain("70%");
+    expect(container.textContent).toContain("30%");
+  });
+
+  it("puts the current user leftmost on the percentage track even when members list them last", async () => {
+    await act(async () => {
+      root.render(
+        <ManualExpenseForm
+          listId="list-1"
+          currentUserId="user-b"
+          members={members}
+          messages={messages}
+        />,
+      );
+    });
+
+    const firstHandle = container.querySelector('[role="slider"]');
+    expect(firstHandle?.getAttribute("aria-label")).toBe("bob percentage");
+  });
+
+  it("live-updates percentages when the list default split changes and the form still matches the old default", async () => {
+    const evenSplit = {
+      list_id: "list-1",
+      owner_id: "user-a",
+      mode: "even" as const,
+      member_ids: ["user-a", "user-b"],
+      shares: [
+        { user_id: "user-a", percentage: "50" },
+        { user_id: "user-b", percentage: "50" },
+      ],
+    };
+    const customSplit = {
+      ...evenSplit,
+      mode: "percentage" as const,
+      shares: [
+        { user_id: "user-a", percentage: "70" },
+        { user_id: "user-b", percentage: "30" },
+      ],
+    };
+
+    await act(async () => {
+      root.render(
+        <ManualExpenseForm
+          listId="list-1"
+          currentUserId="user-a"
+          members={members}
+          defaultSplit={evenSplit}
+          messages={messages}
+        />,
+      );
+    });
+    expect(container.textContent).toContain("50%");
+
+    await act(async () => {
+      root.render(
+        <ManualExpenseForm
+          listId="list-1"
+          currentUserId="user-a"
+          members={members}
+          defaultSplit={customSplit}
+          messages={messages}
+        />,
+      );
+    });
+    expect(container.textContent).toContain("70%");
+    expect(container.textContent).toContain("30%");
+  });
+
+  it("live-updates percentages when the saved default split is published on the list context", async () => {
+    const evenSplit: DefaultSplitPayload = {
+      list_id: "list-1",
+      owner_id: "user-a",
+      mode: "even",
+      member_ids: ["user-a", "user-b"],
+      shares: [
+        { user_id: "user-a", percentage: "50" },
+        { user_id: "user-b", percentage: "50" },
+      ],
+    };
+    const customSplit: DefaultSplitPayload = {
+      ...evenSplit,
+      mode: "percentage",
+      shares: [
+        { user_id: "user-a", percentage: "70" },
+        { user_id: "user-b", percentage: "30" },
+      ],
+    };
+
+    function PublishSplit() {
+      const live = useOptionalListDefaultSplit();
+      return (
+        <button type="button" onClick={() => live?.setDefaultSplit(customSplit)}>
+          publish-split
+        </button>
+      );
+    }
+
+    await act(async () => {
+      root.render(
+        <ListDefaultSplitProvider initial={evenSplit}>
+          <PublishSplit />
+          <ManualExpenseForm
+            listId="list-1"
+            currentUserId="user-a"
+            members={members}
+            defaultSplit={evenSplit}
+            messages={messages}
+          />
+        </ListDefaultSplitProvider>,
+      );
+    });
+    expect(container.textContent).toContain("50%");
+
+    await act(async () => {
+      const publish = [...container.querySelectorAll("button")].find(
+        (el) => el.textContent === "publish-split",
+      );
+      publish?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
     expect(container.textContent).toContain("70%");
     expect(container.textContent).toContain("30%");
   });

@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { useFormSubmission, useFormStateSync } from "@/hooks";
 import { SoftLedgerRadio } from "@/components/soft-ledger/Radio";
 
 import { PercentageSplitTrack } from "./PercentageSplitTrack";
+import { useOptionalListDefaultSplit } from "./ListDefaultSplitContext";
 import {
   fetchDefaultSplit,
   saveDefaultSplit,
@@ -32,6 +34,7 @@ type ListMember = {
 
 type Props = {
   listId: string;
+  currentUserId: string;
   isOwner: boolean;
   initial: DefaultSplitPayload;
   members: ListMember[];
@@ -81,7 +84,9 @@ function hasChanges(current: Record<string, string>, saved: Record<string, strin
   return false;
 }
 
-export function DefaultSplitPanel({ listId, isOwner, initial, members, messages, onSuccess, onSaveRequest, onCanSaveChange }: Props) {
+export function DefaultSplitPanel({ listId, currentUserId, isOwner, initial, members, messages, onSuccess, onSaveRequest, onCanSaveChange }: Props) {
+  const router = useRouter();
+  const liveSplit = useOptionalListDefaultSplit();
   const [mode, setMode] = useState<"even" | "percentage">(initial.mode);
   const [savedMode, setSavedMode] = useState<"even" | "percentage">(initial.mode);
   const initialPercents = useMemo(() => getInitialSavedPercents(initial), [initial]);
@@ -109,6 +114,8 @@ export function DefaultSplitPanel({ listId, isOwner, initial, members, messages,
         }
         setPercents(next);
         setSavedPercents(next);
+        liveSplit?.setDefaultSplit(result.split);
+        router.refresh();
       }
       return result;
     },
@@ -215,6 +222,7 @@ export function DefaultSplitPanel({ listId, isOwner, initial, members, messages,
         <>
           <PercentageSplitTrack
             userIds={userIds}
+            currentUserId={currentUserId}
             members={members}
             percents={percents}
             onChangePercents={setPercents}

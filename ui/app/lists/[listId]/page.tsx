@@ -14,6 +14,7 @@ import type { Locale } from "@/lib/i18n/locale";
 import { fetchSession } from "@/lib/session";
 import { ListDetailChrome } from "../ListDetailChrome";
 import { ListDetailMobileActions } from "../ListDetailMobileActions";
+import { ListDefaultSplitProvider } from "../ListDefaultSplitContext";
 import { ManualExpenseForm } from "../ManualExpenseForm";
 import { OriginChipPicker } from "../OriginChipPicker";
 import { TemporalNavigation } from "../TemporalNavigation";
@@ -505,6 +506,7 @@ export default async function ListDetailPage({
             </p>
           </>
         ) : (
+          <ListDefaultSplitProvider initial={defaultSplit}>
           <div className={styles.detailLayout}>
             <ListDetailChrome title={listTitle as string} />
             <div className={styles.detailPrimary}>
@@ -667,6 +669,7 @@ export default async function ListDetailPage({
                 <div>
                   <TemporalNavigation
                     listId={listId}
+                    currentUserId={session.user_id}
                     members={members}
                     isOwner={isOwner}
                     defaultSplit={defaultSplit}
@@ -741,6 +744,7 @@ export default async function ListDetailPage({
               ) : null}
             </aside>
           </div>
+          </ListDefaultSplitProvider>
         )}
       </div>
     </main>
