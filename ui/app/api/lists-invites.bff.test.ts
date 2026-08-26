@@ -251,4 +251,26 @@ describe("lists / invites BFF smoke (coverage floor)", () => {
     );
     expect(failedDelete.status).toBe(502);
   });
+
+  it("POST statement reassign forwards cookie and body", async () => {
+    const { POST } = await import(
+      "@/app/api/lists/[listId]/statements/[statementId]/reassign/route"
+    );
+    const response = await POST(
+      new Request("http://localhost/api/lists/l1/statements/s1/reassign", {
+        method: "POST",
+        headers: {
+          cookie: "fh_session=tok",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ destination_list_id: "l2" }),
+      }) as never,
+      { params: Promise.resolve({ listId: "l1", statementId: "s1" }) },
+    );
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test:8000/lists/l1/statements/s1/reassign",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
 });

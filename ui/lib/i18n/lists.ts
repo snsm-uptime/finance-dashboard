@@ -89,6 +89,12 @@ export const listsMessages = {
     receiptEdit: "Edit",
     receiptDelete: "Delete",
     receiptNewBadge: "New",
+    receiptMoveStatement: "Move statement to another list",
+    receiptMoveConfirm:
+      "Shares will follow the destination list’s default split unless this statement’s items already have their own split.",
+    receiptMovePickerTitle: "Move to another list",
+    receiptMoveConfirmAction: "Move statement",
+    receiptMoveCancel: "Cancel",
   },
   es: {
     title: "Inicio",
@@ -179,6 +185,12 @@ export const listsMessages = {
     receiptEdit: "Editar",
     receiptDelete: "Eliminar",
     receiptNewBadge: "Nuevo",
+    receiptMoveStatement: "Mover el estado de cuenta a otra lista",
+    receiptMoveConfirm:
+      "Las participaciones seguirán la división predeterminada de la lista de destino, salvo que los ítems de este estado de cuenta ya tengan su propia división.",
+    receiptMovePickerTitle: "Mover a otra lista",
+    receiptMoveConfirmAction: "Mover estado de cuenta",
+    receiptMoveCancel: "Cancelar",
   },
 } as const;
 

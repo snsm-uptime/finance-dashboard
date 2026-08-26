@@ -365,9 +365,10 @@ class ImportSessionRepository(Protocol):
         (Story 4.12, AC #3).
 
         Scoped to the destination list, not global: a duplicate in list A
-        cannot corrupt list B's balance, and re-import is currently the only
-        informal way to repair a misrouted statement (no reassign, no batch
-        rollback yet). Revisit after Stories 5.5 / 5.6.
+        cannot corrupt list B's balance. Misrouted committed statements are
+        repaired by Story 5.3 reassignment (in-place `list_id` move, same
+        `batch_id`). Batch rollback remains Story 5.4. Revisit identity
+        collisions after Stories 5.5 / 5.6.
         """
         ...
 

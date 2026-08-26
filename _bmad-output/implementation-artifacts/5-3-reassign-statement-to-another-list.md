@@ -1,6 +1,10 @@
+---
+baseline_commit: 0d2972e02b2b826b6aa3e6795a0d8db9a985e30b
+---
+
 # Story 5.3: Reassign statement to another list
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -39,42 +43,42 @@ so that balances on both lists stay correct after the mistake.
 
 ## Tasks / Subtasks
 
-- [ ] Task 0: Branch + reads
-  - [ ] 0.1 Branch: `feat/5/5-3-reassign-statement-to-another-list` from current `main` (one story per branch).
-  - [ ] 0.2 Read this file, `_bmad-output/project-context.md`, AD-4 / AD-19 / AD-21 in `ARCHITECTURE-SPINE.md`, `api/domain/list_access.py`, `api/application/list_access.py`, `api/application/import_session.py` (`commit_statement_batch` / `find_existing_identities` comment), `api/adapters/persistence/import_sessions.py` (`_insert_ledger_entries`), `api/application/expenses.py` + `api/domain/settle.py`, `ui/app/lists/[listId]/page.tsx`, `ReceiptRowMenu.tsx`, membership sketch.
+- [x] Task 0: Branch + reads
+  - [x] 0.1 Branch: `feat/5/5-3-reassign-statement-to-another-list` from current `main` (one story per branch).
+  - [x] 0.2 Read this file, `_bmad-output/project-context.md`, AD-4 / AD-19 / AD-21 in `ARCHITECTURE-SPINE.md`, `api/domain/list_access.py`, `api/application/list_access.py`, `api/application/import_session.py` (`commit_statement_batch` / `find_existing_identities` comment), `api/adapters/persistence/import_sessions.py` (`_insert_ledger_entries`), `api/application/expenses.py` + `api/domain/settle.py`, `ui/app/lists/[listId]/page.tsx`, `ReceiptRowMenu.tsx`, membership sketch.
 
-- [ ] Task 1: Domain + application reassign (AC: #1, #2, #3)
-  - [ ] 1.1 Add a frozen command + service in `api/application/` (e.g. `reassign_statement.py`). **Do not** put FastAPI/SQLAlchemy in `api/domain/`. Identify the statement by UUID (`import_statements.id`). Load all ledger entries whose `import_batch_id` → `import_batches.statement_id == statement_id` (or join candidate_row → statement). Empty set → domain error mapped to 404 (no committed rows / unknown statement).
-  - [ ] 1.2 **Move set:** only rows that **have** a ledger entry. Ignore `dedup_skipped` and `deleted` candidates. If the statement’s committed rows currently sit on **multiple** lists (row-level review to different lists — AD-4), **still move all of them to B** (epic AC: “every ledger row originating from that statement”). Fail the whole transaction if the actor is not a member of **B** or of **any current `list_id` of a row being moved** (no partial move).
-  - [ ] 1.3 **ACL:** `AuthorizeListAccessService` twice — source list(s) with `write_ledger` (or a new alias `reassign_statement` → `write_ledger` in `api/domain/list_access.py`) and destination with `import_to_list`. Unknown action must stay fail-closed. Update `_bmad-output/planning-artifacts/architecture/architecture-finance-helper-2026-08-03/membership-acl-enforcement-sketch.md` action matrix + caller map in the **same PR**.
-  - [ ] 1.4 **Same-list no-op:** dest == current unique list → 200, no writes.
-  - [ ] 1.5 **Atomic UPDATE** in one transaction:
+- [x] Task 1: Domain + application reassign (AC: #1, #2, #3)
+  - [x] 1.1 Add a frozen command + service in `api/application/` (e.g. `reassign_statement.py`). **Do not** put FastAPI/SQLAlchemy in `api/domain/`. Identify the statement by UUID (`import_statements.id`). Load all ledger entries whose `import_batch_id` → `import_batches.statement_id == statement_id` (or join candidate_row → statement). Empty set → domain error mapped to 404 (no committed rows / unknown statement).
+  - [x] 1.2 **Move set:** only rows that **have** a ledger entry. Ignore `dedup_skipped` and `deleted` candidates. If the statement’s committed rows currently sit on **multiple** lists (row-level review to different lists — AD-4), **still move all of them to B** (epic AC: “every ledger row originating from that statement”). Fail the whole transaction if the actor is not a member of **B** or of **any current `list_id` of a row being moved** (no partial move).
+  - [x] 1.3 **ACL:** `AuthorizeListAccessService` twice — source list(s) with `write_ledger` (or a new alias `reassign_statement` → `write_ledger` in `api/domain/list_access.py`) and destination with `import_to_list`. Unknown action must stay fail-closed. Update `_bmad-output/planning-artifacts/architecture/architecture-finance-helper-2026-08-03/membership-acl-enforcement-sketch.md` action matrix + caller map in the **same PR**.
+  - [x] 1.4 **Same-list no-op:** dest == current unique list → 200, no writes.
+  - [x] 1.5 **Atomic UPDATE** in one transaction:
     - `ledger_entries.list_id` → B
     - `import_batches.list_id` → B for every batch of that statement that still has ledger rows (do **not** change `import_batches.id`)
     - `import_candidate_rows.resolved_list_id` → B for those committed (non-skipped) rows
     - `receipts.list_id` if any moved entry has `receipt_id`
     - `split_overrides.list_id` for subjects (`item`/`receipt`) tied to moved entries/receipts — **keep override payload** (FR-29 item-override continuity)
-  - [ ] 1.6 **Do not** change `import_batch_id`, `import_candidate_row_id`, `import_identity`, amounts, FX columns, payer, origin, or card FKs.
-  - [ ] 1.7 **Payer:** imported rows use the committing actor as payer. Dest membership of the actor is required; do not rewrite `payer_id`. If an **item override** names a user who is not a member of B, settle/list-expenses already fail loud (`parse_split_spec` / `InvalidSplitOverrideError`) — do not silently drop the override; return 409 with a stable `code` rather than 500.
-  - [ ] 1.8 Unit tests (domain/application fakes, TDD): all rows+batches move; `batch_id` unchanged; dest non-member denied; source non-member denied; multi-list gather onto B; no-op same list; no ledger → not found; FX fields unchanged; override `list_id` follows; skip deleted/dedup_skipped.
+  - [x] 1.6 **Do not** change `import_batch_id`, `import_candidate_row_id`, `import_identity`, amounts, FX columns, payer, origin, or card FKs.
+  - [x] 1.7 **Payer:** imported rows use the committing actor as payer. Dest membership of the actor is required; do not rewrite `payer_id`. If an **item override** names a user who is not a member of B, settle/list-expenses already fail loud (`parse_split_spec` / `InvalidSplitOverrideError`) — do not silently drop the override; return 409 with a stable `code` rather than 500.
+  - [x] 1.8 Unit tests (domain/application fakes, TDD): all rows+batches move; `batch_id` unchanged; dest non-member denied; source non-member denied; multi-list gather onto B; no-op same list; no ledger → not found; FX fields unchanged; override `list_id` follows; skip deleted/dedup_skipped.
 
-- [ ] Task 2: HTTP + BFF (AC: #1, #3)
-  - [ ] 2.1 FastAPI mutation, cookie session like other list writes. Recommended: `POST /lists/{list_id}/statements/{statement_id}/reassign` with body `{ "destination_list_id": "<uuid>" }` where `list_id` is the list the actor is viewing (must be one of the current homes of the statement’s ledger rows). Response: moved `ledger_entry_ids`, `batch_ids`, `from_list_ids`, `destination_list_id` — money as **strings** if any amounts appear (prefer ids-only).
-  - [ ] 2.2 Map errors like `lists.py`: unauthenticated 401; dest/source `NotListMemberError` → 403 `{ "code": "not_list_member" }` (generic, no list existence leak on dest if you only checked dest — still 403 for mutations per sketch); unknown statement / no committed rows → 404; override/membership conflict → 409 with `code`.
-  - [ ] 2.3 Expose `import_batch_id` and `statement_id` (nullable) on `GET /lists/{id}/expenses` / `ExpenseItemResponse` so the UI can offer reassign **only** on import-sourced rows. Hand expenses stay `null`. Wire through `ListedExpense` / persistence select — do not make the UI guess from description.
-  - [ ] 2.4 BFF: `ui/app/api/lists/[listId]/statements/[statementId]/reassign/route.ts` — cookie-forward, same pattern as `expenses/route.ts`. Add a focused BFF test next to `lists-invites.bff.test.ts` (or existing lists BFF file).
-  - [ ] 2.5 Integration (Postgres 16): two lists, shared member, bulk or assign-commit fixture rows, POST reassign, assert ledger+batch `list_id`, GET expenses/balances on A and B, stranger 403, non-member dest 403. Decimal asserts, no float.
+- [x] Task 2: HTTP + BFF (AC: #1, #3)
+  - [x] 2.1 FastAPI mutation, cookie session like other list writes. Recommended: `POST /lists/{list_id}/statements/{statement_id}/reassign` with body `{ "destination_list_id": "<uuid>" }` where `list_id` is the list the actor is viewing (must be one of the current homes of the statement’s ledger rows). Response: moved `ledger_entry_ids`, `batch_ids`, `from_list_ids`, `destination_list_id` — money as **strings** if any amounts appear (prefer ids-only).
+  - [x] 2.2 Map errors like `lists.py`: unauthenticated 401; dest/source `NotListMemberError` → 403 `{ "code": "not_list_member" }` (generic, no list existence leak on dest if you only checked dest — still 403 for mutations per sketch); unknown statement / no committed rows → 404; override/membership conflict → 409 with `code`.
+  - [x] 2.3 Expose `import_batch_id` and `statement_id` (nullable) on `GET /lists/{id}/expenses` / `ExpenseItemResponse` so the UI can offer reassign **only** on import-sourced rows. Hand expenses stay `null`. Wire through `ListedExpense` / persistence select — do not make the UI guess from description.
+  - [x] 2.4 BFF: `ui/app/api/lists/[listId]/statements/[statementId]/reassign/route.ts` — cookie-forward, same pattern as `expenses/route.ts`. Add a focused BFF test next to `lists-invites.bff.test.ts` (or existing lists BFF file).
+  - [x] 2.5 Integration (Postgres 16): two lists, shared member, bulk or assign-commit fixture rows, POST reassign, assert ledger+batch `list_id`, GET expenses/balances on A and B, stranger 403, non-member dest 403. Decimal asserts, no float.
 
-- [ ] Task 3: UI confirm + picker (AC: #1, #2, #4)
-  - [ ] 3.1 **Surface (spine-only — no mock):** list-detail receipt overflow. `ReceiptRowMenu` today has non-persisting Edit/Delete. Add a **third** item only when `statement_id` is present: “Move statement to another list” (EN+ES on `ui/lib/i18n/lists.ts` — same object, both locales). Do **not** add the action on hand rows.
-  - [ ] 3.2 Picker: membership lists from existing homepage/membership fetch **excluding** the current list. Reuse list-name rows / existing sheet or `IconButtonPopup` + confirm — Warm Balance tokens (`--surface`, `--border`, `--muted`, `--space-*`). Primary confirm is **not** a pill. Keyboard + no required swipe (UX-DR19).
-  - [ ] 3.3 **One-line confirm** before POST (required AC): EN+ES equivalent of: shares will follow the destination list’s default split unless this statement’s items already have their own split. No second paragraph of settle math.
-  - [ ] 3.4 After success: stay on list A (rows gone) or navigate to B — either is fine if both lists’ GET expenses/balances would show the move. Prefer staying on A and letting the list refresh (rows disappear; strip updates). Do not recompute CRC in the browser.
-  - [ ] 3.5 Tests (jsdom, test-after): menu item absent without `statement_id`; confirm copy present; picker omits current list; forbidden dest surfaces existing `errorForbidden` pattern. Mock fetch; no Playwright required.
+- [x] Task 3: UI confirm + picker (AC: #1, #2, #4)
+  - [x] 3.1 **Surface (spine-only — no mock):** list-detail receipt overflow. `ReceiptRowMenu` today has non-persisting Edit/Delete. Add a **third** item only when `statement_id` is present: “Move statement to another list” (EN+ES on `ui/lib/i18n/lists.ts` — same object, both locales). Do **not** add the action on hand rows.
+  - [x] 3.2 Picker: membership lists from existing homepage/membership fetch **excluding** the current list. Reuse list-name rows / existing sheet or `IconButtonPopup` + confirm — Warm Balance tokens (`--surface`, `--border`, `--muted`, `--space-*`). Primary confirm is **not** a pill. Keyboard + no required swipe (UX-DR19).
+  - [x] 3.3 **One-line confirm** before POST (required AC): EN+ES equivalent of: shares will follow the destination list’s default split unless this statement’s items already have their own split. No second paragraph of settle math.
+  - [x] 3.4 After success: stay on list A (rows gone) or navigate to B — either is fine if both lists’ GET expenses/balances would show the move. Prefer staying on A and letting the list refresh (rows disappear; strip updates). Do not recompute CRC in the browser.
+  - [x] 3.5 Tests (jsdom, test-after): menu item absent without `statement_id`; confirm copy present; picker omits current list; forbidden dest surfaces existing `errorForbidden` pattern. Mock fetch; no Playwright required.
 
-- [ ] Task 4: Comment / caller hygiene
-  - [ ] 4.1 Update `find_existing_identities` docstring in `import_session.py` — it still says re-import is the only repair and “no reassign yet”. Point at this story; leave 5.4 rollback as future.
-  - [ ] 4.2 Story-close overview (`story-close-overview-checklist.md`).
+- [x] Task 4: Comment / caller hygiene
+  - [x] 4.1 Update `find_existing_identities` docstring in `import_session.py` — it still says re-import is the only repair and “no reassign yet”. Point at this story; leave 5.4 rollback as future.
+  - [x] 4.2 Story-close overview (`story-close-overview-checklist.md`).
 
 ## Dev Notes
 
@@ -164,12 +168,68 @@ Follow `_bmad-output/project-context.md` (money strings, i18n objects, Tailwind,
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Cursor Grok 4.6
 
 ### Debug Log References
 
+Host pytest without `DATABASE_URL`: 535 passed, 197 skipped (Postgres integration gated, including `test_reassign_statement_integration.py`). UI: `tsc --noEmit` clean, 488 vitest passed.
+
+### Implementation Plan
+
+In-place `list_id` updates via `ReassignStatementService` + `AuthorizeListAccessService` (`reassign_statement` → `write_ledger` on every current home, `import_to_list` on B). Expense DTOs carry nullable `statement_id` / `import_batch_id`. List-detail overflow opens a sheet with membership picker and one-line share confirm; success `router.refresh()` on A.
+
 ### Completion Notes List
 
-Ultimate context engine analysis completed - comprehensive developer guide created
+- Added `ReassignStatementService` with atomic list_id moves; batch ids unchanged; same-list no-op; 404 with no ledger; 403 ACL both sides; 409 `invalid_split_override` when an item override names a non-member of B.
+- `GET /lists/{id}/expenses` now includes `statement_id` and `import_batch_id` (null on hand rows).
+- UI: “Move statement to another list” only when `statement_id` is present; EN+ES confirm; picker omits current list; `errorForbidden` on dest deny.
+- Membership ACL sketch updated; `find_existing_identities` docstring points at 5.3 (5.4 still future).
+
+## Story-close overview — 5.3 / 5-3-reassign-statement-to-another-list
+
+**Request path:**
+browser list-detail overflow → `POST /api/lists/{listId}/statements/{statementId}/reassign` (cookie BFF) → FastAPI `POST /lists/{list_id}/statements/{statement_id}/reassign` → `ReassignStatementService` → SQLAlchemy in-place `list_id` updates → GET expenses/balances on A (refresh).
+
+**Key components:**
+`api/application/reassign_statement.py`, `api/domain/list_access.py` (`reassign_statement` alias), `api/api/routes/lists.py`, `ui/app/lists/ListReceiptMenu.tsx`, BFF `ui/app/api/lists/[listId]/statements/[statementId]/reassign/route.ts`.
+
+**Why this shape:**
+FR-29 is a move, not a re-commit (AD-4 batch identity, AD-7 no FX rematerialization, AD-21 shares stay read-time on the destination list).
+
+**What not to break:**
+Do not fork/merge `import_batches.id`; 5.4 rollback still keys off `batch_id` on the **current** `import_batches.list_id`. Do not mutate card routing (FR-11). Do not run dedup on B.
 
 ### File List
+
+- api/application/reassign_statement.py
+- api/tests/test_reassign_statement_application.py
+- api/tests/test_reassign_statement_integration.py
+- api/domain/list_access.py
+- api/application/expenses.py
+- api/application/import_session.py
+- api/adapters/persistence/repositories.py
+- api/api/routes/lists.py
+- api/api/schemas/lists.py
+- ui/app/api/lists/[listId]/statements/[statementId]/reassign/route.ts
+- ui/app/api/lists-invites.bff.test.ts
+- ui/app/lists/ListReceiptMenu.tsx
+- ui/app/lists/ListReceiptMenu.test.tsx
+- ui/app/lists/listsClient.ts
+- ui/app/lists/listsClient.test.ts
+- ui/app/lists/[listId]/page.tsx
+- ui/app/lists/[listId]/page.receiptRowFx.test.ts
+- ui/app/lists/[listId]/page.newBadge.test.ts
+- ui/components/soft-ledger/ReceiptRowMenu.tsx
+- ui/components/soft-ledger/ReceiptRow.tsx
+- ui/lib/i18n/lists.ts
+- _bmad-output/planning-artifacts/architecture/architecture-finance-helper-2026-08-03/membership-acl-enforcement-sketch.md
+- _bmad-output/implementation-artifacts/5-3-reassign-statement-to-another-list.md
+- _bmad-output/implementation-artifacts/sprint-status.yaml
+
+### Change Log
+
+- 2026-08-26: Implemented statement reassignment (move committed ledger rows to another list) with ACL, expense DTO fields, list-detail confirm UI.
+
+## Status
+
+review

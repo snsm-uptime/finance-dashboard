@@ -129,7 +129,7 @@ development_status:
   epic-5: in-progress
   5-1-parse-failure-side-by-side-comparison: done
   5-2-dismiss-failed-statement-or-file: backlog
-  5-3-reassign-statement-to-another-list: ready-for-dev
+  5-3-reassign-statement-to-another-list: review
   5-4-roll-back-an-import-batch: backlog
   5-5-same-price-conflict-review-manual-parsed: backlog
   5-6-alias-on-confirm-manual-entry-re-upload-conflict: backlog

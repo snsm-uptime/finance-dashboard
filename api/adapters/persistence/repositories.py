@@ -41,12 +41,14 @@ from domain.splits import (
     KIND_PERCENTAGE,
     KIND_WHOLE_ASSIGNEE,
 )
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from adapters.persistence.models import (
     CardModel,
+    ImportBatchModel,
+    ImportCandidateRowModel,
     LedgerEntryModel,
     ListDefaultSplitShareModel,
     ListMembershipModel,
@@ -55,6 +57,34 @@ from adapters.persistence.models import (
     SplitOverrideModel,
     UserModel,
 )
+
+
+def _ledger_entry_record(row: LedgerEntryModel, statement_id: UUID | None = None):
+    from application.expenses import LedgerEntryRecord
+
+    return LedgerEntryRecord(
+        id=row.id,
+        list_id=row.list_id,
+        amount=Decimal(str(row.amount)),
+        currency=row.currency,
+        normalized_description=row.normalized_description or "",
+        payer_id=row.payer_id,
+        provenance=row.provenance or "",
+        line_type=row.line_type or "",
+        posted_date=row.posted_date,
+        created_at=row.created_at,
+        amount_crc=Decimal(str(row.amount_crc)),
+        fx_rate=Decimal(str(row.fx_rate)),
+        fx_rate_date=row.fx_rate_date,
+        fx_fallback=row.fx_fallback,
+        receipt_id=row.receipt_id,
+        product_id=row.product_id,
+        external_ref=row.external_ref,
+        origin_kind=row.origin_kind,
+        origin_card_id=row.origin_card_id,
+        import_batch_id=row.import_batch_id,
+        statement_id=statement_id,
+    )
 
 
 def _preferences_record(row: UserModel) -> UserPreferencesRecord:
@@ -408,7 +438,6 @@ class SqlAlchemyListRepository:
         from datetime import UTC, datetime
         from datetime import date as date_cls
 
-        from application.expenses import LedgerEntryRecord
         from domain.expenses import ManualExpenseDraft
 
         assert isinstance(draft, ManualExpenseDraft)
@@ -439,39 +468,19 @@ class SqlAlchemyListRepository:
         )
         self._session.add(row)
         self._session.flush()  # make id readable for split override attach
-        return LedgerEntryRecord(
-            id=row.id,
-            list_id=row.list_id,
-            amount=Decimal(str(row.amount)),
-            currency=row.currency,
-            normalized_description=row.normalized_description or "",
-            payer_id=row.payer_id,
-            provenance=row.provenance or "",
-            line_type=row.line_type or "",
-            posted_date=row.posted_date,
-            created_at=row.created_at,
-            amount_crc=Decimal(str(row.amount_crc)),
-            fx_rate=Decimal(str(row.fx_rate)),
-            fx_rate_date=row.fx_rate_date,
-            fx_fallback=row.fx_fallback,
-            receipt_id=row.receipt_id,
-            product_id=row.product_id,
-            external_ref=row.external_ref,
-            origin_kind=row.origin_kind,
-            origin_card_id=row.origin_card_id,
-        )
+        return _ledger_entry_record(row)
 
     def list_ledger_entries(self, list_id: UUID):
         from application.expenses import LedgerEntryRecord
 
         stmt = (
-            select(LedgerEntryModel)
+            select(LedgerEntryModel, ImportBatchModel.statement_id)
+            .outerjoin(ImportBatchModel, ImportBatchModel.id == LedgerEntryModel.import_batch_id)
             .where(LedgerEntryModel.list_id == list_id)
             .order_by(LedgerEntryModel.created_at.desc(), LedgerEntryModel.id.desc())
         )
-        rows = self._session.scalars(stmt).all()
         result: list[LedgerEntryRecord] = []
-        for row in rows:
+        for row, statement_id in self._session.execute(stmt).all():
             if (
                 row.normalized_description is None
                 or row.payer_id is None
@@ -481,29 +490,7 @@ class SqlAlchemyListRepository:
             ):
                 # Skip incomplete stub rows from pre-3.2 seeds (tests only).
                 continue
-            result.append(
-                LedgerEntryRecord(
-                    id=row.id,
-                    list_id=row.list_id,
-                    amount=Decimal(str(row.amount)),
-                    currency=row.currency,
-                    normalized_description=row.normalized_description,
-                    payer_id=row.payer_id,
-                    provenance=row.provenance,
-                    line_type=row.line_type,
-                    posted_date=row.posted_date,
-                    created_at=row.created_at,
-                    amount_crc=Decimal(str(row.amount_crc)),
-                    fx_rate=Decimal(str(row.fx_rate)),
-                    fx_rate_date=row.fx_rate_date,
-                    fx_fallback=row.fx_fallback,
-                    receipt_id=row.receipt_id,
-                    product_id=row.product_id,
-                    external_ref=row.external_ref,
-                    origin_kind=row.origin_kind,
-                    origin_card_id=row.origin_card_id,
-                )
-            )
+            result.append(_ledger_entry_record(row, statement_id))
         return result
 
     def get_card_for_owner(self, user_id: UUID, card_id: UUID) -> CardRecord | None:
@@ -545,8 +532,6 @@ class SqlAlchemyListRepository:
         origin_kind: str | None,
         origin_card_id: UUID | None,
     ):
-        from application.expenses import LedgerEntryRecord
-
         row = self._session.get(LedgerEntryModel, entry_id)
         if (
             row is None
@@ -563,27 +548,11 @@ class SqlAlchemyListRepository:
         row.origin_kind = origin_kind
         row.origin_card_id = origin_card_id
         self._session.flush()
-        return LedgerEntryRecord(
-            id=row.id,
-            list_id=row.list_id,
-            amount=Decimal(str(row.amount)),
-            currency=row.currency,
-            normalized_description=row.normalized_description,
-            payer_id=row.payer_id,
-            provenance=row.provenance,
-            line_type=row.line_type,
-            posted_date=row.posted_date,
-            created_at=row.created_at,
-            amount_crc=Decimal(str(row.amount_crc)),
-            fx_rate=Decimal(str(row.fx_rate)),
-            fx_rate_date=row.fx_rate_date,
-            fx_fallback=row.fx_fallback,
-            receipt_id=row.receipt_id,
-            product_id=row.product_id,
-            external_ref=row.external_ref,
-            origin_kind=row.origin_kind,
-            origin_card_id=row.origin_card_id,
-        )
+        statement_id = None
+        if row.import_batch_id is not None:
+            batch = self._session.get(ImportBatchModel, row.import_batch_id)
+            statement_id = batch.statement_id if batch is not None else None
+        return _ledger_entry_record(row, statement_id)
 
     def list_members_with_alias(self, list_id: UUID):
         """Roster labels are aliases — email is an identity surface, never a label."""
@@ -689,6 +658,78 @@ class SqlAlchemyListRepository:
         self._session.delete(row)
         self._session.flush()
         return True
+
+    def list_statement_ledger_moves(self, statement_id: UUID):
+        from application.reassign_statement import StatementLedgerMove
+
+        stmt = (
+            select(LedgerEntryModel, ImportBatchModel)
+            .join(ImportBatchModel, ImportBatchModel.id == LedgerEntryModel.import_batch_id)
+            .where(ImportBatchModel.statement_id == statement_id)
+        )
+        moves: list[StatementLedgerMove] = []
+        for entry, batch in self._session.execute(stmt).all():
+            if entry.import_batch_id is None:
+                continue
+            moves.append(
+                StatementLedgerMove(
+                    entry_id=entry.id,
+                    list_id=entry.list_id,
+                    batch_id=batch.id,
+                    candidate_row_id=entry.import_candidate_row_id,
+                    receipt_id=entry.receipt_id,
+                    amount_crc=Decimal(str(entry.amount_crc)),
+                    fx_rate=Decimal(str(entry.fx_rate)),
+                    fx_fallback=entry.fx_fallback,
+                    import_identity=entry.import_identity,
+                )
+            )
+        return moves
+
+    def apply_statement_reassign(
+        self,
+        *,
+        destination_list_id: UUID,
+        entry_ids: tuple[UUID, ...],
+        batch_ids: tuple[UUID, ...],
+        candidate_ids: tuple[UUID, ...],
+        receipt_ids: tuple[UUID, ...],
+        override_keys: tuple[tuple[str, UUID], ...],
+    ) -> None:
+        if entry_ids:
+            self._session.execute(
+                update(LedgerEntryModel)
+                .where(LedgerEntryModel.id.in_(entry_ids))
+                .values(list_id=destination_list_id)
+            )
+        if batch_ids:
+            self._session.execute(
+                update(ImportBatchModel)
+                .where(ImportBatchModel.id.in_(batch_ids))
+                .values(list_id=destination_list_id)
+            )
+        if candidate_ids:
+            self._session.execute(
+                update(ImportCandidateRowModel)
+                .where(ImportCandidateRowModel.id.in_(candidate_ids))
+                .values(resolved_list_id=destination_list_id)
+            )
+        if receipt_ids:
+            self._session.execute(
+                update(ReceiptModel)
+                .where(ReceiptModel.id.in_(receipt_ids))
+                .values(list_id=destination_list_id)
+            )
+        for kind, subject_id in override_keys:
+            self._session.execute(
+                update(SplitOverrideModel)
+                .where(
+                    SplitOverrideModel.subject_kind == kind,
+                    SplitOverrideModel.subject_id == subject_id,
+                )
+                .values(list_id=destination_list_id)
+            )
+        self._session.flush()
 
 
 def _stored_override_from_row(row: SplitOverrideModel) -> StoredSplitOverride:

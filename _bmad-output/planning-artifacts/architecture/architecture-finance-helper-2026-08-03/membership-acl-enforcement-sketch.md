@@ -79,7 +79,7 @@ authorize_list_access(acting_user_id, list_id, action) -> ListAccessGrant
 
 Stable string literals (or an enum of the same names) from the matrix below.
 
-**Aliases:** `read_expenses` ≡ `read_ledger`, `write_expense` ≡ `write_ledger`, and `set_split_override` ≡ `write_ledger` at the port — these names authorize the same capability. Callers may pass either; Epic 3 endpoints may expose the expense-named aliases while the port treats them as synonyms of the ledger actions. Story 2.6 uses `set_split_override` for clarity on the override write surface.
+**Aliases:** `read_expenses` ≡ `read_ledger`, `write_expense` ≡ `write_ledger`, `set_split_override` ≡ `write_ledger`, and `reassign_statement` ≡ `write_ledger` at the port — these names authorize the same capability. Callers may pass either; Epic 3 endpoints may expose the expense-named aliases while the port treats them as synonyms of the ledger actions. Story 2.6 uses `set_split_override` for clarity on the override write surface. Story 5.3 uses `reassign_statement` on every current home list and `import_to_list` on the destination.
 
 ---
 
@@ -96,6 +96,7 @@ Stable string literals (or an enum of the same names) from the matrix below.
 | `write_expense` | Synonym of `write_ledger` |
 | `write_ledger` | Canonical ledger write (member-gated **mutation**) |
 | `set_split_override` | Synonym of `write_ledger` (Story 2.6 item/receipt overrides) |
+| `reassign_statement` | Synonym of `write_ledger` (Story 5.3 — move committed statement rows) |
 | `import_to_list` | Import into list (Epic 4+; member-gated **mutation**) |
 | `set_last_opened_list` | Remembered list preference (member-gated **mutation**) |
 | _(future)_ peer settle participation | Same port; add action when Epic 3 settle lands |
@@ -155,6 +156,7 @@ Stable string literals (or an enum of the same names) from the matrix below.
 | 2.6 overrides | `set_split_override` / `write_ledger` (member write); reads via `read_ledger` |
 | Epic 3 ledger | `read_ledger` / `write_ledger` (+ expense synonyms) |
 | Epic 4 import | `import_to_list` |
+| 5.3 reassign statement | Source list(s): `reassign_statement` / `write_ledger`; destination: `import_to_list`. Actor must be a member of every current home of the statement’s ledger rows **and** of B. |
 
 **Living rule:** any story adding a list-scoped operation updates this sketch’s action matrix and caller map in the **same PR**.
 

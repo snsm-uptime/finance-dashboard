@@ -23,6 +23,7 @@ ListAccessAction = Literal[
     "edit_default_split",
     "route_card_to_list",
     "set_default_import_list",
+    "reassign_statement",
 ]
 
 _ACTION_ALIASES: dict[str, str] = {
@@ -30,7 +31,11 @@ _ACTION_ALIASES: dict[str, str] = {
     "write_expense": "write_ledger",
     # Member write — same capability class as write_ledger (FR-10).
     "set_split_override": "write_ledger",
+    # Story 5.3 — move committed statement rows; same capability as write_ledger.
+    "reassign_statement": "write_ledger",
 }
+
+_MEMBER_READ_ACTIONS = frozenset(
 
 _MEMBER_READ_ACTIONS = frozenset(
     {

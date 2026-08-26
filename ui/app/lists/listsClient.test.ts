@@ -313,4 +313,19 @@ describe("expense client", () => {
       expect(result.expense.provenance).toBe("hand");
     }
   });
+
+  it("reassignStatement maps 403 to errorForbidden", async () => {
+    const { reassignStatement } = await import("./listsClient");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 403,
+        json: async () => ({ code: "not_list_member", detail: "nope" }),
+      }),
+    );
+
+    const result = await reassignStatement("list-a", "stmt-1", "list-b", messages);
+    expect(result).toEqual({ ok: false, error: "forbidden" });
+  });
 });

@@ -23,6 +23,7 @@ export type ReceiptRowProps = {
   netLabel?: string;
   netPolarity?: "owe" | "owed";
   menu?: ReceiptRowMenuMessages;
+  menuSlot?: ReactNode;
   /** Localized "New" chip text for freshly imported parser rows (Story 4.15). */
   newBadgeLabel?: string;
   /** Empty settle surface — muted placeholder, no invented totals. */
@@ -107,6 +108,7 @@ export function ReceiptRow({
   netLabel,
   netPolarity,
   menu,
+  menuSlot,
   newBadgeLabel,
   emptyLabel,
   fxSummary,
@@ -171,7 +173,11 @@ export function ReceiptRow({
           </span>
         ) : null}
 
-        {menu ? (
+        {menuSlot ? (
+          <div className="self-center" style={{ gridArea: "menu" }}>
+            {menuSlot}
+          </div>
+        ) : menu ? (
           <div className="self-center" style={{ gridArea: "menu" }}>
             <ReceiptRowMenu messages={menu} />
           </div>

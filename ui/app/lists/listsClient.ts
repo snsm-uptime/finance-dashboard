@@ -447,6 +447,8 @@ export type ExpenseItem = {
   viewer_share_value: string | null;
   viewer_net_crc: string | null;
   viewer_net_polarity: "owe" | "owed" | "zero" | null;
+  import_batch_id: string | null;
+  statement_id: string | null;
 };
 
 export type CreateExpenseBody = {
@@ -525,6 +527,8 @@ function asExpense(data: unknown): ExpenseItem | null {
       row.viewer_net_polarity === "zero"
         ? row.viewer_net_polarity
         : null,
+    import_batch_id: typeof row.import_batch_id === "string" ? row.import_batch_id : null,
+    statement_id: typeof row.statement_id === "string" ? row.statement_id : null,
   };
 }
 
@@ -671,4 +675,31 @@ export async function fetchListMembers(
     });
   }
   return { ok: true, members };
+}
+
+export async function reassignStatement(
+  listId: string,
+  statementId: string,
+  destinationListId: string,
+  messages: ListsClientMessages,
+): Promise<OkSimple | ErrorResult> {
+  let response: Response;
+  try {
+    response = await fetch(
+      `/api/lists/${encodeURIComponent(listId)}/statements/${encodeURIComponent(statementId)}/reassign`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ destination_list_id: destinationListId }),
+      },
+    );
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  if (!response.ok) {
+    const body = (await parseJson(response)) as { detail?: unknown; code?: unknown } | null;
+    return { ok: false, error: mapError(response.status, body, messages) };
+  }
+  return { ok: true };
 }

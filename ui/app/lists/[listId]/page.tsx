@@ -12,6 +12,7 @@ import { getApiInternalUrl } from "@/lib/api";
 import { listsMessages } from "@/lib/i18n/lists";
 import type { Locale } from "@/lib/i18n/locale";
 import { fetchSession } from "@/lib/session";
+import { ListReceiptMenu } from "../ListReceiptMenu";
 import { ListDetailChrome } from "../ListDetailChrome";
 import { ListDetailMobileActions } from "../ListDetailMobileActions";
 import { ListDefaultSplitProvider } from "../ListDefaultSplitContext";
@@ -130,6 +131,8 @@ function asExpenses(data: unknown): ExpenseItem[] {
           e.viewer_net_polarity === "zero"
           ? e.viewer_net_polarity
           : null,
+      import_batch_id: typeof e.import_batch_id === "string" ? e.import_batch_id : null,
+      statement_id: typeof e.statement_id === "string" ? e.statement_id : null,
     });
   }
   return out;
@@ -615,11 +618,26 @@ export default async function ListDetailPage({
                         newBadgeLabel: todayCr
                           ? newBadgeLabelFrom(e, t, todayCr)
                           : undefined,
-                        menu: {
-                          menuAria: t.receiptMenuAria,
-                          editLabel: t.receiptEdit,
-                          deleteLabel: t.receiptDelete,
-                        },
+                        menuSlot: (
+                          <ListReceiptMenu
+                            listId={listId}
+                            statementId={e.statement_id}
+                            messages={{
+                              menuAria: t.receiptMenuAria,
+                              editLabel: t.receiptEdit,
+                              deleteLabel: t.receiptDelete,
+                              moveStatementLabel: t.receiptMoveStatement,
+                              moveConfirm: t.receiptMoveConfirm,
+                              pickerTitle: t.receiptMovePickerTitle,
+                              confirmAction: t.receiptMoveConfirmAction,
+                              cancelLabel: t.receiptMoveCancel,
+                              errorGeneric: t.errorGeneric,
+                              errorInvalidName: t.errorInvalidName,
+                              errorForbidden: t.errorForbidden,
+                              errorUnauthorized: t.errorUnauthorized,
+                            }}
+                          />
+                        ),
                         fxSummary: rowProps.fxSummary,
                         fxDetail: rowProps.fxDetail,
                       };
