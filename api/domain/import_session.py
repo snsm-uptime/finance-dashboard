@@ -206,9 +206,7 @@ def session_needs_source_pdf(statement_statuses: Sequence[str]) -> bool:
 
 def retained_source_pdf_paths(statements: Sequence[tuple[str, str | None]]) -> frozenset[str]:
     """Paths still needed by staged or failed statements (AD-3 refcount)."""
-    return frozenset(
-        path for status, path in statements if status in _PDF_RETAIN_STATUSES and path
-    )
+    return frozenset(path for status, path in statements if status in _PDF_RETAIN_STATUSES and path)
 
 
 def next_status_after_dismiss_failed(status: str) -> str:

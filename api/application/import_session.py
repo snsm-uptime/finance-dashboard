@@ -731,9 +731,7 @@ class DismissFailedStatementService:
             session_repo=self._session_repo,
             pdf_storage=self._pdf_storage,
         )
-        return (
-            self._session_repo.get_session(command.session_id, command.actor_user_id) or updated
-        )
+        return self._session_repo.get_session(command.session_id, command.actor_user_id) or updated
 
 
 @dataclass(frozen=True, slots=True)

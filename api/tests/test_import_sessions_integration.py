@@ -2238,9 +2238,7 @@ def test_dismiss_failed_statement_skips_sibling_stays_staged_pdf_refcount(
     failed = next(s for s in body["statements"] if s["status"] == "failed")
     staged = next(s for s in body["statements"] if s["status"] == "staged")
 
-    dismissed = client.post(
-        f"/import/sessions/{session_id}/statements/{failed['id']}/dismiss"
-    )
+    dismissed = client.post(f"/import/sessions/{session_id}/statements/{failed['id']}/dismiss")
     assert dismissed.status_code == 200, dismissed.text
     refreshed = dismissed.json()
     by_id = {s["id"]: s for s in refreshed["statements"]}
