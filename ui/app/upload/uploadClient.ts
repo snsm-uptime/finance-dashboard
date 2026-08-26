@@ -456,6 +456,52 @@ export async function discardSession(
   return { ok: true };
 }
 
+export type DismissFailedStatementMessages = {
+  errorUnauthorized: string;
+  errorGeneric: string;
+  errorSessionDiscarded: string;
+  errorStatementNotFailed: string;
+};
+
+function mapDismissFailedError(
+  status: number,
+  body: { detail?: unknown; code?: unknown } | null,
+  messages: DismissFailedStatementMessages,
+): string {
+  const code = typeof body?.code === "string" ? body.code : "";
+  if (status === 401) return messages.errorUnauthorized;
+  if (code === "import_session_discarded") return messages.errorSessionDiscarded;
+  if (code === "import_statement_not_failed") return messages.errorStatementNotFailed;
+  return messages.errorGeneric;
+}
+
+export async function dismissFailedStatement(
+  sessionId: string,
+  statementId: string,
+  messages: DismissFailedStatementMessages,
+): Promise<OkSession | ErrorResult> {
+  let response: Response;
+  try {
+    response = await fetch(
+      `/api/import/sessions/${encodeURIComponent(sessionId)}/statements/${encodeURIComponent(statementId)}/dismiss`,
+      {
+        method: "POST",
+        headers: { Accept: "application/json" },
+        credentials: "same-origin",
+      },
+    );
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  const body = (await parseJson(response)) as { detail?: unknown; code?: unknown } | null;
+  if (!response.ok) {
+    return { ok: false, error: mapDismissFailedError(response.status, body, messages) };
+  }
+  const session = asImportSession(body);
+  if (!session) return { ok: false, error: messages.errorGeneric };
+  return { ok: true, session };
+}
+
 function asImportBatch(data: unknown): ImportBatch | null {
   if (!data || typeof data !== "object") return null;
   const row = data as Partial<ImportBatch>;

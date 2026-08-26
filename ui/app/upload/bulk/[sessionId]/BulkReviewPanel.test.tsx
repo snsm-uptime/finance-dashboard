@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { BulkReviewPanel } from "./BulkReviewPanel";
 import { resetMembershipListsStore } from "@/app/lists/membershipListsStore";
+import type { ImportSession } from "../../uploadClient";
 
 const push = vi.fn();
 let searchParamsValue = "";
@@ -41,12 +42,52 @@ vi.mock("next/dynamic", () => ({
     function ParseComparisonStub(props: {
       statement: { id: string };
       onContinue: () => void;
+      onDismissStatement: (session: ImportSession) => void;
+      onDismissFile: () => void;
     }) {
       return (
         <div data-testid="parse-comparison">
           <span>{props.statement.id}</span>
           <button type="button" onClick={props.onContinue}>
             Continue
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              props.onDismissStatement({
+                id: "s1",
+                created_at: "2026-08-18T00:00:00Z",
+                discarded_at: null,
+                statements: [
+                  {
+                    id: props.statement.id,
+                    product_id: "p",
+                    status: "skipped",
+                    candidate_row_count: 0,
+                    iban: null,
+                    filename: "a.pdf",
+                    card_id: null,
+                    rows: [],
+                    assigned_rows: [],
+                    zero_amount_excluded_count: 0,
+                  },
+                ],
+                undo: null,
+                finalized_at: null,
+                imported_new_count: 0,
+                skipped_duplicate_count: 0,
+                landing_list_id: null,
+                deleted_count: 0,
+                zero_amount_excluded_count: 0,
+                failed_statements: [],
+                committed_by_list: [],
+              })
+            }
+          >
+            Dismiss statement
+          </button>
+          <button type="button" onClick={props.onDismissFile}>
+            Dismiss file
           </button>
         </div>
       );
@@ -262,6 +303,106 @@ describe("BulkReviewPanel", () => {
       "st-failed",
     );
     expect(selectByText(container, "Commit to this list")).toBeUndefined();
+  });
+
+  it("after dismissing a failed statement with no pending rows, shows the list picker", async () => {
+    fetchImportSession.mockResolvedValue({
+      ok: true,
+      session: {
+        id: "s1",
+        created_at: "2026-01-01T00:00:00Z",
+        discarded_at: null,
+        undo: null,
+        statements: [
+          {
+            id: "st-failed",
+            product_id: "promerica_stub",
+            status: "failed",
+            candidate_row_count: 0,
+            iban: null,
+            filename: "a.pdf",
+            card_id: null,
+            rows: [],
+            assigned_rows: [],
+            zero_amount_excluded_count: 0,
+          },
+        ],
+        finalized_at: null,
+        imported_new_count: 0,
+        skipped_duplicate_count: 0,
+        landing_list_id: null,
+        deleted_count: 0,
+        zero_amount_excluded_count: 0,
+        failed_statements: [],
+        committed_by_list: [],
+      },
+    });
+    fetchLists.mockResolvedValue({
+      ok: true,
+      lists: [{ id: "l1", name: "Groceries", owner_id: "u1", role: "owner" }],
+    });
+
+    await act(async () => {
+      root.render(<BulkReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const dismiss = selectByText(container, "Dismiss statement");
+    await act(async () => {
+      dismiss.click();
+    });
+
+    expect(container.querySelector('[data-testid="parse-comparison"]')).toBeNull();
+    expect(selectByText(container, "Commit to this list")).toBeDefined();
+  });
+
+  it("dismiss file from comparison navigates to upload home", async () => {
+    fetchImportSession.mockResolvedValue({
+      ok: true,
+      session: {
+        id: "s1",
+        created_at: "2026-01-01T00:00:00Z",
+        discarded_at: null,
+        undo: null,
+        statements: [
+          {
+            id: "st-failed",
+            product_id: "promerica_stub",
+            status: "failed",
+            candidate_row_count: 0,
+            iban: null,
+            filename: "a.pdf",
+            card_id: null,
+            rows: [],
+            assigned_rows: [],
+            zero_amount_excluded_count: 0,
+          },
+        ],
+        finalized_at: null,
+        imported_new_count: 0,
+        skipped_duplicate_count: 0,
+        landing_list_id: null,
+        deleted_count: 0,
+        zero_amount_excluded_count: 0,
+        failed_statements: [],
+        committed_by_list: [],
+      },
+    });
+    fetchLists.mockResolvedValue({ ok: true, lists: [] });
+
+    await act(async () => {
+      root.render(<BulkReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      selectByText(container, "Dismiss file").click();
+    });
+    expect(push).toHaveBeenCalledWith("/upload");
   });
 
   it("does not show the list picker when the session fetch fails", async () => {

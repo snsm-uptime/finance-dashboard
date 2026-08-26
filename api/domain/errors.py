@@ -497,6 +497,17 @@ class ImportStatementNotFoundError(DomainError):
         super().__init__(self.MESSAGE)
 
 
+class ImportStatementNotFailedError(DomainError):
+    """Raised when dismiss targets a statement that is not parse-failed
+    (Story 5.2). Comparison dismiss is not a skip for staged review."""
+
+    MESSAGE = "This statement is not a failed parse and cannot be dismissed here."
+    CODE = "import_statement_not_failed"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
 class ImportRowNotAvailableError(DomainError):
     """Raised when a commit/delete targets a candidate row that is not
     pending (already committed, deleted, or excluded) (Story 4.10)."""

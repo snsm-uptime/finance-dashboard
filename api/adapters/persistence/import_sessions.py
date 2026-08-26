@@ -904,3 +904,29 @@ class SqlAlchemyImportSessionRepository:
         for statement in row.statements:
             statement.pdf_path = None
         self._session.flush()
+
+    def set_statement_status(
+        self, *, session_id: UUID, user_id: UUID, statement_id: UUID, status: str
+    ) -> ImportSessionRecord:
+        row = self._load_session(session_id, user_id)
+        if row is None:
+            raise ImportSessionNotFoundError()
+        statement_row = next((s for s in row.statements if s.id == statement_id), None)
+        if statement_row is None:
+            raise ImportStatementNotFoundError()
+        statement_row.status = status
+        self._session.flush()
+        return self._to_record(row)
+
+    def clear_statement_pdf_path(
+        self, *, session_id: UUID, user_id: UUID, statement_id: UUID
+    ) -> ImportSessionRecord:
+        row = self._load_session(session_id, user_id)
+        if row is None:
+            raise ImportSessionNotFoundError()
+        statement_row = next((s for s in row.statements if s.id == statement_id), None)
+        if statement_row is None:
+            raise ImportStatementNotFoundError()
+        statement_row.pdf_path = None
+        self._session.flush()
+        return self._to_record(row)

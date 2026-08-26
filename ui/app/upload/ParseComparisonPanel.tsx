@@ -6,7 +6,13 @@ import { Document, Page, pdfjs } from "react-pdf";
 import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 import { uploadCopy } from "@/lib/i18n/upload";
 import type { Locale } from "@/lib/i18n/locale";
-import type { StagedStatement } from "./uploadClient";
+import { DiscardConfirmDialog } from "./DiscardConfirmDialog";
+import {
+  discardSession,
+  dismissFailedStatement,
+  type ImportSession,
+  type StagedStatement,
+} from "./uploadClient";
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
@@ -18,13 +24,22 @@ type ParseComparisonPanelProps = {
   statement: StagedStatement;
   locale: Locale;
   onContinue: () => void;
+  onDismissStatement: (session: ImportSession) => void;
+  onDismissFile: () => void;
 };
+
+const outlineButtonClass =
+  "m-0 px-3 py-[9px] rounded-sm border border-border bg-transparent text-foreground cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-55 disabled:cursor-not-allowed";
+const destructiveOutlineClass =
+  "m-0 px-3 py-[9px] rounded-sm border border-owe bg-transparent text-owe cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-owe disabled:opacity-55 disabled:cursor-not-allowed";
 
 export function ParseComparisonPanel({
   sessionId,
   statement,
   locale,
   onContinue,
+  onDismissStatement,
+  onDismissFile,
 }: ParseComparisonPanelProps) {
   const t = uploadCopy(locale);
   const [file, setFile] = useState<Blob | null>(null);
@@ -32,6 +47,9 @@ export function ParseComparisonPanel({
   const [numPages, setNumPages] = useState(0);
   const [pageWidth, setPageWidth] = useState(320);
   const pdfPaneRef = useRef<HTMLElement>(null);
+  const [confirmFile, setConfirmFile] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -66,6 +84,45 @@ export function ParseComparisonPanel({
   }, [file, pdfError]);
 
   const items = statement.parse_evidence?.items ?? [];
+  const dismissMessages = {
+    errorUnauthorized: t.errorUnauthorized,
+    errorGeneric: t.errorGeneric,
+    errorSessionDiscarded: t.individualReviewErrorSessionDiscarded,
+    errorStatementNotFailed: t.parseFailureErrorNotFailed,
+  };
+
+  async function handleDismissStatement() {
+    setPending(true);
+    setActionError(null);
+    const result = await dismissFailedStatement(sessionId, statement.id, dismissMessages);
+    setPending(false);
+    if (!result.ok) {
+      setActionError(result.error);
+      return;
+    }
+    onDismissStatement(result.session);
+  }
+
+  async function handleDismissFile() {
+    setPending(true);
+    setActionError(null);
+    const result = await discardSession(sessionId, {
+      errorUnsupportedFileType: t.errorUnsupportedFileType,
+      errorUnknownStatement: t.errorUnknownStatement,
+      errorAmbiguousStatement: t.errorAmbiguousStatement,
+      errorUnreadableStatement: t.errorUnreadableStatement,
+      errorDuplicateStatement: t.errorDuplicateStatement,
+      errorGeneric: t.errorGeneric,
+      errorUnauthorized: t.errorUnauthorized,
+    });
+    setPending(false);
+    setConfirmFile(false);
+    if (!result.ok) {
+      setActionError(result.error);
+      return;
+    }
+    onDismissFile();
+  }
 
   return (
     <div className="flex min-h-[100dvh] flex-col gap-[var(--space-4)] px-[var(--space-4)] py-[var(--space-4)] md:min-h-[70vh] md:flex-row md:items-stretch">
@@ -115,7 +172,44 @@ export function ParseComparisonPanel({
             )
           )}
         </ul>
-        <PrimaryButton onClick={onContinue}>{t.parseFailureContinue}</PrimaryButton>
+        {actionError ? (
+          <p className="m-0 text-[0.9rem] text-owe" role="alert">
+            {actionError}
+          </p>
+        ) : null}
+        <div className="flex flex-wrap gap-[var(--space-2)]">
+          <button
+            type="button"
+            className={outlineButtonClass}
+            style={{
+              fontFamily: "var(--type-button-face)",
+              fontSize: "var(--type-button-size)",
+              fontWeight: "var(--type-button-weight)",
+              lineHeight: "1.2",
+            }}
+            disabled={pending}
+            onClick={() => void handleDismissStatement()}
+          >
+            {t.parseFailureDismissStatement}
+          </button>
+          <button
+            type="button"
+            className={destructiveOutlineClass}
+            style={{
+              fontFamily: "var(--type-button-face)",
+              fontSize: "var(--type-button-size)",
+              fontWeight: "var(--type-button-weight)",
+              lineHeight: "1.2",
+            }}
+            disabled={pending}
+            onClick={() => setConfirmFile(true)}
+          >
+            {t.parseFailureDismissFile}
+          </button>
+          <PrimaryButton onClick={onContinue} disabled={pending}>
+            {t.parseFailureContinue}
+          </PrimaryButton>
+        </div>
       </section>
       <section
         ref={pdfPaneRef}
@@ -143,6 +237,16 @@ export function ParseComparisonPanel({
           </Document>
         )}
       </section>
+      <DiscardConfirmDialog
+        open={confirmFile}
+        title={t.discardConfirmTitle}
+        body={t.discardConfirmBody}
+        confirmLabel={t.discardConfirmAction}
+        cancelLabel={t.discardCancel}
+        pending={pending}
+        onConfirm={() => void handleDismissFile()}
+        onCancel={() => setConfirmFile(false)}
+      />
     </div>
   );
 }

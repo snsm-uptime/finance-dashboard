@@ -10,6 +10,7 @@ from uuid import UUID
 import pytest
 from domain.errors import (
     ImportSessionDiscardedError,
+    ImportStatementNotFailedError,
     InvalidCanonicalLineError,
     NoCleanStatementsToCommitError,
     UnsupportedFileTypeError,
@@ -20,11 +21,17 @@ from domain.import_session import (
     ROW_STATUS_EXCLUDED_ZERO_AMOUNT,
     ROW_STATUS_PENDING,
     ROW_STATUSES,
+    STATEMENT_STATUS_COMMITTED,
+    STATEMENT_STATUS_FAILED,
+    STATEMENT_STATUS_SKIPPED,
+    STATEMENT_STATUS_STAGED,
     UNDO_ACTION_ASSIGN,
     UNDO_ACTION_DELETE,
     UNDO_ACTIONS,
     compute_pdf_content_hash,
+    next_status_after_dismiss_failed,
     normalize_row_description,
+    retained_source_pdf_paths,
     row_is_zero_amount,
     select_landing_list_id,
     session_needs_source_pdf,
@@ -206,6 +213,36 @@ def test_session_needs_source_pdf_false_when_all_committed_or_skipped() -> None:
     assert session_needs_source_pdf(["skipped"]) is False
     assert session_needs_source_pdf(["committed", "skipped"]) is False
     assert session_needs_source_pdf([]) is False
+
+
+def test_dismiss_failed_then_only_skipped_or_committed_does_not_need_pdf() -> None:
+    assert next_status_after_dismiss_failed(STATEMENT_STATUS_FAILED) == STATEMENT_STATUS_SKIPPED
+    assert session_needs_source_pdf([STATEMENT_STATUS_SKIPPED, STATEMENT_STATUS_COMMITTED]) is False
+
+
+def test_dismiss_failed_idempotent_when_already_skipped() -> None:
+    assert next_status_after_dismiss_failed(STATEMENT_STATUS_SKIPPED) == STATEMENT_STATUS_SKIPPED
+
+
+def test_dismiss_failed_rejects_staged() -> None:
+    with pytest.raises(ImportStatementNotFailedError):
+        next_status_after_dismiss_failed(STATEMENT_STATUS_STAGED)
+
+
+def test_retained_pdf_paths_keep_shared_file_while_sibling_staged() -> None:
+    shared = "/data/pdfs/u/0.pdf"
+    after_dismiss = retained_source_pdf_paths(
+        [
+            (STATEMENT_STATUS_SKIPPED, shared),
+            (STATEMENT_STATUS_STAGED, shared),
+        ]
+    )
+    assert after_dismiss == frozenset({shared})
+
+
+def test_retained_pdf_paths_empty_when_only_skipped_remain() -> None:
+    shared = "/data/pdfs/u/0.pdf"
+    assert retained_source_pdf_paths([(STATEMENT_STATUS_SKIPPED, shared)]) == frozenset()
 
 
 def test_undo_action_constants_are_the_only_two_actions() -> None:
