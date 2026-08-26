@@ -37,7 +37,20 @@ vi.mock("../../uploadClient", async () => {
 });
 
 vi.mock("next/dynamic", () => ({
-  default: () => () => null,
+  default: () =>
+    function ParseComparisonStub(props: {
+      statement: { id: string };
+      onContinue: () => void;
+    }) {
+      return (
+        <div data-testid="parse-comparison">
+          <span>{props.statement.id}</span>
+          <button type="button" onClick={props.onContinue}>
+            Continue
+          </button>
+        </div>
+      );
+    },
 }));
 
 vi.mock("@/components/PreferencesProvider", () => ({
@@ -198,5 +211,79 @@ describe("BulkReviewPanel", () => {
     const alert = container.querySelector('[role="alert"]');
     expect(alert?.textContent).toBe("You don't have access to that list.");
     expect(push).not.toHaveBeenCalled();
+  });
+
+  it("shows comparison before the list picker when a statement failed to parse", async () => {
+    fetchImportSession.mockResolvedValue({
+      ok: true,
+      session: {
+        id: "s1",
+        created_at: "2026-01-01T00:00:00Z",
+        discarded_at: null,
+        undo: null,
+        statements: [
+          {
+            id: "st-failed",
+            product_id: "promerica_stub",
+            status: "failed",
+            candidate_row_count: 0,
+            iban: null,
+            filename: "a.pdf",
+            card_id: null,
+            rows: [],
+            assigned_rows: [],
+            zero_amount_excluded_count: 0,
+            parse_evidence: { items: [{ kind: "gap", raw_snippet: "bad" }] },
+          },
+        ],
+        finalized_at: null,
+        imported_new_count: 0,
+        skipped_duplicate_count: 0,
+        landing_list_id: null,
+        deleted_count: 0,
+        zero_amount_excluded_count: 0,
+        failed_statements: [],
+        committed_by_list: [],
+      },
+    });
+    fetchLists.mockResolvedValue({
+      ok: true,
+      lists: [{ id: "l1", name: "Groceries", owner_id: "u1", role: "owner" }],
+    });
+
+    await act(async () => {
+      root.render(<BulkReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[data-testid="parse-comparison"]')?.textContent).toContain(
+      "st-failed",
+    );
+    expect(selectByText(container, "Commit to this list")).toBeUndefined();
+  });
+
+  it("does not show the list picker when the session fetch fails", async () => {
+    fetchImportSession.mockResolvedValue({
+      ok: false,
+      error: "This import session could not be found.",
+    });
+    fetchLists.mockResolvedValue({
+      ok: true,
+      lists: [{ id: "l1", name: "Groceries", owner_id: "u1", role: "owner" }],
+    });
+
+    await act(async () => {
+      root.render(<BulkReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe(
+      "This import session could not be found.",
+    );
+    expect(selectByText(container, "Commit to this list")).toBeUndefined();
   });
 });

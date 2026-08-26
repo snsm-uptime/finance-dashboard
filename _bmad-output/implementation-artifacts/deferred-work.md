@@ -283,3 +283,7 @@
 - Review/bulk/completion files were on 4.16’s “leave alone unless compile error” list; they shipped on this branch anyway.
 - `hasRemainingUploadWork` is the in-memory tab queue only (`ui/app/upload/uploadQueueStore.ts`). After a reload, finalized chrome Back lands on the list even if sibling files existed in an earlier queue — 4.16 tab-lifetime by design.
 - Sheet Discard still stages `deleteRow` at Save rather than unassign-to-pending (`ImportReviewSheet.tsx`) — already recorded in 4.13.1 Deviations; Change List is the unassign path.
+
+## Deferred from: code review of 5-1-parse-failure-side-by-side-comparison.md (2026-08-26)
+
+- `FilesystemPdfStorage.delete` still unlinks any path with no volume `is_relative_to` check (`api/adapters/storage/pdf_storage.py:27`). Story 5.1 confined `read` only; `delete` is the pre-existing 4.6 helper. A corrupted stored path would be refused on PDF GET but still unlinked on cleanup.

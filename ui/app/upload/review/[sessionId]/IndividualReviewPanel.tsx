@@ -596,6 +596,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
       ) {
         return;
       }
+      if (step.kind !== "row") return;
       const target = event.target;
       if (
         target instanceof HTMLInputElement ||
@@ -629,6 +630,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     current?.row.id,
+    step.kind,
     canAcceptDefault,
     canAcceptChosen,
     canUndo,

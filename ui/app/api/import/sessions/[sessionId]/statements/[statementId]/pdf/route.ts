@@ -39,7 +39,6 @@ export async function GET(
     );
   }
 
-  const body = await upstream.arrayBuffer();
   const headers = new Headers();
   headers.set(
     "Content-Type",
@@ -47,7 +46,7 @@ export async function GET(
   );
   const cache = upstream.headers.get("Cache-Control");
   if (cache) headers.set("Cache-Control", cache);
-  return new NextResponse(body, {
+  return new NextResponse(upstream.body, {
     status: upstream.status,
     headers,
   });

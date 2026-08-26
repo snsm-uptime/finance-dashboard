@@ -2216,4 +2216,3 @@ def test_upload_mixed_parse_failure_persists_evidence_no_candidate_rows_no_ledge
     assert discarded.status_code == 200
     after_discard = client.get(f"/import/sessions/{session2}/statements/{failed2['id']}/pdf")
     assert after_discard.status_code == 404
-

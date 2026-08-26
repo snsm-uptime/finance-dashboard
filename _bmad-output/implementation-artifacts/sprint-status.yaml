@@ -127,7 +127,7 @@ development_status:
   epic-4-retrospective: optional
 
   epic-5: in-progress
-  5-1-parse-failure-side-by-side-comparison: review
+  5-1-parse-failure-side-by-side-comparison: done
   5-2-dismiss-failed-statement-or-file: backlog
   5-3-reassign-statement-to-another-list: backlog
   5-4-roll-back-an-import-batch: backlog

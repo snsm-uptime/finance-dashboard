@@ -13,6 +13,7 @@ import {
   nextReviewStep,
   titleTextareaHeightPx,
 } from "./IndividualReviewPanel";
+import { nextUnacknowledgedFailedStatement } from "../../reviewSequence";
 import { formatIbanGroups } from "../../CreditCardFace";
 import type { CandidateRow, ImportSession, StagedStatement } from "../../uploadClient";
 
@@ -273,6 +274,13 @@ describe("nextReviewStep", () => {
     const failed = makeStatement({ id: "st-failed", status: "failed", rows: [] });
     const session = makeSession({ statements: [failed] });
     expect(nextReviewStep(session, new Set(["st-failed"]))).toEqual({ kind: "sheet" });
+  });
+
+  it("does not surface failed comparison after the session is finalized", () => {
+    const failed = makeStatement({ id: "st-failed", status: "failed", rows: [] });
+    const session = makeSession({ statements: [failed], finalized_at: "2026-01-02T00:00:00Z" });
+    expect(nextUnacknowledgedFailedStatement(session)).toBeNull();
+    expect(nextReviewStep(session).kind).toBe("none");
   });
 });
 

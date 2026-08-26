@@ -47,12 +47,15 @@ export const uploadMessages = {
     parseFailureGapLabel: "Could not parse",
     parseFailurePdfLoading: "Loading PDF…",
     parseFailurePdfError: "Could not load the original PDF.",
+    parseFailureEmptyEvidence:
+      "No extracted lines were saved for this statement. The original PDF is still below.",
     // Bulk review (Story 4.7)
     bulkReviewTitle: "Assign to a list",
     bulkReviewChooseList: "Choose list",
     bulkReviewConfirm: "Commit to this list",
     bulkReviewCommitting: "Committing…",
     bulkReviewLoadingLists: "Loading your lists…",
+    bulkReviewLoadingSession: "Loading this import…",
     bulkReviewNoLists: "You don't belong to any list yet.",
     bulkReviewErrorForbidden: "You don't have access to that list.",
     bulkReviewErrorSessionNotFound: "This import session could not be found.",
@@ -169,12 +172,15 @@ export const uploadMessages = {
     parseFailureGapLabel: "No se pudo leer",
     parseFailurePdfLoading: "Cargando PDF…",
     parseFailurePdfError: "No se pudo cargar el PDF original.",
+    parseFailureEmptyEvidence:
+      "No se guardaron líneas extraídas para este estado de cuenta. El PDF original sigue abajo.",
     // Bulk review (Story 4.7)
     bulkReviewTitle: "Asignar a una lista",
     bulkReviewChooseList: "Elegir lista",
     bulkReviewConfirm: "Confirmar en esta lista",
     bulkReviewCommitting: "Confirmando…",
     bulkReviewLoadingLists: "Cargando tus listas…",
+    bulkReviewLoadingSession: "Cargando este import…",
     bulkReviewNoLists: "Todavía no perteneces a ninguna lista.",
     bulkReviewErrorForbidden: "No tienes acceso a esa lista.",
     bulkReviewErrorSessionNotFound: "No se encontró esta sesión de importación.",

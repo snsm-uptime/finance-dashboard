@@ -577,13 +577,13 @@ class GetStatementPdfService:
 
     def execute(self, command: GetStatementPdfCommand) -> bytes:
         session = self._session_repo.get_session(command.session_id, command.actor_user_id)
-        if session is None:
+        if session is None or session.discarded_at is not None:
             raise ImportSessionNotFoundError()
         statement = _find_statement(session, command.statement_id)
         if not statement.pdf_path:
             raise ImportStatementNotFoundError()
         content = self._pdf_storage.read(statement.pdf_path)
-        if content is None:
+        if content is None or not content:
             raise ImportStatementNotFoundError()
         return content
 

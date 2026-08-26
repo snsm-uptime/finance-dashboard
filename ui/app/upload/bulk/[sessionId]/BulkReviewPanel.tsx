@@ -46,6 +46,8 @@ export function BulkReviewPanel({ sessionId }: BulkReviewPanelProps) {
   const lists = useMembershipLists();
   const [listId, setListId] = useState<string>("");
   const [session, setSession] = useState<ImportSession | null>(null);
+  const [sessionReady, setSessionReady] = useState(false);
+  const [sessionError, setSessionError] = useState<string | null>(null);
   const [acknowledgedFailedIds, setAcknowledgedFailedIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -68,7 +70,14 @@ export function BulkReviewPanel({ sessionId }: BulkReviewPanelProps) {
     let cancelled = false;
     fetchImportSession(sessionId, reviewMessages).then((result) => {
       if (cancelled) return;
-      if (result.ok) setSession(result.session);
+      if (result.ok) {
+        setSession(result.session);
+        setSessionError(null);
+      } else {
+        setSession(null);
+        setSessionError(result.error);
+      }
+      setSessionReady(true);
     });
     return () => {
       cancelled = true;
@@ -127,6 +136,36 @@ export function BulkReviewPanel({ sessionId }: BulkReviewPanelProps) {
 
   const listOptions = (lists ?? []).map((l) => ({ value: l.id, label: l.name }));
   const failedStatement = nextUnacknowledgedFailedStatement(session, acknowledgedFailedIds);
+
+  if (!sessionReady) {
+    return (
+      <main
+        className="min-h-full py-[2.5rem] px-[1.5rem]"
+        style={{ fontFamily: "var(--font-ui), Manrope, system-ui, sans-serif" }}
+      >
+        <span
+          className="grid size-5 place-items-center text-muted"
+          aria-label={t.bulkReviewLoadingSession}
+          aria-busy="true"
+        >
+          <SpinnerIcon className="size-5 animate-spin motion-reduce:animate-none" />
+        </span>
+      </main>
+    );
+  }
+
+  if (sessionError) {
+    return (
+      <main
+        className="min-h-full py-[2.5rem] px-[1.5rem]"
+        style={{ fontFamily: "var(--font-ui), Manrope, system-ui, sans-serif" }}
+      >
+        <p className="text-owe text-[0.9rem] m-0" role="alert">
+          {sessionError}
+        </p>
+      </main>
+    );
+  }
 
   if (failedStatement) {
     return (

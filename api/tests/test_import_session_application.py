@@ -2211,3 +2211,34 @@ def test_get_statement_pdf_missing_path_is_not_found() -> None:
                 actor_user_id=actor, session_id=session_id, statement_id=statement.id
             )
         )
+
+
+def test_get_statement_pdf_discarded_session_is_not_found() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    actor = uuid4()
+    session_id = _multi_statement_session(repo, storage, user_id=actor, parse_results=[[_row("a")]])
+    statement = repo.get_session(session_id, actor).statements[0]
+    repo.discard_session(session_id, actor)
+    with pytest.raises(ImportSessionNotFoundError):
+        GetStatementPdfService(repo, storage).execute(
+            GetStatementPdfCommand(
+                actor_user_id=actor, session_id=session_id, statement_id=statement.id
+            )
+        )
+
+
+def test_get_statement_pdf_empty_bytes_is_not_found() -> None:
+    repo = _FakeImportSessionRepo()
+    storage = _FakePdfStorage()
+    actor = uuid4()
+    session_id = _multi_statement_session(repo, storage, user_id=actor, parse_results=[[_row("a")]])
+    statement = repo.get_session(session_id, actor).statements[0]
+    assert statement.pdf_path is not None
+    storage.files[statement.pdf_path] = b""
+    with pytest.raises(ImportStatementNotFoundError):
+        GetStatementPdfService(repo, storage).execute(
+            GetStatementPdfCommand(
+                actor_user_id=actor, session_id=session_id, statement_id=statement.id
+            )
+        )

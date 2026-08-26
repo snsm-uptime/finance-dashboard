@@ -4,7 +4,7 @@ baseline_commit: 5f52515e7efcef517ad62b1e23d721a70d892432
 
 # Story 5.1: Parse failure → side-by-side comparison
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -80,6 +80,21 @@ so that nothing enters the ledger silently and I can see the evidence (J3).
 
 - [x] Task 5: Story-close overview
   - [x] 5.1 Fill Completion Notes using `_bmad-output/implementation-artifacts/story-close-overview-checklist.md` (Request path / Key components / Why this shape / What not to break).
+
+### Review Findings
+
+- [x] [Review][Patch] Bulk list picker mounts while session is null or fetch failed — mixed sessions can skip comparison and commit [`ui/app/upload/bulk/[sessionId]/BulkReviewPanel.tsx:67`]
+- [x] [Review][Patch] PDF GET does not reject discarded sessions; Task 2.5 / integration test expect 404 while `session_needs_source_pdf` retains the file [`api/application/import_session.py:578`]
+- [x] [Review][Patch] Individual review still preventDefault()s Arrow/Backspace on the comparison step, blocking PDF pane scroll [`ui/app/upload/review/[sessionId]/IndividualReviewPanel.tsx:613`]
+- [x] [Review][Patch] react-pdf Document has no onLoadError — HTTP 200 non-PDF / worker failure leaves a blank original-PDF region [`ui/app/upload/ParseComparisonPanel.tsx:111`]
+- [x] [Review][Patch] Phone layout is not a pinned lower-half PDF; Page width={360} can overflow a ~320px viewport [`ui/app/upload/ParseComparisonPanel.tsx:58`]
+- [x] [Review][Patch] BFF PDF route buffers via arrayBuffer() instead of streaming the upstream body [`ui/app/api/import/sessions/[sessionId]/statements/[statementId]/pdf/route.ts:42`]
+- [x] [Review][Patch] nextUnacknowledgedFailedStatement ignores finalized_at so bulk comparison can remount after Save [`ui/app/upload/reviewSequence.ts:36`]
+- [x] [Review][Patch] Bulk tests mock next/dynamic to null and never assert a failed session blocks the picker [`ui/app/upload/bulk/[sessionId]/BulkReviewPanel.test.tsx`]
+- [x] [Review][Patch] Comparison tests do not await PDF fetch, assert Continue is visit-local, or assert gap vs row distinction [`ui/app/upload/ParseComparisonPanel.test.tsx`]
+- [x] [Review][Patch] Empty parse_evidence.items renders an empty list with no visible gap empty-state [`ui/app/upload/ParseComparisonPanel.tsx:55`]
+- [x] [Review][Patch] GetStatementPdfService returns empty bytes as 200 application/pdf [`api/application/import_session.py:585`]
+- [x] [Review][Defer] FilesystemPdfStorage.delete is still unconfined while read is volume-checked [`api/adapters/storage/pdf_storage.py:27`] — deferred, pre-existing
 
 ## Dev Notes
 

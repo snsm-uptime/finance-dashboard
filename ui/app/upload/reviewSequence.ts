@@ -37,7 +37,7 @@ export function nextUnacknowledgedFailedStatement(
   session: ImportSession | null,
   acknowledgedFailedIds: ReadonlySet<string> = EMPTY_SKIPPED,
 ): StagedStatement | null {
-  if (!session || session.discarded_at) return null;
+  if (!session || session.discarded_at || session.finalized_at) return null;
   for (const statement of session.statements) {
     if (statement.status === "failed" && !acknowledgedFailedIds.has(statement.id)) {
       return statement;
