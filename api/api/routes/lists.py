@@ -44,6 +44,7 @@ from application.lists import (
     SetListDefaultSplitCommand,
     SetListDefaultSplitService,
 )
+from application.reassign_statement import ReassignStatementCommand, ReassignStatementService
 from domain.errors import (
     AlreadyListMemberError,
     FxAuthenticationError,
@@ -51,6 +52,7 @@ from domain.errors import (
     FxFutureDateError,
     FxRateNotAvailableError,
     FxServiceUnavailableError,
+    ImportStatementNotFoundError,
     InvalidDefaultSplitError,
     InvalidInviteEmailError,
     InvalidListNameError,
@@ -87,6 +89,8 @@ from api.schemas.lists import (
     ListMembershipsResponse,
     ListMembersResponse,
     ListResponse,
+    ReassignStatementBody,
+    ReassignStatementResponse,
     RenameListBody,
     SetDefaultSplitBody,
     UpdateExpenseOriginBody,
@@ -168,6 +172,8 @@ def _expense_item(row: ListedExpense) -> ExpenseItemResponse:
         ),
         viewer_net_polarity=net_polarity,
         origin_card_label=row.origin_card_label,
+        import_batch_id=entry.import_batch_id,
+        statement_id=entry.statement_id,
     )
 
 
@@ -658,6 +664,53 @@ def rename_list(
         )
     logger.info("list_renamed list_id=%s", result.id)
     return _list_response(result.id, result.name, result.owner_id)
+
+
+@router.post(
+    "/{list_id}/statements/{statement_id}/reassign",
+    response_model=ReassignStatementResponse,
+)
+def reassign_statement(
+    list_id: uuid.UUID,
+    statement_id: uuid.UUID,
+    body: ReassignStatementBody,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> ReassignStatementResponse | JSONResponse:
+    service = ReassignStatementService(SqlAlchemyListRepository(db))
+    try:
+        result = service.execute(
+            ReassignStatementCommand(
+                acting_user_id=user_id,
+                source_list_id=list_id,
+                statement_id=statement_id,
+                destination_list_id=body.destination_list_id,
+            )
+        )
+    except ImportStatementNotFoundError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": str(exc), "code": "statement_not_found"},
+        )
+    except InvalidSplitOverrideError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"detail": str(exc), "code": "invalid_split_override"},
+        )
+    except (ListNotFoundError, NotListMemberError):
+        return _access_denied()
+    logger.info(
+        "statement_reassigned statement_id=%s destination_list_id=%s entries=%s",
+        statement_id,
+        result.destination_list_id,
+        len(result.ledger_entry_ids),
+    )
+    return ReassignStatementResponse(
+        ledger_entry_ids=list(result.ledger_entry_ids),
+        batch_ids=list(result.batch_ids),
+        from_list_ids=list(result.from_list_ids),
+        destination_list_id=result.destination_list_id,
+    )
 
 
 @router.delete("/{list_id}", response_model=None)

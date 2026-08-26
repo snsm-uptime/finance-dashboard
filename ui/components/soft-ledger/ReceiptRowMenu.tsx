@@ -11,16 +11,18 @@ export type ReceiptRowMenuMessages = {
   menuAria: string;
   editLabel: string;
   deleteLabel: string;
+  moveStatementLabel?: string;
 };
 
 type Props = {
   messages: ReceiptRowMenuMessages;
+  onMoveStatement?: () => void;
 };
 
 /**
  * Home-list-style overflow menu. Edit/Delete are present and do not persist.
  */
-export function ReceiptRowMenu({ messages }: Props) {
+export function ReceiptRowMenu({ messages, onMoveStatement }: Props) {
   return (
     <IconButtonPopup
       button={
@@ -34,6 +36,11 @@ export function ReceiptRowMenu({ messages }: Props) {
     >
       <IconButtonPopupItem>{messages.editLabel}</IconButtonPopupItem>
       <IconButtonPopupItem danger>{messages.deleteLabel}</IconButtonPopupItem>
+      {messages.moveStatementLabel && onMoveStatement ? (
+        <IconButtonPopupItem onClick={onMoveStatement}>
+          {messages.moveStatementLabel}
+        </IconButtonPopupItem>
+      ) : null}
     </IconButtonPopup>
   );
 }

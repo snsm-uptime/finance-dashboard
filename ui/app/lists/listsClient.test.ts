@@ -313,4 +313,37 @@ describe("expense client", () => {
       expect(result.expense.provenance).toBe("hand");
     }
   });
+
+  it("reassignStatement maps 403 to errorForbidden", async () => {
+    const { reassignStatement } = await import("./listsClient");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 403,
+        json: async () => ({ code: "not_list_member", detail: "nope" }),
+      }),
+    );
+
+    const result = await reassignStatement("list-a", "stmt-1", "list-b", messages);
+    expect(result).toEqual({ ok: false, error: "forbidden" });
+  });
+
+  it("reassignStatement maps 409 invalid_split_override to errorReassignSplit", async () => {
+    const { reassignStatement } = await import("./listsClient");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: async () => ({ code: "invalid_split_override", detail: "nope" }),
+      }),
+    );
+
+    const result = await reassignStatement("list-a", "stmt-1", "list-b", {
+      ...messages,
+      errorReassignSplit: "split-conflict",
+    });
+    expect(result).toEqual({ ok: false, error: "split-conflict" });
+  });
 });

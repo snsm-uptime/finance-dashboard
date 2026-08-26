@@ -89,6 +89,15 @@ export const listsMessages = {
     receiptEdit: "Edit",
     receiptDelete: "Delete",
     receiptNewBadge: "New",
+    receiptMoveStatement: "Move statement to another list",
+    receiptMoveConfirm:
+      "Shares will follow the destination list’s default split unless this statement’s items already have their own split.",
+    receiptMovePickerTitle: "Move to another list",
+    receiptMoveConfirmAction: "Move statement",
+    receiptMoveCancel: "Cancel",
+    receiptMoveNoOtherList: "You have no other list to move this statement to.",
+    errorReassignSplit:
+      "This statement cannot move there: a payer or split on these rows is not a member of the destination list.",
   },
   es: {
     title: "Inicio",
@@ -179,6 +188,15 @@ export const listsMessages = {
     receiptEdit: "Editar",
     receiptDelete: "Eliminar",
     receiptNewBadge: "Nuevo",
+    receiptMoveStatement: "Mover el estado de cuenta a otra lista",
+    receiptMoveConfirm:
+      "Las participaciones seguirán la división predeterminada de la lista de destino, salvo que los ítems de este estado de cuenta ya tengan su propia división.",
+    receiptMovePickerTitle: "Mover a otra lista",
+    receiptMoveConfirmAction: "Mover estado de cuenta",
+    receiptMoveCancel: "Cancelar",
+    receiptMoveNoOtherList: "No tienes otra lista a la que mover este estado de cuenta.",
+    errorReassignSplit:
+      "Este estado de cuenta no se puede mover ahí: un pagador o una división de estas filas no es miembro de la lista de destino.",
   },
 } as const;
 

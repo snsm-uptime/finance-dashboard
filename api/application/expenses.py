@@ -59,6 +59,8 @@ class LedgerEntryRecord:
     external_ref: str | None = None
     origin_kind: str | None = None
     origin_card_id: UUID | None = None
+    import_batch_id: UUID | None = None
+    statement_id: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)

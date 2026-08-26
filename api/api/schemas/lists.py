@@ -79,6 +79,8 @@ class ExpenseItemResponse(BaseModel):
     viewer_net_crc: str | None = None
     viewer_net_polarity: Literal["owe", "owed", "zero"] | None = None
     origin_card_label: str | None = None
+    import_batch_id: UUID | None = None
+    statement_id: UUID | None = None
 
 
 class ListExpensesStubResponse(BaseModel):
@@ -155,3 +157,14 @@ class InviteMemberResponse(BaseModel):
     status: str
     template_kind: str
     invite_id: UUID
+
+
+class ReassignStatementBody(BaseModel):
+    destination_list_id: UUID
+
+
+class ReassignStatementResponse(BaseModel):
+    ledger_entry_ids: list[UUID]
+    batch_ids: list[UUID]
+    from_list_ids: list[UUID]
+    destination_list_id: UUID

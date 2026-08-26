@@ -33,6 +33,8 @@ function crcExpense(overrides: Partial<ExpenseItem> = {}): ExpenseItem {
     viewer_share_value: null,
     viewer_net_crc: null,
     viewer_net_polarity: null,
+    import_batch_id: null,
+    statement_id: null,
     ...overrides,
   };
 }
