@@ -4,7 +4,6 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -29,10 +28,11 @@ export function ListDefaultSplitProvider({
   children: ReactNode;
 }) {
   const [defaultSplit, setSplit] = useState<DefaultSplitPayload | null>(initial);
-
-  useEffect(() => {
+  const [seenInitial, setSeenInitial] = useState(initial);
+  if (initial !== seenInitial) {
+    setSeenInitial(initial);
     setSplit(initial);
-  }, [initial]);
+  }
 
   const setDefaultSplit = useCallback((next: DefaultSplitPayload) => {
     setSplit(next);
