@@ -287,3 +287,9 @@
 ## Deferred from: code review of 5-1-parse-failure-side-by-side-comparison.md (2026-08-26)
 
 - `FilesystemPdfStorage.delete` still unlinks any path with no volume `is_relative_to` check (`api/adapters/storage/pdf_storage.py:27`). Story 5.1 confined `read` only; `delete` is the pre-existing 4.6 helper. A corrupted stored path would be refused on PDF GET but still unlinked on cleanup.
+
+## Deferred from: code review of 5-3-reassign-statement-to-another-list.md (2026-08-26)
+
+- GET expenses swallows `InvalidSplitOverrideError` and sets `lens=None` (`api/application/expenses.py:382`) — pre-existing Epic 3 path; story 5.3 409s on reassign but dest Soft-Ledger can still go blank if an override is invalid after the move.
+- `fetchLists` always calls `replaceMembershipLists` (`ui/app/lists/listsClient.ts:109`) — opening the reassign picker reuses that helper and can rewrite homepage membership cache on a partial GET.
+- Reassign has no row lock (`api/application/reassign_statement.py` read then `apply_statement_reassign`) — same last-write-wins pattern as other list mutations; 5.4 rollback follows whichever dest flushed last.

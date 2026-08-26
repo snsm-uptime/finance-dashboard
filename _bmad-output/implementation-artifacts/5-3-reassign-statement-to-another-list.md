@@ -80,6 +80,25 @@ so that balances on both lists stay correct after the mistake.
   - [x] 4.1 Update `find_existing_identities` docstring in `import_session.py` — it still says re-import is the only repair and “no reassign yet”. Point at this story; leave 5.4 rollback as future.
   - [x] 4.2 Story-close overview (`story-close-overview-checklist.md`).
 
+### Review Findings
+
+- [x] [Review][Dismiss] Confirm copy vs statement-wide gather — keep one-line share confirm only (AC 3.3); no extra AD-4 / other-list warning.
+
+- [ ] [Review][Patch] Duplicate `_MEMBER_READ_ACTIONS = frozenset(` is a SyntaxError — ACL module cannot import [`api/domain/list_access.py:38`]
+- [ ] [Review][Patch] 409 when original `payer_id` is not a member of destination B (user decision: do not rewrite payer; reject the move) [`api/application/reassign_statement.py:118`]
+- [ ] [Review][Patch] Reassign 409 `invalid_split_override` is shown as invite `errorAlreadyMember` [`ui/app/lists/listsClient.ts:60`]
+- [ ] [Review][Patch] Override validation uses `get_split_override(home_list, …)` but UPDATE matches only `(subject_kind, subject_id)` — skip-on-None can still move an override without 409 [`api/application/reassign_statement.py:127`] [`api/adapters/persistence/repositories.py:723`]
+- [ ] [Review][Patch] Empty dest picker (only one membership) has no empty state; confirm stays disabled [`ui/app/lists/ListReceiptMenu.tsx:51`]
+- [ ] [Review][Patch] Failed `fetchLists` still opens the sheet and leaves prior `lists` in state [`ui/app/lists/ListReceiptMenu.tsx:46`]
+- [ ] [Review][Patch] Integration “non-member dest” case is actually source-deny (dest owner POSTing list A) [`api/tests/test_reassign_statement_integration.py:163`]
+- [ ] [Review][Patch] Fake `list_statement_ledger_moves` ignores `statement_id`; skip-deleted test never seeds skipped candidates [`api/tests/test_reassign_statement_application.py:76`]
+- [ ] [Review][Patch] BFF test claims cookie forward but only asserts POST method [`ui/app/api/lists-invites.bff.test.ts:255`]
+- [ ] [Review][Patch] Corrupt override payload (`assignee_id` missing) is KeyError → 500, not 409 [`api/adapters/persistence/repositories.py:735`]
+
+- [x] [Review][Defer] GET expenses swallows `InvalidSplitOverrideError` and blanks the lens [`api/application/expenses.py:382`] — deferred, pre-existing
+- [x] [Review][Defer] `fetchLists` always `replaceMembershipLists` — picker reuse can rewrite homepage cache [`ui/app/lists/listsClient.ts:109`] — deferred, pre-existing
+- [x] [Review][Defer] Reassign read/write has no `FOR UPDATE`; concurrent POSTs last-write-wins [`api/application/reassign_statement.py:80`] — deferred, pre-existing (same as other list mutations)
+
 ## Dev Notes
 
 ### Current system (must preserve)
