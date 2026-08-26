@@ -138,6 +138,16 @@ development_status:
   5-9-statement-cycle-period-selector: backlog
   epic-5-retrospective: optional
 
+  # Epic 6 — individual-list (post-v1). Do not start until Epic 5 is done unless product pulls it.
+  # Sprint Change Proposal 2026-08-26-individual-list.md
+  epic-6: backlog
+  6-1-mode-switch-on-member-count: backlog
+  6-2-spend-by-origin-statement-cycle: backlog
+  6-3-budget-list: backlog
+  6-4-budget-detail: backlog
+  6-5-budget-attribution-manual-and-rules: backlog
+  epic-6-retrospective: optional
+
 action_items:
   - epic: 1
     action: "Story-close interaction overview (how/why map) before marking stories done"

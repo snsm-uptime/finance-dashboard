@@ -2,7 +2,7 @@
 title: "PRD: finance-helper"
 status: final
 created: 2026-08-02
-updated: 2026-08-03
+updated: 2026-08-26
 ---
 
 # PRD: finance-helper
@@ -49,7 +49,9 @@ The brief's addendum remains valid as evidence and mapping reference — the BAC
 
 The **list** is the organizing concept of the product. A list is a named container of spending, owned by a user, that transactions land in. Users create as many as they find useful — one per card, one per category of spending, one per household arrangement. Every user receives a personal list on signup as the default destination for their own expenses.
 
-A list becomes shared when its owner adds other users to it. Shared lists exist to make settling up easy, and support three things: **splitting** what was spent, **settling** what is consequently owed, and **visualizing** the result. Personal lists are the same entity with a single member — not a separate concept — which is why the eventual trends dashboard can filter across personal and shared lists interchangeably.
+A list becomes shared when its owner adds other users to it. Shared lists exist to make settling up easy, and support three things: **splitting** what was spent, **settling** what is consequently owed, and **visualizing** the result. Personal lists are the **same entity** with a single member — not a separate list type — which is why a future trends dashboard can filter across personal and shared lists interchangeably.
+
+**Jobs follow member count** *(amended 2026-08-26 — Sprint Change Proposal 2026-08-26 individual-list).* v1 ships **shared-expenses settle** for lists with **two or more members**. When `member_count == 1`, the **individual-list** surface (spend by origin, then budgets) is **post-v1** (Epic 6). Inviting a second member flips that list to shared settle chrome; it does not migrate the list to a new type.
 
 This replaces the brief's per-product boolean, which could express exactly one relationship with exactly one person and would have required a schema migration the moment a second arrangement appeared.
 
@@ -364,7 +366,7 @@ A list owner can invite another person to a list by email address.
 
 #### FR-8: Peer access via membership
 
-Once a member of a list, a user can see that list's shared-expenses view and participate in splits according to membership — there is no owner-vs-viewer product role among members.
+Once a member of a list, a user can see that list and participate according to membership — there is no owner-vs-viewer product role among members. **v1** chrome is the shared-expenses / split surface. **Post-v1** solo chrome is individual-list (Epic 6); splits remain a **shared-mode** job. *(Amended 2026-08-26.)*
 
 **Consequences (testable):**
 
@@ -715,7 +717,7 @@ When a statement is parsed:
 
 #### FR-38: Shared-expenses view per list
 
-A list member can open a shared-expenses view for that list.
+A list member can open the list detail for that list. **v1** list detail is the shared-expenses settle view (this FR). **Post-v1** (`member_count == 1`): individual-list (FR-46+) instead of settle chrome. *(Amended 2026-08-26.)*
 
 **Consequences (testable):**
 
@@ -881,11 +883,21 @@ PostgreSQL schema evolution is supported via migrations as the data model change
 - Settlement. v1 shows balances; recording payments, drawing down debt, and settlement history are v2. v1's balance computation must be shaped so the running ledger can be built on it
 - Account profile and settings beyond authentication (display name, notification preferences, session management UI, FX rate overrides)
 - Machine-learning categorization. Deferred, but the schema reserves `category`, `category_confidence`, and `category_source`, and categorization must never block import. Model direction is recorded in the brief addendum
-- Trends and analytics dashboards, and personal-spending dashboards beyond the single shared-expenses view
+- Trends and analytics dashboards, and personal-spending dashboards beyond the single shared-expenses view *(kept 2026-08-26 — individual-list is post-v1, not In for v1)*
 - Promerica statement parsing itself, pending sample collection
 - CSV and HTML statement formats. The adapter contract must accommodate them as format parsers; v1 implements PDF only
 - Open-source release. The product is built generic from day one with no personal data committed, but contributor documentation, CI, licensing, and a support policy are post-v1
 - A command-line interface
+
+### Post-v1 — individual-list (Epic 6)
+
+Specified so v1 stories do not invent a personal dashboard. **Not In for v1.** See Sprint Change Proposal 2026-08-26 individual-list.
+
+- **FR-46:** List-detail chrome follows **live member count**. `1` → individual-list; `≥ 2` → shared-expenses settle (FR-38–45). Same list entity; no `list_kind`.
+- **FR-47:** Solo default hero is **spend by origin** (registered card / Cash / blank) for the selected **statement-cycle** period (FR-39). Totals are **period spend** (purchase-like lines, FR-45 spirit), not issuer current balance or minimum due. Hide split, simplify, copy settle plan, Settle CTA, and the You are owed / You owe / Balance grid.
+- **FR-48:** Solo **Budgets** tab: named budgets with caps and near-cap treatment. Budget **detail** shows cap and **related transaction history**.
+- **FR-49:** Budget attribution is **manual assign and rules** (both later in Epic 6). Shared-list budgets/dashboards are **later than Epic 6**. **Loans** are out of Epic 6.
+- **FR-50:** When a second member joins, chrome **switches** to shared settle. Budget rows may remain stored; they are not the primary shared UI in Epic 6.
 
 ## Constraints and commitments
 

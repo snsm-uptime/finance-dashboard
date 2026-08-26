@@ -32,7 +32,7 @@ FR-6: An authenticated user can create additional named lists they own; list nam
 
 FR-7: A list owner can invite another person by email; registered users receive a join invitation; unregistered addresses receive a signup-oriented invitation and land on the inviting list after signup; delivery uses transactional email.
 
-FR-8: List members can see the shared-expenses view and participate in splits; visibility is membership-based; non-members cannot read expenses or balances; no owner-vs-viewer product role among members.
+FR-8: List members can see the list and participate; visibility is membership-based; non-members cannot read expenses or balances; no owner-vs-viewer product role among members. v1 chrome is shared-expenses/splits; solo individual-list chrome is Epic 6 (FR-46).
 
 FR-9: New lists default to an even split among members; the list default can be changed to a standing percentage split that must sum to exactly 100%; new items inherit the current list default until overridden; only the list owner may edit the standing default split.
 
@@ -260,6 +260,11 @@ FR-42: Epic 3 — Receipt-style item list
 FR-43: Epic 3 (pattern) / Epic 5 (wire) — Incomplete balance disclosure
 FR-44: Epic 3 — Balance shape ready for settlement
 FR-45: Epic 3 — Line types that feed settle-up
+FR-46: Epic 6 (post-v1) — List-detail chrome follows live member count
+FR-47: Epic 6 (post-v1) — Solo spend-by-origin for statement-cycle period
+FR-48: Epic 6 (post-v1) — Solo budgets tab, caps, detail + related history
+FR-49: Epic 6 (post-v1) — Budget attribution manual + rules (later in epic); loans out
+FR-50: Epic 6 (post-v1) — Second member flips chrome to shared settle
 
 ## Epic List
 
@@ -283,6 +288,7 @@ Users create named lists, invite members by email (registered + unregistered →
 Users log shared expenses and see who owes whom in CRC on Soft-Ledger (Warm Balance tokens). Balances from per-transaction shares + payer + FR-45 line-type rules; CanonicalLine-compatible money fields; FX; incomplete-disclosure pattern ready (shows incomplete only when data says so).
 **FRs covered:** FR-19 (define), FR-21, FR-38, FR-40, FR-42, FR-43 (pattern), FR-44, FR-45
 **Demo gate:** J5 + J2
+**Deferral (2026-08-26):** Solo (`member_count == 1`) individual-list UI is **Epic 6 (post-v1)**. Stories 3.3–3.4 stay shared-expenses / settle. See Sprint Change Proposal 2026-08-26 individual-list.
 
 ### Epic 3.5: UI styling stack — Tailwind + SCSS
 Migrate `ui` from CSS Modules to Tailwind-first co-located styles, with SCSS only for custom styles. Preserve Warm Balance / Soft-Ledger (AD-12). No new product FRs.
@@ -319,6 +325,12 @@ Users register cards by IBAN, set optional manual-expense origin (card / Cash / 
 Ordered: parse failure/quarantine/hand-fix → wire FR-43 on strip → reassign/rollback → same-price + aliases → then settle polish (FR-41) + statement-cycle selector (FR-39).
 **FRs covered:** FR-22, FR-23, FR-24, FR-25, FR-26, FR-27, FR-28, FR-29, FR-30, FR-39, FR-41, FR-43 (wire)
 **Demo gate:** J3 + J7 before simplify stories
+
+### Epic 6: individual-list (post-v1)
+When a list has one member, list detail is a personal spend surface (origin totals, then budgets)—not settle-up. Same list entity; chrome follows member count.
+**FRs covered:** FR-46, FR-47, FR-48, FR-49, FR-50 (reuses FR-39 cycle selector)
+**Demo gate:** solo list shows origin spend; inviting a second member restores settle chrome
+**Sequencing note:** Do not start until Epic 5 is done (or product explicitly pulls this epic). v1 MVP does not include this epic.
 
 ## Epic 1: Accounts & personal workspace
 
@@ -731,7 +743,8 @@ So that Epic 3 settle-up and the Adjust-split UI can consume a stable share-allo
 Users log shared expenses and see who owes whom in CRC on Soft-Ledger (Warm Balance tokens). Balances from per-transaction shares + payer + FR-45 line-type rules; CanonicalLine-compatible money fields; FX; incomplete-disclosure pattern ready (shows incomplete only when data says so).
 
 **FRs covered:** FR-19 (define), FR-21, FR-38, FR-40, FR-42, FR-43 (pattern), FR-44, FR-45  
-**Demo gate:** J5 + J2
+**Demo gate:** J5 + J2  
+**Deferral (2026-08-26):** Solo individual-list UI is Epic 6 (post-v1). These stories remain shared settle.
 
 ### Story 3.1: Warm Balance tokens + Soft-Ledger primitives
 
@@ -819,6 +832,8 @@ So that I can see who owes whom at a glance (J2).
 **When** the strip renders
 **Then** layout and empty/zero states still work; live who-owes-whom numbers wire in 3.4; the pairwise 3-column settle UI is Story 5.8 (this story does not claim the final strip anatomy)
 
+**Deferral (2026-08-26):** Solo (`member_count == 1`) origin-card / budget chrome is Epic 6. This story’s ACs are for shared-expenses.
+
 ### Story 3.4: Settle-up from shares, payer, and line types
 
 As a list member,
@@ -831,6 +846,7 @@ So that the strip shows who should return what in CRC and stays ready for v2 pay
 **When** settle-up is computed for the list period
 **Then** suggested balances preserve net positions from those allocations (FR-44)
 **And** Soft-Ledger may show those nets on the interim strip (owe/owed polarity, UX-DR17); viewer pairwise columns, Balance, simplify group plan, copy, and payable-clean Settle are Story 5.8 — 3.4 must not treat a single household hero number as the finished settle UI
+**And** solo individual-list replacement of this strip is Epic 6 (post-v1) — not this story
 
 **Given** lines with excluded types (payment, interest, fee, voluntary_service, installment_schedule, balance_forward, unclassified credit_note, etc.)
 **When** settle-up runs
@@ -1335,6 +1351,7 @@ So that I see the number I came to update (J1 climax).
 **And** an empty pending queue **without** Save does not land and does not delete the PDF
 **And** Bulk review (Story 4.7) is unchanged: no sheet; existing bulk commit may still idle-release as today
 **And** the Soft-Ledger settle strip reflects the new committed purchases — same strip as Epic 3, no parallel settle UI
+**And** landing on that strip is correct for **v1 / shared lists**; solo origin-card landing is Epic 6 (post-v1) — do not implement it here
 **And** when Epic 5 same-price conflicts exist, Story 5.7 inserts conflict review after this summary and before Soft-Ledger land — do not land on a confident strip then interrupt (UX-DR22)
 
 **Given** a statement parsed correctly and committed with no unresolved quarantine
@@ -1538,6 +1555,8 @@ Ordered: parse failure → dismiss → reassign/rollback → same-price + aliase
 **Scope change (2026-08-25):** Story 4.10's row-level review model (per-transaction assign/delete/undo before Save on ImportReviewSheet) made statement-level quarantine redundant — rows that parse already resolve independently before Save, so there is no "partial statement" state left to hold in limbo. Old Story 5.2 ("Accept with quarantine or dismiss") is replaced by dismiss-only; old Story 5.3 ("Hand-edit unresolved rows against PDF") is cut — there is no unresolved-row bucket to hand-fix (manual expense entry, FR-21, remains the general hand-entry path). FR-27 is removed from v1; FR-26, FR-28, and FR-43 are reworded. FR-43's incomplete-disclosure trigger now sources solely from unresolved same-price conflicts (Story 5.7, was 5.4) instead of quarantine, so disclosure-wiring now builds after conflict review rather than before it. Stories renumbered 5.5–5.10 → 5.3–5.9 accordingly. AD-3, AD-4, and AD-17 are amended by Sprint Change Proposal 2026-08-25. See that proposal for full rationale.
 
 **Scope change (2026-08-26):** Story 5.8 is settle polish, not “simplify overlay on a single hero amount.” List-detail Balance strip is a viewer-centric three-column grid (You are owed | You owe | Balance), Simplify produces a group transfer plan, CopyButton copies that plan as plain text, and Settle means the viewer already paid their payables (column clean for them; inbound balances remain for later pay-up reminders). See Sprint Change Proposal 2026-08-26. Stories 3.3–3.4 stay done (docs/traceability only).
+
+**Deferral (2026-08-26):** Stories 5.7–5.9 remain **shared-mode**. Solo individual-list UI is Epic 6. Story 5.9’s cycle selector is reused by Epic 6.2.
 
 ### Story 5.1: Parse failure → side-by-side comparison
 
@@ -1764,6 +1783,8 @@ So that I never trust a confident total that silently omits unresolved purchases
 **When** the period is complete again
 **Then** the incomplete disclosure clears and the strip returns to a confident settle figure
 
+**Deferral (2026-08-26):** This disclosure is for the **shared** settle strip. Solo lists do not use this strip after Epic 6.
+
 ### Story 5.8: Settle-up pairwise grid, simplify group plan, copy to share
 
 As a list member,
@@ -1805,6 +1826,7 @@ So that I can settle with fewer transactions and, when I settle, my payables are
 **When** I open Simplify
 **Then** Simplify remains available but may show empty / no-op suggestions
 **And** it never invents debts
+**And** after Epic 6, solo lists hide Simplify entirely (this AC is v1 shared-mode, including interim solo-on-settle-strip)
 
 **Given** I dismiss Simplify
 **When** I return to the pairwise grid
@@ -1839,3 +1861,102 @@ So that settle-up matches the statement window I care about.
 **Given** EN/ES locale
 **When** cycle labels are shown
 **Then** chrome is localized; card labels remain free text (UX-DR18)
+
+**Deferral (2026-08-26):** Cycle selection is **shared-expenses** in v1. Epic 6.2 reuses the same period for solo spend-by-origin.
+
+## Epic 6: individual-list (post-v1)
+
+When a list has one member, list detail is a personal spend surface (origin totals, then budgets)—not settle-up. Same list entity; chrome follows live member count.
+
+**FRs covered:** FR-46, FR-47, FR-48, FR-49, FR-50 (reuses FR-39)  
+**Demo gate:** solo list shows origin spend; inviting a second member restores settle chrome  
+**Sequencing:** After Epic 5. Out of this epic: loans; shared-list budgets; recording payments.
+
+### Story 6.1: Mode switch on member count
+
+As a list member,
+I want list detail chrome to follow how many people are on the list,
+So that a solo list is not a household settle screen, and inviting someone restores settle.
+
+**Acceptance Criteria:**
+
+**Given** a list with exactly one member
+**When** I open list detail
+**Then** split/settle/simplify/copy-plan/Settle and the You are owed / You owe / Balance grid are not shown (FR-46)
+**And** Adjust split is not offered on create/edit
+
+**Given** a second member joins that list
+**When** I open list detail
+**Then** shared-expenses settle chrome from Epic 5 is shown (FR-50)
+**And** budget chrome is not the primary shared UI in this epic
+
+**Given** CI
+**When** member count is 1 vs ≥ 2
+**Then** tests cover both chrome branches
+
+### Story 6.2: Spend by origin for the statement cycle
+
+As the only member of a list,
+I want to see how much was spent per origin this statement cycle,
+So that I know what went on each card, cash, or unassigned origin.
+
+**Acceptance Criteria:**
+
+**Given** a solo list with committed purchases in the selected cycle
+**When** I open list detail
+**Then** the hero is **period spend by origin** (registered card / Cash / blank) (FR-47)
+**And** the period is the **statement-cycle** selector from Story 5.9 (FR-39)
+**And** included lines follow spend (FR-45 spirit), not who-owes-whom
+**And** amounts are **period spend**, not issuer current balance or minimum due
+
+**Given** receipts exist
+**When** I scroll below origin cards
+**Then** newest-first receipt list remains available
+
+### Story 6.3: Budget list
+
+As the only member of a list,
+I want a Budgets tab with named caps,
+So that I can see which envelopes are near their cap.
+
+**Acceptance Criteria:**
+
+**Given** a solo list
+**When** I open the Budgets tab
+**Then** I can create/list budgets with name, cap, and currency (FR-48)
+**And** near-cap state is visible
+**And** this tab is not the primary UI when `member_count ≥ 2`
+
+### Story 6.4: Budget detail
+
+As the only member of a list,
+I want a budget detail page with related transactions,
+So that I can see what counted toward a cap.
+
+**Acceptance Criteria:**
+
+**Given** a budget on a solo list
+**When** I open its detail
+**Then** I see the cap and a history of related transactions (FR-48)
+**And** history may be empty until Story 6.5 attributes lines
+
+### Story 6.5: Budget attribution — manual and rules
+
+As the only member of a list,
+I want to assign transactions to budgets by hand and by rules,
+So that budget history and near-cap are based on real spend.
+
+**Acceptance Criteria:**
+
+**Given** a budget and committed lines
+**When** I assign manually
+**Then** those lines appear on budget detail history (FR-49)
+
+**Given** a matching rule on a budget
+**When** new or existing lines match
+**Then** they are attributed without a second manual step (FR-49)
+
+**Given** this story
+**When** scope is considered
+**Then** loans and shared-list budgets are out
+

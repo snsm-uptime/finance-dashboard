@@ -225,7 +225,7 @@ Soft-Ledger hybrid type manner: **medium-light weights** (≈400–550), not Can
 
 **Personality:** Soft-Ledger hybrid — looser strip island + airier rows within Ledger Strip scan order.
 
-**List surface order (product):** settle balances / amounts first; receipts newest-first below.
+**List surface order (product):** For **`member_count ≥ 2`**, settle balances / amounts first; receipts newest-first below. For **`member_count == 1`** (post-v1 Epic 6), **origin spend cards** replace the settle strip; receipts may remain newest-first below. v1 implements the shared order only.
 
 **Soft-Ledger hybrid structure (phone)**
 
@@ -276,7 +276,13 @@ Specs below distill the Soft-Ledger hybrid panel. Dark mode swaps `*-dark` color
 
 ### Balance strip (`components.balance-strip`)
 
-Hero of the shared-list surface. Anatomy (list **detail**, Story 5.8): three columns — **You are owed** (CRC + member names) · **You owe** (CRC + member names) · **Balance** (viewer signed net, owe/owed color by sign). Island inset from screen edges. Actions: **Simplify** (group transfer plan, fewer payments, nets preserved) and **Copy** (`CopyButton`, plain-text plan). **Settle** means the viewer already paid “You owe”; that column is then empty/clean; “You are owed” remains for later reminders. Never label a control as recording a bank payment. Lists **homepage** may keep a compact glimpse (UX-DR7). Do not use a single who-line + hero amount as the primary list-detail settle read.
+Hero of the **shared-list** surface (`member_count ≥ 2`). Anatomy (list **detail**, Story 5.8): three columns — **You are owed** (CRC + member names) · **You owe** (CRC + member names) · **Balance** (viewer signed net, owe/owed color by sign). Island inset from screen edges. Actions: **Simplify** (group transfer plan, fewer payments, nets preserved) and **Copy** (`CopyButton`, plain-text plan). **Settle** means the viewer already paid “You owe”; that column is then empty/clean; “You are owed” remains for later reminders. Never label a control as recording a bank payment. Lists **homepage** may keep a compact glimpse (UX-DR7). Do not use a single who-line + hero amount as the primary list-detail settle read.
+
+**Post-v1 (Epic 6):** when `member_count == 1`, do **not** use this strip. Replace with **origin cards** (period spend per origin, statement-cycle selector). Hide Simplify, Copy settle plan, Settle, and owed/owe columns.
+
+### Origin cards (`components.origin-cards`) — post-v1
+
+Solo list hero. One island (or row of islands) per origin with **period spend**. Warm Balance tokens; Soft-Ledger island language — not a new visual system. Full mock when Epic 6 is pulled.
 
 ### Button — primary (`components.button-primary`)
 
@@ -320,7 +326,7 @@ Not redrawn on Soft-Ledger hybrid panel; Soft Type panel showed disclosure under
 
 | Do | Don't |
 |---|---|
-| Lead every list surface with the settle amount in the Soft-Ledger strip island | Hide the number behind dense tables, charts, or long receipt scrolls |
+| Lead **shared** list surfaces (`member_count ≥ 2`) with the settle amount in the Soft-Ledger strip island | Hide that number behind dense tables, charts, or long receipt scrolls **on shared lists**; do not keep the settle strip as the solo hero (Epic 6) |
 | Use `{colors.owe}` / `{colors.owed}` for polarity | Color-code money with unsemantic rainbow badges |
 | Keep Soft-Ledger air: inset island, transparent receipts, 1px borders | Canonical full-bleed heavy rules or Dense Ink 2px chrome as default |
 | Ship both token sets; honor Account theme Light / Dark / System (default System) | Ship light-only, invent a third “brand” mode, or ignore the user’s theme choice |

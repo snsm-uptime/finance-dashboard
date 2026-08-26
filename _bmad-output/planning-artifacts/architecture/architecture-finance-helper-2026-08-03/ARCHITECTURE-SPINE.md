@@ -7,13 +7,14 @@ paradigm: 'hexagonal / ports-and-adapters'
 scope: 'finance-helper v1 thin vertical slice (upload → parse → store → shared-expenses) and bank-adapter extension surface'
 status: final
 created: '2026-08-03'
-updated: '2026-08-19'
+updated: '2026-08-26'
 binds:
   - auth
   - lists
   - ingest
   - review
   - settle-up
+  - individual-list
   - adapters
 sources:
   - '_bmad-output/planning-artifacts/prds/prd-finance-helper-2026-08-02/prd.md'
@@ -29,7 +30,7 @@ companions:
 
 ## Design Paradigm
 
-**Hexagonal / ports-and-adapters.** Domain (users, lists, membership, cards, dedup identity, import-session/batch commit, settle math, FX application) has no imports from Next.js, FastAPI routing, SQLAlchemy sessions, or PDF libraries. Driving adapters: bank parsers (`pdfplumber`), BCCR client, SMTP, Postgres repositories. Driven adapters: HTTP API (FastAPI), browser UI (Next.js).
+**Hexagonal / ports-and-adapters.** Domain (users, lists, membership, cards, dedup identity, import-session/batch commit, settle math, FX application; **post-v1:** budget records + spend-by-origin read model) has no imports from Next.js, FastAPI routing, SQLAlchemy sessions, or PDF libraries. Driving adapters: bank parsers (`pdfplumber`), BCCR client, SMTP, Postgres repositories. Driven adapters: HTTP API (FastAPI), browser UI (Next.js).
 
 Ingest is a **pipeline inside the application ring**, not the top-level paradigm: detect → split → parse → normalize → stage (Import Session) → review → commit (Import Batch).
 
@@ -237,6 +238,12 @@ flowchart LR
 - **Prevents:** Double-counting statement transfers vs recorded payments; inventing a payment ledger in v1
 - **Rule:** v1 settle-up is **computed shares** (pairwise viewer-vs-member edges + member nets). **Simplify** is a pure function: fewer suggested transfers that preserve nets. **Copy** is UI clipboard only (`CopyButton`). Taxonomy MUST include a line type for inter-member transfers so such rows can be stored without feeding settle allocations. **Recording/reconciling bank settlement payments is out of v1.** **Settle (viewer):** assumes the actor already paid their payables; their “You owe” side is clean; inbound “You are owed” remains for a later remind-to-pay feature. v1 may persist a **minimal payable-settled assertion** for that actor — it MUST NOT write transfer lines as if money moved in the app.
 
+### AD-29 — individual-list mode (post-v1) [ADOPTED]
+
+- **Binds:** FR-46–50; Epic 6; list detail read model
+- **Prevents:** A `list_kind` column; treating solo spend totals as issuer statement balance; pulling individual-list into v1 settle stories
+- **Rule:** Mode is **live membership count**, not a list type. `member_count ≥ 2` → settle read model (AD-21). `member_count == 1` → **spend-by-origin** for the selected statement cycle (period spend by card / Cash / blank; FR-45-like included lines). **Not** current balance or minimum due. **Budgets** are list-scoped (name, cap, currency); UI is **solo-only** in Epic 6. Attribution (manual + rules) is later in the epic. Second membership **flips** chrome to settle; budget rows may remain persisted. **Loans out.** Shared-list budgets later than Epic 6. **v1 does not implement this AD.** Stack unchanged (AD-2, AD-5).
+
 ### AD-22 — Operational envelope [ADOPTED]
 
 - **Binds:** deploy, environments, ops
@@ -423,6 +430,7 @@ erDiagram
 | PDF failure comparison (dismiss-only) | `ui` react-pdf + PDF path | AD-3, AD-12 |
 | Same-price conflicts | `application` match | AD-10 |
 | Settle-up / simplify CRC | `domain` + materialized FX | AD-5, AD-6, AD-7, AD-21 |
+| individual-list (post-v1) | `domain` + list detail API/UI | AD-29 |
 | Invites email | SMTP adapter | AD-8, AD-19 |
 | CI / branches / SemVer | repo tooling | AD-11, AD-13, AD-14, AD-15 |
 | Operator deploy | Compose + volumes/proxy | AD-2, AD-3, AD-22 |
@@ -436,6 +444,7 @@ erDiagram
 | Traefik vs Caddy vs other proxy | Same-origin cookie contract matters; brand does not |
 | Operator real-PDF harness UX | Policy locked (AD-11) |
 | Settlement payment recording / double-count flows | AD-21: out of v1; taxonomy stub only |
+| individual-list UI + budgets (Epic 6) | AD-29: post-v1; do not implement in v1 stories |
 | User FX override | Out of v1 (AD-7) |
 | CSV/HTML format adapters | Contract allows; v1 PDF only |
 | ML categorization / trends | PRD out of v1 |

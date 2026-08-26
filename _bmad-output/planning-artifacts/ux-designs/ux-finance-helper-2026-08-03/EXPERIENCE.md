@@ -3,7 +3,7 @@ name: finance-helper
 status: final
 sources:
   - {planning_artifacts}/prds/prd-finance-helper-2026-08-02/prd.md
-updated: 2026-08-21
+updated: 2026-08-26
 ---
 
 # finance-helper — Experience Spine
@@ -18,7 +18,7 @@ UI system **unspecified** — Architecture chooses the stack. These spines own W
 
 Appearance: Light / Dark / System (both token sets in scope; default System). Product name: finance-helper (mark TBD in `DESIGN.md`).
 
-**Out of v1 UI:** settlement recording, profile/settings product surface, expense-distribution dashboard tab, ML, trends.
+**Out of v1 UI:** settlement recording, profile/settings product surface, expense-distribution dashboard tab, ML, trends, **individual-list** (origin cards, budget tabs — Epic 6).
 
 ## Information Architecture
 
@@ -26,7 +26,7 @@ Appearance: Light / Dark / System (both token sets in scope; default System). Pr
 |---|---|---|
 | First paint | App open (signed in) | Remembered last-opened list; if none → Lists homepage |
 | Lists homepage | First paint fallback; navigate away from a list | All lists the user belongs to |
-| Shared-expenses (list detail) | First paint (remembered), Lists homepage row, post-import landing | Settle-up balances first; receipt/items newest-first below |
+| Shared-expenses (list detail) | First paint (remembered), Lists homepage row, post-import landing | **v1 / `member_count ≥ 2`:** settle-up balances first; receipt/items newest-first below. **Post-v1 / solo:** individual-list (Epic 6) — origin spend first; Budgets tab; no settle chrome |
 | Upload | Global Upload; also from inside a list | Pick PDF → Individual or Bulk review mode → ingest |
 | Individual review | Upload (mode = Individual); Resume from Upload | One transaction at a time; assign / default / delete / undo; then ImportReviewSheet (grouped by list, per-row discard, one Save) *(amended 2026-08-21)* |
 | Bulk review | Upload (mode = Bulk) | Assign/commit statements; list-context upload may pre-select destination for Bulk only |
@@ -38,7 +38,7 @@ Appearance: Light / Dark / System (both token sets in scope; default System). Pr
 | Invitee signup | Invite email link | Email + password; lands on inviting list |
 | Account menu | Chrome (minimal) | Sign out + password reset + **Language (EN/ES)** + **Theme (Light / Dark / System)** — **no** profile/settings surface |
 
-**Not v1:** Distribution dashboard tab (desired post-v1).
+**Not v1:** Distribution dashboard tab (desired post-v1). **individual-list** origin cards + budget list/detail (Epic 6, solo only; shared-list budgets later).
 
 List-scoped upload pre-selects destination **only for Bulk** — does not change Individual default destination.
 
@@ -51,7 +51,7 @@ List-scoped upload pre-selects destination **only for Bulk** — does not change
 - **Lifted from Splitwise:** who-owes-whom instantly scannable — the settle-up strip is the number the user came for (`{colors.owe}` / `{colors.owed}` amount chrome).
 - **Rejected — bank apps (dense tables):** ledger rows stay airy Soft-Ledger hybrid; balances before receipts; no spreadsheet wall on open.
 - **Rejected — bank jargon / product codes as UI language:** cards show the user’s label, not bank product names; copy stays plain (see Voice).
-- **Rejected — hiding the number you came for:** shared-expenses opens on settle-up amounts, not buried under receipts or chrome.
+- **Rejected — hiding the number you came for:** shared-expenses (`≥ 2` members) opens on settle-up amounts, not buried under receipts or chrome. Solo post-v1 opens on **origin spend**, not settle.
 
 ## Voice and Tone
 
@@ -73,7 +73,9 @@ Behavioral. Visual specs live in `DESIGN.md.Components`.
 
 | Component | Use | Behavioral rules |
 |---|---|---|
-| Settle-up strip | Shared-expenses top | Three columns: You are owed · You owe · Balance (viewer net), CRC. Simplify → group plan; CopyButton → plain text. Settle clears the viewer’s payables (already paid). Incomplete-period disclosure below the island. Not a bank-settlement recording control. |
+| Settle-up strip | Shared-expenses top (`member_count ≥ 2`) | Three columns: You are owed · You owe · Balance (viewer net), CRC. Simplify → group plan; CopyButton → plain text. Settle clears the viewer’s payables (already paid). Incomplete-period disclosure below the island. Not a bank-settlement recording control. **Hidden on solo lists (Epic 6).** |
+| Origin cards | Solo list detail top (Epic 6) | Period spend per origin (card / Cash / blank) for the statement-cycle period. Not issuer current balance. |
+| Budgets tab / detail | Solo list (Epic 6) | List of budgets with caps; detail = cap + related transaction history. Attribution later in epic. Hide as primary UI when a second member joins. |
 | Receipt row | Shared-expenses below strip | Newest-first. Tap → item detail / edit when those exist. FX: show enough original + converted CRC to audit. |
 | List row | Lists homepage | Opens shared-expenses for that list. |
 | Upload entry | Global + list chrome | Global reaches ingest always. From list: Bulk may pre-select that list as destination; Individual default destination unchanged. |
@@ -138,8 +140,8 @@ Behavioral. Visual contrast lives in `DESIGN.md` (Warm Balance light/dark tokens
 
 - **WCAG 2.2 AA** across phone and desktop web surfaces.
 - Review outcomes exposed to assistive tech as labeled actions (not gesture-only): desktop buttons; phone swipes must have equivalent accessible controls or announcements so outcomes remain operable without swipe.
-- Screen reader: announce surface on navigation (e.g. list name + settle-up context); quarantine disclosure is announced, not color-only.
-- Focus order follows reading order: settle-up strip → receipts; comparison PDF/extracted regions labeled; conflict cards selectable by keyboard.
+- Screen reader: announce surface on navigation (e.g. list name + settle-up context **or**, post-v1 solo, individual-list / origin context); quarantine disclosure is announced, not color-only.
+- Focus order follows reading order: settle-up strip → receipts **(shared)**; **solo Epic 6:** cycle selector → origin cards → tabs → receipts; comparison PDF/extracted regions labeled; conflict cards selectable by keyboard.
 - Tap/click targets usable on phone viewport; Reduce Motion: no required motion to complete review, quarantine, or conflict pick.
 - Language: UI strings available in EN and ES (see Internationalization); `lang` switches with locale.
 
