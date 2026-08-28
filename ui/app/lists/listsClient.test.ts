@@ -5,6 +5,7 @@ import {
   fetchLists,
   inviteMember,
   renameList,
+  rollbackImportBatch,
   saveDefaultSplit,
   setDefaultImportList,
 } from "./listsClient";
@@ -345,5 +346,64 @@ describe("expense client", () => {
       errorReassignSplit: "split-conflict",
     });
     expect(result).toEqual({ ok: false, error: "split-conflict" });
+  });
+
+  it("rollbackImportBatch treats 204 as success", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
+      json: async () => {
+        throw new Error("no body");
+      },
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await rollbackImportBatch("list-1", "batch-1", messages);
+    expect(result).toEqual({ ok: true });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/lists/list-1/import-batches/batch-1",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
+  it("rollbackImportBatch maps 404 to generic", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        json: async () => ({ code: "import_batch_not_found", detail: "missing" }),
+      }),
+    );
+    const result = await rollbackImportBatch("list-1", "batch-1", messages);
+    expect(result).toEqual({ ok: false, error: "generic" });
+  });
+
+  it("rollbackImportBatch maps 401 to unauthorized", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        json: async () => ({ detail: "Not authenticated." }),
+      }),
+    );
+    const result = await rollbackImportBatch("list-1", "batch-1", messages);
+    expect(result).toEqual({ ok: false, error: "unauthorized" });
+  });
+});
+
+describe("lists i18n rollback keys", () => {
+  it("has matching EN/ES rollback copy", async () => {
+    const { listsMessages } = await import("@/lib/i18n/lists");
+    for (const key of [
+      "rollbackBatchConfirmTitle",
+      "rollbackBatchConfirmBody",
+      "rollbackBatchConfirmBodyCount",
+      "rollbackBatchConfirmAction",
+    ] as const) {
+      expect(listsMessages.en[key].length).toBeGreaterThan(0);
+      expect(listsMessages.es[key].length).toBeGreaterThan(0);
+    }
   });
 });

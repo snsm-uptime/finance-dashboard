@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from "react";
 
 import { Chip, type ChipTone } from "@/components/Chip";
 
-import { ReceiptRowMenu, type ReceiptRowMenuMessages } from "./ReceiptRowMenu";
+import { ReceiptRowMenu, type ReceiptRowMenuMessages, type ReceiptRowRollback } from "./ReceiptRowMenu";
 
 export type ReceiptRowProps = {
   title?: string;
@@ -24,6 +24,7 @@ export type ReceiptRowProps = {
   netPolarity?: "owe" | "owed";
   menu?: ReceiptRowMenuMessages;
   menuSlot?: ReactNode;
+  rollback?: ReceiptRowRollback;
   /** Localized "New" chip text for freshly imported parser rows (Story 4.15). */
   newBadgeLabel?: string;
   /** Empty settle surface — muted placeholder, no invented totals. */
@@ -109,6 +110,7 @@ export function ReceiptRow({
   netPolarity,
   menu,
   menuSlot,
+  rollback,
   newBadgeLabel,
   emptyLabel,
   fxSummary,
@@ -179,7 +181,7 @@ export function ReceiptRow({
           </div>
         ) : menu ? (
           <div className="self-center" style={{ gridArea: "menu" }}>
-            <ReceiptRowMenu messages={menu} />
+            <ReceiptRowMenu messages={menu} rollback={rollback} />
           </div>
         ) : null}
 

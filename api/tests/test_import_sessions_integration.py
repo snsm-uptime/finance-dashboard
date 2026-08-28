@@ -1809,7 +1809,8 @@ def test_session_summary_fields_mix_and_undo(
     assert after["committed_by_list"] == []
 
 
-def test_discard_retains_failed_statement_pdf(client: TestClient, db_session: Session) -> None:
+def test_discard_releases_failed_statement_pdf(client: TestClient, db_session: Session) -> None:
+    """Story 5.2: session discard always releases PDFs, even while a statement is failed."""
     _register(client, "discardfailed@example.com")
     user_id = UUID(client.get("/auth/me").json()["user_id"])
     repo = SqlAlchemyImportSessionRepository(db_session)
@@ -1836,8 +1837,8 @@ def test_discard_retains_failed_statement_pdf(client: TestClient, db_session: Se
     statement = db_session.scalars(
         select(ImportStatementModel).where(ImportStatementModel.session_id == record.id)
     ).one()
-    assert statement.pdf_path is not None
-    assert Path(path).exists()
+    assert statement.pdf_path is None
+    assert not Path(path).exists()
 
 
 # --- Story 4.13.1: assigned_rows payload + per-row unassign (ImportReviewSheet) ---
@@ -2334,3 +2335,166 @@ def test_dismiss_file_mixed_session_abandons_pending_and_404s_pdf(
         select(LedgerEntryModel).where(LedgerEntryModel.list_id == list_id)
     ).all()
     assert len(ledger_rows) == 1
+
+
+def test_rollback_bulk_batch_clears_ledger_and_batch(
+    client_with_fx: TestClient, db_session: Session
+) -> None:
+    client = client_with_fx
+    _register(client, "rollbackbulk@example.com")
+    session_id = _upload_bac_session(client)
+    list_id = _own_list_id(client)
+    goldens = _load_goldens_module()
+
+    committed = client.post(f"/import/sessions/{session_id}/bulk-commit", json={"list_id": list_id})
+    assert committed.status_code == 200, committed.text
+    batch_id = committed.json()["batches"][0]["id"]
+    assert client.post(f"/import/sessions/{session_id}/finalize").status_code == 200
+
+    expenses = client.get(f"/lists/{list_id}/expenses")
+    assert expenses.status_code == 200
+    assert len(expenses.json()["expenses"]) == len(goldens.GOLDENS)
+    assert all(row["import_batch_id"] == batch_id for row in expenses.json()["expenses"])
+
+    rolled = client.delete(f"/lists/{list_id}/import-batches/{batch_id}")
+    assert rolled.status_code == 204, rolled.text
+    assert rolled.content == b""
+
+    after = client.get(f"/lists/{list_id}/expenses")
+    assert after.status_code == 200
+    assert after.json()["expenses"] == []
+    balances = client.get(f"/lists/{list_id}/balances")
+    assert balances.status_code == 200
+    assert balances.json()["balance_crc"] == "0"
+    db_session.expire_all()
+    assert db_session.get(ImportBatchModel, UUID(batch_id)) is None
+    leftover = db_session.scalars(
+        select(LedgerEntryModel).where(LedgerEntryModel.list_id == UUID(list_id))
+    ).all()
+    assert leftover == []
+
+    again = client.delete(f"/lists/{list_id}/import-batches/{batch_id}")
+    assert again.status_code == 404
+    assert again.json()["code"] == "import_batch_not_found"
+
+
+def test_rollback_one_individual_batch_leaves_sibling(
+    client_with_fx: TestClient, db_session: Session
+) -> None:
+    client = client_with_fx
+    _register(client, "rollbacksibling@example.com")
+    session_id = UUID(_upload_bac_session(client))
+    list_id = UUID(_own_list_id(client))
+    actor_id = UUID(client.get("/auth/me").json()["user_id"])
+    repo, lookup, fx, _storage = _services(db_session)
+    statement = db_session.scalars(
+        select(ImportStatementModel).where(ImportStatementModel.session_id == session_id)
+    ).one()
+    candidates = list(
+        db_session.scalars(
+            select(ImportCandidateRowModel)
+            .where(ImportCandidateRowModel.statement_id == statement.id)
+            .order_by(ImportCandidateRowModel.sequence)
+        )
+    )
+    first, second = candidates[0], candidates[1]
+    batch_1 = (
+        AssignCandidateRowService(repo, lookup, fx)
+        .execute(
+            AssignCandidateRowCommand(
+                actor_user_id=actor_id, session_id=session_id, row_id=first.id, list_id=list_id
+            )
+        )
+        .batch
+    )
+    batch_2 = (
+        AssignCandidateRowService(repo, lookup, fx)
+        .execute(
+            AssignCandidateRowCommand(
+                actor_user_id=actor_id, session_id=session_id, row_id=second.id, list_id=list_id
+            )
+        )
+        .batch
+    )
+    assert batch_1 is not None and batch_2 is not None
+
+    rolled = client.delete(f"/lists/{list_id}/import-batches/{batch_1.id}")
+    assert rolled.status_code == 204, rolled.text
+
+    expenses = client.get(f"/lists/{list_id}/expenses")
+    assert expenses.status_code == 200
+    remaining = expenses.json()["expenses"]
+    assert len(remaining) == 1
+    assert remaining[0]["import_batch_id"] == str(batch_2.id)
+    db_session.expire_all()
+    assert db_session.get(ImportBatchModel, batch_2.id) is not None
+    first_row = db_session.get(ImportCandidateRowModel, first.id)
+    assert first_row is not None
+    assert first_row.status == ROW_STATUS_COMMITTED
+
+    # AC #4: settle figures come from the remaining ledger, not a wiped one.
+    balances = client.get(f"/lists/{list_id}/balances")
+    assert balances.status_code == 200
+    remaining_ledger = db_session.scalars(
+        select(LedgerEntryModel).where(LedgerEntryModel.list_id == list_id)
+    ).all()
+    assert len(remaining_ledger) == 1
+    assert remaining_ledger[0].import_batch_id == batch_2.id
+
+
+def test_rollback_then_reimport_commits_new_batch_not_skipped(
+    client_with_fx: TestClient, db_session: Session
+) -> None:
+    client = client_with_fx
+    _register(client, "rollbackreimport@example.com")
+    session_id = _upload_bac_session(client)
+    list_id = _own_list_id(client)
+    goldens = _load_goldens_module()
+
+    first = client.post(f"/import/sessions/{session_id}/bulk-commit", json={"list_id": list_id})
+    assert first.status_code == 200, first.text
+    batch_id = first.json()["batches"][0]["id"]
+    assert client.post(f"/import/sessions/{session_id}/finalize").status_code == 200
+    assert client.delete(f"/lists/{list_id}/import-batches/{batch_id}").status_code == 204
+
+    second_session = _upload_bac_session(client)
+    second = client.post(
+        f"/import/sessions/{second_session}/bulk-commit", json={"list_id": list_id}
+    )
+    assert second.status_code == 200, second.text
+    assert second.json()["skipped_duplicate_count"] == 0
+    assert second.json()["imported_new_count"] == len(goldens.GOLDENS)
+    new_batch = second.json()["batches"][0]["id"]
+    assert new_batch != batch_id
+    expenses = client.get(f"/lists/{list_id}/expenses")
+    assert len(expenses.json()["expenses"]) == len(goldens.GOLDENS)
+    assert all(row["import_batch_id"] == new_batch for row in expenses.json()["expenses"])
+
+
+def test_rollback_acl_and_wrong_list_are_not_found(
+    client_with_fx: TestClient, db_session: Session
+) -> None:
+    client = client_with_fx
+    _register(client, "rollbackowner@example.com")
+    session_id = _upload_bac_session(client)
+    list_a = _own_list_id(client)
+    list_b = client.post("/lists", json={"name": "Other list"}).json()["id"]
+    committed = client.post(f"/import/sessions/{session_id}/bulk-commit", json={"list_id": list_a})
+    batch_id = committed.json()["batches"][0]["id"]
+
+    wrong_list = client.delete(f"/lists/{list_b}/import-batches/{batch_id}")
+    assert wrong_list.status_code == 404
+    assert wrong_list.json()["code"] == "import_batch_not_found"
+
+    client.post("/auth/sign-out")
+    _register(client, "rollbackstranger@example.com")
+    stranger = client.delete(f"/lists/{list_a}/import-batches/{batch_id}")
+    assert stranger.status_code == 404
+    assert stranger.json()["code"] == "import_batch_not_found"
+
+    unauth = TestClient(client.app)
+    naked = unauth.delete(f"/lists/{list_a}/import-batches/{batch_id}")
+    assert naked.status_code == 401
+
+    db_session.expire_all()
+    assert db_session.get(ImportBatchModel, UUID(batch_id)) is not None

@@ -293,3 +293,7 @@
 - GET expenses swallows `InvalidSplitOverrideError` and sets `lens=None` (`api/application/expenses.py:382`) — pre-existing Epic 3 path; story 5.3 409s on reassign but dest Soft-Ledger can still go blank if an override is invalid after the move.
 - `fetchLists` always calls `replaceMembershipLists` (`ui/app/lists/listsClient.ts:109`) — opening the reassign picker reuses that helper and can rewrite homepage membership cache on a partial GET.
 - Reassign has no row lock (`api/application/reassign_statement.py` read then `apply_statement_reassign`) — same last-write-wins pattern as other list mutations; 5.4 rollback follows whichever dest flushed last.
+
+## Deferred from: code review of 5-4-roll-back-an-import-batch.md (2026-08-27)
+
+- No audit trail for import-batch rollback (who deleted a committed batch and when) — `RollbackImportBatchService`/`rollback_batch` hard-delete ledger rows, split overrides, and the batch row with no log entry. Pre-existing gap: no audit-log infrastructure exists anywhere in this codebase for any mutation today (`api/application/import_rollback.py`).

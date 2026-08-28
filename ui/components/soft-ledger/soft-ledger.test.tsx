@@ -43,6 +43,10 @@ vi.mock("@/components/IconButton/IconButton.module.scss", () => ({
   ),
 }));
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
+
 describe("Soft-Ledger primitives", () => {
   let host: HTMLDivElement;
   let root: Root;
@@ -58,6 +62,7 @@ describe("Soft-Ledger primitives", () => {
       root.unmount();
     });
     host.remove();
+    vi.unstubAllGlobals();
   });
 
   it("renders BalanceStrip who-line + amount with text polarity", () => {
@@ -186,6 +191,82 @@ describe("Soft-Ledger primitives", () => {
     });
     expect(host.textContent).toContain("Edit");
     expect(host.textContent).toContain("Delete");
+  });
+
+  it("parser row with batch id confirms then DELETE import-batches, not expense id", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 204, json: async () => null });
+    vi.stubGlobal("fetch", fetchMock);
+
+    act(() => {
+      root.render(
+        <ReceiptRow
+          title="Parser coffee"
+          amount="₡10"
+          menu={{ menuAria: "Expense options", editLabel: "Edit", deleteLabel: "Delete" }}
+          rollback={{
+            listId: "list-1",
+            batchId: "batch-9",
+            confirmTitle: "Undo this import?",
+            confirmBody: "This removes 2 expenses from that import action.",
+            confirmAction: "Undo import",
+            cancelLabel: "Cancel",
+            errorGeneric: "generic",
+            errorForbidden: "forbidden",
+            errorUnauthorized: "unauthorized",
+          }}
+        />,
+      );
+    });
+    const trigger = host.querySelector("button[aria-haspopup='menu']") as HTMLButtonElement;
+    act(() => {
+      trigger.click();
+    });
+    const deleteItem = Array.from(host.querySelectorAll("button")).find(
+      (el) => el.textContent === "Delete",
+    );
+    expect(deleteItem).toBeTruthy();
+    act(() => {
+      deleteItem?.click();
+    });
+    expect(host.textContent).toContain("Undo this import?");
+    expect(host.textContent).toContain("2 expenses");
+    const confirm = Array.from(host.querySelectorAll("button")).find(
+      (el) => el.textContent === "Undo import",
+    );
+    await act(async () => {
+      confirm?.click();
+      await Promise.resolve();
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/lists/list-1/import-batches/batch-9");
+    expect(fetchMock.mock.calls[0]?.[1]).toEqual(expect.objectContaining({ method: "DELETE" }));
+    expect(String(fetchMock.mock.calls[0]?.[0])).not.toContain("expenses");
+  });
+
+  it("hand row Delete does not fetch", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    act(() => {
+      root.render(
+        <ReceiptRow
+          title="Hand coffee"
+          amount="₡10"
+          menu={{ menuAria: "Expense options", editLabel: "Edit", deleteLabel: "Delete" }}
+        />,
+      );
+    });
+    const trigger = host.querySelector("button[aria-haspopup='menu']") as HTMLButtonElement;
+    act(() => {
+      trigger.click();
+    });
+    const deleteItem = Array.from(host.querySelectorAll("button")).find(
+      (el) => el.textContent === "Delete",
+    );
+    act(() => {
+      deleteItem?.click();
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(host.querySelector("[role='dialog']")).toBeNull();
   });
 
   it("renders an accent New chip after the amount when newBadgeLabel is set", () => {

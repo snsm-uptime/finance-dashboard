@@ -575,3 +575,13 @@ class ImportRowNotDiscardableError(DomainError):
 
     def __init__(self) -> None:
         super().__init__(self.MESSAGE)
+
+
+class ImportBatchNotFoundError(DomainError):
+    """Raised when an import batch is missing, on another list, or hidden by ACL."""
+
+    MESSAGE = "Import batch not found."
+    CODE = "import_batch_not_found"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)

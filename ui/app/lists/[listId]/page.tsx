@@ -249,6 +249,25 @@ export function newBadgeLabelFrom(
   return createdOn !== null && createdOn === today ? t.receiptNewBadge : undefined;
 }
 
+/**
+ * Confirm-dialog body for rolling back an import batch. When sibling rows on
+ * the same list share `batchId`, mentions the count so a bulk rollback is not
+ * a silent multi-row wipe (Story 5.4 Task 3.1).
+ */
+export function rollbackBatchConfirmBodyFrom(
+  expenses: ExpenseItem[],
+  batchId: string,
+  t: { rollbackBatchConfirmBody: string; rollbackBatchConfirmBodyCount: string },
+): string {
+  const count = expenses.reduce(
+    (total, row) => (row.import_batch_id === batchId ? total + 1 : total),
+    0,
+  );
+  return count > 1
+    ? t.rollbackBatchConfirmBodyCount.replace("{count}", String(count))
+    : t.rollbackBatchConfirmBody;
+}
+
 /** Roster alias for a receipt row; short id if the payer has not claimed one yet. */
 export function payerAliasFrom(payerId: string, members: ListMember[]): string {
   const member = members.find((m) => m.user_id === payerId);
@@ -638,6 +657,25 @@ export default async function ListDetailPage({
                               errorUnauthorized: t.errorUnauthorized,
                               errorReassignSplit: t.errorReassignSplit,
                             }}
+                            rollback={
+                              e.import_batch_id
+                                ? {
+                                    listId,
+                                    batchId: e.import_batch_id,
+                                    confirmTitle: t.rollbackBatchConfirmTitle,
+                                    confirmBody: rollbackBatchConfirmBodyFrom(
+                                      expenses,
+                                      e.import_batch_id,
+                                      t,
+                                    ),
+                                    confirmAction: t.rollbackBatchConfirmAction,
+                                    cancelLabel: t.deleteCancel,
+                                    errorGeneric: t.errorGeneric,
+                                    errorForbidden: t.errorForbidden,
+                                    errorUnauthorized: t.errorUnauthorized,
+                                  }
+                                : undefined
+                            }
                           />
                         ),
                         fxSummary: rowProps.fxSummary,

@@ -7,6 +7,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
+from application.import_rollback import ImportBatchPeek
 from application.import_session import (
     CandidateRowRecord,
     CommitOutcome,
@@ -20,6 +21,7 @@ from application.import_session import (
 )
 from domain.canonical_line import CanonicalLine
 from domain.errors import (
+    ImportBatchNotFoundError,
     ImportNothingToUndoError,
     ImportRowNotAvailableError,
     ImportRowNotDiscardableError,
@@ -43,7 +45,8 @@ from domain.import_session import (
     statement_is_fully_resolved,
 )
 from domain.parse_evidence import ParseEvidence
-from sqlalchemy import select, update
+from domain.splits import SUBJECT_ITEM
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
@@ -54,6 +57,7 @@ from adapters.persistence.models import (
     ImportStatementModel,
     LedgerEntryModel,
     ListModel,
+    SplitOverrideModel,
 )
 
 
@@ -930,3 +934,43 @@ class SqlAlchemyImportSessionRepository:
         statement_row.pdf_path = None
         self._session.flush()
         return self._to_record(row)
+
+    def get_import_batch(self, batch_id: UUID) -> ImportBatchPeek | None:
+        row = self._session.get(ImportBatchModel, batch_id)
+        if row is None:
+            return None
+        return ImportBatchPeek(id=row.id, list_id=row.list_id)
+
+    def atomic(self):
+        return self._session.begin_nested()
+
+    def rollback_batch(self, batch_id: UUID) -> int:
+        """Delete ledger (and item split overrides) first, then the batch.
+
+        Order is required: `ledger_entries.import_batch_id` is ON DELETE SET NULL.
+
+        Locks the batch row (`with_for_update`) so a concurrent rollback of the
+        same batch blocks until this transaction commits, then correctly sees
+        it gone instead of racing past the existence check.
+        """
+        batch_row = self._session.get(ImportBatchModel, batch_id, with_for_update=True)
+        if batch_row is None:
+            raise ImportBatchNotFoundError()
+        entry_ids = list(
+            self._session.scalars(
+                select(LedgerEntryModel.id).where(LedgerEntryModel.import_batch_id == batch_id)
+            ).all()
+        )
+        if entry_ids:
+            self._session.execute(
+                delete(SplitOverrideModel).where(
+                    SplitOverrideModel.subject_kind == SUBJECT_ITEM,
+                    SplitOverrideModel.subject_id.in_(entry_ids),
+                )
+            )
+            self._session.execute(
+                delete(LedgerEntryModel).where(LedgerEntryModel.import_batch_id == batch_id)
+            )
+        self._session.delete(batch_row)
+        self._session.flush()
+        return len(entry_ids)

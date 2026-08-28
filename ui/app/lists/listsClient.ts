@@ -708,3 +708,31 @@ export async function reassignStatement(
   }
   return { ok: true };
 }
+
+export async function rollbackImportBatch(
+  listId: string,
+  batchId: string,
+  messages: ListsClientMessages,
+): Promise<OkSimple | ErrorResult> {
+  let response: Response;
+  try {
+    response = await fetch(
+      `/api/lists/${encodeURIComponent(listId)}/import-batches/${encodeURIComponent(batchId)}`,
+      {
+        method: "DELETE",
+        headers: { Accept: "application/json" },
+        credentials: "same-origin",
+      },
+    );
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  if (response.status === 204 || response.ok) {
+    return { ok: true };
+  }
+  const parsed = (await parseJson(response)) as {
+    detail?: unknown;
+    code?: unknown;
+  } | null;
+  return { ok: false, error: mapError(response.status, parsed, messages) };
+}
