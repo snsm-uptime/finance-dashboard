@@ -376,6 +376,34 @@ class SamePriceConflictModel(Base):
     )
 
 
+class DescriptionAliasModel(Base):
+    """Manual-label ↔ bank-description alias, written as a silent side effect
+    of a survivor-pick same-price conflict resolution (Story 5.6, FR-23).
+    Write-only in v1 — no read path ships this story."""
+
+    __tablename__ = "description_aliases"
+    __table_args__ = (
+        UniqueConstraint(
+            "list_id", "manual_label", "bank_description", name="uq_description_alias_pair"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    list_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("lists.id", ondelete="CASCADE"), nullable=False
+    )
+    manual_label: Mapped[str] = mapped_column(Text, nullable=False)
+    bank_description: Mapped[str] = mapped_column(Text, nullable=False)
+    source_conflict_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("same_price_conflicts.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 class SplitOverrideModel(Base):
     """Persisted split override configuration (not computed share cents)."""
 

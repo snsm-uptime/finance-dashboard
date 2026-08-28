@@ -7,8 +7,9 @@ from decimal import Decimal
 from uuid import UUID, uuid4
 
 import pytest
-from adapters.persistence.models import LedgerEntryModel
+from adapters.persistence.models import DescriptionAliasModel, LedgerEntryModel
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tests.integration_db import claim_alias, database_url
 
@@ -113,6 +114,17 @@ def test_list_and_resolve_manual_survivor(client: TestClient, db_session: Sessio
 
     assert db_session.get(LedgerEntryModel, parsed_id) is None
     assert db_session.get(LedgerEntryModel, manual_id) is not None
+
+    # Story 5.6: the route constructs and injects SqlAlchemyDescriptionAliasRepository
+    # into ResolveSamePriceConflictService — confirm the alias write actually
+    # reaches the DB through the real route wiring, not just the application
+    # layer called directly.
+    db_session.expire_all()
+    alias_rows = list(db_session.scalars(select(DescriptionAliasModel)).all())
+    assert len(alias_rows) == 1
+    assert alias_rows[0].list_id == UUID(list_id)
+    assert alias_rows[0].manual_label == "Manual"
+    assert alias_rows[0].bank_description == "Parsed"
 
     queue_after = client.get("/import-conflicts").json()
     assert queue_after["conflicts"] == []

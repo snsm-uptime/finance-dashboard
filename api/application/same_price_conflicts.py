@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
@@ -19,11 +20,18 @@ from domain.same_price_conflict import (
     within_window,
 )
 
+from application.description_aliases import (
+    DescriptionAliasRepository,
+    NullDescriptionAliasRepository,
+    RecordDescriptionAliasService,
+)
 from application.list_access import (
     AuthorizeListAccessCommand,
     AuthorizeListAccessService,
     ListAccessLookup,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -190,9 +198,15 @@ class ResolveSamePriceConflictCommand:
 
 
 class ResolveSamePriceConflictService:
-    def __init__(self, repo: SamePriceConflictRepository, list_lookup: ListAccessLookup) -> None:
+    def __init__(
+        self,
+        repo: SamePriceConflictRepository,
+        list_lookup: ListAccessLookup,
+        alias_repo: DescriptionAliasRepository | None = None,
+    ) -> None:
         self._repo = repo
         self._list_lookup = list_lookup
+        self._alias_repo = alias_repo or NullDescriptionAliasRepository()
 
     def execute(self, command: ResolveSamePriceConflictCommand) -> None:
         conflict = self._repo.get_conflict(command.conflict_id)
@@ -223,6 +237,36 @@ class ResolveSamePriceConflictService:
             resolution=command.resolution,
             resolved_by_user_id=command.actor_user_id,
         )
+
+        if command.resolution in (
+            CONFLICT_RESOLUTION_MANUAL_SURVIVOR,
+            CONFLICT_RESOLUTION_PARSED_SURVIVOR,
+        ):
+            # source_conflict_id is None, not conflict.id: resolve_conflict's
+            # hard-delete of the losing entry cascades (ON DELETE CASCADE on
+            # same_price_conflicts.manual_entry_id/parsed_entry_id) and removes
+            # this very conflict row from the DB before this line runs — an FK
+            # pointing at conflict.id would violate referential integrity.
+            # The column is nullable exactly for this "source already purged"
+            # case (see description_aliases schema note).
+            #
+            # Best-effort side effect (Task 1): a failure here must never undo
+            # the resolve_conflict call above, so it is isolated with a broad
+            # catch-and-log rather than left to propagate into the caller's
+            # transaction.
+            try:
+                RecordDescriptionAliasService(self._alias_repo).execute(
+                    list_id=conflict.parsed.list_id,
+                    manual_label=conflict.manual.normalized_description,
+                    bank_description=conflict.parsed.normalized_description,
+                    source_conflict_id=None,
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to record description alias for resolved conflict %s; "
+                    "resolution already applied and is not affected.",
+                    command.conflict_id,
+                )
 
 
 class ListSamePriceConflictQueueService:

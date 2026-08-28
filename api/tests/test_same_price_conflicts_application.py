@@ -7,7 +7,9 @@ from decimal import Decimal
 from uuid import UUID, uuid4
 
 import pytest
+from adapters.persistence.description_aliases import SqlAlchemyDescriptionAliasRepository
 from adapters.persistence.models import (
+    DescriptionAliasModel,
     ImportBatchModel,
     ImportSessionModel,
     ImportStatementModel,
@@ -33,6 +35,7 @@ from domain.errors import (
     SamePriceConflictConfirmRequiredError,
     SamePriceConflictNotFoundError,
 )
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tests.integration_db import database_url
 
@@ -68,6 +71,7 @@ def _make_manual_entry(
     amount: Decimal = Decimal("10.00"),
     currency: str = "CRC",
     posted_date: date = date(2026, 8, 10),
+    normalized_description: str | None = "Manual entry",
 ) -> UUID:
     entry_id = uuid4()
     db_session.add(
@@ -76,7 +80,7 @@ def _make_manual_entry(
             list_id=list_id,
             amount=amount,
             currency=currency,
-            normalized_description="Manual entry",
+            normalized_description=normalized_description,
             provenance="hand",
             posted_date=posted_date,
             amount_crc=amount,
@@ -95,6 +99,7 @@ def _make_parsed_entry(
     amount: Decimal = Decimal("10.00"),
     currency: str = "CRC",
     posted_date: date = date(2026, 8, 10),
+    normalized_description: str = "Parsed entry",
 ) -> UUID:
     entry_id = uuid4()
     db_session.add(
@@ -103,7 +108,7 @@ def _make_parsed_entry(
             list_id=list_id,
             amount=amount,
             currency=currency,
-            normalized_description="Parsed entry",
+            normalized_description=normalized_description,
             provenance="parser",
             posted_date=posted_date,
             import_batch_id=batch_id,
@@ -562,3 +567,355 @@ def test_resolving_unknown_conflict_raises_not_found(db_session: Session) -> Non
                 resolution=CONFLICT_RESOLUTION_PARSED_SURVIVOR,
             )
         )
+
+
+def _alias_rows(db_session: Session) -> list[DescriptionAliasModel]:
+    return list(db_session.scalars(select(DescriptionAliasModel)).all())
+
+
+def test_manual_survivor_resolution_writes_alias_row(db_session: Session) -> None:
+    actor = _make_user(db_session, "alias1@example.com")
+    list_id = _make_list(db_session, owner_id=actor, member_ids=[])
+    manual_id = _make_manual_entry(db_session, list_id=list_id)
+    parsed_id = _make_parsed_entry(db_session, list_id=list_id)
+
+    conflict_repo = SqlAlchemySamePriceConflictRepository(db_session)
+    DetectSamePriceConflictsService(conflict_repo).execute(
+        DetectSamePriceConflictsCommand(
+            actor_user_id=actor,
+            parsed_entry_id=parsed_id,
+            parsed_list_id=list_id,
+            amount=Decimal("10.00"),
+            currency="CRC",
+            posted_date=date(2026, 8, 10),
+        )
+    )
+    conflict = ListSamePriceConflictQueueService(conflict_repo).execute(actor)[0]
+
+    list_repo = SqlAlchemyListRepository(db_session)
+    alias_repo = SqlAlchemyDescriptionAliasRepository(db_session)
+    ResolveSamePriceConflictService(conflict_repo, list_repo, alias_repo).execute(
+        ResolveSamePriceConflictCommand(
+            actor_user_id=actor,
+            conflict_id=conflict.id,
+            resolution=CONFLICT_RESOLUTION_MANUAL_SURVIVOR,
+        )
+    )
+
+    rows = _alias_rows(db_session)
+    assert len(rows) == 1
+    assert rows[0].list_id == list_id
+    assert rows[0].manual_label == "Manual entry"
+    assert rows[0].bank_description == "Parsed entry"
+    # The conflict row itself is cascade-deleted by resolve_conflict's
+    # hard-delete of the losing (parsed) entry, so there is no longer a live
+    # row for source_conflict_id to reference — it is None, not conflict.id.
+    assert rows[0].source_conflict_id is None
+    # Sanity: manual survived, parsed was deleted (Story 5.5 behavior).
+    assert db_session.get(LedgerEntryModel, manual_id) is not None
+    assert db_session.get(LedgerEntryModel, parsed_id) is None
+
+
+def test_parsed_survivor_resolution_also_writes_alias_row(db_session: Session) -> None:
+    """The manual entry is deleted by this resolution, but its label was
+    already captured into the conflict snapshot before delete."""
+    actor = _make_user(db_session, "alias2@example.com")
+    list_id = _make_list(db_session, owner_id=actor, member_ids=[])
+    manual_id = _make_manual_entry(db_session, list_id=list_id)
+    parsed_id = _make_parsed_entry(db_session, list_id=list_id)
+
+    conflict_repo = SqlAlchemySamePriceConflictRepository(db_session)
+    DetectSamePriceConflictsService(conflict_repo).execute(
+        DetectSamePriceConflictsCommand(
+            actor_user_id=actor,
+            parsed_entry_id=parsed_id,
+            parsed_list_id=list_id,
+            amount=Decimal("10.00"),
+            currency="CRC",
+            posted_date=date(2026, 8, 10),
+        )
+    )
+    conflict = ListSamePriceConflictQueueService(conflict_repo).execute(actor)[0]
+
+    list_repo = SqlAlchemyListRepository(db_session)
+    alias_repo = SqlAlchemyDescriptionAliasRepository(db_session)
+    ResolveSamePriceConflictService(conflict_repo, list_repo, alias_repo).execute(
+        ResolveSamePriceConflictCommand(
+            actor_user_id=actor,
+            conflict_id=conflict.id,
+            resolution=CONFLICT_RESOLUTION_PARSED_SURVIVOR,
+        )
+    )
+
+    rows = _alias_rows(db_session)
+    assert len(rows) == 1
+    assert rows[0].list_id == list_id
+    assert rows[0].manual_label == "Manual entry"
+    assert rows[0].bank_description == "Parsed entry"
+    assert db_session.get(LedgerEntryModel, manual_id) is None
+    assert db_session.get(LedgerEntryModel, parsed_id) is not None
+
+
+def test_not_same_expense_resolution_writes_no_alias_row(db_session: Session) -> None:
+    actor = _make_user(db_session, "alias3@example.com")
+    list_id = _make_list(db_session, owner_id=actor, member_ids=[])
+    _make_manual_entry(db_session, list_id=list_id)
+    parsed_id = _make_parsed_entry(db_session, list_id=list_id)
+
+    conflict_repo = SqlAlchemySamePriceConflictRepository(db_session)
+    DetectSamePriceConflictsService(conflict_repo).execute(
+        DetectSamePriceConflictsCommand(
+            actor_user_id=actor,
+            parsed_entry_id=parsed_id,
+            parsed_list_id=list_id,
+            amount=Decimal("10.00"),
+            currency="CRC",
+            posted_date=date(2026, 8, 10),
+        )
+    )
+    conflict = ListSamePriceConflictQueueService(conflict_repo).execute(actor)[0]
+
+    list_repo = SqlAlchemyListRepository(db_session)
+    alias_repo = SqlAlchemyDescriptionAliasRepository(db_session)
+    ResolveSamePriceConflictService(conflict_repo, list_repo, alias_repo).execute(
+        ResolveSamePriceConflictCommand(
+            actor_user_id=actor,
+            conflict_id=conflict.id,
+            resolution=CONFLICT_RESOLUTION_NOT_SAME_EXPENSE,
+            confirmed=True,
+        )
+    )
+
+    assert _alias_rows(db_session) == []
+
+
+def test_re_resolving_same_pair_from_two_conflicts_does_not_duplicate_alias(
+    db_session: Session,
+) -> None:
+    """Two independent conflicts that both resolve to the exact same
+    (list_id, manual_label, bank_description) triple must not accumulate a
+    duplicate alias row (UNIQUE no-op path)."""
+    actor = _make_user(db_session, "alias4@example.com")
+    list_id = _make_list(db_session, owner_id=actor, member_ids=[])
+    # One manual entry matches two independent parsed entries (Story 5.5
+    # multi-match) — resolving both conflicts as manual_survivor writes the
+    # identical (list_id, "Manual entry", "Parsed entry") triple twice.
+    _make_manual_entry(db_session, list_id=list_id)
+    parsed_1 = _make_parsed_entry(db_session, list_id=list_id)
+    parsed_2 = _make_parsed_entry(db_session, list_id=list_id)
+
+    conflict_repo = SqlAlchemySamePriceConflictRepository(db_session)
+    detect_service = DetectSamePriceConflictsService(conflict_repo)
+    for parsed_id in (parsed_1, parsed_2):
+        detect_service.execute(
+            DetectSamePriceConflictsCommand(
+                actor_user_id=actor,
+                parsed_entry_id=parsed_id,
+                parsed_list_id=list_id,
+                amount=Decimal("10.00"),
+                currency="CRC",
+                posted_date=date(2026, 8, 10),
+            )
+        )
+
+    list_repo = SqlAlchemyListRepository(db_session)
+    alias_repo = SqlAlchemyDescriptionAliasRepository(db_session)
+    resolve_service = ResolveSamePriceConflictService(conflict_repo, list_repo, alias_repo)
+    conflicts = ListSamePriceConflictQueueService(conflict_repo).execute(actor)
+    assert len(conflicts) == 2
+    for conflict in conflicts:
+        resolve_service.execute(
+            ResolveSamePriceConflictCommand(
+                actor_user_id=actor,
+                conflict_id=conflict.id,
+                resolution=CONFLICT_RESOLUTION_MANUAL_SURVIVOR,
+            )
+        )
+
+    rows = _alias_rows(db_session)
+    assert len(rows) == 1
+    assert rows[0].list_id == list_id
+    assert rows[0].manual_label == "Manual entry"
+    assert rows[0].bank_description == "Parsed entry"
+
+
+def test_re_upload_creates_independent_second_conflict_in_same_queue(db_session: Session) -> None:
+    """AC #2/#3: a manual entry that survived an earlier resolution remains a
+    valid candidate for a later, independent parsed commit — the same
+    `same_price_conflicts` queue, no separate detection mechanism."""
+    actor = _make_user(db_session, "alias5@example.com")
+    list_id = _make_list(db_session, owner_id=actor, member_ids=[])
+    manual_id = _make_manual_entry(db_session, list_id=list_id)
+    first_parsed_id = _make_parsed_entry(db_session, list_id=list_id)
+
+    conflict_repo = SqlAlchemySamePriceConflictRepository(db_session)
+    detect_service = DetectSamePriceConflictsService(conflict_repo)
+    detect_service.execute(
+        DetectSamePriceConflictsCommand(
+            actor_user_id=actor,
+            parsed_entry_id=first_parsed_id,
+            parsed_list_id=list_id,
+            amount=Decimal("10.00"),
+            currency="CRC",
+            posted_date=date(2026, 8, 10),
+        )
+    )
+    first_conflict = ListSamePriceConflictQueueService(conflict_repo).execute(actor)[0]
+
+    list_repo = SqlAlchemyListRepository(db_session)
+    alias_repo = SqlAlchemyDescriptionAliasRepository(db_session)
+    ResolveSamePriceConflictService(conflict_repo, list_repo, alias_repo).execute(
+        ResolveSamePriceConflictCommand(
+            actor_user_id=actor,
+            conflict_id=first_conflict.id,
+            resolution=CONFLICT_RESOLUTION_MANUAL_SURVIVOR,
+        )
+    )
+    assert db_session.get(LedgerEntryModel, manual_id) is not None
+    assert db_session.get(LedgerEntryModel, first_parsed_id) is None
+
+    # Re-upload: a second parsed entry with the same amount/currency/window.
+    second_parsed_id = _make_parsed_entry(db_session, list_id=list_id)
+    detect_service.execute(
+        DetectSamePriceConflictsCommand(
+            actor_user_id=actor,
+            parsed_entry_id=second_parsed_id,
+            parsed_list_id=list_id,
+            amount=Decimal("10.00"),
+            currency="CRC",
+            posted_date=date(2026, 8, 10),
+        )
+    )
+
+    queue = ListSamePriceConflictQueueService(conflict_repo).execute(actor)
+    assert len(queue) == 1
+    second_conflict = queue[0]
+    assert second_conflict.id != first_conflict.id
+    assert second_conflict.manual.entry_id == manual_id
+    assert second_conflict.parsed.entry_id == second_parsed_id
+    assert second_conflict.resolved_at is None
+
+
+def test_losing_side_manual_entry_raises_no_conflict_on_later_reupload(db_session: Session) -> None:
+    """AC #5: a manual entry that lost an earlier resolution (parsed_survivor
+    — hard-deleted) must not be conflicted against again, because it no
+    longer exists — nothing to duplicate."""
+    actor = _make_user(db_session, "alias6@example.com")
+    list_id = _make_list(db_session, owner_id=actor, member_ids=[])
+    manual_id = _make_manual_entry(db_session, list_id=list_id)
+    first_parsed_id = _make_parsed_entry(db_session, list_id=list_id)
+
+    conflict_repo = SqlAlchemySamePriceConflictRepository(db_session)
+    detect_service = DetectSamePriceConflictsService(conflict_repo)
+    detect_service.execute(
+        DetectSamePriceConflictsCommand(
+            actor_user_id=actor,
+            parsed_entry_id=first_parsed_id,
+            parsed_list_id=list_id,
+            amount=Decimal("10.00"),
+            currency="CRC",
+            posted_date=date(2026, 8, 10),
+        )
+    )
+    first_conflict = ListSamePriceConflictQueueService(conflict_repo).execute(actor)[0]
+
+    list_repo = SqlAlchemyListRepository(db_session)
+    alias_repo = SqlAlchemyDescriptionAliasRepository(db_session)
+    ResolveSamePriceConflictService(conflict_repo, list_repo, alias_repo).execute(
+        ResolveSamePriceConflictCommand(
+            actor_user_id=actor,
+            conflict_id=first_conflict.id,
+            resolution=CONFLICT_RESOLUTION_PARSED_SURVIVOR,
+        )
+    )
+    assert db_session.get(LedgerEntryModel, manual_id) is None
+
+    second_parsed_id = _make_parsed_entry(db_session, list_id=list_id)
+    detect_service.execute(
+        DetectSamePriceConflictsCommand(
+            actor_user_id=actor,
+            parsed_entry_id=second_parsed_id,
+            parsed_list_id=list_id,
+            amount=Decimal("10.00"),
+            currency="CRC",
+            posted_date=date(2026, 8, 10),
+        )
+    )
+
+    assert ListSamePriceConflictQueueService(conflict_repo).execute(actor) == []
+
+
+def test_manual_survivor_resolution_writes_alias_even_when_descriptions_are_identical(
+    db_session: Session,
+) -> None:
+    """AC #1: the alias is stored even when the two descriptions already read
+    identically, not just the differing-text case exercised elsewhere."""
+    actor = _make_user(db_session, "alias7@example.com")
+    list_id = _make_list(db_session, owner_id=actor, member_ids=[])
+    _make_manual_entry(db_session, list_id=list_id, normalized_description="Same Label")
+    parsed_id = _make_parsed_entry(db_session, list_id=list_id, normalized_description="Same Label")
+
+    conflict_repo = SqlAlchemySamePriceConflictRepository(db_session)
+    DetectSamePriceConflictsService(conflict_repo).execute(
+        DetectSamePriceConflictsCommand(
+            actor_user_id=actor,
+            parsed_entry_id=parsed_id,
+            parsed_list_id=list_id,
+            amount=Decimal("10.00"),
+            currency="CRC",
+            posted_date=date(2026, 8, 10),
+        )
+    )
+    conflict = ListSamePriceConflictQueueService(conflict_repo).execute(actor)[0]
+
+    list_repo = SqlAlchemyListRepository(db_session)
+    alias_repo = SqlAlchemyDescriptionAliasRepository(db_session)
+    ResolveSamePriceConflictService(conflict_repo, list_repo, alias_repo).execute(
+        ResolveSamePriceConflictCommand(
+            actor_user_id=actor,
+            conflict_id=conflict.id,
+            resolution=CONFLICT_RESOLUTION_MANUAL_SURVIVOR,
+        )
+    )
+
+    rows = _alias_rows(db_session)
+    assert len(rows) == 1
+    assert rows[0].manual_label == "Same Label"
+    assert rows[0].bank_description == "Same Label"
+
+
+def test_manual_survivor_resolution_skips_alias_when_manual_description_is_null(
+    db_session: Session,
+) -> None:
+    """Dev Notes: a manual entry with a null `normalized_description` must
+    not produce a garbage alias row — `RecordDescriptionAliasService` skips
+    persistence silently via `normalize_alias_pair` returning `None`."""
+    actor = _make_user(db_session, "alias8@example.com")
+    list_id = _make_list(db_session, owner_id=actor, member_ids=[])
+    _make_manual_entry(db_session, list_id=list_id, normalized_description=None)
+    parsed_id = _make_parsed_entry(db_session, list_id=list_id)
+
+    conflict_repo = SqlAlchemySamePriceConflictRepository(db_session)
+    DetectSamePriceConflictsService(conflict_repo).execute(
+        DetectSamePriceConflictsCommand(
+            actor_user_id=actor,
+            parsed_entry_id=parsed_id,
+            parsed_list_id=list_id,
+            amount=Decimal("10.00"),
+            currency="CRC",
+            posted_date=date(2026, 8, 10),
+        )
+    )
+    conflict = ListSamePriceConflictQueueService(conflict_repo).execute(actor)[0]
+
+    list_repo = SqlAlchemyListRepository(db_session)
+    alias_repo = SqlAlchemyDescriptionAliasRepository(db_session)
+    ResolveSamePriceConflictService(conflict_repo, list_repo, alias_repo).execute(
+        ResolveSamePriceConflictCommand(
+            actor_user_id=actor,
+            conflict_id=conflict.id,
+            resolution=CONFLICT_RESOLUTION_MANUAL_SURVIVOR,
+        )
+    )
+
+    assert _alias_rows(db_session) == []
