@@ -82,7 +82,12 @@ def _seed_conflict(
 
 def test_unauthenticated_rejected(client: TestClient) -> None:
     assert client.get("/import-conflicts").status_code == 401
-    assert client.post(f"/import-conflicts/{uuid4()}/resolve", json={"resolution": "manual_survivor"}).status_code == 401
+    assert (
+        client.post(
+            f"/import-conflicts/{uuid4()}/resolve", json={"resolution": "manual_survivor"}
+        ).status_code
+        == 401
+    )
 
 
 def test_list_and_resolve_manual_survivor(client: TestClient, db_session: Session) -> None:

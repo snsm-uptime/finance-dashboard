@@ -25,16 +25,12 @@ VALID_RESOLUTIONS = frozenset(
 )
 
 
-def is_same_price(
-    a_amount: Decimal, a_currency: str, b_amount: Decimal, b_currency: str
-) -> bool:
+def is_same_price(a_amount: Decimal, a_currency: str, b_amount: Decimal, b_currency: str) -> bool:
     """Exact equality, no tolerance (AC #2) — amount AND currency must match."""
     return a_amount == b_amount and a_currency == b_currency
 
 
-def within_window(
-    parsed_posted_date: date, manual_posted_date: date, window_days: int
-) -> bool:
+def within_window(parsed_posted_date: date, manual_posted_date: date, window_days: int) -> bool:
     """Inclusive both directions (±window_days), calendar dates already
     normalized to America/Costa_Rica by the caller — no timezone math here."""
     delta_days = abs((parsed_posted_date - manual_posted_date).days)

@@ -896,9 +896,7 @@ class AssignBulkImportService:
                 # One detect pass per committed row, in the same loop that
                 # already has the rows in hand (Story 5.5, Task 4) — not a
                 # second pass over the batch.
-                for commit_row, entry_id in zip(
-                    rows, outcome.batch.ledger_entry_ids, strict=True
-                ):
+                for commit_row, entry_id in zip(rows, outcome.batch.ledger_entry_ids, strict=True):
                     self._detect_conflicts.execute(
                         DetectSamePriceConflictsCommand(
                             actor_user_id=command.actor_user_id,

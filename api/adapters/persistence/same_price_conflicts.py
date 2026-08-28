@@ -150,7 +150,6 @@ class SqlAlchemySamePriceConflictRepository:
             if constraint is not None and constraint != "uq_same_price_conflict_pair":
                 raise
 
-
     def _to_record(
         self,
         conflict: SamePriceConflictModel,

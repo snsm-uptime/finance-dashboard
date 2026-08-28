@@ -121,7 +121,9 @@ def _make_batch(db_session: Session, *, list_id: UUID, actor_id: UUID) -> UUID:
     batch_id = uuid4()
     db_session.add(ImportSessionModel(id=session_id, user_id=actor_id, content_hash="a" * 64))
     db_session.add(
-        ImportStatementModel(id=statement_id, session_id=session_id, product_id="bac_credit", status="staged")
+        ImportStatementModel(
+            id=statement_id, session_id=session_id, product_id="bac_credit", status="staged"
+        )
     )
     db_session.flush()
     db_session.add(

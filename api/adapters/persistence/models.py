@@ -348,9 +348,7 @@ class SamePriceConflictModel(Base):
 
     __tablename__ = "same_price_conflicts"
     __table_args__ = (
-        UniqueConstraint(
-            "manual_entry_id", "parsed_entry_id", name="uq_same_price_conflict_pair"
-        ),
+        UniqueConstraint("manual_entry_id", "parsed_entry_id", name="uq_same_price_conflict_pair"),
         Index("ix_same_price_conflicts_parsed_list_resolved", "parsed_list_id", "resolved_at"),
         Index("ix_same_price_conflicts_manual_list_resolved", "manual_list_id", "resolved_at"),
     )

@@ -54,9 +54,7 @@ class TestWithinWindow:
 class TestValidateResolutionConfirm:
     def test_not_same_expense_without_confirm_raises(self) -> None:
         with pytest.raises(SamePriceConflictConfirmRequiredError):
-            validate_resolution_confirm(
-                CONFLICT_RESOLUTION_NOT_SAME_EXPENSE, confirmed=False
-            )
+            validate_resolution_confirm(CONFLICT_RESOLUTION_NOT_SAME_EXPENSE, confirmed=False)
 
     def test_not_same_expense_with_confirm_passes(self) -> None:
         validate_resolution_confirm(CONFLICT_RESOLUTION_NOT_SAME_EXPENSE, confirmed=True)

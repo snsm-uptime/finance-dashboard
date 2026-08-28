@@ -490,7 +490,9 @@ def bulk_commit_import_session(
     session_repo = SqlAlchemyImportSessionRepository(db)
     list_repo = SqlAlchemyListRepository(db)
     conflict_repo = SqlAlchemySamePriceConflictRepository(db)
-    service = AssignBulkImportService(session_repo, list_repo, fx_service, pdf_storage, conflict_repo)
+    service = AssignBulkImportService(
+        session_repo, list_repo, fx_service, pdf_storage, conflict_repo
+    )
     try:
         result = service.execute(
             AssignBulkImportCommand(
