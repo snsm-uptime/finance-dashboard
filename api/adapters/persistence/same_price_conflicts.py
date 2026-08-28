@@ -6,10 +6,6 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import and_, exists, select
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, aliased
-
 from application.same_price_conflicts import (
     CONFLICT_RESOLUTION_MANUAL_SURVIVOR,
     CONFLICT_RESOLUTION_PARSED_SURVIVOR,
@@ -18,6 +14,9 @@ from application.same_price_conflicts import (
     SamePriceConflictRecord,
 )
 from domain.errors import SamePriceConflictAlreadyResolvedError, SamePriceConflictNotFoundError
+from sqlalchemy import exists, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session, aliased
 
 from adapters.persistence.models import (
     ImportBatchModel,
