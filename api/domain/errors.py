@@ -585,3 +585,48 @@ class ImportBatchNotFoundError(DomainError):
 
     def __init__(self) -> None:
         super().__init__(self.MESSAGE)
+
+
+class SamePriceConflictNotFoundError(DomainError):
+    """Raised when a same-price conflict id is missing, or its lists are
+    hidden from the acting user by ACL (Story 5.5)."""
+
+    MESSAGE = "Conflict not found."
+    CODE = "same_price_conflict_not_found"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
+class SamePriceConflictAlreadyResolvedError(DomainError):
+    """Raised when resolve is retried against a conflict that already has a
+    resolution stamped — idempotency guard against double-delete."""
+
+    MESSAGE = "This conflict has already been resolved."
+    CODE = "same_price_conflict_already_resolved"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
+class SamePriceConflictConfirmRequiredError(DomainError):
+    """Raised when "Not the same expense" is submitted without the harder
+    explicit confirm (Story 5.5, AC #6)."""
+
+    MESSAGE = "Confirm that these are not the same expense before keeping both."
+    CODE = "same_price_conflict_confirm_required"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
+class SamePriceConflictInvalidResolutionError(DomainError):
+    """Raised when `resolution` is not one of the three known constants
+    (Story 5.5) — guards against an unrecognized value silently resolving a
+    conflict with nothing deleted and no confirm required."""
+
+    MESSAGE = "Unrecognized conflict resolution."
+    CODE = "same_price_conflict_invalid_resolution"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)

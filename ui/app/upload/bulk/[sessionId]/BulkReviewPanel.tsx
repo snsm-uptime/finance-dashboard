@@ -25,6 +25,7 @@ import {
   type IndividualReviewMessages,
 } from "../../uploadClient";
 import { nextUnacknowledgedFailedStatement } from "../../reviewSequence";
+import { routeAfterImportLanding } from "../../conflictsClient";
 
 const ParseComparisonPanel = dynamic(
   () => import("../../ParseComparisonPanel").then((mod) => mod.ParseComparisonPanel),
@@ -150,14 +151,14 @@ export function BulkReviewPanel({ sessionId }: BulkReviewPanelProps) {
       // ImportReviewSheet's Done action for the row-by-row flow).
       const result = await finalizeSession(sessionId, reviewMessages);
       if (result.ok) {
-        router.push(`/lists/${encodeURIComponent(listId)}`);
+        await routeAfterImportLanding(router, listId);
         return { ok: true };
       }
       return result;
     }
     const result = await bulkCommitSession(sessionId, listId, bulkCommitMessages);
     if (result.ok) {
-      router.push(`/lists/${encodeURIComponent(result.result.list_id)}`);
+      await routeAfterImportLanding(router, result.result.list_id);
     }
     return result;
   });

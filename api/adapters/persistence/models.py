@@ -84,6 +84,10 @@ class ListModel(Base):
     default_split_mode: Mapped[str] = mapped_column(
         String(32), nullable=False, default="even", server_default="even"
     )
+    # List-configurable same-price conflict window (Story 5.5, AD-10). Null
+    # means "use DEFAULT_SAME_PRICE_WINDOW_DAYS" — no settings UI ships yet
+    # (deferred to Story 5.9), this column only carries the schema-level hook.
+    same_price_window_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -334,6 +338,43 @@ class LedgerEntryModel(Base):
     list: Mapped[ListModel] = relationship(back_populates="ledger_entries")
     receipt: Mapped[ReceiptModel | None] = relationship(
         "ReceiptModel", back_populates="ledger_entries"
+    )
+
+
+class SamePriceConflictModel(Base):
+    """A durable Manual|Parsed same-price collision awaiting resolution
+    (Story 5.5, AD-10). Source of truth for the unresolved-conflict queue —
+    survives Import Session expiry."""
+
+    __tablename__ = "same_price_conflicts"
+    __table_args__ = (
+        UniqueConstraint(
+            "manual_entry_id", "parsed_entry_id", name="uq_same_price_conflict_pair"
+        ),
+        Index("ix_same_price_conflicts_parsed_list_resolved", "parsed_list_id", "resolved_at"),
+        Index("ix_same_price_conflicts_manual_list_resolved", "manual_list_id", "resolved_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    manual_entry_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("ledger_entries.id", ondelete="CASCADE"), nullable=False
+    )
+    parsed_entry_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("ledger_entries.id", ondelete="CASCADE"), nullable=False
+    )
+    manual_list_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("lists.id", ondelete="CASCADE"), nullable=False
+    )
+    parsed_list_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("lists.id", ondelete="CASCADE"), nullable=False
+    )
+    detected_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolution: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    resolved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
 
