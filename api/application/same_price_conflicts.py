@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
@@ -29,6 +30,8 @@ from application.list_access import (
     AuthorizeListAccessService,
     ListAccessLookup,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -246,12 +249,24 @@ class ResolveSamePriceConflictService:
             # pointing at conflict.id would violate referential integrity.
             # The column is nullable exactly for this "source already purged"
             # case (see description_aliases schema note).
-            RecordDescriptionAliasService(self._alias_repo).execute(
-                list_id=conflict.parsed.list_id,
-                manual_label=conflict.manual.normalized_description,
-                bank_description=conflict.parsed.normalized_description,
-                source_conflict_id=None,
-            )
+            #
+            # Best-effort side effect (Task 1): a failure here must never undo
+            # the resolve_conflict call above, so it is isolated with a broad
+            # catch-and-log rather than left to propagate into the caller's
+            # transaction.
+            try:
+                RecordDescriptionAliasService(self._alias_repo).execute(
+                    list_id=conflict.parsed.list_id,
+                    manual_label=conflict.manual.normalized_description,
+                    bank_description=conflict.parsed.normalized_description,
+                    source_conflict_id=None,
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to record description alias for resolved conflict %s; "
+                    "resolution already applied and is not affected.",
+                    command.conflict_id,
+                )
 
 
 class ListSamePriceConflictQueueService:

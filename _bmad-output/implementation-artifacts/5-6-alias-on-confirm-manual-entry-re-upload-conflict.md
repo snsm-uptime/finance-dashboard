@@ -4,7 +4,7 @@ baseline_commit: b3f4203
 
 # Story 5.6: Alias on confirm + manual-entry re-upload conflict
 
-Status: review
+Status: done
 
 ## Story
 
@@ -63,6 +63,17 @@ so that I don't silently duplicate a manual row and aliases are ready for later 
   - [x] Domain: `normalize_alias_pair` — both non-blank → returns stripped tuple; either blank/`None`/whitespace-only → returns `None`. (`api/tests/test_description_alias_domain.py`, 7 tests)
   - [x] Application/integration (Postgres 16, not SQLite): 6 new tests appended to `api/tests/test_same_price_conflicts_application.py` covering manual_survivor alias write, parsed_survivor alias write, not_same_expense writes no alias, dedup no-op on repeated triple, re-upload end-to-end (independent second conflict in same queue), and losing-side no-conflict-on-later-reupload (AC #5).
   - [x] No new UI tests — no `ui/` files changed (confirmed via `git status`).
+
+### Review Findings
+
+- [x] [Review][Patch] Best-effort alias write can veto an already-successful conflict resolution — isolated the `RecordDescriptionAliasService` call in a broad catch-and-log so a bookkeeping failure can never roll back `resolve_conflict`'s already-applied changes, per Task 1's own "best-effort side-effect" intent (user decision: isolate now). [api/application/same_price_conflicts.py:238-262]
+- [x] [Review][Patch] `record_alias`'s IntegrityError guard silently swallows unresolvable constraint violations — dropped the `constraint is not None` short-circuit so any non-matching/unresolvable constraint re-raises. [api/adapters/persistence/description_aliases.py:44-46]
+- [x] [Review][Patch] Local `from uuid import uuid4` inside method body instead of top-level import — moved to the module's top-level `uuid` import. [api/adapters/persistence/description_aliases.py:5]
+- [x] [Review][Patch] `NullDescriptionAliasRepository.record_alias(**_kwargs)` doesn't mirror the Protocol's real keyword signature — gave it the explicit `list_id`/`manual_label`/`bank_description`/`source_conflict_id` signature. [api/application/description_aliases.py:29-36]
+- [x] [Review][Patch] Missing integration coverage for AC #1 identical-description case, the null-description skip path, and the route's actual repo wiring — added `test_manual_survivor_resolution_writes_alias_even_when_descriptions_are_identical` and `test_manual_survivor_resolution_skips_alias_when_manual_description_is_null` (`api/tests/test_same_price_conflicts_application.py`); added an alias-row assertion to `test_list_and_resolve_manual_survivor` (`api/tests/test_import_conflicts_api.py`) to confirm the real route wiring persists an alias. 804 tests pass, ruff clean.
+- [x] [Review][Defer] `normalize_alias_pair` doesn't case-fold or collapse whitespace, so near-duplicate labels bypass the UNIQUE dedup guarantee [api/domain/description_alias.py] — deferred, matches spec's literal strip-only scope; deeper normalization belongs with the future ML read-path
+- [x] [Review][Defer] `description_aliases.source_conflict_id` has no standalone index [api/adapters/persistence/migrations/versions/0030_description_aliases.py] — deferred, pre-existing non-issue today since every write path currently writes `None`
+- [x] [Review][Defer] Identical constraint-swallowing pattern also exists unfixed in `create_conflict` (Story 5.5) [api/adapters/persistence/same_price_conflicts.py:148-150] — deferred, pre-existing, out of this diff's scope
 
 ## Dev Notes
 

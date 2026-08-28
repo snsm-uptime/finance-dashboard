@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -22,8 +22,6 @@ class SqlAlchemyDescriptionAliasRepository:
         bank_description: str,
         source_conflict_id: UUID | None,
     ) -> None:
-        from uuid import uuid4
-
         try:
             with self._session.begin_nested():
                 self._session.add(
@@ -40,7 +38,9 @@ class SqlAlchemyDescriptionAliasRepository:
             # UNIQUE (list_id, manual_label, bank_description) — a re-upload
             # that re-confirms the same pair is a no-op, not an error. Any
             # other integrity violation is a real failure and must not be
-            # swallowed alongside the expected dedup case.
+            # swallowed alongside the expected dedup case — including when
+            # constraint_name can't be resolved at all, which must fail loud
+            # rather than be mistaken for the expected dedup case.
             constraint = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
-            if constraint is not None and constraint != "uq_description_alias_pair":
+            if constraint != "uq_description_alias_pair":
                 raise

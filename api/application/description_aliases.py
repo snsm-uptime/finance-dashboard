@@ -26,7 +26,14 @@ class NullDescriptionAliasRepository:
     """No-op default — keeps pre-existing `ResolveSamePriceConflictService`
     call sites compiling unchanged when no alias repo is injected."""
 
-    def record_alias(self, **_kwargs) -> None:
+    def record_alias(
+        self,
+        *,
+        list_id: UUID,
+        manual_label: str,
+        bank_description: str,
+        source_conflict_id: UUID | None,
+    ) -> None:
         return None
 
 

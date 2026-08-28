@@ -71,6 +71,7 @@ def _make_manual_entry(
     amount: Decimal = Decimal("10.00"),
     currency: str = "CRC",
     posted_date: date = date(2026, 8, 10),
+    normalized_description: str | None = "Manual entry",
 ) -> UUID:
     entry_id = uuid4()
     db_session.add(
@@ -79,7 +80,7 @@ def _make_manual_entry(
             list_id=list_id,
             amount=amount,
             currency=currency,
-            normalized_description="Manual entry",
+            normalized_description=normalized_description,
             provenance="hand",
             posted_date=posted_date,
             amount_crc=amount,
@@ -98,6 +99,7 @@ def _make_parsed_entry(
     amount: Decimal = Decimal("10.00"),
     currency: str = "CRC",
     posted_date: date = date(2026, 8, 10),
+    normalized_description: str = "Parsed entry",
 ) -> UUID:
     entry_id = uuid4()
     db_session.add(
@@ -106,7 +108,7 @@ def _make_parsed_entry(
             list_id=list_id,
             amount=amount,
             currency=currency,
-            normalized_description="Parsed entry",
+            normalized_description=normalized_description,
             provenance="parser",
             posted_date=posted_date,
             import_batch_id=batch_id,
@@ -841,3 +843,79 @@ def test_losing_side_manual_entry_raises_no_conflict_on_later_reupload(db_sessio
     )
 
     assert ListSamePriceConflictQueueService(conflict_repo).execute(actor) == []
+
+
+def test_manual_survivor_resolution_writes_alias_even_when_descriptions_are_identical(
+    db_session: Session,
+) -> None:
+    """AC #1: the alias is stored even when the two descriptions already read
+    identically, not just the differing-text case exercised elsewhere."""
+    actor = _make_user(db_session, "alias7@example.com")
+    list_id = _make_list(db_session, owner_id=actor, member_ids=[])
+    _make_manual_entry(db_session, list_id=list_id, normalized_description="Same Label")
+    parsed_id = _make_parsed_entry(db_session, list_id=list_id, normalized_description="Same Label")
+
+    conflict_repo = SqlAlchemySamePriceConflictRepository(db_session)
+    DetectSamePriceConflictsService(conflict_repo).execute(
+        DetectSamePriceConflictsCommand(
+            actor_user_id=actor,
+            parsed_entry_id=parsed_id,
+            parsed_list_id=list_id,
+            amount=Decimal("10.00"),
+            currency="CRC",
+            posted_date=date(2026, 8, 10),
+        )
+    )
+    conflict = ListSamePriceConflictQueueService(conflict_repo).execute(actor)[0]
+
+    list_repo = SqlAlchemyListRepository(db_session)
+    alias_repo = SqlAlchemyDescriptionAliasRepository(db_session)
+    ResolveSamePriceConflictService(conflict_repo, list_repo, alias_repo).execute(
+        ResolveSamePriceConflictCommand(
+            actor_user_id=actor,
+            conflict_id=conflict.id,
+            resolution=CONFLICT_RESOLUTION_MANUAL_SURVIVOR,
+        )
+    )
+
+    rows = _alias_rows(db_session)
+    assert len(rows) == 1
+    assert rows[0].manual_label == "Same Label"
+    assert rows[0].bank_description == "Same Label"
+
+
+def test_manual_survivor_resolution_skips_alias_when_manual_description_is_null(
+    db_session: Session,
+) -> None:
+    """Dev Notes: a manual entry with a null `normalized_description` must
+    not produce a garbage alias row — `RecordDescriptionAliasService` skips
+    persistence silently via `normalize_alias_pair` returning `None`."""
+    actor = _make_user(db_session, "alias8@example.com")
+    list_id = _make_list(db_session, owner_id=actor, member_ids=[])
+    _make_manual_entry(db_session, list_id=list_id, normalized_description=None)
+    parsed_id = _make_parsed_entry(db_session, list_id=list_id)
+
+    conflict_repo = SqlAlchemySamePriceConflictRepository(db_session)
+    DetectSamePriceConflictsService(conflict_repo).execute(
+        DetectSamePriceConflictsCommand(
+            actor_user_id=actor,
+            parsed_entry_id=parsed_id,
+            parsed_list_id=list_id,
+            amount=Decimal("10.00"),
+            currency="CRC",
+            posted_date=date(2026, 8, 10),
+        )
+    )
+    conflict = ListSamePriceConflictQueueService(conflict_repo).execute(actor)[0]
+
+    list_repo = SqlAlchemyListRepository(db_session)
+    alias_repo = SqlAlchemyDescriptionAliasRepository(db_session)
+    ResolveSamePriceConflictService(conflict_repo, list_repo, alias_repo).execute(
+        ResolveSamePriceConflictCommand(
+            actor_user_id=actor,
+            conflict_id=conflict.id,
+            resolution=CONFLICT_RESOLUTION_MANUAL_SURVIVOR,
+        )
+    )
+
+    assert _alias_rows(db_session) == []
