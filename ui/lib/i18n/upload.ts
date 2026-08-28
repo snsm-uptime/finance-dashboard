@@ -68,6 +68,10 @@ export const uploadMessages = {
       "Some rows were already committed or deleted. Reload and try again.",
     bulkReviewErrorNoCleanStatements: "There are no clean statements to commit.",
     bulkReviewErrorFxUnavailable: "Currency conversion is unavailable right now. Try again later.",
+    // Per-row exceptions ahead of a fixed-list bulk commit (Story 4.19)
+    bulkReviewRowsHeading: "Move or delete the ones that don't belong here",
+    bulkReviewMoveRowPlaceholder: "Move to…",
+    bulkReviewDeleteRow: "Delete",
     // Individual review (Story 4.8; row-level rewrite Story 4.13)
     individualReviewTitle: "Review statements",
     individualReviewProgress: "{count} left",
@@ -197,6 +201,10 @@ export const uploadMessages = {
     bulkReviewErrorNoCleanStatements: "No hay estados de cuenta limpios para confirmar.",
     bulkReviewErrorFxUnavailable:
       "La conversión de moneda no está disponible ahora. Inténtalo más tarde.",
+    // Per-row exceptions ahead of a fixed-list bulk commit (Story 4.19)
+    bulkReviewRowsHeading: "Mueve o elimina las que no correspondan aquí",
+    bulkReviewMoveRowPlaceholder: "Mover a…",
+    bulkReviewDeleteRow: "Eliminar",
     // Individual review (Story 4.8; row-level rewrite Story 4.13)
     individualReviewTitle: "Revisar estados de cuenta",
     individualReviewProgress: "{count} restantes",

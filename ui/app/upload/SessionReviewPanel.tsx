@@ -1,14 +1,16 @@
 "use client";
 
-import { FormEvent, useId, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useId, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
-import { CloseIcon, SaveIcon } from "@/app/icons";
+import { CloseIcon, SaveIcon, SpinnerIcon } from "@/app/icons";
 import { IconButton } from "@/components/IconButton";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { useFormSubmission } from "@/hooks";
 import { uploadCopy } from "@/lib/i18n/upload";
 import { useCardIdentification } from "@/hooks/useCardIdentification";
+import { fetchCards, type CardItem, type CardsClientMessages } from "@/app/cards/cardsClient";
 import { CreditCardFace, CreditCardMark } from "./CreditCardFace";
 import { classifyActiveImportSession } from "./classifyActiveImportSession";
 import { DiscardConfirmDialog } from "./DiscardConfirmDialog";
@@ -20,6 +22,42 @@ import {
   type StagedStatement,
   type UploadMessages,
 } from "./uploadClient";
+
+/**
+ * Session-wide auto-routing (Story 4.19): once every statement's card is
+ * identified, route straight past the Assign/Review choice when the
+ * evidence agrees — any "review"-routed card always wins (safest default),
+ * a unanimous "fixed" routing to the same list sends the whole session
+ * straight to Bulk pre-filled with that list. Anything else (no cards
+ * matched, mixed fixed lists, cards still loading) falls back to letting
+ * the user pick, unchanged.
+ */
+function sessionAutoRoute(
+  statements: readonly StagedStatement[],
+  identifiedCardByStatement: ReadonlyMap<string, string | null>,
+  cardsById: ReadonlyMap<string, CardItem> | null,
+): { kind: "fixed"; listId: string } | { kind: "review" } | { kind: "undetermined" } {
+  if (cardsById === null) return { kind: "undetermined" };
+  const matchedCardIds = new Set<string>();
+  for (const statement of statements) {
+    const cardId = identifiedCardByStatement.get(statement.id);
+    if (cardId === undefined) return { kind: "undetermined" };
+    if (cardId !== null) matchedCardIds.add(cardId);
+  }
+  if (matchedCardIds.size === 0) return { kind: "undetermined" };
+
+  let fixedListId: string | null | undefined;
+  for (const cardId of matchedCardIds) {
+    const card = cardsById.get(cardId);
+    if (!card || card.routing_mode === "review") return { kind: "review" };
+    if (fixedListId === undefined) {
+      fixedListId = card.fixed_list_id;
+    } else if (fixedListId !== card.fixed_list_id) {
+      return { kind: "undetermined" };
+    }
+  }
+  return fixedListId ? { kind: "fixed", listId: fixedListId } : { kind: "undetermined" };
+}
 
 type SessionReviewPanelProps = {
   session: ImportSession;
@@ -40,9 +78,14 @@ export function SessionReviewPanel({
 }: SessionReviewPanelProps) {
   const { locale } = usePreferences();
   const t = uploadCopy(locale);
+  const router = useRouter();
   const [registrationError, setRegistrationError] = useState<string | null>(null);
   const [cardLabelInput, setCardLabelInput] = useState<string>("");
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [cardsById, setCardsById] = useState<Map<string, CardItem> | null>(null);
+  const [identifiedCardByStatement, setIdentifiedCardByStatement] = useState<
+    Map<string, string | null>
+  >(() => new Map());
   const kind = classifyActiveImportSession(session);
   const needsRetentionWarning = kind === "partial" || kind === "sheet-waiting";
 
@@ -65,6 +108,54 @@ export function SessionReviewPanel({
     }),
     [t.errorCardAlreadyRegistered, t.errorInvalidCardLabel, t.errorGeneric, t.errorUnauthorized],
   );
+
+  // Cards' routing_mode/fixed_list_id (Story 4.19) drive session-wide
+  // auto-routing below — fetched once, best-effort: a failure just leaves
+  // cardsById null, which sessionAutoRoute treats as "undetermined" and
+  // falls back to the existing Assign/Review choice.
+  useEffect(() => {
+    let cancelled = false;
+    const cardsMessages: CardsClientMessages = {
+      errorGeneric: t.errorGeneric,
+      errorUnauthorized: t.errorUnauthorized,
+      errorInvalidLabel: t.errorGeneric,
+      errorInvalidIban: t.errorGeneric,
+      errorDuplicateIban: t.errorGeneric,
+    };
+    fetchCards(cardsMessages).then((result) => {
+      if (cancelled) return;
+      if (result.ok) setCardsById(new Map(result.cards.map((card) => [card.id, card])));
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.id]);
+
+  const reportIdentifiedCard = useCallback((statementId: string, cardId: string | null) => {
+    setIdentifiedCardByStatement((prev) => {
+      if (prev.get(statementId) === cardId) return prev;
+      const next = new Map(prev);
+      next.set(statementId, cardId);
+      return next;
+    });
+  }, []);
+
+  const autoRoute =
+    kind === "untouched"
+      ? sessionAutoRoute(session.statements, identifiedCardByStatement, cardsById)
+      : { kind: "undetermined" as const };
+
+  useEffect(() => {
+    if (autoRoute.kind === "fixed") {
+      router.replace(
+        `/upload/bulk/${encodeURIComponent(session.id)}?listId=${encodeURIComponent(autoRoute.listId)}`,
+      );
+    } else if (autoRoute.kind === "review") {
+      router.replace(`/upload/review/${encodeURIComponent(session.id)}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRoute.kind, autoRoute.kind === "fixed" ? autoRoute.listId : null, session.id]);
 
   const discard = useFormSubmission(async (sessionId: string) => {
     const result = await discardSession(sessionId, messages);
@@ -146,6 +237,23 @@ export function SessionReviewPanel({
     );
   }
 
+  if (autoRoute.kind === "fixed" || autoRoute.kind === "review") {
+    return (
+      <section
+        aria-label={t.cardIdentificationTitle}
+        className="flex min-h-full w-full flex-1 flex-col items-center justify-center"
+      >
+        <span
+          className="grid size-8 place-items-center text-muted"
+          aria-label={t.cardIdentificationTitle}
+          aria-busy="true"
+        >
+          <SpinnerIcon className="size-8 animate-spin motion-reduce:animate-none" />
+        </span>
+      </section>
+    );
+  }
+
   return (
     <section
       aria-label={t.cardIdentificationTitle}
@@ -160,6 +268,7 @@ export function SessionReviewPanel({
             assignHref={`/upload/bulk/${encodeURIComponent(session.id)}`}
             reviewHref={reviewHref}
             onRegistered={refreshSession}
+            onCardIdentified={reportIdentifiedCard}
             onDiscard={requestDiscard}
             discardPending={discard.pending}
             cardMessages={cardMessages}
@@ -215,6 +324,7 @@ type StatementCardProps = {
   assignHref: string;
   reviewHref: string;
   onRegistered: () => void;
+  onCardIdentified: (statementId: string, cardId: string | null) => void;
   onDiscard: () => void;
   discardPending: boolean;
   cardMessages: CardIdentificationMessages;
@@ -231,6 +341,7 @@ function StatementCard({
   assignHref,
   reviewHref,
   onRegistered,
+  onCardIdentified,
   onDiscard,
   discardPending,
   cardMessages,
@@ -248,6 +359,14 @@ function StatementCard({
     card.needsRegistration ||
     (!card.cardMatched && Boolean(statement.iban) && !statement.card_id);
   const savedName = card.cardLabel || t.newCardTitle;
+
+  // Reports this statement's resolved card (or null, when it carries none)
+  // up to the session-wide auto-router once identification settles — not
+  // while still loading or awaiting registration (Story 4.19).
+  useEffect(() => {
+    if (card.loading || needsRegistration) return;
+    onCardIdentified(statement.id, card.cardId ?? null);
+  }, [card.loading, needsRegistration, card.cardId, statement.id, onCardIdentified]);
 
   async function handleRegisterCard(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

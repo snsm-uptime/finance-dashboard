@@ -1565,7 +1565,10 @@ def test_bulk_assign_skips_zero_amount_rows_and_commits_remaining() -> None:
     assert updated.statements[0].status == STATEMENT_STATUS_COMMITTED
 
 
-def test_bulk_assign_rejects_statement_with_non_pending_row_no_commit() -> None:
+def test_bulk_assign_skips_already_resolved_row_and_commits_remaining() -> None:
+    """Story 4.19: a row resolved by an individual assign/delete ahead of a
+    fixed-list bulk commit is skipped, not a blocker — only the rows still
+    pending go into the commit."""
     repo = _FakeImportSessionRepo()
     storage = _FakePdfStorage()
     lookup = _FakeListLookup()
@@ -1579,11 +1582,19 @@ def test_bulk_assign_rejects_statement_with_non_pending_row_no_commit() -> None:
     already = session.statements[0].candidate_rows[0]
     repo.set_row_status(session_id, already.id, ROW_STATUS_COMMITTED)
 
-    with pytest.raises(ImportRowNotAvailableError):
-        AssignBulkImportService(repo, lookup, _FakeFxService(), storage).execute(
-            AssignBulkImportCommand(actor_user_id=actor, session_id=session_id, list_id=list_id)
-        )
-    assert repo.commit_calls == []
+    result = AssignBulkImportService(repo, lookup, _FakeFxService(), storage).execute(
+        AssignBulkImportCommand(actor_user_id=actor, session_id=session_id, list_id=list_id)
+    )
+
+    assert len(result.batches) == 1
+    assert len(repo.commit_calls[0]["rows"]) == 1
+    assert repo.commit_calls[0]["rows"][0].draft.normalized_description == "b"
+    updated = repo.get_session(session_id, actor)
+    by_desc = {
+        row.line.normalized_description: row.status for row in updated.statements[0].candidate_rows
+    }
+    assert by_desc["a"] == ROW_STATUS_COMMITTED
+    assert by_desc["b"] == ROW_STATUS_COMMITTED
 
 
 def test_assign_candidate_row_writes_one_batch_sibling_stays_pending() -> None:

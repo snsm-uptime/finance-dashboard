@@ -31,7 +31,6 @@ from domain.errors import (
 )
 from domain.expenses import ORIGIN_KIND_CARD, ManualExpenseDraft
 from domain.import_session import (
-    ROW_STATUS_EXCLUDED_ZERO_AMOUNT,
     ROW_STATUS_PENDING,
     STATEMENT_STATUS_FAILED,
     STATEMENT_STATUS_SKIPPED,
@@ -804,20 +803,23 @@ class AssignBulkImportService:
         for statement in session.statements:
             if statement.status != STATEMENT_STATUS_STAGED:
                 continue
-            non_excluded = [
+            # Rows already resolved by an individual assign/delete (Story
+            # 4.19's per-row exceptions ahead of a fixed-list bulk commit) are
+            # skipped rather than blocking the statement — only rows still
+            # pending go into this commit.
+            pending_candidates = [
                 candidate
                 for candidate in statement.candidate_rows
-                if candidate.status != ROW_STATUS_EXCLUDED_ZERO_AMOUNT
+                if candidate.status == ROW_STATUS_PENDING
             ]
-            if any(candidate.status != ROW_STATUS_PENDING for candidate in non_excluded):
-                raise ImportRowNotAvailableError()
             rows: list[CommitRow] = []
             duplicate_row_ids: list[UUID] = []
             card_id = statement.card_id
 
             # One lookup per statement, not one per row (Story 4.12, AC #3).
             identities = {
-                candidate.id: canonical_identity_key(candidate.line) for candidate in non_excluded
+                candidate.id: canonical_identity_key(candidate.line)
+                for candidate in pending_candidates
             }
             already_in_list = self._session_repo.find_existing_identities(
                 list_id=command.list_id, identities=list(identities.values())
@@ -827,7 +829,7 @@ class AssignBulkImportService:
             # identities claimed by an earlier row in *this* loop count too.
             claimed_in_this_action: set[str] = set()
 
-            for candidate in non_excluded:
+            for candidate in pending_candidates:
                 # Validate before the duplicate check (matches
                 # AssignCandidateRowService's order, Story 4.12 review): a row
                 # that is both invalid and a duplicate must fail loudly, not

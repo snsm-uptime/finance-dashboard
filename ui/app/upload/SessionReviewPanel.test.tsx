@@ -9,6 +9,8 @@ import type { ImportSession } from "./uploadClient";
 
 const discardSession = vi.fn();
 const fetchImportSession = vi.fn();
+const fetchCards = vi.fn();
+const replace = vi.fn();
 
 vi.mock("./uploadClient", async () => {
   const actual = await vi.importActual<typeof import("./uploadClient")>("./uploadClient");
@@ -18,6 +20,14 @@ vi.mock("./uploadClient", async () => {
     fetchImportSession: (...args: unknown[]) => fetchImportSession(...args),
   };
 });
+
+vi.mock("@/app/cards/cardsClient", () => ({
+  fetchCards: (...args: unknown[]) => fetchCards(...args),
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace, push: vi.fn() }),
+}));
 
 vi.mock("@/hooks/useCardIdentification", () => ({
   useCardIdentification: (
@@ -130,6 +140,7 @@ describe("SessionReviewPanel", () => {
     document.body.appendChild(container);
     root = createRoot(container);
     vi.clearAllMocks();
+    fetchCards.mockResolvedValue({ ok: true, cards: [] });
   });
 
   afterEach(() => {
@@ -267,5 +278,134 @@ describe("SessionReviewPanel", () => {
     const resume = container.querySelector('a[href*="/upload/review/"]') as HTMLAnchorElement;
     expect(resume?.href).toContain("/upload/review/sess1");
     expect(container.querySelector('a[href*="/upload/bulk/"]')).toBeNull();
+  });
+
+  describe("card-routing auto-navigation (Story 4.19)", () => {
+    const singleMatchedSession: ImportSession = {
+      ...mockSession,
+      statements: [mockSession.statements[0]],
+    };
+
+    it("routes straight to Bulk pre-filled with the card's fixed list", async () => {
+      fetchCards.mockResolvedValue({
+        ok: true,
+        cards: [
+          {
+            id: "card1",
+            label: "My Visa",
+            iban: "DE89370400440532013000",
+            created_at: "2026-01-01T00:00:00Z",
+            routing_mode: "fixed",
+            fixed_list_id: "list-9",
+          },
+        ],
+      });
+
+      await act(async () => {
+        root.render(<SessionReviewPanel session={singleMatchedSession} />);
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(replace).toHaveBeenCalledWith("/upload/bulk/sess1?listId=list-9");
+    });
+
+    it("routes straight to individual review when the card is set to review", async () => {
+      fetchCards.mockResolvedValue({
+        ok: true,
+        cards: [
+          {
+            id: "card1",
+            label: "My Visa",
+            iban: "DE89370400440532013000",
+            created_at: "2026-01-01T00:00:00Z",
+            routing_mode: "review",
+            fixed_list_id: null,
+          },
+        ],
+      });
+
+      await act(async () => {
+        root.render(<SessionReviewPanel session={singleMatchedSession} />);
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(replace).toHaveBeenCalledWith("/upload/review/sess1");
+    });
+
+    it("falls back to the Assign/Review choice when matched cards disagree on their fixed list", async () => {
+      const mixedSession: ImportSession = {
+        ...mockSession,
+        statements: [
+          mockSession.statements[0],
+          {
+            ...mockSession.statements[0],
+            id: "st3",
+            card_id: "card2",
+            candidate_row_count: 1,
+            rows: [{ ...mockSession.statements[0].rows[0], id: "r3" }],
+          },
+        ],
+      };
+      fetchCards.mockResolvedValue({
+        ok: true,
+        cards: [
+          {
+            id: "card1",
+            label: "My Visa",
+            iban: "DE89370400440532013000",
+            created_at: "2026-01-01T00:00:00Z",
+            routing_mode: "fixed",
+            fixed_list_id: "list-9",
+          },
+          {
+            id: "card2",
+            label: "My Mastercard",
+            iban: "ES9121000418450200051332",
+            created_at: "2026-01-01T00:00:00Z",
+            routing_mode: "fixed",
+            fixed_list_id: "list-10",
+          },
+        ],
+      });
+
+      await act(async () => {
+        root.render(<SessionReviewPanel session={mixedSession} />);
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(replace).not.toHaveBeenCalled();
+      expect(container.textContent).toContain("Assign to a list");
+    });
+
+    it("does not auto-route while a statement still needs card registration", async () => {
+      fetchCards.mockResolvedValue({
+        ok: true,
+        cards: [
+          {
+            id: "card1",
+            label: "My Visa",
+            iban: "DE89370400440532013000",
+            created_at: "2026-01-01T00:00:00Z",
+            routing_mode: "fixed",
+            fixed_list_id: "list-9",
+          },
+        ],
+      });
+
+      await act(async () => {
+        root.render(<SessionReviewPanel session={mockSession} />);
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(replace).not.toHaveBeenCalled();
+    });
   });
 });
