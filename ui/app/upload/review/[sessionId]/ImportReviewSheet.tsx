@@ -14,7 +14,6 @@ import { uploadCopy } from "@/lib/i18n/upload";
 import type { Locale } from "@/lib/i18n/locale";
 import {
   deleteRow,
-  fetchImportSession,
   finalizeSession,
   unassignRow,
   type CandidateRow,
@@ -288,23 +287,25 @@ export function ImportReviewSheet({
     for (const rowId of discardIds) {
       if (!sessionHasRow(latest, rowId)) continue;
       const deleted = await deleteRow(sessionId, rowId, messages);
-      if (!deleted.ok) return deleted;
+      if (!deleted.ok) {
+        // A stray reentrant Save (or a retry after an earlier attempt that
+        // actually succeeded server-side before erroring locally) can ask to
+        // delete a row that's already gone — the server 409s with this exact
+        // message rather than treating delete as idempotent. Since the row
+        // is already gone either way, that's not a real failure here.
+        if (deleted.error === messages.errorRowNotAvailable) continue;
+        return deleted;
+      }
       latest = deleted.session;
       onSessionUpdate(latest);
     }
 
-    const refreshed = await fetchImportSession(sessionId, messages);
-    if (refreshed.ok) {
-      latest = refreshed.session;
-      onSessionUpdate(latest);
-    }
-
-    const stillPending = pendingRowIds(latest);
-    if (stillPending.length) {
-      console.error("import save: pending rows remain after discard deletes", stillPending);
-      return { ok: false as const, error: t.errorGeneric };
-    }
-
+    // finalizeSession is the source of truth for "no pending rows remain" —
+    // it rejects with errorSessionHasPendingRows otherwise. An extra
+    // fetchImportSession-then-recheck here used to gate this call: any lag
+    // between that read and the deletes just above could see a still-stale
+    // pending row and abort with a generic error, silently skipping finalize
+    // and requiring a second Save click to actually persist the session.
     const result = await finalizeSession(sessionId, messages);
     if (result.ok) {
       clearStagedImportDiscards(sessionId);

@@ -426,7 +426,6 @@ describe("ImportReviewSheet", () => {
 
     deleteRow.mockReset();
     deleteRow.mockResolvedValue({ ok: true, session: afterDelete });
-    fetchImportSession.mockResolvedValue({ ok: true, session: afterDelete });
 
     await act(async () => {
       [...container.querySelectorAll("button")].find((b) => b.textContent === "Save")?.click();
@@ -440,7 +439,7 @@ describe("ImportReviewSheet", () => {
     expect(deleteRow.mock.invocationCallOrder[0]).toBeLessThan(
       finalizeSession.mock.invocationCallOrder[0],
     );
-    expect(onSessionUpdate).toHaveBeenCalledTimes(3);
+    expect(onSessionUpdate).toHaveBeenCalledTimes(2);
     expect(push).not.toHaveBeenCalled();
     expect(localStorage.getItem("finance-helper.staged-import-discards.s1")).toBeNull();
   });
