@@ -136,6 +136,13 @@ def _money_str(value: Decimal) -> str:
     return format(value, "f")
 
 
+def _amount_str(value: Decimal) -> str:
+    """`amount` is Numeric(18, 4) for FX headroom, but money always displays at
+    2 decimals — quantize before rendering so a DB round-trip doesn't leak the
+    column's storage scale (e.g. "40.0000") into the API response."""
+    return format(value.quantize(Decimal("0.01")), "f")
+
+
 def _expense_item(row: ListedExpense) -> ExpenseItemResponse:
     entry = row.entry
     lens = row.lens
@@ -152,7 +159,7 @@ def _expense_item(row: ListedExpense) -> ExpenseItemResponse:
     return ExpenseItemResponse(
         id=entry.id,
         list_id=entry.list_id,
-        amount=_money_str(entry.amount),
+        amount=_amount_str(entry.amount),
         currency=entry.currency,
         description=entry.normalized_description,
         payer_id=entry.payer_id,
@@ -477,7 +484,7 @@ def create_list_expense(
     return CreateExpenseResponse(
         id=created.id,
         list_id=created.list_id,
-        amount=_money_str(created.amount),
+        amount=_amount_str(created.amount),
         currency=created.currency,
         description=created.normalized_description,
         payer_id=created.payer_id,

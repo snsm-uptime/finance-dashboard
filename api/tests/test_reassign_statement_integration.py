@@ -153,7 +153,11 @@ def test_reassign_moves_ledger_and_balances(client: TestClient, db_session: Sess
     assert balances_a.status_code == 200
     assert balances_b.status_code == 200
     assert Decimal(balances_a.json()["balance_crc"]) == Decimal("0")
-    assert Decimal(balances_b.json()["balance_crc"]) == Decimal("40.00")
+    # Solo-member list: the even default split allocates 100% back to the sole
+    # payer, so their net balance is paid(40) - owed(40) = 0 (domain/settle.py
+    # `compute_settle_balance_for_list_members` — positive means owed *by*
+    # other members, and there are none here).
+    assert Decimal(balances_b.json()["balance_crc"]) == Decimal("0")
 
 
 def test_reassign_dest_non_member_forbidden(client: TestClient, db_session: Session) -> None:

@@ -1809,7 +1809,8 @@ def test_session_summary_fields_mix_and_undo(
     assert after["committed_by_list"] == []
 
 
-def test_discard_retains_failed_statement_pdf(client: TestClient, db_session: Session) -> None:
+def test_discard_releases_failed_statement_pdf(client: TestClient, db_session: Session) -> None:
+    """Story 5.2: session discard always releases PDFs, even while a statement is failed."""
     _register(client, "discardfailed@example.com")
     user_id = UUID(client.get("/auth/me").json()["user_id"])
     repo = SqlAlchemyImportSessionRepository(db_session)
@@ -1836,8 +1837,8 @@ def test_discard_retains_failed_statement_pdf(client: TestClient, db_session: Se
     statement = db_session.scalars(
         select(ImportStatementModel).where(ImportStatementModel.session_id == record.id)
     ).one()
-    assert statement.pdf_path is not None
-    assert Path(path).exists()
+    assert statement.pdf_path is None
+    assert not Path(path).exists()
 
 
 # --- Story 4.13.1: assigned_rows payload + per-row unassign (ImportReviewSheet) ---
