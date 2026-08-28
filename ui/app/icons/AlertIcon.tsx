@@ -6,8 +6,8 @@ export function AlertIcon({ className, ...props }: SVGProps<SVGSVGElement>) {
   return (
     <svg
       className={className}
-      width="1.1rem"
-      height="1.1rem"
+      width="17.6"
+      height="17.6"
       viewBox="0 0 24 24"
       fill="none"
       aria-hidden="true"
