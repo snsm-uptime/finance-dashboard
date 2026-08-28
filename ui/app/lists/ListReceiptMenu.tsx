@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
-import { ReceiptRowMenu } from "@/components/soft-ledger/ReceiptRowMenu";
+import { ReceiptRowMenu, type ReceiptRowRollback } from "@/components/soft-ledger/ReceiptRowMenu";
 
 import { Sheet } from "./Sheet";
 import {
@@ -30,9 +30,10 @@ type Props = {
   listId: string;
   statementId: string | null;
   messages: ListReceiptMenuMessages;
+  rollback?: ReceiptRowRollback;
 };
 
-export function ListReceiptMenu({ listId, statementId, messages }: Props) {
+export function ListReceiptMenu({ listId, statementId, messages, rollback }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [lists, setLists] = useState<ListItem[]>([]);
@@ -79,6 +80,7 @@ export function ListReceiptMenu({ listId, statementId, messages }: Props) {
           moveStatementLabel: statementId ? messages.moveStatementLabel : undefined,
         }}
         onMoveStatement={statementId ? openPicker : undefined}
+        rollback={rollback}
       />
       <Sheet
         open={open}

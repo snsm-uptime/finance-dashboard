@@ -638,6 +638,31 @@ export default async function ListDetailPage({
                               errorUnauthorized: t.errorUnauthorized,
                               errorReassignSplit: t.errorReassignSplit,
                             }}
+                            rollback={
+                              e.import_batch_id
+                                ? {
+                                    listId,
+                                    batchId: e.import_batch_id,
+                                    confirmTitle: t.rollbackBatchConfirmTitle,
+                                    confirmBody:
+                                      expenses.filter(
+                                        (row) => row.import_batch_id === e.import_batch_id,
+                                      ).length > 1
+                                        ? t.rollbackBatchConfirmBodyCount.replace(
+                                            "{count}",
+                                            String(
+                                              expenses.filter(
+                                                (row) => row.import_batch_id === e.import_batch_id,
+                                              ).length,
+                                            ),
+                                          )
+                                        : t.rollbackBatchConfirmBody,
+                                    confirmAction: t.rollbackBatchConfirmAction,
+                                    cancelLabel: t.deleteCancel,
+                                    errorGeneric: t.errorGeneric,
+                                  }
+                                : undefined
+                            }
                           />
                         ),
                         fxSummary: rowProps.fxSummary,

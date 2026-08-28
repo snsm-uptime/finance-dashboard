@@ -98,6 +98,11 @@ export const listsMessages = {
     receiptMoveNoOtherList: "You have no other list to move this statement to.",
     errorReassignSplit:
       "This statement cannot move there: a payer or split on these rows is not a member of the destination list.",
+    rollbackBatchConfirmTitle: "Undo this import?",
+    rollbackBatchConfirmBody: "This removes every expense from that import action.",
+    rollbackBatchConfirmBodyCount:
+      "This removes {count} expenses from that import action.",
+    rollbackBatchConfirmAction: "Undo import",
   },
   es: {
     title: "Inicio",
@@ -197,6 +202,11 @@ export const listsMessages = {
     receiptMoveNoOtherList: "No tienes otra lista a la que mover este estado de cuenta.",
     errorReassignSplit:
       "Este estado de cuenta no se puede mover ahí: un pagador o una división de estas filas no es miembro de la lista de destino.",
+    rollbackBatchConfirmTitle: "¿Deshacer esta importación?",
+    rollbackBatchConfirmBody: "Esto quita todos los gastos de esa acción de importación.",
+    rollbackBatchConfirmBodyCount:
+      "Esto quita {count} gastos de esa acción de importación.",
+    rollbackBatchConfirmAction: "Deshacer importación",
   },
 } as const;
 
