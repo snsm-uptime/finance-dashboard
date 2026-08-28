@@ -28,12 +28,18 @@ vi.mock("@/app/lists/listsClient", async () => {
 
 const bulkCommitSession = vi.fn();
 const fetchImportSession = vi.fn();
+const assignRow = vi.fn();
+const deleteRow = vi.fn();
+const finalizeSession = vi.fn();
 vi.mock("../../uploadClient", async () => {
   const actual = await vi.importActual<typeof import("../../uploadClient")>("../../uploadClient");
   return {
     ...actual,
     bulkCommitSession: (...args: unknown[]) => bulkCommitSession(...args),
     fetchImportSession: (...args: unknown[]) => fetchImportSession(...args),
+    assignRow: (...args: unknown[]) => assignRow(...args),
+    deleteRow: (...args: unknown[]) => deleteRow(...args),
+    finalizeSession: (...args: unknown[]) => finalizeSession(...args),
   };
 });
 
@@ -125,6 +131,9 @@ describe("BulkReviewPanel", () => {
     fetchLists.mockReset();
     bulkCommitSession.mockReset();
     fetchImportSession.mockReset();
+    assignRow.mockReset();
+    deleteRow.mockReset();
+    finalizeSession.mockReset();
     fetchImportSession.mockResolvedValue({
       ok: true,
       session: {
@@ -141,7 +150,17 @@ describe("BulkReviewPanel", () => {
             iban: null,
             filename: "a.pdf",
             card_id: null,
-            rows: [],
+            rows: [
+              {
+                id: "r1",
+                sequence: 0,
+                description: "Coffee shop",
+                amount: "4.50",
+                currency: "USD",
+                posted_date: "2026-01-02",
+                status: "pending",
+              },
+            ],
             assigned_rows: [],
             zero_amount_excluded_count: 0,
           },
@@ -426,5 +445,138 @@ describe("BulkReviewPanel", () => {
       "This import session could not be found.",
     );
     expect(selectByText(container, "Commit to this list")).toBeUndefined();
+  });
+
+  const emptiedSession = {
+    id: "s1",
+    created_at: "2026-01-01T00:00:00Z",
+    discarded_at: null,
+    undo: null,
+    statements: [
+      {
+        id: "st1",
+        product_id: "bac_credit",
+        status: "staged",
+        candidate_row_count: 1,
+        iban: null,
+        filename: "a.pdf",
+        card_id: null,
+        rows: [],
+        assigned_rows: [],
+        zero_amount_excluded_count: 0,
+      },
+    ],
+    finalized_at: null,
+    imported_new_count: 0,
+    skipped_duplicate_count: 0,
+    landing_list_id: null,
+    deleted_count: 0,
+    zero_amount_excluded_count: 0,
+    failed_statements: [],
+    committed_by_list: [],
+  };
+
+  it("deleting a pending row calls deleteRow and drops it from the exception list", async () => {
+    fetchLists.mockResolvedValue({
+      ok: true,
+      lists: [{ id: "l1", name: "Groceries", owner_id: "u1", role: "owner" }],
+    });
+    deleteRow.mockResolvedValue({ ok: true, session: emptiedSession });
+
+    await act(async () => {
+      root.render(<BulkReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await openAndChoose(container, "Groceries");
+    expect(container.textContent).toContain("Coffee shop");
+
+    const deleteButton = container.querySelector(
+      'button[aria-label="Delete"]',
+    ) as HTMLButtonElement;
+    await act(async () => {
+      deleteButton.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(deleteRow).toHaveBeenCalledWith("s1", "r1", expect.anything());
+    expect(container.textContent).not.toContain("Coffee shop");
+  });
+
+  it("moving a pending row calls assignRow with the picked target list", async () => {
+    fetchLists.mockResolvedValue({
+      ok: true,
+      lists: [
+        { id: "l1", name: "Groceries", owner_id: "u1", role: "owner" },
+        { id: "l2", name: "Trip", owner_id: "u1", role: "member" },
+      ],
+    });
+    assignRow.mockResolvedValue({ ok: true, session: emptiedSession });
+
+    await act(async () => {
+      root.render(<BulkReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await openAndChoose(container, "Groceries");
+
+    const triggers = Array.from(
+      container.querySelectorAll('button[aria-haspopup="listbox"]'),
+    ) as HTMLButtonElement[];
+    // [0] is the main list picker (now showing "Groceries"); [1] is this
+    // row's "Move to…" picker.
+    await act(async () => {
+      triggers[1].click();
+    });
+    const option = Array.from(container.querySelectorAll('[role="option"]')).find(
+      (el) => el.textContent === "Trip",
+    ) as HTMLElement;
+    await act(async () => {
+      option.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    });
+
+    expect(assignRow).toHaveBeenCalledWith("s1", "r1", "l2", expect.anything());
+  });
+
+  it("finalizes instead of bulk-committing once every row was resolved individually", async () => {
+    fetchLists.mockResolvedValue({
+      ok: true,
+      lists: [{ id: "l1", name: "Groceries", owner_id: "u1", role: "owner" }],
+    });
+    deleteRow.mockResolvedValue({ ok: true, session: emptiedSession });
+    finalizeSession.mockResolvedValue({ ok: true, session: emptiedSession });
+
+    await act(async () => {
+      root.render(<BulkReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await openAndChoose(container, "Groceries");
+    const deleteButton = container.querySelector(
+      'button[aria-label="Delete"]',
+    ) as HTMLButtonElement;
+    await act(async () => {
+      deleteButton.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const confirmButton = selectByText(container, "Commit to this list");
+    await act(async () => {
+      confirmButton.click();
+    });
+
+    expect(finalizeSession).toHaveBeenCalledWith("s1", expect.anything());
+    expect(bulkCommitSession).not.toHaveBeenCalled();
+    expect(push).toHaveBeenCalledWith("/lists/l1");
   });
 });

@@ -491,6 +491,14 @@
   z-index: 2;
 }
 
+/* menuContainer is its own stacking context (absolute + z-index), so a later
+   row's menuContainer otherwise paints over an earlier row's open popup no
+   matter the popup's internal z-index. Raise the open row's container above
+   its siblings instead. */
+.menuContainer:has([data-open]) {
+  z-index: 10;
+}
+
 /* Sizing only — hover/focus/disabled states come from IconButton's built-in
    variant="muted" chrome, which already matches these exactly. */
 .renameIcon {

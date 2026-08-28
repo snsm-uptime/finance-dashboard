@@ -122,9 +122,10 @@ def validate_bulk_commit_eligible(
 
     Confirms the session is available (not discarded) and has at least one
     staged statement to commit. A sibling already `committed` (e.g. an
-    all-zero statement flipped at create time) does not block Bulk —
-    mixed row status on a statement being committed is ImportRowNotAvailableError
-    in the service/repo, not this function.
+    all-zero statement flipped at create time) does not block Bulk — nor does
+    a row already resolved by an individual assign/delete ahead of a
+    fixed-list bulk commit (Story 4.19): the service/repo simply commits
+    whichever rows are still pending.
     """
     if discarded_at is not None:
         raise ImportSessionDiscardedError()
