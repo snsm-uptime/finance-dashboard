@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 export function useFormSubmission<T>(
   submitFn: (data: T) => Promise<{ ok: boolean; error?: string }>,
@@ -11,9 +11,17 @@ export function useFormSubmission<T>(
 } {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // `pending` state only reflects reality after React commits a render, so
+  // two submit() calls dispatched before that commit (a fast real-world
+  // double-click, or two distinct handlers firing in the same tick) would
+  // both read a stale `pending=false` and both run submitFn concurrently —
+  // e.g. double-submitting a Save action, which can 409 on its own re-sent
+  // mutation. This ref is checked/set synchronously, closing that gap.
+  const pendingRef = useRef(false);
 
   async function submit(data: T): Promise<boolean> {
-    if (pending) return false;
+    if (pendingRef.current) return false;
+    pendingRef.current = true;
 
     setPending(true);
     setError(null);
@@ -27,6 +35,7 @@ export function useFormSubmission<T>(
       options?.onSuccess?.();
       return true;
     } finally {
+      pendingRef.current = false;
       setPending(false);
     }
   }
