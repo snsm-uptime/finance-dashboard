@@ -21,6 +21,7 @@ from application.import_session import (
 )
 from domain.canonical_line import CanonicalLine
 from domain.errors import (
+    ImportBatchNotFoundError,
     ImportNothingToUndoError,
     ImportRowNotAvailableError,
     ImportRowNotDiscardableError,
@@ -947,7 +948,14 @@ class SqlAlchemyImportSessionRepository:
         """Delete ledger (and item split overrides) first, then the batch.
 
         Order is required: `ledger_entries.import_batch_id` is ON DELETE SET NULL.
+
+        Locks the batch row (`with_for_update`) so a concurrent rollback of the
+        same batch blocks until this transaction commits, then correctly sees
+        it gone instead of racing past the existence check.
         """
+        batch_row = self._session.get(ImportBatchModel, batch_id, with_for_update=True)
+        if batch_row is None:
+            raise ImportBatchNotFoundError()
         entry_ids = list(
             self._session.scalars(
                 select(LedgerEntryModel.id).where(LedgerEntryModel.import_batch_id == batch_id)
@@ -963,8 +971,6 @@ class SqlAlchemyImportSessionRepository:
             self._session.execute(
                 delete(LedgerEntryModel).where(LedgerEntryModel.import_batch_id == batch_id)
             )
-        batch_row = self._session.get(ImportBatchModel, batch_id)
-        if batch_row is not None:
-            self._session.delete(batch_row)
+        self._session.delete(batch_row)
         self._session.flush()
         return len(entry_ids)

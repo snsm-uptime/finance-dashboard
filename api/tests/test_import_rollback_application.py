@@ -74,9 +74,7 @@ class _FakeRollbackRepo:
 
     def identities_on_list(self, list_id: UUID) -> set[str]:
         return {
-            e.import_identity
-            for e in self.entries
-            if e.list_id == list_id and e.import_identity
+            e.import_identity for e in self.entries if e.list_id == list_id and e.import_identity
         }
 
     @contextmanager

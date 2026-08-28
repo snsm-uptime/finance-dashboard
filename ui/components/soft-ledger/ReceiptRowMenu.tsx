@@ -27,6 +27,8 @@ export type ReceiptRowRollback = {
   confirmAction: string;
   cancelLabel: string;
   errorGeneric: string;
+  errorForbidden: string;
+  errorUnauthorized: string;
 };
 
 type Props = {
@@ -97,8 +99,8 @@ function RollbackBatchConfirm({
     const result = await rollbackImportBatch(rollback.listId, rollback.batchId, {
       errorGeneric: rollback.errorGeneric,
       errorInvalidName: rollback.errorGeneric,
-      errorForbidden: rollback.errorGeneric,
-      errorUnauthorized: rollback.errorGeneric,
+      errorForbidden: rollback.errorForbidden,
+      errorUnauthorized: rollback.errorUnauthorized,
     });
     setPending(false);
     if (!result.ok) {
@@ -113,7 +115,7 @@ function RollbackBatchConfirm({
     <DiscardConfirmDialog
       open={open}
       title={rollback.confirmTitle}
-      body={error ?? rollback.confirmBody}
+      body={error ? `${rollback.confirmBody} ${error}` : rollback.confirmBody}
       confirmLabel={rollback.confirmAction}
       cancelLabel={rollback.cancelLabel}
       pending={pending}

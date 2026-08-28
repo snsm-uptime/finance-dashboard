@@ -176,7 +176,6 @@ def _expense_item(row: ListedExpense) -> ExpenseItemResponse:
         ),
         viewer_net_polarity=net_polarity,
         origin_card_label=row.origin_card_label,
-        import_batch_id=entry.import_batch_id,
         statement_id=entry.statement_id,
     )
 

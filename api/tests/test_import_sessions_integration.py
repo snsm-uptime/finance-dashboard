@@ -2397,16 +2397,24 @@ def test_rollback_one_individual_batch_leaves_sibling(
         )
     )
     first, second = candidates[0], candidates[1]
-    batch_1 = AssignCandidateRowService(repo, lookup, fx).execute(
-        AssignCandidateRowCommand(
-            actor_user_id=actor_id, session_id=session_id, row_id=first.id, list_id=list_id
+    batch_1 = (
+        AssignCandidateRowService(repo, lookup, fx)
+        .execute(
+            AssignCandidateRowCommand(
+                actor_user_id=actor_id, session_id=session_id, row_id=first.id, list_id=list_id
+            )
         )
-    ).batch
-    batch_2 = AssignCandidateRowService(repo, lookup, fx).execute(
-        AssignCandidateRowCommand(
-            actor_user_id=actor_id, session_id=session_id, row_id=second.id, list_id=list_id
+        .batch
+    )
+    batch_2 = (
+        AssignCandidateRowService(repo, lookup, fx)
+        .execute(
+            AssignCandidateRowCommand(
+                actor_user_id=actor_id, session_id=session_id, row_id=second.id, list_id=list_id
+            )
         )
-    ).batch
+        .batch
+    )
     assert batch_1 is not None and batch_2 is not None
 
     rolled = client.delete(f"/lists/{list_id}/import-batches/{batch_1.id}")
@@ -2422,6 +2430,15 @@ def test_rollback_one_individual_batch_leaves_sibling(
     first_row = db_session.get(ImportCandidateRowModel, first.id)
     assert first_row is not None
     assert first_row.status == ROW_STATUS_COMMITTED
+
+    # AC #4: settle figures come from the remaining ledger, not a wiped one.
+    balances = client.get(f"/lists/{list_id}/balances")
+    assert balances.status_code == 200
+    remaining_ledger = db_session.scalars(
+        select(LedgerEntryModel).where(LedgerEntryModel.list_id == list_id)
+    ).all()
+    assert len(remaining_ledger) == 1
+    assert remaining_ledger[0].import_batch_id == batch_2.id
 
 
 def test_rollback_then_reimport_commits_new_batch_not_skipped(
@@ -2480,4 +2497,3 @@ def test_rollback_acl_and_wrong_list_are_not_found(
 
     db_session.expire_all()
     assert db_session.get(ImportBatchModel, UUID(batch_id)) is not None
-

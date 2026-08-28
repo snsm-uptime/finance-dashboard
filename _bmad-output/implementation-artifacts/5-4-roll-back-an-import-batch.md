@@ -4,7 +4,7 @@ baseline_commit: 78a1c77
 
 # Story 5.4: Roll back an import batch
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -91,7 +91,15 @@ so that its ledger effect is undone and a later re-import does not leave duplica
 
 ### Review Findings
 
-_(filled at code-review)_
+- [x] [Review][Patch] BFF DELETE route crashes on the rollback success path: `new NextResponse(text, {status: 204, ...})` throws because a 204 response cannot carry a body, even an empty string — every successful rollback returns a 500 to the browser despite the API-side delete having actually happened [ui/app/api/lists/[listId]/import-batches/[batchId]/route.ts:42-48] — fixed: return `new NextResponse(null, {status: 204})` for the 204 case
+- [x] [Review][Patch] `rollback_batch` has an unlocked check-then-act race: two concurrent DELETEs for the same `batch_id` can both pass `get_import_batch`'s existence peek before either commits, so the second caller can get a `204`/0-rows-removed instead of the spec's required `404 import_batch_not_found` on a second call (Task 1.4 idempotency) [api/adapters/persistence/import_sessions.py:937-970; api/application/import_rollback.py:54-70] — fixed: `rollback_batch` now locks the batch row with `with_for_update=True` and raises `ImportBatchNotFoundError` if it's gone
+- [x] [Review][Patch] `rollback_batch` looks up the batch row twice (once via `get_import_batch` in the service, again via `self._session.get(ImportBatchModel, batch_id)` inside `rollback_batch`) — redundant round trip with no behavioral purpose [api/adapters/persistence/import_sessions.py:966] — fixed as part of the locking change above: the locked `get()` inside `rollback_batch` is now the only lookup used for the delete
+- [x] [Review][Patch] Rollback confirm dialog collapses all error variants (401/403/404/500) into `errorGeneric`, unlike every other confirm flow in `page.tsx` which passes the four distinct message keys through — user gets the same generic copy for "session expired" as for "server error" [ui/components/soft-ledger/ReceiptRowMenu.tsx:91-94] — fixed: `ReceiptRowRollback` now carries `errorForbidden`/`errorUnauthorized` too, wired from `page.tsx`
+- [x] [Review][Patch] Confirm dialog body permanently swaps to the error string on failure (`body={error ?? rollback.confirmBody}`) and only reverts once the user clicks Confirm again — between a failed attempt and the retry click, the "N expenses will be removed" context is gone [ui/components/soft-ledger/ReceiptRowMenu.tsx:109] — fixed: body now appends the error after the original copy instead of replacing it
+- [x] [Review][Patch] Sibling-batch row count in `page.tsx` filters the full `expenses` array up to 3 times per row instead of computing a `batchId → count` map once — O(n²) work on every render for no reason [ui/app/lists/[listId]/page.tsx:630-638] — fixed: extracted `rollbackBatchConfirmBodyFrom` (single-pass reduce) and reused it per row
+- [x] [Review][Patch] Task 3.6 checklist claims a test for "two rows same batch → one confirm rolls back once," but `soft-ledger.test.tsx` only exercises the count-copy via a hardcoded prop, never through `page.tsx`'s real `expenses.filter` derivation — add a test that goes through the real prop-building path [ui/components/soft-ledger/soft-ledger.test.tsx] — fixed: added `page.rollbackBatchConfirmBody.test.ts` covering the extracted helper directly (singular, count, cross-batch, hand-row cases)
+- [x] [Review][Patch] Task 4.1 calls for a balances assertion on rollback; only the full-wipe test (`test_rollback_bulk_batch_clears_ledger_and_batch`) checks `/balances`. The sibling-preserving test (`test_rollback_one_individual_batch_leaves_sibling`) never asserts balances reflect the remaining entry — add that assertion to cover the non-trivial "some rows remain" path [api/tests/test_import_sessions_integration.py:539-583] — fixed: added a `/balances` call plus a remaining-ledger assertion tying the surviving row to `batch_2`
+- [x] [Review][Defer] No audit trail for rollback (who/when deleted a committed batch) [api/application/import_rollback.py] — deferred, pre-existing: no audit-log infrastructure exists anywhere in this codebase for any mutation today; not something this story should introduce alone
 
 ## Dev Notes
 

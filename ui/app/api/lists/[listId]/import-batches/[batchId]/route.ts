@@ -39,6 +39,10 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     );
   }
 
+  if (upstream.status === 204) {
+    return new NextResponse(null, { status: 204 });
+  }
+
   const text = await upstream.text();
   return new NextResponse(text, {
     status: upstream.status,

@@ -211,6 +211,8 @@ describe("Soft-Ledger primitives", () => {
             confirmAction: "Undo import",
             cancelLabel: "Cancel",
             errorGeneric: "generic",
+            errorForbidden: "forbidden",
+            errorUnauthorized: "unauthorized",
           }}
         />,
       );
