@@ -15,10 +15,12 @@ import { CreditCardFace, CreditCardMark } from "./CreditCardFace";
 import { classifyActiveImportSession } from "./classifyActiveImportSession";
 import { DiscardConfirmDialog } from "./DiscardConfirmDialog";
 import {
+  assignRow,
   discardSession,
   fetchImportSession,
   type CardIdentificationMessages,
   type ImportSession,
+  type IndividualReviewMessages,
   type StagedStatement,
   type UploadMessages,
 } from "./uploadClient";
@@ -99,6 +101,20 @@ export function SessionReviewPanel({
     errorUnauthorized: t.errorUnauthorized,
   };
 
+  const reviewMessages: IndividualReviewMessages = {
+    errorForbidden: t.errorGeneric,
+    errorSessionNotFound: t.errorGeneric,
+    errorStatementNotFound: t.errorGeneric,
+    errorSessionDiscarded: t.errorGeneric,
+    errorStatementNotAvailable: t.errorGeneric,
+    errorRowNotFound: t.errorGeneric,
+    errorRowNotAvailable: t.errorGeneric,
+    errorNothingToUndo: t.errorGeneric,
+    errorFxUnavailable: t.errorGeneric,
+    errorGeneric: t.errorGeneric,
+    errorUnauthorized: t.errorUnauthorized,
+  };
+
   const cardMessages: CardIdentificationMessages = useMemo(
     () => ({
       errorCardAlreadyRegistered: t.errorCardAlreadyRegistered,
@@ -147,13 +163,35 @@ export function SessionReviewPanel({
       : { kind: "undetermined" as const };
 
   useEffect(() => {
-    if (autoRoute.kind === "fixed") {
-      router.replace(
-        `/upload/bulk/${encodeURIComponent(session.id)}?listId=${encodeURIComponent(autoRoute.listId)}`,
-      );
-    } else if (autoRoute.kind === "review") {
-      router.replace(`/upload/review/${encodeURIComponent(session.id)}`);
+    if (autoRoute.kind !== "fixed") {
+      if (autoRoute.kind === "review") {
+        router.replace(`/upload/review/${encodeURIComponent(session.id)}`);
+      }
+      return;
     }
+    // Every card agrees on this fixed list: assign every pending row to it
+    // (as if the user had done it one-by-one) and land on the same
+    // ImportReviewSheet individual review finishes on, so discard / select
+    // multiple / change list are reused as-is rather than duplicated in
+    // Bulk. A failed assignRow just stops early — the review page below
+    // still shows whatever got assigned plus the remaining pending rows.
+    let cancelled = false;
+    const sessionId = session.id;
+    const listId = autoRoute.listId;
+    async function autoAssignToFixedList() {
+      outer: for (const statement of session.statements) {
+        for (const row of statement.rows) {
+          const result = await assignRow(sessionId, row.id, listId, reviewMessages);
+          if (cancelled) return;
+          if (!result.ok) break outer;
+        }
+      }
+      if (!cancelled) router.replace(`/upload/review/${encodeURIComponent(sessionId)}`);
+    }
+    void autoAssignToFixedList();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoRoute.kind, autoRoute.kind === "fixed" ? autoRoute.listId : null, session.id]);
 

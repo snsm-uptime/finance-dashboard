@@ -10,6 +10,7 @@ import type { ImportSession } from "./uploadClient";
 const discardSession = vi.fn();
 const fetchImportSession = vi.fn();
 const fetchCards = vi.fn();
+const assignRow = vi.fn();
 const replace = vi.fn();
 
 vi.mock("./uploadClient", async () => {
@@ -18,6 +19,7 @@ vi.mock("./uploadClient", async () => {
     ...actual,
     discardSession: (...args: unknown[]) => discardSession(...args),
     fetchImportSession: (...args: unknown[]) => fetchImportSession(...args),
+    assignRow: (...args: unknown[]) => assignRow(...args),
   };
 });
 
@@ -286,7 +288,7 @@ describe("SessionReviewPanel", () => {
       statements: [mockSession.statements[0]],
     };
 
-    it("routes straight to Bulk pre-filled with the card's fixed list", async () => {
+    it("auto-assigns every pending row to the card's fixed list, then routes to individual review", async () => {
       fetchCards.mockResolvedValue({
         ok: true,
         cards: [
@@ -300,15 +302,30 @@ describe("SessionReviewPanel", () => {
           },
         ],
       });
+      assignRow.mockResolvedValue({ ok: true, session: singleMatchedSession });
 
       await act(async () => {
         root.render(<SessionReviewPanel session={singleMatchedSession} />);
       });
       await act(async () => {
         await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
       });
 
-      expect(replace).toHaveBeenCalledWith("/upload/bulk/sess1?listId=list-9");
+      expect(assignRow).toHaveBeenCalledWith(
+        "sess1",
+        "r1",
+        "list-9",
+        expect.anything(),
+      );
+      expect(assignRow).toHaveBeenCalledWith(
+        "sess1",
+        "r2",
+        "list-9",
+        expect.anything(),
+      );
+      expect(replace).toHaveBeenCalledWith("/upload/review/sess1");
     });
 
     it("routes straight to individual review when the card is set to review", async () => {
