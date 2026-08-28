@@ -4,7 +4,7 @@ baseline_commit: 78a1c77
 
 # Story 5.4: Roll back an import batch
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -47,47 +47,47 @@ so that its ledger effect is undone and a later re-import does not leave duplica
 
 ## Tasks / Subtasks
 
-- [ ] Task 0: Branch + reads
-  - [ ] 0.1 Branch: `feat/5/5-4-roll-back-an-import-batch` from current `main` (one story per branch).
-  - [ ] 0.2 Read this file, `_bmad-output/project-context.md`, AD-4 in `ARCHITECTURE-SPINE.md`, `commit_statement_batch` + `_hard_delete_ledger_for_row` in `api/adapters/persistence/import_sessions.py`, `LedgerEntryModel` / `ImportBatchModel` / `SplitOverrideModel` in `models.py`, `ExpenseItemResponse` + list GET expenses, `ReceiptRowMenu.tsx`, `ui/app/lists/[listId]/page.tsx`, BFF `ui/app/api/lists/[listId]/expenses/[entryId]/origin/route.ts` (cookie-forward template).
+- [x] Task 0: Branch + reads
+  - [x] 0.1 Branch: `feat/5/5-4-roll-back-an-import-batch` from current `main` (one story per branch).
+  - [x] 0.2 Read this file, `_bmad-output/project-context.md`, AD-4 in `ARCHITECTURE-SPINE.md`, `commit_statement_batch` + `_hard_delete_ledger_for_row` in `api/adapters/persistence/import_sessions.py`, `LedgerEntryModel` / `ImportBatchModel` / `SplitOverrideModel` in `models.py`, `ExpenseItemResponse` + list GET expenses, `ReceiptRowMenu.tsx`, `ui/app/lists/[listId]/page.tsx`, BFF `ui/app/api/lists/[listId]/expenses/[entryId]/origin/route.ts` (cookie-forward template).
 
-- [ ] Task 1: Persistence + application — atomic batch undo (AC: #1, #2, #3)
-  - [ ] 1.1 New `RollbackImportBatchService` (name flexible) in `api/application/` — **not** a FastAPI/SQLAlchemy import in `domain/`. Command: `actor_user_id`, `list_id`, `batch_id`.
-  - [ ] 1.2 Load `ImportBatchModel` by id. Missing → not-found. `batch.list_id != list_id` → **same not-found** (no existence leak). Authorize `import_to_list` (or `write_ledger` — both are member mutations; pick **one** and use `AuthorizeListAccessService`; non-member → existing 404/403 pattern of list writes, prefer **404** if GET list already 404s strangers).
-  - [ ] 1.3 Inside one request transaction (reuse `get_db`; use `begin_nested()` if you need a clean IntegrityError mapping like commit):
+- [x] Task 1: Persistence + application — atomic batch undo (AC: #1, #2, #3)
+  - [x] 1.1 New `RollbackImportBatchService` (name flexible) in `api/application/` — **not** a FastAPI/SQLAlchemy import in `domain/`. Command: `actor_user_id`, `list_id`, `batch_id`.
+  - [x] 1.2 Load `ImportBatchModel` by id. Missing → not-found. `batch.list_id != list_id` → **same not-found** (no existence leak). Authorize `import_to_list` (or `write_ledger` — both are member mutations; pick **one** and use `AuthorizeListAccessService`; non-member → existing 404/403 pattern of list writes, prefer **404** if GET list already 404s strangers).
+  - [x] 1.3 Inside one request transaction (reuse `get_db`; use `begin_nested()` if you need a clean IntegrityError mapping like commit):
       1. Collect ledger ids where `import_batch_id == batch_id`.
       2. Delete `split_overrides` with `subject_kind` item and `subject_id` in those ids (imported rows can carry item overrides from 3.2-style split attach if any exist).
       3. Hard-delete those `ledger_entries` (frees `uq_ledger_entries_import_candidate_row_id` and `import_identity`).
       4. Delete the `import_batches` row.
       5. **Do not** UPDATE candidate rows back to `pending`. Leave `committed` / `dedup_skipped` as-is. Do not call `_reopen_statement_if_pending`. Do not touch sibling batches.
-  - [ ] 1.4 Idempotency: second call → 404 `import_batch_not_found` (or reuse a generic not-found code already used on this router family). Do not 500.
-  - [ ] 1.5 Manual expenses (`import_batch_id` IS NULL) are never selected. A batch that only ever existed as all-duplicate (no row in `import_batches`, Story 4.12) has nothing to roll back — there is no id.
-  - [ ] 1.6 Repository method on the import-session repo **or** list/expense repo — do **not** duplicate `_hard_delete_ledger_for_row`’s per-row loop if you can `DELETE … WHERE import_batch_id = :id` then delete batch. Reuse that helper only if it stays correct for multi-row bulk batches (today it deletes **one** entry then maybe the batch). Prefer a dedicated `rollback_batch(batch_id)` that deletes **all** matching ledger rows in one go.
-  - [ ] 1.7 Application tests (fakes): bulk-shaped batch (2 ledger rows) → both gone, sibling batch’s row remains; individual-shaped batch (1 row) → only that row gone; wrong list_id → not found, ledger untouched; stranger → not found; empty leftover identities so a fake “dedup lookup” would not see them; split override on one entry is gone.
+  - [x] 1.4 Idempotency: second call → 404 `import_batch_not_found` (or reuse a generic not-found code already used on this router family). Do not 500.
+  - [x] 1.5 Manual expenses (`import_batch_id` IS NULL) are never selected. A batch that only ever existed as all-duplicate (no row in `import_batches`, Story 4.12) has nothing to roll back — there is no id.
+  - [x] 1.6 Repository method on the import-session repo **or** list/expense repo — do **not** duplicate `_hard_delete_ledger_for_row`’s per-row loop if you can `DELETE … WHERE import_batch_id = :id` then delete batch. Reuse that helper only if it stays correct for multi-row bulk batches (today it deletes **one** entry then maybe the batch). Prefer a dedicated `rollback_batch(batch_id)` that deletes **all** matching ledger rows in one go.
+  - [x] 1.7 Application tests (fakes): bulk-shaped batch (2 ledger rows) → both gone, sibling batch’s row remains; individual-shaped batch (1 row) → only that row gone; wrong list_id → not found, ledger untouched; stranger → not found; empty leftover identities so a fake “dedup lookup” would not see them; split override on one entry is gone.
 
-- [ ] Task 2: HTTP + BFF + DTO (AC: #1, #4)
-  - [ ] 2.1 FastAPI: `DELETE /lists/{list_id}/import-batches/{batch_id}` (cookie auth). 204 empty body on success (or 200 with `{batch_id, removed_entry_count}` — pick 204 to match discard-ish mutations unless tests already prefer JSON). `response` error `code` snake_case.
-  - [ ] 2.2 Expose `import_batch_id: UUID | null` on `ExpenseItemResponse` / `LedgerEntryRecord` / `ListedExpense` mapping / `asExpense` in `listsClient.ts`. Null for hand rows. Wire through `list_ledger_entries` — today the record **omits** `import_batch_id`; add it without breaking money-as-string.
-  - [ ] 2.3 BFF: `ui/app/api/lists/[listId]/import-batches/[batchId]/route.ts` — DELETE, cookie-forward, no JSON body, 502 on upstream down (copy origin route style).
-  - [ ] 2.4 `rollbackImportBatch(listId, batchId, messages)` in `listsClient.ts` + tests: 204, 404, 401.
+- [x] Task 2: HTTP + BFF + DTO (AC: #1, #4)
+  - [x] 2.1 FastAPI: `DELETE /lists/{list_id}/import-batches/{batch_id}` (cookie auth). 204 empty body on success (or 200 with `{batch_id, removed_entry_count}` — pick 204 to match discard-ish mutations unless tests already prefer JSON). `response` error `code` snake_case.
+  - [x] 2.2 Expose `import_batch_id: UUID | null` on `ExpenseItemResponse` / `LedgerEntryRecord` / `ListedExpense` mapping / `asExpense` in `listsClient.ts`. Null for hand rows. Wire through `list_ledger_entries` — today the record **omits** `import_batch_id`; add it without breaking money-as-string.
+  - [x] 2.3 BFF: `ui/app/api/lists/[listId]/import-batches/[batchId]/route.ts` — DELETE, cookie-forward, no JSON body, 502 on upstream down (copy origin route style).
+  - [x] 2.4 `rollbackImportBatch(listId, batchId, messages)` in `listsClient.ts` + tests: 204, 404, 401.
 
-- [ ] Task 3: Soft-Ledger UI (AC: #1, #3, #4)
-  - [ ] 3.1 Entry is **spine-only** (no mock). Use list-detail `ReceiptRowMenu`. For rows with non-null `import_batch_id`: **Delete** becomes the rollback affordance (danger). **Confirm** before the network call (high-intent): reuse confirm-dialog pattern (`DiscardConfirmDialog` or a small list-domain dialog — do not invent a third confirm primitive if one exists). Copy must say the **whole batch** is undone; if `expenses.filter(e => e.import_batch_id === id).length > 1`, mention that count so bulk rollback is not a silent multi-row wipe.
-  - [ ] 3.2 After success: `router.refresh()` like `OriginChipPicker` / `ManualExpenseForm` so BalanceStrip + receipt list + existing incomplete slot re-read server data. Do **not** recompute shares/FX in the browser.
-  - [ ] 3.3 Hand rows: Delete stays non-persisting (current `ReceiptRowMenu` items with no `onClick`). Edit stays non-persisting for everyone.
-  - [ ] 3.4 Do not use `@use-gesture` on this menu. Keyboard/click only (UX-DR19). Not a pill primary CTA (AD-12).
-  - [ ] 3.5 i18n: both `en` and `es` on `ui/lib/i18n/lists.ts` (e.g. `rollbackBatchConfirmTitle`, `rollbackBatchConfirmBody`, `rollbackBatchConfirmAction`, error generic). Calm voice: undo this import, not “paid” / settlement language.
-  - [ ] 3.6 Tests (jsdom, test-after): parser row with batch id → confirm → DELETE `/api/lists/{id}/import-batches/{batchId}` (not DELETE expense id); two rows same batch → one confirm rolls back once; hand row Delete does not fetch; EN/ES keys present. Mock fetch; no Playwright required.
+- [x] Task 3: Soft-Ledger UI (AC: #1, #3, #4)
+  - [x] 3.1 Entry is **spine-only** (no mock). Use list-detail `ReceiptRowMenu`. For rows with non-null `import_batch_id`: **Delete** becomes the rollback affordance (danger). **Confirm** before the network call (high-intent): reuse confirm-dialog pattern (`DiscardConfirmDialog` or a small list-domain dialog — do not invent a third confirm primitive if one exists). Copy must say the **whole batch** is undone; if `expenses.filter(e => e.import_batch_id === id).length > 1`, mention that count so bulk rollback is not a silent multi-row wipe.
+  - [x] 3.2 After success: `router.refresh()` like `OriginChipPicker` / `ManualExpenseForm` so BalanceStrip + receipt list + existing incomplete slot re-read server data. Do **not** recompute shares/FX in the browser.
+  - [x] 3.3 Hand rows: Delete stays non-persisting (current `ReceiptRowMenu` items with no `onClick`). Edit stays non-persisting for everyone.
+  - [x] 3.4 Do not use `@use-gesture` on this menu. Keyboard/click only (UX-DR19). Not a pill primary CTA (AD-12).
+  - [x] 3.5 i18n: both `en` and `es` on `ui/lib/i18n/lists.ts` (e.g. `rollbackBatchConfirmTitle`, `rollbackBatchConfirmBody`, `rollbackBatchConfirmAction`, error generic). Calm voice: undo this import, not “paid” / settlement language.
+  - [x] 3.6 Tests (jsdom, test-after): parser row with batch id → confirm → DELETE `/api/lists/{id}/import-batches/{batchId}` (not DELETE expense id); two rows same batch → one confirm rolls back once; hand row Delete does not fetch; EN/ES keys present. Mock fetch; no Playwright required.
 
-- [ ] Task 4: Integration (Postgres 16)
-  - [ ] 4.1 Bulk path: upload synthetic BAC (or existing fixture) → bulk-commit list A → `DELETE` batch → GET expenses empty (or only unrelated rows); GET balances hero matches remaining ledger; `import_batches` row gone.
-  - [ ] 4.2 Sibling: two individual assigns (two batches) on same statement → rollback batch 1 → batch 2 ledger remains.
-  - [ ] 4.3 Re-import: after rollback, upload the **same** synthetic PDF again to the same list → commit produces a **new** batch and ledger rows (not `skipped_duplicate` for those identities). Uses existing content-hash / session rules; if active-session hash blocks a second upload of an in-flight file, use a **finalized** first session (normal 4.14 Save) then second upload.
-  - [ ] 4.4 ACL: non-member 404/401; batch on list B cannot be deleted via list A’s URL.
+- [x] Task 4: Integration (Postgres 16)
+  - [x] 4.1 Bulk path: upload synthetic BAC (or existing fixture) → bulk-commit list A → `DELETE` batch → GET expenses empty (or only unrelated rows); GET balances hero matches remaining ledger; `import_batches` row gone.
+  - [x] 4.2 Sibling: two individual assigns (two batches) on same statement → rollback batch 1 → batch 2 ledger remains.
+  - [x] 4.3 Re-import: after rollback, upload the **same** synthetic PDF again to the same list → commit produces a **new** batch and ledger rows (not `skipped_duplicate` for those identities). Uses existing content-hash / session rules; if active-session hash blocks a second upload of an in-flight file, use a **finalized** first session (normal 4.14 Save) then second upload.
+  - [x] 4.4 ACL: non-member 404/401; batch on list B cannot be deleted via list A’s URL.
 
-- [ ] Task 5: Story-close overview
-  - [ ] 5.1 Fill Completion Notes using `_bmad-output/implementation-artifacts/story-close-overview-checklist.md`.
-  - [ ] 5.2 Sync story Status with `sprint-status.yaml` at close (Epic 3.5 retro). Include Review Findings (or explicit zero-findings) when review runs.
+- [x] Task 5: Story-close overview
+  - [x] 5.1 Fill Completion Notes using `_bmad-output/implementation-artifacts/story-close-overview-checklist.md`.
+  - [x] 5.2 Sync story Status with `sprint-status.yaml` at close (Epic 3.5 retro). Include Review Findings (or explicit zero-findings) when review runs.
 
 ### Review Findings
 
@@ -183,10 +183,70 @@ Follow `_bmad-output/project-context.md`: Import Session ≠ Batch; rollback = u
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Sonnet 5 (claude-sonnet-5)
 
 ### Debug Log References
 
+- Backend suite: `docker compose exec api uv run pytest -q` → 742 passed, 1 pre-existing failure (`test_discard_retains_failed_statement_pdf`, confirmed failing on baseline `9f99c14` too via `git stash`; unrelated to this story).
+- Rollback-only slice: `uv run pytest tests/test_import_rollback_application.py tests/test_import_sessions_integration.py -k rollback -q` → 10 passed.
+- Frontend: `npx vitest run` → 502 passed (65 files); `npx tsc --noEmit` clean; `npx eslint .` → 0 errors (3 pre-existing warnings in unrelated files).
+- Ruff: `uv run ruff check .` → all checks passed.
+- No Alembic migration added (HEAD stayed `0028_stmt_parse_evidence`).
+
 ### Completion Notes List
 
+## Story-close overview — 5.4 roll back an import batch
+
+**Request path:**
+Browser (`ReceiptRowMenu` Delete on a parser/batch row) → confirm dialog (`DiscardConfirmDialog`) → `rollbackImportBatch()` in `listsClient.ts` → same-origin BFF `DELETE /api/lists/{listId}/import-batches/{batchId}` (cookie-forward) → API `DELETE /lists/{list_id}/import-batches/{batch_id}` → `RollbackImportBatchService.execute` → `AuthorizeListAccessService` (`import_to_list`) → `SqlAlchemyImportSessionRepository.rollback_batch` inside `session.begin_nested()` → delete item `split_overrides` → delete `ledger_entries` where `import_batch_id = :id` → delete the `import_batches` row → `router.refresh()` re-reads expenses/balances from the server.
+
+**Key components:**
+- `api/application/import_rollback.py` (new) — `RollbackImportBatchService`, `RollbackImportBatchCommand`, `ImportBatchPeek`, `ImportBatchRollbackRepository` Protocol.
+- `api/adapters/persistence/import_sessions.py` — `get_import_batch`, `rollback_batch`, `atomic` on `SqlAlchemyImportSessionRepository`; deletes ledger rows (and matching item `split_overrides`) before the batch row (FK is `ON DELETE SET NULL`).
+- `api/api/routes/lists.py` — `DELETE /lists/{list_id}/import-batches/{batch_id}`, 204 on success, `import_batch_not_found` (404) on missing/foreign/stranger.
+- `api/domain/errors.py` — `ImportBatchNotFoundError`.
+- `api/api/schemas/lists.py`, `api/application/expenses.py`, `api/adapters/persistence/repositories.py` — `import_batch_id` threaded through `ExpenseItemResponse` / `LedgerEntryRecord` / `SqlAlchemyListRepository` row mapping.
+- `ui/app/api/lists/[listId]/import-batches/[batchId]/route.ts` (new BFF) — cookie-forward DELETE, 502 on upstream unreachable.
+- `ui/app/lists/listsClient.ts` — `rollbackImportBatch()`; `ExpenseItem.import_batch_id`.
+- `ui/components/soft-ledger/ReceiptRowMenu.tsx` / `ReceiptRow.tsx` — Delete becomes a confirmed rollback affordance only when `import_batch_id` is non-null; hand rows keep the non-persisting chrome-only Delete/Edit.
+- `ui/app/lists/[listId]/page.tsx` — wires `rollback` prop per row, singular vs. counted confirm copy when other rows share the same `batch_id`.
+- `ui/lib/i18n/lists.ts` — `rollbackBatchConfirm*` EN/ES keys.
+
+**Why this shape:**
+AD-4 keys rollback off `batch_id` (never a single-row `DELETE /expenses/{id}` inside a multi-row batch, which would half-empty a journal). Ledger rows are deleted before the batch row because `ledger_entries.import_batch_id` is `ON DELETE SET NULL` — deleting the batch first would orphan `import_identity` values and silently break the Story 4.12 dedup skip on re-import (AC #2). Not-found is returned uniformly for missing batch, wrong `list_id`, and non-member so the endpoint doesn't leak existence across lists (AD-19). No new Alembic migration, no tombstone/`rolled_back` status — matches `_hard_delete_ledger_for_row`'s precedent of hard-deleting so empty journals don't pollute FR-30.
+
+**What not to break:**
+- Never call `session.delete(batch)` before deleting its `ledger_entries` / `split_overrides`.
+- Never resurrect `_undo_assign` from list-detail rollback — that path is session-scoped and reopens `pending`, which this story explicitly does not do.
+- Never let a single-row `DELETE /lists/{id}/expenses/{entryId}` remove one row out of a multi-row bulk batch — always route batch-linked rows through `import-batches/{batchId}`.
+- Keep `import_batch_id` null-safe end to end (hand/manual rows) — `ReceiptRowMenu` must only offer rollback when it is non-null.
+- If Story 5.3 (reassign) lands later, `rollback_batch` must keep using the batch's **current** `list_id` — do not cache/derive it elsewhere.
+
 ### File List
+
+**UPDATE:**
+- `api/adapters/persistence/import_sessions.py`
+- `api/adapters/persistence/repositories.py`
+- `api/api/routes/lists.py`
+- `api/api/schemas/lists.py`
+- `api/application/expenses.py`
+- `api/domain/errors.py`
+- `api/tests/test_import_sessions_integration.py`
+- `ui/app/lists/[listId]/page.tsx`
+- `ui/app/lists/[listId]/page.newBadge.test.ts`
+- `ui/app/lists/[listId]/page.receiptRowFx.test.ts`
+- `ui/app/lists/listsClient.ts`
+- `ui/app/lists/listsClient.test.ts`
+- `ui/components/soft-ledger/ReceiptRow.tsx`
+- `ui/components/soft-ledger/ReceiptRowMenu.tsx`
+- `ui/components/soft-ledger/soft-ledger.test.tsx`
+- `ui/lib/i18n/lists.ts`
+
+**NEW:**
+- `api/application/import_rollback.py`
+- `api/tests/test_import_rollback_application.py`
+- `ui/app/api/lists/[listId]/import-batches/[batchId]/route.ts`
+
+### Change Log
+
+- 2026-08-27: Implemented atomic import-batch rollback (`RollbackImportBatchService`, `DELETE /lists/{list_id}/import-batches/{batch_id}`, BFF route, Soft-Ledger confirmed-rollback affordance on parser rows); status → review.
