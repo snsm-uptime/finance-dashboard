@@ -26,6 +26,16 @@ vi.mock("@/app/lists/listsClient", async () => {
   };
 });
 
+const routeAfterImportLanding = vi.fn();
+vi.mock("../../conflictsClient", async () => {
+  const actual =
+    await vi.importActual<typeof import("../../conflictsClient")>("../../conflictsClient");
+  return {
+    ...actual,
+    routeAfterImportLanding: (...args: unknown[]) => routeAfterImportLanding(...args),
+  };
+});
+
 const bulkCommitSession = vi.fn();
 const fetchImportSession = vi.fn();
 const assignRow = vi.fn();
@@ -134,6 +144,12 @@ describe("BulkReviewPanel", () => {
     assignRow.mockReset();
     deleteRow.mockReset();
     finalizeSession.mockReset();
+    routeAfterImportLanding.mockReset();
+    routeAfterImportLanding.mockImplementation(
+      async (router: { push: (href: string) => void }, listId: string | null) => {
+        router.push(listId ? `/lists/${listId}` : "/lists");
+      },
+    );
     fetchImportSession.mockResolvedValue({
       ok: true,
       session: {
@@ -578,5 +594,37 @@ describe("BulkReviewPanel", () => {
     expect(finalizeSession).toHaveBeenCalledWith("s1", expect.anything());
     expect(bulkCommitSession).not.toHaveBeenCalled();
     expect(push).toHaveBeenCalledWith("/lists/l1");
+  });
+
+  it("routes to conflict review instead of the list when the queue is non-empty (Story 5.5, UX-DR22)", async () => {
+    fetchLists.mockResolvedValue({
+      ok: true,
+      lists: [{ id: "l1", name: "Groceries", owner_id: "u1", role: "owner" }],
+    });
+    bulkCommitSession.mockResolvedValue({
+      ok: true,
+      result: { session_id: "s1", list_id: "l1", batches: [] },
+    });
+    routeAfterImportLanding.mockImplementation(
+      async (router: { push: (href: string) => void }, listId: string | null) => {
+        router.push(`/upload/conflicts?landingListId=${listId}`);
+      },
+    );
+
+    await act(async () => {
+      root.render(<BulkReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await openAndChoose(container, "Groceries");
+    const confirmButton = selectByText(container, "Commit to this list");
+    await act(async () => {
+      confirmButton.click();
+    });
+
+    expect(bulkCommitSession).toHaveBeenCalledWith("s1", "l1", expect.anything());
+    expect(push).toHaveBeenCalledWith("/upload/conflicts?landingListId=l1");
   });
 });

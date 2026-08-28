@@ -26,6 +26,7 @@ import { ArrowIcon, SaveIcon, SpinnerIcon, TrashIcon } from "@/app/icons";
 import { uploadCopy } from "@/lib/i18n/upload";
 import type { Locale } from "@/lib/i18n/locale";
 import { useCardIdentification } from "@/hooks/useCardIdentification";
+import { routeAfterImportLanding } from "@/app/upload/conflictsClient";
 import { CreditCardFace, CreditCardMark } from "../../CreditCardFace";
 import { ImportCompletionSummary } from "./ImportCompletionSummary";
 import { ImportReviewSheet } from "./ImportReviewSheet";
@@ -416,14 +417,23 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     if (leavingRef.current) return;
     leavingRef.current = true;
     forgetOpenImportSession();
-    const href =
-      session?.finalized_at && !hasRemainingUploadWork(session.id)
-        ? session.landing_list_id
-          ? `/lists/${encodeURIComponent(session.landing_list_id)}`
-          : "/lists"
-        : "/upload";
+    if (session?.finalized_at && !hasRemainingUploadWork(session.id)) {
+      // Story 5.5, UX-DR22: check the conflict queue before landing on the
+      // list/Soft-Ledger — never land there and then interrupt.
+      routeAfterImportLanding(router, session.landing_list_id)
+        .catch(() => {
+          // router.push should not throw, but if it does, don't leave an
+          // unhandled rejection — the leavingRef reset below still runs.
+        })
+        .finally(() => {
+          queueMicrotask(() => {
+            leavingRef.current = false;
+          });
+        });
+      return;
+    }
     try {
-      router.push(href);
+      router.push("/upload");
     } catch {
       leavingRef.current = false;
       return;

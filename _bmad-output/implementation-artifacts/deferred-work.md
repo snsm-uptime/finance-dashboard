@@ -297,3 +297,8 @@
 ## Deferred from: code review of 5-4-roll-back-an-import-batch.md (2026-08-27)
 
 - No audit trail for import-batch rollback (who deleted a committed batch and when) — `RollbackImportBatchService`/`rollback_batch` hard-delete ledger rows, split overrides, and the batch row with no log entry. Pre-existing gap: no audit-log infrastructure exists anywhere in this codebase for any mutation today (`api/application/import_rollback.py`).
+
+## Deferred from: code review of 5-5-same-price-conflict-review-manual-parsed.md (2026-08-28)
+
+- If the actor loses membership on one side of a same-price conflict after detection (removed from `manual_list_id` or `parsed_list_id`), the conflict becomes invisible to everyone — `list_unresolved_conflicts`/`resolve_conflict`'s ACL both require current membership on both lists — and can never be resolved, leaving it in the durable queue forever (`api/adapters/persistence/same_price_conflicts.py`, `api/application/same_price_conflicts.py`). Deferred, rare edge case, fix later.
+- No test exercises same-price detection through the actual production wiring in `AssignBulkImportService.execute`/`AssignCandidateRowService.execute` (`api/application/import_session.py`) — every existing test calls `DetectSamePriceConflictsService` directly. A Postgres-integration test through the real commit path (likely via the existing `test_import_sessions_integration.py` PDF-fixture TestClient setup) would close this gap against AD-15's "Postgres 16 integration for the commit→detect→resolve path" requirement.

@@ -14,6 +14,7 @@ import uuid
 from adapters.persistence.cards import SqlAlchemyCardRepository
 from adapters.persistence.import_sessions import SqlAlchemyImportSessionRepository
 from adapters.persistence.repositories import SqlAlchemyListRepository
+from adapters.persistence.same_price_conflicts import SqlAlchemySamePriceConflictRepository
 from application.bank_adapters import BankAdapter
 from application.cards import MatchCardByIbanService, RegisterCardCommand, RegisterCardService
 from application.fx_service import MaterializeFxService
@@ -488,7 +489,10 @@ def bulk_commit_import_session(
 ) -> BulkCommitResponse | JSONResponse:
     session_repo = SqlAlchemyImportSessionRepository(db)
     list_repo = SqlAlchemyListRepository(db)
-    service = AssignBulkImportService(session_repo, list_repo, fx_service, pdf_storage)
+    conflict_repo = SqlAlchemySamePriceConflictRepository(db)
+    service = AssignBulkImportService(
+        session_repo, list_repo, fx_service, pdf_storage, conflict_repo
+    )
     try:
         result = service.execute(
             AssignBulkImportCommand(
@@ -584,7 +588,8 @@ def assign_candidate_row(
     default list or the picked one (AC #2)."""
     session_repo = SqlAlchemyImportSessionRepository(db)
     list_repo = SqlAlchemyListRepository(db)
-    service = AssignCandidateRowService(session_repo, list_repo, fx_service)
+    conflict_repo = SqlAlchemySamePriceConflictRepository(db)
+    service = AssignCandidateRowService(session_repo, list_repo, fx_service, conflict_repo)
     try:
         service.execute(
             AssignCandidateRowCommand(

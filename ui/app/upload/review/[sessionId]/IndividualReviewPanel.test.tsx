@@ -97,6 +97,23 @@ vi.mock("@/components/PreferencesProvider", () => ({
   usePreferences: () => ({ locale: "en", theme: "light" }),
 }));
 
+const routeAfterImportLanding = vi.fn(
+  async (router: { push: (href: string) => void }, listId: string | null) => {
+    router.push(listId ? `/lists/${listId}` : "/lists");
+  },
+);
+vi.mock("@/app/upload/conflictsClient", async () => {
+  const actual =
+    await vi.importActual<typeof import("@/app/upload/conflictsClient")>(
+      "@/app/upload/conflictsClient",
+    );
+  return {
+    ...actual,
+    routeAfterImportLanding: (...args: [{ push: (href: string) => void }, string | null]) =>
+      routeAfterImportLanding(...args),
+  };
+});
+
 type DragState = {
   last: boolean;
   movement: [number, number];
@@ -349,6 +366,12 @@ describe("IndividualReviewPanel", () => {
     editRowDescription.mockReset();
     finalizeSession.mockReset();
     unassignRow.mockReset();
+    routeAfterImportLanding.mockClear();
+    routeAfterImportLanding.mockImplementation(
+      async (router: { push: (href: string) => void }, listId: string | null) => {
+        router.push(listId ? `/lists/${listId}` : "/lists");
+      },
+    );
     comparisonDismissSession.current = null;
     capturedDragHandler = undefined;
     resetUploadQueue();
@@ -1027,6 +1050,47 @@ describe("IndividualReviewPanel", () => {
     });
     expect(discardSession).not.toHaveBeenCalled();
     expect(push).toHaveBeenCalledWith("/lists/list-1");
+  });
+
+  it("routes to conflict review instead of the landing list when the queue is non-empty (Story 5.5, UX-DR22)", async () => {
+    fetchImportSession.mockResolvedValue({
+      ok: true,
+      session: makeSession({
+        statements: [makeStatement({ rows: [] })],
+        finalized_at: "2026-08-24T01:00:00Z",
+        landing_list_id: "list-1",
+        imported_new_count: 2,
+        deleted_count: 1,
+      }),
+    });
+    fetchLists.mockResolvedValue({ ok: true, lists: [] });
+    stubAuthMeFetch(null);
+    routeAfterImportLanding.mockImplementation(
+      async (router: { push: (href: string) => void }, listId: string | null) => {
+        router.push(`/upload/conflicts?landingListId=${listId}`);
+      },
+    );
+
+    await act(async () => {
+      root.render(
+        <AppShell>
+          <IndividualReviewPanel sessionId="s1" />
+        </AppShell>,
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const back = container.querySelector(
+      'header button[aria-label="Back"]',
+    ) as HTMLButtonElement;
+    await act(async () => {
+      back.click();
+    });
+    expect(routeAfterImportLanding).toHaveBeenCalledWith(expect.anything(), "list-1");
+    expect(push).toHaveBeenCalledWith("/upload/conflicts?landingListId=list-1");
   });
 
   it("chrome title is Review another file when other uploads remain", async () => {

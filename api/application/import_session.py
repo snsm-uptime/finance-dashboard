@@ -55,6 +55,12 @@ from application.list_access import (
     ListAccessLookup,
 )
 from application.ports import PdfStorage
+from application.same_price_conflicts import (
+    DetectSamePriceConflictsCommand,
+    DetectSamePriceConflictsService,
+    NullSamePriceConflictRepository,
+    SamePriceConflictRepository,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -768,11 +774,15 @@ class AssignBulkImportService:
         list_lookup: ListAccessLookup,
         fx_service: MaterializeFxService,
         pdf_storage: PdfStorage,
+        same_price_conflict_repo: SamePriceConflictRepository | None = None,
     ) -> None:
         self._session_repo = session_repo
         self._list_lookup = list_lookup
         self._fx_service = fx_service
         self._pdf_storage = pdf_storage
+        self._detect_conflicts = DetectSamePriceConflictsService(
+            same_price_conflict_repo or NullSamePriceConflictRepository()
+        )
 
     def execute(self, command: AssignBulkImportCommand) -> AssignBulkImportResult:
         # statement.card_id is origin for committed ledger rows (Story 4.8.1
@@ -883,6 +893,20 @@ class AssignBulkImportService:
             skipped_duplicate += outcome.skipped_duplicate
             if outcome.batch is not None:
                 batches.append(outcome.batch)
+                # One detect pass per committed row, in the same loop that
+                # already has the rows in hand (Story 5.5, Task 4) — not a
+                # second pass over the batch.
+                for commit_row, entry_id in zip(rows, outcome.batch.ledger_entry_ids, strict=True):
+                    self._detect_conflicts.execute(
+                        DetectSamePriceConflictsCommand(
+                            actor_user_id=command.actor_user_id,
+                            parsed_entry_id=entry_id,
+                            parsed_list_id=command.list_id,
+                            amount=commit_row.draft.amount,
+                            currency=commit_row.draft.currency,
+                            posted_date=date.fromisoformat(commit_row.draft.posted_date),
+                        )
+                    )
 
         # A row-grain undo pointer is meaningless once a whole statement was
         # bulk-committed on top of it (AC #5, "cleared once used or superseded").
@@ -951,10 +975,14 @@ class AssignCandidateRowService:
         session_repo: ImportSessionRepository,
         list_lookup: ListAccessLookup,
         fx_service: MaterializeFxService,
+        same_price_conflict_repo: SamePriceConflictRepository | None = None,
     ) -> None:
         self._session_repo = session_repo
         self._list_lookup = list_lookup
         self._fx_service = fx_service
+        self._detect_conflicts = DetectSamePriceConflictsService(
+            same_price_conflict_repo or NullSamePriceConflictRepository()
+        )
 
     def execute(self, command: AssignCandidateRowCommand) -> CommitOutcome:
         session = self._session_repo.get_session(command.session_id, command.actor_user_id)
@@ -1029,7 +1057,7 @@ class AssignCandidateRowService:
         # not finalization. Review includes ImportReviewSheet until Save, which
         # calls POST /finalize — dropping the file here would strand a user who
         # still wants to compare, and 4.11 deferred exactly this defect.
-        return self._session_repo.commit_statement_batch(
+        outcome = self._session_repo.commit_statement_batch(
             batch_id=uuid4(),
             session_id=command.session_id,
             statement_id=statement.id,
@@ -1038,6 +1066,19 @@ class AssignCandidateRowService:
             rows=[CommitRow(candidate_row_id=candidate.id, draft=draft, fx=fx, identity=identity)],
             undo_row_id=candidate.id,
         )
+        if outcome.batch is not None:
+            for entry_id in outcome.batch.ledger_entry_ids:
+                self._detect_conflicts.execute(
+                    DetectSamePriceConflictsCommand(
+                        actor_user_id=command.actor_user_id,
+                        parsed_entry_id=entry_id,
+                        parsed_list_id=command.list_id,
+                        amount=draft.amount,
+                        currency=draft.currency,
+                        posted_date=date.fromisoformat(draft.posted_date),
+                    )
+                )
+        return outcome
 
 
 @dataclass(frozen=True, slots=True)
