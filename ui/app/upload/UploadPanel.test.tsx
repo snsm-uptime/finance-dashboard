@@ -215,17 +215,17 @@ describe("UploadPanel", () => {
     });
     await selectFiles(container, fakeFile());
     await waitFor(
-      () => Boolean(container.querySelector('a[href="/upload/review/s1"]')),
+      () => Boolean(container.querySelector('a[href="/upload/session/s1"]')),
       "resume row",
     );
 
     expect(uploadStatement).toHaveBeenCalled();
     expect(container.querySelector('input[type="file"]')).not.toBeNull();
     expect(container.querySelector('button[aria-label="Upload"]')).not.toBeNull();
-    expect(container.querySelector('a[href="/upload/review/s1"]')?.textContent).toBe(
+    expect(container.querySelector('a[href="/upload/session/s1"]')?.textContent).toBe(
       "statement.pdf",
     );
-    expect(container.querySelector('a[href="/upload/review/s1"]')?.getAttribute("aria-label")).toBe(
+    expect(container.querySelector('a[href="/upload/session/s1"]')?.getAttribute("aria-label")).toBe(
       "Resume review: statement.pdf",
     );
   });
@@ -294,7 +294,7 @@ describe("UploadPanel", () => {
     });
     await selectFiles(container, fakeFile());
     await waitFor(
-      () => Boolean(container.querySelector('a[href="/upload/review/s1"]')),
+      () => Boolean(container.querySelector('a[href="/upload/session/s1"]')),
       "staged resume link",
     );
 
@@ -315,7 +315,7 @@ describe("UploadPanel", () => {
       root.render(<UploadPanel />);
     });
     expect(container.textContent).toContain("next.pdf");
-    expect(container.querySelector('a[href="/upload/review/s2"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/upload/session/s2"]')).not.toBeNull();
   });
 
   it("hydrates from initialSession without hiding the input", async () => {
@@ -325,7 +325,7 @@ describe("UploadPanel", () => {
 
     expect(fetchImportSession).not.toHaveBeenCalled();
     expect(container.querySelector('input[type="file"]')).not.toBeNull();
-    expect(container.querySelector('a[href="/upload/review/s1"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/upload/session/s1"]')).not.toBeNull();
   });
 
   it("does not resurrect a stale tab id when the server has no active session", async () => {
@@ -438,7 +438,7 @@ describe("UploadPanel", () => {
       () =>
         Boolean(
           container.querySelector('[aria-label="This statement has already been uploaded."]'),
-        ) && Boolean(container.querySelector('a[href="/upload/review/sb"]')),
+        ) && Boolean(container.querySelector('a[href="/upload/session/sb"]')),
       "duplicate error icon and remaining staged file",
     );
 
@@ -460,7 +460,7 @@ describe("UploadPanel", () => {
       root.render(<UploadPanel />);
     });
     expect(container.textContent).not.toContain("a.pdf");
-    expect(container.querySelector('a[href="/upload/review/sb"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/upload/session/sb"]')).not.toBeNull();
   });
 
   it("uploads queued files sequentially in selection order", async () => {
@@ -510,7 +510,7 @@ describe("UploadPanel", () => {
 
     expect(uploadStatement).toHaveBeenCalledTimes(2);
     expect(container.textContent).toContain("Could not read this PDF.");
-    expect(container.querySelector('a[href="/upload/review/sb"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/upload/session/sb"]')).not.toBeNull();
   });
 
   it("snapshots selected files before resetting the live FileList", async () => {
@@ -551,7 +551,7 @@ describe("UploadPanel", () => {
       input.dispatchEvent(new Event("change", { bubbles: true }));
     });
     await waitFor(
-      () => Boolean(container.querySelector('a[href="/upload/review/s1"]')),
+      () => Boolean(container.querySelector('a[href="/upload/session/s1"]')),
       "upload after live FileList reset",
     );
     expect(uploadStatement).toHaveBeenCalledTimes(1);
@@ -574,7 +574,7 @@ describe("UploadPanel", () => {
       "s1",
       expect.objectContaining({ errorDuplicateStatement: expect.any(String) }),
     );
-    expect(container.querySelector('a[href="/upload/review/s1"]')).toBeNull();
+    expect(container.querySelector('a[href="/upload/session/s1"]')).toBeNull();
   });
 
   it("does not resurrect a discarded session from stale initialSession after remount", async () => {
@@ -587,7 +587,7 @@ describe("UploadPanel", () => {
     await act(async () => {
       close.click();
     });
-    expect(container.querySelector('a[href="/upload/review/s1"]')).toBeNull();
+    expect(container.querySelector('a[href="/upload/session/s1"]')).toBeNull();
 
     act(() => {
       root.unmount();
@@ -597,7 +597,7 @@ describe("UploadPanel", () => {
       root.render(<UploadPanel initialSession={unmatchedSession} />);
     });
 
-    expect(container.querySelector('a[href="/upload/review/s1"]')).toBeNull();
+    expect(container.querySelector('a[href="/upload/session/s1"]')).toBeNull();
     expect(container.textContent).not.toContain("statement.pdf");
   });
 
@@ -613,7 +613,7 @@ describe("UploadPanel", () => {
       close.click();
     });
 
-    expect(container.querySelector('a[href="/upload/review/s1"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/upload/session/s1"]')).not.toBeNull();
     expect(container.querySelector('[role="alert"]')?.textContent).toBe(
       "Something went wrong. Try again.",
     );
@@ -651,11 +651,11 @@ describe("UploadPanel", () => {
     });
     await selectFiles(container, fakeFile("dup.pdf", "%PDF-dup"));
     await waitFor(
-      () => Boolean(container.querySelector('a[href="/upload/review/existing-session"]')),
+      () => Boolean(container.querySelector('a[href="/upload/session/existing-session"]')),
       "duplicate resume link",
     );
 
-    expect(container.querySelector('a[href="/upload/review/existing-session"]')?.textContent).toBe(
+    expect(container.querySelector('a[href="/upload/session/existing-session"]')?.textContent).toBe(
       "dup.pdf",
     );
     expect(

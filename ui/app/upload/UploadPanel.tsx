@@ -71,7 +71,7 @@ function reviewHrefFor(entry: QueueEntry): string | null {
   const sessionId =
     entry.state === "staged" && entry.session ? entry.session.id : entry.duplicateSessionId;
   if (!sessionId) return null;
-  return `/upload/review/${encodeURIComponent(sessionId)}`;
+  return `/upload/session/${encodeURIComponent(sessionId)}`;
 }
 
 function isInQueueDuplicate(
