@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import uuid
 
+from adapters.persistence.description_aliases import SqlAlchemyDescriptionAliasRepository
 from adapters.persistence.repositories import SqlAlchemyListRepository
 from adapters.persistence.same_price_conflicts import SqlAlchemySamePriceConflictRepository
 from application.same_price_conflicts import (
@@ -86,7 +87,8 @@ def resolve_import_conflict(
 ) -> Response | JSONResponse:
     conflict_repo = SqlAlchemySamePriceConflictRepository(db)
     list_repo = SqlAlchemyListRepository(db)
-    service = ResolveSamePriceConflictService(conflict_repo, list_repo)
+    alias_repo = SqlAlchemyDescriptionAliasRepository(db)
+    service = ResolveSamePriceConflictService(conflict_repo, list_repo, alias_repo)
     try:
         service.execute(
             ResolveSamePriceConflictCommand(
