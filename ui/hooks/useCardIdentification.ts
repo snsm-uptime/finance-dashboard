@@ -26,8 +26,15 @@ export function useCardIdentification(
   // When it is not, the hook reports the empty result below rather than
   // resetting state from inside the effect (react-hooks/set-state-in-effect).
   const identifiable = Boolean(statement?.iban && statement.status === "staged");
+  const statementId = statement?.id;
 
-  // Auto-identify card when statement changes
+  // Auto-identify card when statement changes. Depends on statementId (a
+  // stable primitive), not `statement` itself — the caller's session gets
+  // replaced wholesale after every swipe/assign/undo, so the SAME logical
+  // statement gets a brand-new object reference on every one of those
+  // renders; depending on the object would re-run this (and its network
+  // call + loading flicker) on every row action instead of only when the
+  // reviewed statement actually changes.
   useEffect(() => {
     if (!identifiable) return;
 
@@ -76,7 +83,8 @@ export function useCardIdentification(
     return () => {
       cancelled = true;
     };
-  }, [sessionId, statement, identifiable, messages]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- statementId, not statement, is the intended trigger (see comment above)
+  }, [sessionId, statementId, identifiable, messages]);
 
   // Register new card and re-identify
   async function registerCard(label: string): Promise<{ ok: boolean; error?: string }> {
