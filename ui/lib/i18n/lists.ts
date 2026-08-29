@@ -28,6 +28,7 @@ export const listsMessages = {
     detailReceiptsEmpty: "No receipts yet.",
     incompleteDisclosureLabel:
       "Balances may be incomplete. Check unresolved items to confirm the total.",
+    incompleteDisclosureResolve: "Resolve incomplete",
     backToLists: "Home",
     detailNotFound: "This list is unavailable.",
     inviteTitle: "Invite someone",
@@ -131,6 +132,7 @@ export const listsMessages = {
     detailReceiptsEmpty: "Aún no hay recibos.",
     incompleteDisclosureLabel:
       "Los saldos podrían estar incompletos. Revisa los pendientes para confirmar el total.",
+    incompleteDisclosureResolve: "Resolver pendientes",
     backToLists: "Inicio",
     detailNotFound: "Esta lista no está disponible.",
     inviteTitle: "Invitar a alguien",

@@ -32,6 +32,11 @@ from application.ports import (
     NewMembershipRecord,
     PreferencesRepository,
 )
+from application.same_price_conflicts import (
+    NullSamePriceConflictRepository,
+    SamePriceConflictRepository,
+    conflicts_touching_list,
+)
 
 PLACEHOLDER_BALANCE_CRC = "0"
 
@@ -196,6 +201,7 @@ class SetListDefaultSplitCommand:
 class ListBalancesStub:
     list_id: UUID
     balance_crc: str
+    is_incomplete: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -390,8 +396,13 @@ class GetListExpensesStubService:
 class GetListBalancesStubService:
     """Settle-up balances from per-transaction shares — authorize_list_access(read_balances)."""
 
-    def __init__(self, repo: ListRepository) -> None:
+    def __init__(
+        self,
+        repo: ListRepository,
+        conflict_repo: SamePriceConflictRepository | None = None,
+    ) -> None:
         self._repo = repo
+        self._conflict_repo = conflict_repo or NullSamePriceConflictRepository()
 
     def execute(self, command: GetListBalancesStubCommand) -> ListBalancesStub:
         grant = AuthorizeListAccessService(self._repo).execute(
@@ -402,6 +413,8 @@ class GetListBalancesStubService:
             )
         )
         lst = self._repo.get_list_with_grant(grant, command.list_id)
+        unresolved = self._conflict_repo.list_unresolved_conflicts(command.actor_user_id)
+        is_incomplete = len(conflicts_touching_list(unresolved, command.list_id)) > 0
         return ListBalancesStub(
             list_id=command.list_id,
             balance_crc=compute_viewer_balance_crc(
@@ -410,6 +423,7 @@ class GetListBalancesStubService:
                 actor_user_id=command.actor_user_id,
                 owner_id=lst.owner_id,
             ),
+            is_incomplete=is_incomplete,
         )
 
 

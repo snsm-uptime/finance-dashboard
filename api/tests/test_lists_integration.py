@@ -5,10 +5,17 @@ Requires DATABASE_URL (Compose db or CI Postgres 16). Skips when unset.
 
 from __future__ import annotations
 
+from datetime import date
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 import pytest
-from adapters.persistence.models import ListMembershipModel, ListModel
+from adapters.persistence.models import (
+    LedgerEntryModel,
+    ListMembershipModel,
+    ListModel,
+    SamePriceConflictModel,
+)
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -211,6 +218,7 @@ def test_member_detail_and_stubs_ok(client: TestClient) -> None:
     balances = client.get(f"/lists/{list_id}/balances")
     assert balances.status_code == 200
     assert balances.json()["balance_crc"] == "0"
+    assert balances.json()["balance_status"] == {"is_incomplete": False}
 
 
 def test_set_last_opened_list_member_and_non_member(client: TestClient) -> None:
@@ -258,3 +266,203 @@ def test_set_default_import_list_member_and_non_member(client: TestClient) -> No
     missing = client.patch("/auth/me", json={"default_import_list_id": str(uuid4())})
     assert missing.status_code == 403
     assert missing.json()["code"] == "not_list_member"
+
+
+# --- Story 5.7: balance_status.is_incomplete on GET /lists/{id}/balances ---
+
+
+def _seed_ledger_entry(
+    db_session: Session,
+    *,
+    list_id: UUID,
+    provenance: str,
+    amount: Decimal = Decimal("10.00"),
+    currency: str = "CRC",
+    posted_date: date = date(2026, 8, 10),
+    normalized_description: str = "Entry",
+) -> UUID:
+    entry_id = uuid4()
+    db_session.add(
+        LedgerEntryModel(
+            id=entry_id,
+            list_id=list_id,
+            amount=amount,
+            currency=currency,
+            normalized_description=normalized_description,
+            provenance=provenance,
+            posted_date=posted_date,
+            amount_crc=amount,
+            fx_rate=Decimal("1"),
+        )
+    )
+    db_session.flush()
+    return entry_id
+
+
+def _seed_conflict(
+    db_session: Session,
+    *,
+    manual_entry_id: UUID,
+    parsed_entry_id: UUID,
+    manual_list_id: UUID,
+    parsed_list_id: UUID,
+) -> UUID:
+    conflict_id = uuid4()
+    db_session.add(
+        SamePriceConflictModel(
+            id=conflict_id,
+            manual_entry_id=manual_entry_id,
+            parsed_entry_id=parsed_entry_id,
+            manual_list_id=manual_list_id,
+            parsed_list_id=parsed_list_id,
+        )
+    )
+    db_session.flush()
+    return conflict_id
+
+
+def test_balances_no_unresolved_conflicts_is_complete(
+    client: TestClient, db_session: Session
+) -> None:
+    _register(client, "complete@example.com")
+    created = client.post("/lists", json={"name": "Household"})
+    list_id = created.json()["id"]
+
+    balances = client.get(f"/lists/{list_id}/balances")
+    assert balances.status_code == 200
+    assert balances.json()["balance_status"] == {"is_incomplete": False}
+
+
+def test_balances_incomplete_when_list_is_parsed_side(
+    client: TestClient, db_session: Session
+) -> None:
+    _register(client, "parsedside@example.com")
+    created = client.post("/lists", json={"name": "Household"})
+    list_id = UUID(created.json()["id"])
+
+    manual_id = _seed_ledger_entry(db_session, list_id=list_id, provenance="hand")
+    parsed_id = _seed_ledger_entry(db_session, list_id=list_id, provenance="parser")
+    _seed_conflict(
+        db_session,
+        manual_entry_id=manual_id,
+        parsed_entry_id=parsed_id,
+        manual_list_id=list_id,
+        parsed_list_id=list_id,
+    )
+
+    balances = client.get(f"/lists/{list_id}/balances")
+    assert balances.status_code == 200
+    assert balances.json()["balance_status"] == {"is_incomplete": True}
+
+
+def test_balances_incomplete_when_list_is_manual_side_on_related_list(
+    client: TestClient, db_session: Session
+) -> None:
+    """AD-10 'related lists': manual and parsed entries can sit on different
+    lists that share the actor's membership."""
+    _register(client, "manualside@example.com")
+    manual_list = UUID(client.post("/lists", json={"name": "Manual List"}).json()["id"])
+    parsed_list = UUID(client.post("/lists", json={"name": "Parsed List"}).json()["id"])
+
+    manual_id = _seed_ledger_entry(db_session, list_id=manual_list, provenance="hand")
+    parsed_id = _seed_ledger_entry(db_session, list_id=parsed_list, provenance="parser")
+    _seed_conflict(
+        db_session,
+        manual_entry_id=manual_id,
+        parsed_entry_id=parsed_id,
+        manual_list_id=manual_list,
+        parsed_list_id=parsed_list,
+    )
+
+    manual_side = client.get(f"/lists/{manual_list}/balances")
+    assert manual_side.json()["balance_status"] == {"is_incomplete": True}
+
+
+def test_balances_resolving_conflict_clears_incomplete(
+    client: TestClient, db_session: Session
+) -> None:
+    _register(client, "resolveflow@example.com")
+    created = client.post("/lists", json={"name": "Household"})
+    list_id = UUID(created.json()["id"])
+
+    manual_id = _seed_ledger_entry(db_session, list_id=list_id, provenance="hand")
+    parsed_id = _seed_ledger_entry(db_session, list_id=list_id, provenance="parser")
+    conflict_id = _seed_conflict(
+        db_session,
+        manual_entry_id=manual_id,
+        parsed_entry_id=parsed_id,
+        manual_list_id=list_id,
+        parsed_list_id=list_id,
+    )
+
+    before = client.get(f"/lists/{list_id}/balances")
+    assert before.json()["balance_status"] == {"is_incomplete": True}
+
+    resolved = client.post(
+        f"/import-conflicts/{conflict_id}/resolve",
+        json={"resolution": "manual_survivor", "confirmed": True},
+    )
+    assert resolved.status_code == 204, resolved.text
+
+    after = client.get(f"/lists/{list_id}/balances")
+    assert after.status_code == 200
+    assert after.json()["balance_status"] == {"is_incomplete": False}
+
+
+def test_balances_conflict_on_unrelated_list_does_not_flag_this_list(
+    client: TestClient, db_session: Session
+) -> None:
+    _register(client, "unrelated@example.com")
+    watched_list = UUID(client.post("/lists", json={"name": "Watched"}).json()["id"])
+
+    client.post("/auth/sign-out")
+    _register(client, "otherowner@example.com")
+    other_list = UUID(client.post("/lists", json={"name": "Other"}).json()["id"])
+    manual_id = _seed_ledger_entry(db_session, list_id=other_list, provenance="hand")
+    parsed_id = _seed_ledger_entry(db_session, list_id=other_list, provenance="parser")
+    _seed_conflict(
+        db_session,
+        manual_entry_id=manual_id,
+        parsed_entry_id=parsed_id,
+        manual_list_id=other_list,
+        parsed_list_id=other_list,
+    )
+
+    client.post("/auth/sign-out")
+    signed_in = client.post(
+        "/auth/sign-in", json={"email": "unrelated@example.com", "password": "password1"}
+    )
+    assert signed_in.status_code == 200, signed_in.text
+    watched = client.get(f"/lists/{watched_list}/balances")
+    assert watched.status_code == 200
+    assert watched.json()["balance_status"] == {"is_incomplete": False}
+
+
+def test_balances_conflict_on_one_of_actors_own_lists_does_not_flag_a_sibling_list(
+    client: TestClient, db_session: Session
+) -> None:
+    """Same actor, two lists: a conflict touching only one must not flag the
+    other. `list_unresolved_conflicts(actor_user_id)` alone (actor-scoping)
+    would pass this only by accident of the unrelated-list test above — this
+    exercises `conflicts_touching_list`'s per-list_id filter directly."""
+    _register(client, "twolists@example.com")
+    touched_list = UUID(client.post("/lists", json={"name": "Touched"}).json()["id"])
+    sibling_list = UUID(client.post("/lists", json={"name": "Sibling"}).json()["id"])
+
+    manual_id = _seed_ledger_entry(db_session, list_id=touched_list, provenance="hand")
+    parsed_id = _seed_ledger_entry(db_session, list_id=touched_list, provenance="parser")
+    _seed_conflict(
+        db_session,
+        manual_entry_id=manual_id,
+        parsed_entry_id=parsed_id,
+        manual_list_id=touched_list,
+        parsed_list_id=touched_list,
+    )
+
+    touched = client.get(f"/lists/{touched_list}/balances")
+    assert touched.status_code == 200
+    assert touched.json()["balance_status"] == {"is_incomplete": True}
+
+    sibling = client.get(f"/lists/{sibling_list}/balances")
+    assert sibling.status_code == 200
+    assert sibling.json()["balance_status"] == {"is_incomplete": False}

@@ -13,6 +13,7 @@ from adapters.persistence.repositories import (
     SqlAlchemyAuthUserRepository,
     SqlAlchemyListRepository,
 )
+from adapters.persistence.same_price_conflicts import SqlAlchemySamePriceConflictRepository
 from application.expenses import (
     CreateManualExpenseCommand,
     CreateManualExpenseService,
@@ -76,6 +77,7 @@ from sqlalchemy.orm import Session
 
 from api.deps import get_auth_settings, get_db, get_fx_service, require_authenticated_user
 from api.schemas.lists import (
+    BalanceStatusResponse,
     CreateExpenseBody,
     CreateExpenseResponse,
     CreateListBody,
@@ -593,12 +595,18 @@ def get_list_balances_stub(
     user_id: uuid.UUID = Depends(require_authenticated_user),
     db: Session = Depends(get_db),
 ) -> ListBalancesStubResponse | JSONResponse:
-    service = GetListBalancesStubService(SqlAlchemyListRepository(db))
+    service = GetListBalancesStubService(
+        SqlAlchemyListRepository(db), SqlAlchemySamePriceConflictRepository(db)
+    )
     try:
         result = service.execute(GetListBalancesStubCommand(actor_user_id=user_id, list_id=list_id))
     except ListNotFoundError:
         return _list_not_found()
-    return ListBalancesStubResponse(list_id=result.list_id, balance_crc=result.balance_crc)
+    return ListBalancesStubResponse(
+        list_id=result.list_id,
+        balance_crc=result.balance_crc,
+        balance_status=BalanceStatusResponse(is_incomplete=result.is_incomplete),
+    )
 
 
 @router.post(

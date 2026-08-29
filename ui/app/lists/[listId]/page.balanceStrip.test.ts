@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { balanceStripPropsFrom } from "./page";
+import { asBalances, balanceStripPropsFrom } from "./page";
 
 const t = {
   detailSettleEmpty: "No balances yet.",
@@ -54,5 +54,42 @@ describe("balanceStripPropsFrom", () => {
       amount: "—",
       polarity: "neutral",
     });
+  });
+});
+
+describe("asBalances", () => {
+  it("parses balance_status.is_incomplete true", () => {
+    expect(
+      asBalances({ list_id: "l1", balance_crc: "0", balance_status: { is_incomplete: true } }),
+    ).toEqual({ list_id: "l1", balance_crc: "0", balance_status: { is_incomplete: true } });
+  });
+
+  it("parses balance_status.is_incomplete false", () => {
+    expect(
+      asBalances({ list_id: "l1", balance_crc: "0", balance_status: { is_incomplete: false } }),
+    ).toEqual({ list_id: "l1", balance_crc: "0", balance_status: { is_incomplete: false } });
+  });
+
+  it("defaults is_incomplete to false when balance_status is absent — never fabricates true", () => {
+    expect(asBalances({ list_id: "l1", balance_crc: "0" })).toEqual({
+      list_id: "l1",
+      balance_crc: "0",
+      balance_status: { is_incomplete: false },
+    });
+  });
+
+  it("defaults is_incomplete to false when balance_status is malformed", () => {
+    expect(
+      asBalances({ list_id: "l1", balance_crc: "0", balance_status: { is_incomplete: "yes" } }),
+    ).toEqual({ list_id: "l1", balance_crc: "0", balance_status: { is_incomplete: false } });
+    expect(asBalances({ list_id: "l1", balance_crc: "0", balance_status: null })).toEqual({
+      list_id: "l1",
+      balance_crc: "0",
+      balance_status: { is_incomplete: false },
+    });
+  });
+
+  it("still rejects payloads missing balance_crc regardless of balance_status", () => {
+    expect(asBalances({ list_id: "l1", balance_status: { is_incomplete: true } })).toBeNull();
   });
 });

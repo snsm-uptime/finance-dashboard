@@ -127,9 +127,14 @@ class ListMembersResponse(BaseModel):
     members: list[ListMemberItem]
 
 
+class BalanceStatusResponse(BaseModel):
+    is_incomplete: bool
+
+
 class ListBalancesStubResponse(BaseModel):
     list_id: UUID
     balance_crc: str
+    balance_status: BalanceStatusResponse
 
 
 class DefaultSplitShareItem(BaseModel):

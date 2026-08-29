@@ -1,6 +1,8 @@
+import Link from "next/link";
+
 type ResolveAction =
-  | { onResolve: () => void; resolveLabel: string }
-  | { onResolve?: undefined; resolveLabel?: undefined };
+  | { resolveHref: string; resolveLabel: string }
+  | { resolveHref?: undefined; resolveLabel?: undefined };
 
 export type IncompleteDisclosureProps = {
   /** Renders the disclosure only when true (AC #1) — no fabricated incomplete state. */
@@ -8,15 +10,10 @@ export type IncompleteDisclosureProps = {
   label: string;
 } & ResolveAction;
 
-// TODO (Epic 5.2-5.4): Wire real incomplete data from API.
-// - API response will add balanceStatus.isIncomplete (bool) to the balances payload.
-// - When incomplete, balanceStatus.unresolvedQuarantineCount / unresolvedConflictCount arrive too.
-// - onResolve will route to the quarantine/conflict resolution detail view.
-// - This story creates the slot only; Epic 5 supplies the real data and behavior.
 export function IncompleteDisclosure({
   isIncomplete,
   label,
-  onResolve,
+  resolveHref,
   resolveLabel,
 }: IncompleteDisclosureProps) {
   if (!isIncomplete) return null;
@@ -33,15 +30,14 @@ export function IncompleteDisclosure({
       role="status"
     >
       {label}
-      {onResolve ? (
-        <button
-          type="button"
-          className="inline ml-[var(--space-1)] p-0 border-none bg-transparent underline cursor-pointer text-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+      {resolveHref ? (
+        <Link
+          href={resolveHref}
+          className="inline ml-[var(--space-1)] underline cursor-pointer text-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           style={{ font: "inherit" }}
-          onClick={onResolve}
         >
           {resolveLabel}
-        </button>
+        </Link>
       ) : null}
     </div>
   );
