@@ -44,6 +44,7 @@
 generated: 2026-08-03T22:46:31
 last_updated: 2026-08-28
 
+
 project: finance-dashboard
 project_key: NOKEY
 tracking_system: file-system
@@ -133,7 +134,7 @@ development_status:
   5-4-roll-back-an-import-batch: done
   5-5-same-price-conflict-review-manual-parsed: done
   5-6-alias-on-confirm-manual-entry-re-upload-conflict: done
-  5-7-wire-incomplete-balance-disclosure-on-strip: backlog
+  5-7-wire-incomplete-balance-disclosure-on-strip: done
   5-8-settle-up-simplify-suggested-transfers: backlog # 5.8 title 2026-08-26: pairwise grid + group plan + copy + payable-clean settle
   5-9-statement-cycle-period-selector: backlog
   epic-5-retrospective: optional

@@ -269,6 +269,19 @@ class ResolveSamePriceConflictService:
                 )
 
 
+def conflicts_touching_list(
+    records: list[SamePriceConflictRecord], list_id: UUID
+) -> list[SamePriceConflictRecord]:
+    """Narrow an already-fetched unresolved-conflict list to ones touching
+    `list_id` on either side (AD-10: manual and parsed can sit on different
+    related lists)."""
+    return [
+        record
+        for record in records
+        if record.manual.list_id == list_id or record.parsed.list_id == list_id
+    ]
+
+
 class ListSamePriceConflictQueueService:
     """The acting user's full unresolved queue (AC #4) — reads the durable
     `same_price_conflicts` table directly, not any ephemeral Import Session
@@ -288,6 +301,7 @@ __all__ = [
     "DetectSamePriceConflictsCommand",
     "DetectSamePriceConflictsService",
     "ListSamePriceConflictQueueService",
+    "conflicts_touching_list",
     "ManualCandidateRecord",
     "NullSamePriceConflictRepository",
     "ResolveSamePriceConflictCommand",

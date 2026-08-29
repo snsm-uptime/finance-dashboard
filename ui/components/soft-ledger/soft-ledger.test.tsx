@@ -636,35 +636,30 @@ describe("Soft-Ledger primitives", () => {
     expect(status?.textContent).toContain("Balances may be incomplete.");
   });
 
-  it("IncompleteDisclosure invokes onResolve via a keyboard-accessible button when provided", () => {
-    const onResolve = vi.fn();
+  it("IncompleteDisclosure renders a calm resolve link when resolveHref is provided", () => {
     act(() => {
       root.render(
         <IncompleteDisclosure
           isIncomplete={true}
           label="Balances may be incomplete."
-          onResolve={onResolve}
+          resolveHref="/upload/conflicts"
           resolveLabel="Resolve incomplete"
         />,
       );
     });
-    const button = host.querySelector("button") as HTMLButtonElement;
-    expect(button).not.toBeNull();
-    expect(button.type).toBe("button");
-    expect(button.textContent).toBe("Resolve incomplete");
-    act(() => {
-      button.click();
-    });
-    expect(onResolve).toHaveBeenCalledTimes(1);
+    const anchor = host.querySelector("a") as HTMLAnchorElement;
+    expect(anchor).not.toBeNull();
+    expect(anchor.getAttribute("href")).toBe("/upload/conflicts");
+    expect(anchor.textContent).toBe("Resolve incomplete");
   });
 
-  it("IncompleteDisclosure has no resolve control when onResolve is omitted", () => {
+  it("IncompleteDisclosure has no resolve control when resolveHref is omitted", () => {
     act(() => {
       root.render(
         <IncompleteDisclosure isIncomplete={true} label="Balances may be incomplete." />,
       );
     });
-    expect(host.querySelector("button")).toBeNull();
+    expect(host.querySelector("a")).toBeNull();
   });
 
   it("shared-expenses composition: strip, then incomplete disclosure (when incomplete), then receipts — same inset, no fabricated data", () => {

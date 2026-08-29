@@ -73,9 +73,10 @@ function asDefaultSplit(data: unknown): DefaultSplitPayload | null {
 type BalancesPayload = {
   list_id: string;
   balance_crc: string;
+  balance_status: { is_incomplete: boolean };
 };
 
-function asBalances(data: unknown): BalancesPayload | null {
+export function asBalances(data: unknown): BalancesPayload | null {
   if (!data || typeof data !== "object") return null;
   const row = data as Partial<BalancesPayload>;
   if (typeof row.list_id !== "string") {
@@ -85,7 +86,17 @@ function asBalances(data: unknown): BalancesPayload | null {
   if (!balanceCrc || balanceCrc === "undefined") {
     return null;
   }
-  return { list_id: row.list_id, balance_crc: balanceCrc };
+  // Never fabricate `true` on a parse miss — an absent/malformed balance_status
+  // must default to complete, mirroring the balanceCrc defensive parsing above.
+  const isIncomplete =
+    row.balance_status && typeof row.balance_status === "object"
+      ? (row.balance_status as { is_incomplete?: unknown }).is_incomplete === true
+      : false;
+  return {
+    list_id: row.list_id,
+    balance_crc: balanceCrc,
+    balance_status: { is_incomplete: isIncomplete },
+  };
 }
 
 function asExpenses(data: unknown): ExpenseItem[] {
@@ -599,10 +610,11 @@ export default async function ListDetailPage({
                   />
                 }
               />
-              {/* Slot only (Story 3.6): no balanceStatus in the API yet; Epic 5.4 wires isIncomplete. */}
               <IncompleteDisclosure
-                isIncomplete={false}
+                isIncomplete={balances?.balance_status.is_incomplete === true}
                 label={t.incompleteDisclosureLabel}
+                resolveHref="/upload/conflicts"
+                resolveLabel={t.incompleteDisclosureResolve}
               />
               {expenses.length === 0 && !expensesLoadError ? (
                 <Hint>{t.detailHintEmpty}</Hint>
