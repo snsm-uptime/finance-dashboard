@@ -185,12 +185,12 @@ export function ImportReviewSheet({
   // unmounts the sheet; skip onSessionUpdate so a late success does not
   // write into an unmounted tree.
   const mountedRef = useRef(true);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
       mountedRef.current = false;
-    },
-    [],
-  );
+    };
+  }, []);
 
   const messages: IndividualReviewMessages = {
     errorForbidden: t.individualReviewErrorForbidden,
