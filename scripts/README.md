@@ -92,6 +92,50 @@ Stop and remove named volumes (node_modules cache, etc.):
 # Note: Postgres data is NOT removed; use this only for ephemeral caches.
 ```
 
+### `compose-wipe-db.sh` — Wipe the Database Clean
+
+Deletes the Postgres bind-mounted data directory for this checkout, so the
+next stack start reinitializes an empty database. `compose-down.sh --wipe`
+only removes named volumes and does NOT touch this data — use this script
+when you need an actually clean database.
+
+**Usage:**
+```bash
+./scripts/compose-wipe-db.sh [-y|--yes] [--no-up] [-d|--detach]
+```
+
+**Flags:**
+- `-y`, `--yes` — Skip the confirmation prompt.
+- `--no-up` — Leave the stack down after wiping (skip `compose-up.sh`).
+- `-d`, `--detach` — Start the stack back up in the background.
+- `--help` — Show help text.
+
+**What it does:**
+1. Stops this checkout's Compose stack (`docker compose down`).
+2. Deletes `FINANCE_HELPER_DATA/pgdata` as resolved from this checkout's `.env`.
+3. Starts the stack back up (unless `--no-up`).
+
+Resolves `FINANCE_HELPER_DATA` from this checkout's own `.env`, so it only
+wipes the database belonging to this worktree — other worktrees and the main
+checkout are unaffected.
+
+**Examples:**
+
+Wipe and restart (foreground), with confirmation prompt:
+```bash
+./scripts/compose-wipe-db.sh
+```
+
+Wipe without prompting, restart in background:
+```bash
+./scripts/compose-wipe-db.sh -y -d
+```
+
+Wipe only, leave the stack down:
+```bash
+./scripts/compose-wipe-db.sh -y --no-up
+```
+
 ### `compose-restart.sh` — Restart the Stack
 
 Stops and starts the stack in one command, with consistent file selection.
