@@ -281,14 +281,15 @@ def simplify_group_transfers(
         debtor_id, debtor_bal = debtors[0]
 
         amount = min(creditor_bal, abs(debtor_bal)).quantize(quantum)
-        if amount > 0:
-            transfers.append(
-                SuggestedTransfer(
-                    from_member_id=debtor_id,
-                    to_member_id=creditor_id,
-                    amount_crc=amount,
-                )
+        if amount == 0:
+            raise ValueError("net_balances not quantized to currency_exponent")
+        transfers.append(
+            SuggestedTransfer(
+                from_member_id=debtor_id,
+                to_member_id=creditor_id,
+                amount_crc=amount,
             )
+        )
 
         creditor_bal -= amount
         debtor_bal += amount
