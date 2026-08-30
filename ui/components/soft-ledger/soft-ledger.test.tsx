@@ -121,13 +121,14 @@ describe("Soft-Ledger primitives", () => {
     expect(section?.contains(action)).toBe(true);
   });
 
-  it("renders BalanceStrip grid variant with pairwise columns and balance (Story 5.8)", () => {
+  it("renders BalanceStrip grid variant with a Member details disclosure and balance (Story 5.8)", () => {
     act(() => {
       root.render(
         <BalanceStrip
           variant="grid"
-          youAreOwedLabel="You are owed"
-          youOweLabel="You owe"
+          memberDetailsTitle="Member details"
+          owesYouLabel="owes you"
+          isOwedLabel="is owed"
           balanceLabel="Balance"
           youAreOwed={[{ memberId: "m1", label: "Alice", amount: "₡500.00" }]}
           youOwe={[]}
@@ -138,21 +139,42 @@ describe("Soft-Ledger primitives", () => {
     });
     const section = host.querySelector("section");
     expect(section).not.toBeNull();
-    expect(host.textContent).toContain("You are owed");
+    expect(host.textContent).toContain("Member details");
     expect(host.textContent).toContain("Alice");
-    expect(host.textContent).toContain("You owe");
+    expect(host.textContent).toContain("owes you");
     expect(host.textContent).toContain("Balance");
-    // Two ₡500.00 occurrences: one in the You are owed row, one in Balance.
+    // Two ₡500.00 occurrences: one in the member details row, one in Balance.
     expect(host.textContent?.match(/₡500\.00/g)?.length).toBe(2);
   });
 
-  it("BalanceStrip grid renders no fake zero rows for an empty column (AC #1)", () => {
+  it("Member details disclosure defaults open (Story 5.8)", () => {
     act(() => {
       root.render(
         <BalanceStrip
           variant="grid"
-          youAreOwedLabel="You are owed"
-          youOweLabel="You owe"
+          memberDetailsTitle="Member details"
+          owesYouLabel="owes you"
+          isOwedLabel="is owed"
+          balanceLabel="Balance"
+          youAreOwed={[{ memberId: "m1", label: "Alice", amount: "₡500.00" }]}
+          youOwe={[]}
+          balanceAmount="₡500.00"
+          balancePolarity="owed"
+        />,
+      );
+    });
+    const region = host.querySelector('[role="region"]');
+    expect(region?.getAttribute("aria-hidden")).toBe("false");
+  });
+
+  it("BalanceStrip grid renders no Member details disclosure when both lists are empty (AC #1)", () => {
+    act(() => {
+      root.render(
+        <BalanceStrip
+          variant="grid"
+          memberDetailsTitle="Member details"
+          owesYouLabel="owes you"
+          isOwedLabel="is owed"
           balanceLabel="Balance"
           youAreOwed={[]}
           youOwe={[]}
@@ -161,6 +183,7 @@ describe("Soft-Ledger primitives", () => {
       );
     });
     expect(host.querySelectorAll("li").length).toBe(0);
+    expect(host.textContent).not.toContain("Member details");
     expect(host.textContent).not.toContain("₡0.00");
   });
 
@@ -195,7 +218,10 @@ describe("Soft-Ledger primitives", () => {
       );
     });
     expect(host.textContent).toContain("Already minimal");
-    expect(host.querySelector("button")).toBeNull();
+    const toggle = host.querySelector("button") as HTMLButtonElement;
+    expect(toggle.textContent).toContain("Group transfer plan");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(host.querySelectorAll("button")).toHaveLength(1);
   });
 
   it("SimplifyPanel renders transfer rows and a CopyButton when transfers exist", () => {
@@ -217,7 +243,10 @@ describe("Soft-Ledger primitives", () => {
     expect(host.textContent).toContain("Alice");
     expect(host.textContent).toContain("Bob");
     expect(host.textContent).toContain("₡500.00");
-    expect(host.querySelector("button")?.getAttribute("aria-label")).toBe("Copy plan");
+    const copyButton = Array.from(host.querySelectorAll("button")).find(
+      (b) => b.getAttribute("aria-label") === "Copy plan",
+    );
+    expect(copyButton).toBeDefined();
   });
 
   it("renders Hint and SectionLabel and empty ReceiptRow", () => {

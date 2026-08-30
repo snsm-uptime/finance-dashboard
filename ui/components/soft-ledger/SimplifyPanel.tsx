@@ -1,4 +1,5 @@
 import { CopyButton } from "@/components/CopyButton/CopyButton";
+import { Disclosure } from "@/components/Disclosure";
 
 export type SimplifyTransfer = {
   fromMemberId: string;
@@ -31,22 +32,26 @@ type Props = {
   messages: SimplifyPanelMessages;
 };
 
-/** Presentational — literal `transfers` prop only, no fetching (Story 5.8). */
+/**
+ * Presentational — literal `transfers` prop only, no fetching (Story 5.8).
+ * The title is the disclosure toggle (closed by default); Copy stays in the
+ * header, outside the toggle, so it stays reachable without expanding.
+ */
 export function SimplifyPanel({ transfers, messages }: Props) {
   return (
-    <div className="mx-strip-inset flex flex-col gap-[var(--space-3)] px-[var(--space-4)] py-[var(--space-4)] bg-surface border border-border rounded-md">
-      <div className="flex items-center justify-between gap-[var(--space-2)]">
-        <p className="m-0 text-foreground" style={{ fontFamily: "var(--type-body-face)", fontWeight: 550 }}>
-          {messages.title}
-        </p>
-        {transfers.length > 0 ? (
+    <Disclosure
+      title={messages.title}
+      className="min-w-0"
+      headerExtra={
+        transfers.length > 0 ? (
           <CopyButton
             value={simplifyPlanTextFrom(transfers)}
             label={messages.copyLabel}
             copiedLabel={messages.copiedLabel}
           />
-        ) : null}
-      </div>
+        ) : null
+      }
+    >
       {transfers.length === 0 ? (
         <p className="m-0 text-muted" style={{ fontFamily: "var(--type-meta-face)" }}>
           {messages.emptyLabel}
@@ -68,6 +73,6 @@ export function SimplifyPanel({ transfers, messages }: Props) {
           ))}
         </ul>
       )}
-    </div>
+    </Disclosure>
   );
 }

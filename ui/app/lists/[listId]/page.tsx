@@ -9,7 +9,7 @@ import { ReceiptRow } from "@/components/soft-ledger/ReceiptRow";
 import { SectionLabel } from "@/components/soft-ledger/SectionLabel";
 import { requireAlias } from "@/lib/alias";
 import { getApiInternalUrl } from "@/lib/api";
-import { formatCrcAmount } from "@/lib/currency";
+import { formatCrcAmount, formatCrcNumber } from "@/lib/currency";
 import { listsMessages } from "@/lib/i18n/lists";
 import type { Locale } from "@/lib/i18n/locale";
 import { fetchSession } from "@/lib/session";
@@ -20,6 +20,7 @@ import { ListDefaultSplitProvider } from "../ListDefaultSplitContext";
 import { ManualExpenseForm } from "../ManualExpenseForm";
 import { OriginChipPicker } from "../OriginChipPicker";
 import { SettleControls } from "../SettleControls";
+import { SimplifyColumn } from "../SimplifyColumn";
 import { TemporalNavigation } from "../TemporalNavigation";
 import {
   balanceTone,
@@ -327,7 +328,7 @@ export function receiptRowFxPropsFrom(
   const original = t.expenseFxOriginalTemplate
     .replace("{currency}", e.currency)
     .replace("{original}", e.amount)
-    .replace("{crc}", formatCrcAmount(e.amount_crc));
+    .replace("{crc}", formatCrcNumber(e.amount_crc));
   const fxDetail = e.fx_rate_date
     ? t.expenseFxRateDetailTemplate
       .replace("{rate}", e.fx_rate)
@@ -570,13 +571,42 @@ export default async function ListDetailPage({
                   {...(showBalancesGrid
                     ? {
                       variant: "grid" as const,
-                      youAreOwedLabel: t.balanceYouAreOwed,
-                      youOweLabel: t.balanceYouOwe,
+                      memberDetailsTitle: t.memberDetailsTitle,
+                      owesYouLabel: t.owesYouLabel,
+                      isOwedLabel: t.isOwedLabel,
                       balanceLabel: t.balanceLabel,
                       youAreOwed: pairwiseRowsFrom(balances?.you_are_owed ?? []),
                       youOwe: pairwiseRowsFrom(balances?.you_owe ?? []),
                       balanceAmount: stripProps.amount,
                       balancePolarity: stripProps.polarity,
+                      simplify:
+                        members.length >= 3 ? (
+                          <SimplifyColumn
+                            listId={listId}
+                            available={balances?.balance_status.is_incomplete !== true}
+                            messages={{
+                              title: t.simplifyTitle,
+                              emptyLabel: t.simplifyEmpty,
+                              copyLabel: t.copyPlanLabel,
+                              copiedLabel: t.copyPlanCopiedLabel,
+                              blockedLabel: t.simplifyBlocked,
+                              errorGeneric: t.errorGeneric,
+                            }}
+                          />
+                        ) : undefined,
+                      settleAction: (
+                        <SettleControls
+                          listId={listId}
+                          messages={{
+                            settleAction: t.settleAction,
+                            settleConfirmTitle: t.settleConfirmTitle,
+                            settleConfirmBody: t.settleConfirmBody,
+                            settleConfirmAction: t.settleConfirmAction,
+                            settleCancel: t.settleCancel,
+                            errorGeneric: t.errorGeneric,
+                          }}
+                        />
+                      ),
                     }
                     : {
                       who: stripProps.who,
@@ -646,26 +676,6 @@ export default async function ListDetailPage({
                     />
                   }
                 />
-                {showBalancesGrid ? (
-                  <SettleControls
-                    listId={listId}
-                    simplifyAvailable={balances?.balance_status.is_incomplete !== true}
-                    messages={{
-                      simplifyAction: t.simplifyAction,
-                      simplifyTitle: t.simplifyTitle,
-                      simplifyEmpty: t.simplifyEmpty,
-                      simplifyBlocked: t.simplifyBlocked,
-                      settleAction: t.settleAction,
-                      settleConfirmTitle: t.settleConfirmTitle,
-                      settleConfirmBody: t.settleConfirmBody,
-                      settleConfirmAction: t.settleConfirmAction,
-                      settleCancel: t.settleCancel,
-                      copyPlanLabel: t.copyPlanLabel,
-                      copyPlanCopiedLabel: t.copyPlanCopiedLabel,
-                      errorGeneric: t.errorGeneric,
-                    }}
-                  />
-                ) : null}
                 <IncompleteDisclosure
                   isIncomplete={balances?.balance_status.is_incomplete === true}
                   label={t.incompleteDisclosureLabel}
