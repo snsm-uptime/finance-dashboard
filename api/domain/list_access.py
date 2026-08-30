@@ -24,6 +24,7 @@ ListAccessAction = Literal[
     "route_card_to_list",
     "set_default_import_list",
     "reassign_statement",
+    "settle_payables",
 ]
 
 _ACTION_ALIASES: dict[str, str] = {
@@ -50,6 +51,7 @@ _MEMBER_MUTATION_ACTIONS = frozenset(
         "set_last_opened_list",
         "route_card_to_list",
         "set_default_import_list",
+        "settle_payables",
     }
 )
 

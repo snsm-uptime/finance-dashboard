@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Protocol
 from uuid import UUID, uuid4
@@ -19,7 +20,12 @@ from domain.errors import (
     NotListOwnerError,
 )
 from domain.lists import validate_list_name
-from domain.settle import compute_settle_balance_for_list_members
+from domain.settle import (
+    compute_pairwise_settle_balances,
+    compute_settle_balance_for_list_members,
+    net_pairwise_edges,
+    simplify_group_transfers,
+)
 from domain.splits import SplitSpec, compute_share_allocations
 
 from application.list_access import (
@@ -128,6 +134,12 @@ class ListRepository(Protocol):
 
     def clear_invalid_percentage_default(self, list_id: UUID) -> None: ...
 
+    def upsert_settle_assertion(
+        self, list_id: UUID, actor_user_id: UUID, settled_at: datetime
+    ) -> None: ...
+
+    def get_settled_at(self, list_id: UUID, actor_user_id: UUID) -> datetime | None: ...
+
 
 @dataclass(frozen=True, slots=True)
 class CreateOwnedListCommand:
@@ -198,10 +210,67 @@ class SetListDefaultSplitCommand:
 
 
 @dataclass(frozen=True, slots=True)
+class PairwiseEdge:
+    """One member's net vs the viewer, from the viewer's perspective."""
+
+    member_id: UUID
+    alias: str | None
+    amount_crc: str
+
+
+@dataclass(frozen=True, slots=True)
 class ListBalancesStub:
     list_id: UUID
     balance_crc: str
     is_incomplete: bool = False
+    you_are_owed: tuple[PairwiseEdge, ...] = ()
+    you_owe: tuple[PairwiseEdge, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ListPairwiseBalances:
+    """Standalone pairwise-balances view — same shape as `ListBalancesStub`.
+
+    Kept as a distinct name per the domain vocabulary; `GetListBalancesStubService`
+    returns `ListBalancesStub` (its established result type) rather than this
+    class, since both carry identical fields.
+    """
+
+    list_id: UUID
+    you_are_owed: tuple[PairwiseEdge, ...]
+    you_owe: tuple[PairwiseEdge, ...]
+    balance_crc: str
+    is_incomplete: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class SuggestedTransferView:
+    """Simplify-plan transfer with resolved aliases, ready for API/UI wire-up."""
+
+    from_member_id: UUID
+    from_alias: str | None
+    to_member_id: UUID
+    to_alias: str | None
+    amount_crc: str
+
+
+@dataclass(frozen=True, slots=True)
+class SimplifyGroupPlan:
+    list_id: UUID
+    transfers: tuple[SuggestedTransferView, ...]
+    is_incomplete: bool
+
+
+@dataclass(frozen=True, slots=True)
+class SimplifyGroupPlanCommand:
+    actor_user_id: UUID
+    list_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class SettlePayablesCommand:
+    actor_user_id: UUID
+    list_id: UUID
 
 
 @dataclass(frozen=True, slots=True)
@@ -332,6 +401,105 @@ def compute_viewer_balance_crc(
     return str(balances.get(actor_user_id, Decimal("0")))
 
 
+def _split_override_fn_for(repo: object, list_id: UUID):
+    def get_split_override_fn(receipt_id):
+        from domain.splits import SUBJECT_RECEIPT
+
+        if receipt_id is None:
+            return None
+        stored = repo.get_split_override(list_id, SUBJECT_RECEIPT, receipt_id)  # type: ignore[attr-defined]
+        if stored is None:
+            return None
+        return SplitSpec(
+            kind=stored.kind,
+            assignee_id=stored.assignee_id,
+            amounts=stored.amounts,
+            percentages=stored.percentages,
+        )
+
+    return get_split_override_fn
+
+
+def compute_viewer_pairwise_edges(
+    repo: object,
+    *,
+    list_id: UUID,
+    actor_user_id: UUID,
+    owner_id: UUID,
+    settled_at: datetime | None = None,
+) -> tuple[tuple[PairwiseEdge, ...], tuple[PairwiseEdge, ...]]:
+    """Viewer-perspective pairwise edges: (you_are_owed, you_owe).
+
+    `you_are_owed` always reflects the full, unfiltered ledger. `you_owe` is
+    additionally filtered to entries created after `settled_at` when provided
+    — a settle assertion clears the payable side for the viewer, but never
+    the true net (AD-21).
+    """
+    list_ledger = getattr(repo, "list_ledger_entries", None)
+    list_members = getattr(repo, "list_members_with_alias", None)
+    if list_ledger is None or list_members is None:
+        return (), ()
+
+    all_entries = list(list_ledger(list_id))
+    members = list_members(list_id)
+    alias_by_id = {m.user_id: m.alias for m in members}
+    stored_default_split = repo.get_stored_default_split(list_id)  # type: ignore[attr-defined]
+    default_mode = stored_default_split.mode if stored_default_split else MODE_EVEN
+    default_shares = stored_default_split.shares if stored_default_split else None
+    get_split_override_fn = _split_override_fn_for(repo, list_id)
+
+    def get_list_default_split_fn(_list_id):
+        return default_shares
+
+    def net_for(entries) -> dict[tuple[UUID, UUID], Decimal]:
+        edges = compute_pairwise_settle_balances(
+            entries,
+            members,
+            owner_id,
+            compute_share_allocations,
+            get_split_override_fn,
+            get_list_default_split_fn,
+            default_mode=default_mode,
+        )
+        return net_pairwise_edges(edges)
+
+    def edge(other: UUID, amount: Decimal) -> PairwiseEdge:
+        return PairwiseEdge(member_id=other, alias=alias_by_id.get(other), amount_crc=str(amount))
+
+    def viewer_split(
+        net: dict[tuple[UUID, UUID], Decimal],
+    ) -> tuple[tuple[PairwiseEdge, ...], tuple[PairwiseEdge, ...]]:
+        owed_to_viewer: list[PairwiseEdge] = []
+        viewer_owes: list[PairwiseEdge] = []
+        for (x, y), value in net.items():
+            if x == actor_user_id:
+                other = y
+                # net[(x,y)] > 0 means y owes x (viewer) — viewer is owed.
+                if value > 0:
+                    owed_to_viewer.append(edge(other, value))
+                elif value < 0:
+                    viewer_owes.append(edge(other, -value))
+            elif y == actor_user_id:
+                other = x
+                # net[(x,y)] > 0 means y (viewer) owes x.
+                if value > 0:
+                    viewer_owes.append(edge(other, value))
+                elif value < 0:
+                    owed_to_viewer.append(edge(other, -value))
+        return tuple(owed_to_viewer), tuple(viewer_owes)
+
+    net_full = net_for(all_entries)
+    you_are_owed, you_owe_unfiltered = viewer_split(net_full)
+
+    if settled_at is None:
+        return you_are_owed, you_owe_unfiltered
+
+    filtered_entries = [e for e in all_entries if e.created_at > settled_at]
+    net_filtered = net_for(filtered_entries)
+    _, you_owe = viewer_split(net_filtered)
+    return you_are_owed, you_owe
+
+
 class ListMembershipsService:
     """Membership-scoped list summaries for the authenticated user.
 
@@ -415,6 +583,19 @@ class GetListBalancesStubService:
         lst = self._repo.get_list_with_grant(grant, command.list_id)
         unresolved = self._conflict_repo.list_unresolved_conflicts(command.actor_user_id)
         is_incomplete = len(conflicts_touching_list(unresolved, command.list_id)) > 0
+
+        get_settled_at = getattr(self._repo, "get_settled_at", None)
+        settled_at = (
+            get_settled_at(command.list_id, command.actor_user_id) if get_settled_at else None
+        )
+        you_are_owed, you_owe = compute_viewer_pairwise_edges(
+            self._repo,
+            list_id=command.list_id,
+            actor_user_id=command.actor_user_id,
+            owner_id=lst.owner_id,
+            settled_at=settled_at,
+        )
+
         return ListBalancesStub(
             list_id=command.list_id,
             balance_crc=compute_viewer_balance_crc(
@@ -424,6 +605,106 @@ class GetListBalancesStubService:
                 owner_id=lst.owner_id,
             ),
             is_incomplete=is_incomplete,
+            you_are_owed=you_are_owed,
+            you_owe=you_owe,
+        )
+
+
+class SimplifyGroupPlanService:
+    """List-wide minimal-transaction settle plan — authorize_list_access(read_balances).
+
+    A read, like balances: it computes and returns the plan even when
+    `is_incomplete` is true (AC #5). The API route is what turns that flag
+    into an HTTP 409 — domain/application stay permissive; gating lives at
+    the edge (mirrors `ResolveSamePriceConflictService`, Story 5.6).
+    """
+
+    def __init__(
+        self,
+        repo: ListRepository,
+        conflict_repo: SamePriceConflictRepository | None = None,
+    ) -> None:
+        self._repo = repo
+        self._conflict_repo = conflict_repo or NullSamePriceConflictRepository()
+
+    def execute(self, command: SimplifyGroupPlanCommand) -> SimplifyGroupPlan:
+        grant = AuthorizeListAccessService(self._repo).execute(
+            AuthorizeListAccessCommand(
+                acting_user_id=command.actor_user_id,
+                list_id=command.list_id,
+                action="read_balances",
+            )
+        )
+        lst = self._repo.get_list_with_grant(grant, command.list_id)
+        unresolved = self._conflict_repo.list_unresolved_conflicts(command.actor_user_id)
+        is_incomplete = len(conflicts_touching_list(unresolved, command.list_id)) > 0
+
+        list_ledger = getattr(self._repo, "list_ledger_entries", None)
+        list_members = getattr(self._repo, "list_members_with_alias", None)
+        if list_ledger is None or list_members is None:
+            return SimplifyGroupPlan(
+                list_id=command.list_id, transfers=(), is_incomplete=is_incomplete
+            )
+
+        ledger_entries = list_ledger(command.list_id)
+        members = list_members(command.list_id)
+        alias_by_id = {m.user_id: m.alias for m in members}
+        stored_default_split = self._repo.get_stored_default_split(command.list_id)
+        default_mode = stored_default_split.mode if stored_default_split else MODE_EVEN
+        default_shares = stored_default_split.shares if stored_default_split else None
+        get_split_override_fn = _split_override_fn_for(self._repo, command.list_id)
+
+        def get_list_default_split_fn(_list_id):
+            return default_shares
+
+        net_balances = compute_settle_balance_for_list_members(
+            ledger_entries,
+            members,
+            lst.owner_id,
+            compute_share_allocations,
+            get_split_override_fn,
+            get_list_default_split_fn,
+            default_mode=default_mode,
+        )
+        transfers = simplify_group_transfers(net_balances)
+        views = tuple(
+            SuggestedTransferView(
+                from_member_id=t.from_member_id,
+                from_alias=alias_by_id.get(t.from_member_id),
+                to_member_id=t.to_member_id,
+                to_alias=alias_by_id.get(t.to_member_id),
+                amount_crc=str(t.amount_crc),
+            )
+            for t in transfers
+        )
+        return SimplifyGroupPlan(
+            list_id=command.list_id, transfers=views, is_incomplete=is_incomplete
+        )
+
+
+class SettlePayablesService:
+    """Assert "my payables are done" — authorize_list_access(settle_payables).
+
+    Idempotent: settling again just moves `settled_at` forward. Never writes
+    an inter-member transfer/payment ledger line (AD-21) — only a single
+    upserted `(list_id, actor_user_id) -> settled_at` timestamp row.
+    """
+
+    def __init__(self, repo: ListRepository) -> None:
+        self._repo = repo
+
+    def execute(self, command: SettlePayablesCommand) -> None:
+        AuthorizeListAccessService(self._repo).execute(
+            AuthorizeListAccessCommand(
+                acting_user_id=command.actor_user_id,
+                list_id=command.list_id,
+                action="settle_payables",
+            )
+        )
+        self._repo.upsert_settle_assertion(
+            command.list_id,
+            command.actor_user_id,
+            settled_at=datetime.now(UTC),
         )
 
 
