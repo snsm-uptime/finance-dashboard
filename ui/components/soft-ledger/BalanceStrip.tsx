@@ -43,12 +43,11 @@ function memberDetailRowsFrom(youAreOwed: PairwiseRow[], youOwe: PairwiseRow[]):
 function MemberDetailsList({
   rows,
   owesYouLabel,
-  isOwedLabel,
-}: {
-  rows: MemberDetailRow[];
-  owesYouLabel: string;
-  isOwedLabel: string;
-}) {
+  isOwedLabel, }: {
+    rows: MemberDetailRow[];
+    owesYouLabel: string;
+    isOwedLabel: string;
+  }) {
   if (rows.length === 0) return null;
   return (
     <ul className="m-0 flex list-none flex-col divide-y divide-border p-0">
@@ -58,7 +57,7 @@ function MemberDetailsList({
           className="flex items-baseline justify-between gap-[var(--space-2)] py-[var(--space-2)] first:pt-0 last:pb-0"
         >
           <span className="min-w-0 truncate" style={{ fontFamily: "var(--type-meta-face)" }}>
-            {row.label} {row.polarity === "owed" ? owesYouLabel : isOwedLabel}
+            <strong className={`tabular-nums ${toneClass(row.polarity)}`}>{row.label}</strong> {row.polarity === "owed" ? owesYouLabel : isOwedLabel}
           </span>
           <span className={`tabular-nums ${toneClass(row.polarity)}`} style={amountStyle}>
             {row.amount}

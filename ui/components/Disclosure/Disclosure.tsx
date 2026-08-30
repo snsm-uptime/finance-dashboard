@@ -2,7 +2,7 @@
 
 import { useId, useState, type ReactNode } from "react";
 
-import { TriangleIcon } from "@/app/icons";
+import { BackIcon } from "@/app/icons";
 import { SlideDown } from "@/components/SlideDown";
 
 export type DisclosureProps = {
@@ -18,10 +18,11 @@ export type DisclosureProps = {
 const titleStyle = { fontFamily: "var(--type-body-face)", fontWeight: 550 } as const;
 
 /**
- * Section header whose title is the toggle: a triangle prefix (left when
- * closed, down when open) plus a label, driving a `SlideDown` body. Built on
- * top of `SlideDown` rather than folded into it, since `SlideDown` is also
- * used bare (no title/trigger) by OriginChipPicker and CardRoutingControl.
+ * Section header whose title is the toggle: the same chevron used by the
+ * chrome header's back control (pointing at the label when closed, down when
+ * open) plus a label, driving a `SlideDown` body. Built on top of `SlideDown`
+ * rather than folded into it, since `SlideDown` is also used bare (no
+ * title/trigger) by OriginChipPicker and CardRoutingControl.
  */
 export function Disclosure({ title, children, defaultOpen = false, headerExtra, className }: DisclosureProps) {
   const [open, setOpen] = useState(defaultOpen);
@@ -39,8 +40,8 @@ export function Disclosure({ title, children, defaultOpen = false, headerExtra, 
           onClick={() => setOpen((current) => !current)}
           className="flex min-w-0 cursor-pointer items-center gap-[var(--space-2)] border-0 bg-transparent p-0 text-left text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
-          <TriangleIcon
-            className={`size-3 shrink-0 transition-transform duration-200 ease-out motion-reduce:transition-none ${open ? "rotate-90" : "rotate-180"}`}
+          <BackIcon
+            className={`size-3 shrink-0 transition-transform duration-200 ease-out motion-reduce:transition-none ${open ? "-rotate-90" : "rotate-180"}`}
           />
           <span style={titleStyle}>{title}</span>
         </button>

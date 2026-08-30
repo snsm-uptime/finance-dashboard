@@ -23,7 +23,7 @@ describe("Disclosure", () => {
     container.remove();
   });
 
-  it("defaults closed, hides the body, and points its triangle left", () => {
+  it("defaults closed, hides the body, and points its chevron toward the label", () => {
     act(() => {
       root.render(<Disclosure title="Group transfer plan">Body content</Disclosure>);
     });
@@ -34,7 +34,7 @@ describe("Disclosure", () => {
     expect(button.querySelector("svg")?.getAttribute("class")).toContain("rotate-180");
   });
 
-  it("opens the body and rotates the triangle down on click", () => {
+  it("opens the body and rotates the chevron down on click", () => {
     act(() => {
       root.render(<Disclosure title="Member details">Body content</Disclosure>);
     });
@@ -46,7 +46,7 @@ describe("Disclosure", () => {
     expect(button.getAttribute("aria-expanded")).toBe("true");
     expect(region.getAttribute("aria-hidden")).toBe("false");
     expect(region.textContent).toContain("Body content");
-    expect(button.querySelector("svg")?.getAttribute("class")).toContain("rotate-90");
+    expect(button.querySelector("svg")?.getAttribute("class")).toContain("-rotate-90");
   });
 
   it("honors defaultOpen and renders headerExtra outside the toggle button", () => {
