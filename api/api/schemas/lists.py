@@ -131,10 +131,31 @@ class BalanceStatusResponse(BaseModel):
     is_incomplete: bool
 
 
+class PairwiseEdgeResponse(BaseModel):
+    member_id: UUID
+    alias: str | None = None
+    amount_crc: str
+
+
 class ListBalancesStubResponse(BaseModel):
     list_id: UUID
     balance_crc: str
     balance_status: BalanceStatusResponse
+    you_are_owed: list[PairwiseEdgeResponse] = Field(default_factory=list)
+    you_owe: list[PairwiseEdgeResponse] = Field(default_factory=list)
+
+
+class TransferResponse(BaseModel):
+    from_member_id: UUID
+    from_alias: str | None = None
+    to_member_id: UUID
+    to_alias: str | None = None
+    amount_crc: str
+
+
+class SimplifyPlanResponse(BaseModel):
+    transfers: list[TransferResponse]
+    is_incomplete: bool
 
 
 class DefaultSplitShareItem(BaseModel):
