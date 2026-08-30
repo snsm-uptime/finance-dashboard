@@ -76,20 +76,32 @@ default_user_cejas = MockUser(
     email="snsmtel@gmail.com",
     password="05111012",
     alias="cejas",
-    default_lists=("ECO", "Personal", "Home"),
+    default_lists=("ECO", "Personal", "Home", "trip"),
 )
 
 default_user_monchis = MockUser(
     email="monsotos@gmail.com",
     password="05111012",
     alias="monchis",
-    # "Home" belongs to cejas — monchis joins it rather than owning a namesake.
+    # "Home" and "trip" belong to cejas — monchis joins them rather than owning namesakes.
     default_lists=("Macarena", "Personal"),
-    shared_lists=(SharedList(owner=default_user_cejas, name="Home"),),
+    shared_lists=(
+        SharedList(owner=default_user_cejas, name="Home"),
+        SharedList(owner=default_user_cejas, name="trip"),
+    ),
+)
+
+default_user_nico = MockUser(
+    email="nrchi@gmail.com",
+    password="05111012",
+    alias="nico",
+    # "trip" belongs to cejas — nico joins it rather than owning a namesake.
+    default_lists=("Personal",),
+    shared_lists=(SharedList(owner=default_user_cejas, name="trip"),),
 )
 
 # First entry is the primary account: the one SEED_DEV_USER_* overrides target.
-DEV_USERS: tuple[MockUser, ...] = (default_user_cejas, default_user_monchis)
+DEV_USERS: tuple[MockUser, ...] = (default_user_cejas, default_user_monchis, default_user_nico)
 
 
 def _resolve_roster() -> dict[MockUser, MockUser]:
