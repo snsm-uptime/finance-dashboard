@@ -61,13 +61,25 @@ describe("asBalances", () => {
   it("parses balance_status.is_incomplete true", () => {
     expect(
       asBalances({ list_id: "l1", balance_crc: "0", balance_status: { is_incomplete: true } }),
-    ).toEqual({ list_id: "l1", balance_crc: "0", balance_status: { is_incomplete: true } });
+    ).toEqual({
+      list_id: "l1",
+      balance_crc: "0",
+      balance_status: { is_incomplete: true },
+      you_are_owed: [],
+      you_owe: [],
+    });
   });
 
   it("parses balance_status.is_incomplete false", () => {
     expect(
       asBalances({ list_id: "l1", balance_crc: "0", balance_status: { is_incomplete: false } }),
-    ).toEqual({ list_id: "l1", balance_crc: "0", balance_status: { is_incomplete: false } });
+    ).toEqual({
+      list_id: "l1",
+      balance_crc: "0",
+      balance_status: { is_incomplete: false },
+      you_are_owed: [],
+      you_owe: [],
+    });
   });
 
   it("defaults is_incomplete to false when balance_status is absent — never fabricates true", () => {
@@ -75,17 +87,54 @@ describe("asBalances", () => {
       list_id: "l1",
       balance_crc: "0",
       balance_status: { is_incomplete: false },
+      you_are_owed: [],
+      you_owe: [],
     });
   });
 
   it("defaults is_incomplete to false when balance_status is malformed", () => {
     expect(
       asBalances({ list_id: "l1", balance_crc: "0", balance_status: { is_incomplete: "yes" } }),
-    ).toEqual({ list_id: "l1", balance_crc: "0", balance_status: { is_incomplete: false } });
+    ).toEqual({
+      list_id: "l1",
+      balance_crc: "0",
+      balance_status: { is_incomplete: false },
+      you_are_owed: [],
+      you_owe: [],
+    });
     expect(asBalances({ list_id: "l1", balance_crc: "0", balance_status: null })).toEqual({
       list_id: "l1",
       balance_crc: "0",
       balance_status: { is_incomplete: false },
+      you_are_owed: [],
+      you_owe: [],
+    });
+  });
+
+  it("parses you_are_owed/you_owe rows, dropping malformed entries", () => {
+    expect(
+      asBalances({
+        list_id: "l1",
+        balance_crc: "0",
+        you_are_owed: [{ member_id: "m1", alias: "Alice", amount_crc: "500" }, { bad: true }],
+        you_owe: [{ member_id: "m2", alias: null, amount_crc: "200" }],
+      }),
+    ).toEqual({
+      list_id: "l1",
+      balance_crc: "0",
+      balance_status: { is_incomplete: false },
+      you_are_owed: [{ member_id: "m1", alias: "Alice", amount_crc: "500" }],
+      you_owe: [{ member_id: "m2", alias: null, amount_crc: "200" }],
+    });
+  });
+
+  it("defaults you_are_owed/you_owe to [] when absent or malformed — never fabricates rows", () => {
+    expect(asBalances({ list_id: "l1", balance_crc: "0", you_are_owed: "nope" })).toEqual({
+      list_id: "l1",
+      balance_crc: "0",
+      balance_status: { is_incomplete: false },
+      you_are_owed: [],
+      you_owe: [],
     });
   });
 

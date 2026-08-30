@@ -12,6 +12,7 @@ import { IncompleteDisclosure } from "./IncompleteDisclosure";
 import { PrimaryButton } from "./PrimaryButton";
 import { ReceiptRow } from "./ReceiptRow";
 import { SectionLabel } from "./SectionLabel";
+import { SimplifyPanel, simplifyPlanTextFrom } from "./SimplifyPanel";
 import { SoftLedgerRadio } from "./Radio";
 import { SoftLedgerSelect } from "./Select";
 import { TabBar } from "./TabBar";
@@ -118,6 +119,105 @@ describe("Soft-Ledger primitives", () => {
     expect(section).not.toBeNull();
     expect(action?.textContent).toBe("Add expense");
     expect(section?.contains(action)).toBe(true);
+  });
+
+  it("renders BalanceStrip grid variant with pairwise columns and balance (Story 5.8)", () => {
+    act(() => {
+      root.render(
+        <BalanceStrip
+          variant="grid"
+          youAreOwedLabel="You are owed"
+          youOweLabel="You owe"
+          balanceLabel="Balance"
+          youAreOwed={[{ memberId: "m1", label: "Alice", amount: "₡500.00" }]}
+          youOwe={[]}
+          balanceAmount="₡500.00"
+          balancePolarity="owed"
+        />,
+      );
+    });
+    const section = host.querySelector("section");
+    expect(section).not.toBeNull();
+    expect(host.textContent).toContain("You are owed");
+    expect(host.textContent).toContain("Alice");
+    expect(host.textContent).toContain("You owe");
+    expect(host.textContent).toContain("Balance");
+    // Two ₡500.00 occurrences: one in the You are owed row, one in Balance.
+    expect(host.textContent?.match(/₡500\.00/g)?.length).toBe(2);
+  });
+
+  it("BalanceStrip grid renders no fake zero rows for an empty column (AC #1)", () => {
+    act(() => {
+      root.render(
+        <BalanceStrip
+          variant="grid"
+          youAreOwedLabel="You are owed"
+          youOweLabel="You owe"
+          balanceLabel="Balance"
+          youAreOwed={[]}
+          youOwe={[]}
+          balanceAmount="₡0"
+        />,
+      );
+    });
+    expect(host.querySelectorAll("li").length).toBe(0);
+    expect(host.textContent).not.toContain("₡0.00");
+  });
+
+  it("simplifyPlanTextFrom builds plain-text lines, never says 'paid' (AC #4)", () => {
+    expect(simplifyPlanTextFrom([])).toBe("");
+    expect(
+      simplifyPlanTextFrom([
+        { fromMemberId: "a", fromLabel: "Alice", toMemberId: "b", toLabel: "Bob", amountCrc: "₡500.00" },
+      ]),
+    ).toBe("Alice pays Bob ₡500.00");
+    const multi = simplifyPlanTextFrom([
+      { fromMemberId: "a", fromLabel: "Alice", toMemberId: "b", toLabel: "Bob", amountCrc: "₡500.00" },
+      { fromMemberId: "c", fromLabel: "Charlie", toMemberId: "b", toLabel: "Bob", amountCrc: "₡100.00" },
+    ]);
+    expect(multi).toBe("Alice pays Bob ₡500.00\nCharlie pays Bob ₡100.00");
+    expect(multi.toLowerCase()).not.toContain("paid");
+    expect(multi.toLowerCase()).not.toContain("settle");
+  });
+
+  it("SimplifyPanel shows the empty label and no CopyButton when there are no transfers", () => {
+    act(() => {
+      root.render(
+        <SimplifyPanel
+          transfers={[]}
+          messages={{
+            title: "Group transfer plan",
+            emptyLabel: "Already minimal — no transfers needed.",
+            copyLabel: "Copy plan",
+            copiedLabel: "Copied",
+          }}
+        />,
+      );
+    });
+    expect(host.textContent).toContain("Already minimal");
+    expect(host.querySelector("button")).toBeNull();
+  });
+
+  it("SimplifyPanel renders transfer rows and a CopyButton when transfers exist", () => {
+    act(() => {
+      root.render(
+        <SimplifyPanel
+          transfers={[
+            { fromMemberId: "a", fromLabel: "Alice", toMemberId: "b", toLabel: "Bob", amountCrc: "₡500.00" },
+          ]}
+          messages={{
+            title: "Group transfer plan",
+            emptyLabel: "Already minimal — no transfers needed.",
+            copyLabel: "Copy plan",
+            copiedLabel: "Copied",
+          }}
+        />,
+      );
+    });
+    expect(host.textContent).toContain("Alice");
+    expect(host.textContent).toContain("Bob");
+    expect(host.textContent).toContain("₡500.00");
+    expect(host.querySelector("button")?.getAttribute("aria-label")).toBe("Copy plan");
   });
 
   it("renders Hint and SectionLabel and empty ReceiptRow", () => {

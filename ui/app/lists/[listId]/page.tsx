@@ -18,6 +18,7 @@ import { ListDetailMobileActions } from "../ListDetailMobileActions";
 import { ListDefaultSplitProvider } from "../ListDefaultSplitContext";
 import { ManualExpenseForm } from "../ManualExpenseForm";
 import { OriginChipPicker } from "../OriginChipPicker";
+import { SettleControls } from "../SettleControls";
 import { TemporalNavigation } from "../TemporalNavigation";
 import {
   balanceTone,
@@ -70,11 +71,36 @@ function asDefaultSplit(data: unknown): DefaultSplitPayload | null {
   };
 }
 
+export type PairwiseEdgePayload = {
+  member_id: string;
+  alias: string | null;
+  amount_crc: string;
+};
+
 type BalancesPayload = {
   list_id: string;
   balance_crc: string;
   balance_status: { is_incomplete: boolean };
+  you_are_owed: PairwiseEdgePayload[];
+  you_owe: PairwiseEdgePayload[];
 };
+
+/** Defensive parse — malformed/absent rows default to `[]`, never fabricated (Story 5.8). */
+function asPairwiseEdges(data: unknown): PairwiseEdgePayload[] {
+  if (!Array.isArray(data)) return [];
+  const out: PairwiseEdgePayload[] = [];
+  for (const row of data) {
+    if (!row || typeof row !== "object") continue;
+    const r = row as Partial<PairwiseEdgePayload>;
+    if (typeof r.member_id !== "string" || typeof r.amount_crc !== "string") continue;
+    out.push({
+      member_id: r.member_id,
+      alias: typeof r.alias === "string" && r.alias ? r.alias : null,
+      amount_crc: r.amount_crc,
+    });
+  }
+  return out;
+}
 
 export function asBalances(data: unknown): BalancesPayload | null {
   if (!data || typeof data !== "object") return null;
@@ -96,6 +122,8 @@ export function asBalances(data: unknown): BalancesPayload | null {
     list_id: row.list_id,
     balance_crc: balanceCrc,
     balance_status: { is_incomplete: isIncomplete },
+    you_are_owed: asPairwiseEdges((row as { you_are_owed?: unknown }).you_are_owed),
+    you_owe: asPairwiseEdges((row as { you_owe?: unknown }).you_owe),
   };
 }
 
@@ -363,6 +391,17 @@ export function balanceStripPropsFrom(
   return { who: t.balanceZero, amount, polarity: "neutral" };
 }
 
+/** Pairwise column rows for the settle grid — alias falls back to a short id. */
+export function pairwiseRowsFrom(
+  edges: PairwiseEdgePayload[],
+): { memberId: string; label: string; amount: string }[] {
+  return edges.map((e) => ({
+    memberId: e.member_id,
+    label: e.alias ?? `${e.member_id.slice(0, 8)}…`,
+    amount: formatCrcAmount(e.amount_crc),
+  }));
+}
+
 function asMembers(data: unknown): ListMember[] {
   if (!data || typeof data !== "object") return [];
   const rows = (data as { members?: unknown }).members;
@@ -509,12 +548,9 @@ export default async function ListDetailPage({
   const listTitle = detail?.name;
   const isOwner = Boolean(detail?.owner_id && detail.owner_id === session.user_id);
   const showListDetail = Boolean(listTitle) && !notFound && !loadError;
-  const stripProps = balanceStripPropsFrom(
-    expenses.length > 0,
-    balancesLoadError,
-    balances?.balance_crc,
-    t,
-  );
+  const hasExpenses = expenses.length > 0;
+  const showBalancesGrid = hasExpenses && !balancesLoadError && balances !== null;
+  const stripProps = balanceStripPropsFrom(hasExpenses, balancesLoadError, balances?.balance_crc, t);
   const todayCr = calendarDateInCostaRica(new Date().toISOString());
 
   return (
@@ -544,9 +580,22 @@ export default async function ListDetailPage({
             <ListDetailChrome title={listTitle as string} />
             <div className={styles.detailPrimary}>
               <BalanceStrip
-                who={stripProps.who}
-                amount={stripProps.amount}
-                polarity={stripProps.polarity}
+                {...(showBalancesGrid
+                  ? {
+                      variant: "grid" as const,
+                      youAreOwedLabel: t.balanceYouAreOwed,
+                      youOweLabel: t.balanceYouOwe,
+                      balanceLabel: t.balanceLabel,
+                      youAreOwed: pairwiseRowsFrom(balances?.you_are_owed ?? []),
+                      youOwe: pairwiseRowsFrom(balances?.you_owe ?? []),
+                      balanceAmount: stripProps.amount,
+                      balancePolarity: stripProps.polarity,
+                    }
+                  : {
+                      who: stripProps.who,
+                      amount: stripProps.amount,
+                      polarity: stripProps.polarity,
+                    })}
                 action={
                   <ListDetailMobileActions
                     listId={listId}
@@ -610,6 +659,26 @@ export default async function ListDetailPage({
                   />
                 }
               />
+              {showBalancesGrid ? (
+                <SettleControls
+                  listId={listId}
+                  simplifyAvailable={balances?.balance_status.is_incomplete !== true}
+                  messages={{
+                    simplifyAction: t.simplifyAction,
+                    simplifyTitle: t.simplifyTitle,
+                    simplifyEmpty: t.simplifyEmpty,
+                    simplifyBlocked: t.simplifyBlocked,
+                    settleAction: t.settleAction,
+                    settleConfirmTitle: t.settleConfirmTitle,
+                    settleConfirmBody: t.settleConfirmBody,
+                    settleConfirmAction: t.settleConfirmAction,
+                    settleCancel: t.settleCancel,
+                    copyPlanLabel: t.copyPlanLabel,
+                    copyPlanCopiedLabel: t.copyPlanCopiedLabel,
+                    errorGeneric: t.errorGeneric,
+                  }}
+                />
+              ) : null}
               <IncompleteDisclosure
                 isIncomplete={balances?.balance_status.is_incomplete === true}
                 label={t.incompleteDisclosureLabel}
