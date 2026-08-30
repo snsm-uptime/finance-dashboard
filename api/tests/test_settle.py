@@ -8,7 +8,11 @@ from domain.settle import (
     LedgerEntryRecord,
     ListMemberView,
     ShareAllocation,
+    SuggestedTransfer,
+    compute_pairwise_settle_balances,
     compute_settle_balance_for_list_members,
+    net_pairwise_edges,
+    simplify_group_transfers,
 )
 from domain.splits import compute_share_allocations
 
@@ -707,3 +711,164 @@ def test_negative_purchase_with_real_share_allocator(alice_id, bob_id, list_id):
     assert balances[alice_id] == Decimal("-40.00")
     assert balances[bob_id] == Decimal("40.00")
     assert sum(balances.values(), Decimal("0")) == Decimal("0")
+
+
+# --- Story 5.8: pairwise edges + simplify -----------------------------------
+
+
+def test_pairwise_edges_two_member_list(alice_id, bob_id, list_id):
+    """Alice pays 1000, 50/50 with Bob -> edge (alice, bob) = 500 (bob owes alice)."""
+    members = [
+        ListMemberView(user_id=alice_id, alias="Alice"),
+        ListMemberView(user_id=bob_id, alias="Bob"),
+    ]
+    entry = LedgerEntryRecord(
+        id=uuid4(),
+        list_id=list_id,
+        amount_crc=Decimal("1000"),
+        currency="CRC",
+        payer_id=alice_id,
+        line_type="purchase",
+    )
+
+    def compute_allocations_fn(total, currency, **_kwargs):
+        allocations = [
+            ShareAllocation(member_id=alice_id, amount=Decimal("500"), currency="CRC"),
+            ShareAllocation(member_id=bob_id, amount=Decimal("500"), currency="CRC"),
+        ]
+        return MockAllocationResult(allocations)
+
+    edges = compute_pairwise_settle_balances(
+        [entry],
+        members,
+        alice_id,
+        compute_allocations_fn,
+        lambda _receipt_id: None,
+        lambda _list_id: None,
+        default_mode="even",
+    )
+
+    assert edges == {(alice_id, bob_id): Decimal("500")}
+
+
+def test_pairwise_edges_three_member_list_with_remainder(alice_id, bob_id, charlie_id, list_id):
+    """Bob pays 1000, percentage split with remainder to creator (charlie)."""
+    members = [
+        ListMemberView(user_id=alice_id, alias="Alice"),
+        ListMemberView(user_id=bob_id, alias="Bob"),
+        ListMemberView(user_id=charlie_id, alias="Charlie"),
+    ]
+    entry = LedgerEntryRecord(
+        id=uuid4(),
+        list_id=list_id,
+        amount_crc=Decimal("1000"),
+        currency="CRC",
+        payer_id=bob_id,
+        line_type="purchase",
+    )
+
+    def compute_allocations_fn(total, currency, **_kwargs):
+        allocations = [
+            ShareAllocation(member_id=alice_id, amount=Decimal("333"), currency="CRC"),
+            ShareAllocation(member_id=bob_id, amount=Decimal("333"), currency="CRC"),
+            ShareAllocation(member_id=charlie_id, amount=Decimal("334"), currency="CRC"),
+        ]
+        return MockAllocationResult(allocations)
+
+    edges = compute_pairwise_settle_balances(
+        [entry],
+        members,
+        charlie_id,
+        compute_allocations_fn,
+        lambda _receipt_id: None,
+        lambda _list_id: None,
+    )
+
+    assert edges == {
+        (bob_id, alice_id): Decimal("333"),
+        (bob_id, charlie_id): Decimal("334"),
+    }
+
+
+def test_net_pairwise_edges_collapses_both_directions(alice_id, bob_id):
+    """Opposing directional edges on the same pair collapse to one signed net."""
+    edges = {
+        (alice_id, bob_id): Decimal("500"),
+        (bob_id, alice_id): Decimal("200"),
+    }
+
+    net = net_pairwise_edges(edges)
+
+    x, y = (alice_id, bob_id) if str(alice_id) < str(bob_id) else (bob_id, alice_id)
+    expected = Decimal("500") - Decimal("200") if x == alice_id else Decimal("200") - Decimal("500")
+    assert net == {(x, y): expected}
+
+
+def test_net_pairwise_edges_drops_fully_cancelling_pairs(alice_id, bob_id):
+    edges = {
+        (alice_id, bob_id): Decimal("300"),
+        (bob_id, alice_id): Decimal("300"),
+    }
+
+    assert net_pairwise_edges(edges) == {}
+
+
+def test_net_pairwise_edges_no_reverse_direction(alice_id, bob_id):
+    edges = {(alice_id, bob_id): Decimal("500")}
+
+    net = net_pairwise_edges(edges)
+
+    assert net == {(alice_id, bob_id): Decimal("500")}
+
+
+def test_simplify_group_transfers_three_person_cycle(alice_id, bob_id, charlie_id):
+    """A owes B, B owes C, C owes A in a balanced cycle nets to fewer transfers."""
+    net_balances = {
+        alice_id: Decimal("0"),
+        bob_id: Decimal("100"),
+        charlie_id: Decimal("-100"),
+    }
+
+    transfers = simplify_group_transfers(net_balances)
+
+    assert len(transfers) == 1
+    assert transfers[0].from_member_id == charlie_id
+    assert transfers[0].to_member_id == bob_id
+    assert transfers[0].amount_crc == Decimal("100")
+
+
+def test_simplify_group_transfers_two_member_single_transfer(alice_id, bob_id):
+    net_balances = {alice_id: Decimal("500"), bob_id: Decimal("-500")}
+
+    transfers = simplify_group_transfers(net_balances)
+
+    assert transfers == [
+        SuggestedTransfer(from_member_id=bob_id, to_member_id=alice_id, amount_crc=Decimal("500"))
+    ]
+
+
+def test_simplify_group_transfers_all_zero_no_invented_debts(alice_id, bob_id):
+    net_balances = {alice_id: Decimal("0"), bob_id: Decimal("0")}
+
+    transfers = simplify_group_transfers(net_balances)
+
+    assert transfers == []
+
+
+def test_simplify_group_transfers_sum_back_to_original_nets(alice_id, bob_id, charlie_id):
+    net_balances = {
+        alice_id: Decimal("400"),
+        bob_id: Decimal("100"),
+        charlie_id: Decimal("-500"),
+    }
+
+    transfers = simplify_group_transfers(net_balances)
+
+    replay: dict[UUID, Decimal] = dict.fromkeys(net_balances, Decimal("0"))
+    for t in transfers:
+        replay[t.from_member_id] -= t.amount_crc
+        replay[t.to_member_id] += t.amount_crc
+
+    assert replay == net_balances
+    for t in transfers:
+        assert t.amount_crc > 0
