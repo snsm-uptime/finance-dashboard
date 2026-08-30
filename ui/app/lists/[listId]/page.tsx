@@ -536,7 +536,7 @@ export default async function ListDetailPage({
   const isOwner = Boolean(detail?.owner_id && detail.owner_id === session.user_id);
   const showListDetail = Boolean(listTitle) && !notFound && !loadError;
   const hasExpenses = expenses.length > 0;
-  const showBalancesGrid = hasExpenses && !balancesLoadError && balances !== null;
+  const showBalancesGrid = !balancesLoadError && balances !== null;
   const stripProps = balanceStripPropsFrom(hasExpenses, balancesLoadError, balances?.balance_crc, t);
   const todayCr = calendarDateInCostaRica(new Date().toISOString());
 
