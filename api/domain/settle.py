@@ -76,8 +76,9 @@ def compute_settle_balance_for_list_members(
         list_owner_id: UUID of the list creator (remainder sink for percentages).
         compute_allocations_fn: Callable to compute share allocations
             (signature: compute_share_allocations(...) -> AllocationResult).
-        get_split_override_fn: Callable to fetch split override for receipt_id
-            (signature: get_split_override(receipt_id) -> SplitOverrideModel | None).
+        get_split_override_fn: Callable to fetch item/receipt split overrides for
+            an entry (signature: get_split_override(entry_id, receipt_id) ->
+            tuple[SplitSpec | None, SplitSpec | None] of (item_override, receipt_override)).
         get_list_default_split_fn: Callable to fetch list default split config
             (signature: get_list_default_split(list_id) -> StoredDefaultSplit | None).
         currency_exponent: Currency exponent for precision (default 2 for CRC).
@@ -108,16 +109,12 @@ def compute_settle_balance_for_list_members(
         sign = Decimal("1") if raw_amount > 0 else Decimal("-1")
         split_total = abs(raw_amount)
 
-        receipt_override = None
-        if entry.receipt_id:
-            split_override = get_split_override_fn(entry.receipt_id)
-            if split_override:
-                receipt_override = split_override
+        item_override, receipt_override = get_split_override_fn(entry.id, entry.receipt_id)
 
         allocations = compute_allocations_fn(
             total=split_total,
             currency=entry.currency,
-            item_override=None,
+            item_override=item_override,
             receipt_override=receipt_override,
             list_default_mode=default_mode,
             list_default_shares=get_list_default_split_fn(entry.list_id),
@@ -190,16 +187,12 @@ def compute_pairwise_settle_balances(
         sign = Decimal("1") if raw_amount > 0 else Decimal("-1")
         split_total = abs(raw_amount)
 
-        receipt_override = None
-        if entry.receipt_id:
-            split_override = get_split_override_fn(entry.receipt_id)
-            if split_override:
-                receipt_override = split_override
+        item_override, receipt_override = get_split_override_fn(entry.id, entry.receipt_id)
 
         allocations = compute_allocations_fn(
             total=split_total,
             currency=entry.currency,
-            item_override=None,
+            item_override=item_override,
             receipt_override=receipt_override,
             list_default_mode=default_mode,
             list_default_shares=get_list_default_split_fn(entry.list_id),

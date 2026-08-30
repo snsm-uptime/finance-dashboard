@@ -76,8 +76,8 @@ def test_simple_50_50_split_alice_pays(alice_id, bob_id, list_id):
         ]
         return MockAllocationResult(allocations)
 
-    def get_split_override_fn(entry_id):
-        return None
+    def get_split_override_fn(entry_id, receipt_id):
+        return None, None
 
     def get_list_default_split_fn(list_id):
         return None
@@ -128,8 +128,8 @@ def test_single_payer_single_recipient(alice_id, bob_id, list_id):
         ]
         return MockAllocationResult(allocations)
 
-    def get_split_override_fn(entry_id):
-        return None
+    def get_split_override_fn(entry_id, receipt_id):
+        return None, None
 
     def get_list_default_split_fn(list_id):
         return None
@@ -204,8 +204,8 @@ def test_multiple_members_mixed_payers(alice_id, bob_id, charlie_id, list_id):
             ]
         return MockAllocationResult(allocations)
 
-    def get_split_override_fn(entry_id):
-        return None
+    def get_split_override_fn(entry_id, receipt_id):
+        return None, None
 
     def get_list_default_split_fn(list_id):
         return None
@@ -276,8 +276,8 @@ def test_excluded_line_types_skipped(alice_id, bob_id, list_id):
         ]
         return MockAllocationResult(allocations)
 
-    def get_split_override_fn(entry_id):
-        return None
+    def get_split_override_fn(entry_id, receipt_id):
+        return None, None
 
     def get_list_default_split_fn(list_id):
         return None
@@ -306,8 +306,8 @@ def test_no_expenses_zero_balance(alice_id, bob_id, list_id):
     def compute_allocations_fn(*args, **kwargs):
         return MockAllocationResult([])
 
-    def get_split_override_fn(entry_id):
-        return None
+    def get_split_override_fn(entry_id, receipt_id):
+        return None, None
 
     def get_list_default_split_fn(list_id):
         return None
@@ -356,8 +356,8 @@ def test_expense_with_only_payer_in_allocations(alice_id, bob_id, list_id):
         ]
         return MockAllocationResult(allocations)
 
-    def get_split_override_fn(entry_id):
-        return None
+    def get_split_override_fn(entry_id, receipt_id):
+        return None, None
 
     def get_list_default_split_fn(list_id):
         return None
@@ -408,8 +408,8 @@ def test_invariant_sum_equals_zero(alice_id, bob_id, list_id):
         ]
         return MockAllocationResult(allocations)
 
-    def get_split_override_fn(entry_id):
-        return None
+    def get_split_override_fn(entry_id, receipt_id):
+        return None, None
 
     def get_list_default_split_fn(list_id):
         return None
@@ -461,8 +461,8 @@ def test_percentage_split_with_remainder_to_creator(alice_id, bob_id, charlie_id
         ]
         return MockAllocationResult(allocations)
 
-    def get_split_override_fn(entry_id):
-        return None
+    def get_split_override_fn(entry_id, receipt_id):
+        return None, None
 
     def get_list_default_split_fn(list_id):
         return None
@@ -514,8 +514,8 @@ def test_double_count_prevention_receipt_level_only(alice_id, bob_id, list_id):
         ]
         return MockAllocationResult(allocations)
 
-    def get_split_override_fn(entry_id):
-        return None
+    def get_split_override_fn(entry_id, receipt_id):
+        return None, None
 
     def get_list_default_split_fn(list_id):
         return None
@@ -578,8 +578,8 @@ def test_mixed_crc_and_usd_entries_use_materialized_amount_crc(alice_id, bob_id,
         ]
         return MockAllocationResult(allocations)
 
-    def get_split_override_fn(entry_id):
-        return None
+    def get_split_override_fn(entry_id, receipt_id):
+        return None, None
 
     def get_list_default_split_fn(list_id):
         return None
@@ -641,7 +641,7 @@ def test_negative_purchase_refund_inverts_even_split(alice_id, bob_id, list_id):
         members,
         alice_id,
         compute_allocations_fn,
-        lambda _receipt_id: None,
+        lambda _entry_id, _receipt_id: (None, None),
         lambda _list_id: None,
         default_mode="even",
     )
@@ -674,7 +674,7 @@ def test_zero_amount_purchase_is_skipped(alice_id, bob_id, list_id):
         members,
         alice_id,
         compute_allocations_fn,
-        lambda _receipt_id: None,
+        lambda _entry_id, _receipt_id: (None, None),
         lambda _list_id: None,
         default_mode="even",
     )
@@ -703,7 +703,7 @@ def test_negative_purchase_with_real_share_allocator(alice_id, bob_id, list_id):
         members,
         alice_id,
         compute_share_allocations,
-        lambda _receipt_id: None,
+        lambda _entry_id, _receipt_id: (None, None),
         lambda _list_id: None,
         default_mode="even",
     )
@@ -743,7 +743,7 @@ def test_pairwise_edges_two_member_list(alice_id, bob_id, list_id):
         members,
         alice_id,
         compute_allocations_fn,
-        lambda _receipt_id: None,
+        lambda _entry_id, _receipt_id: (None, None),
         lambda _list_id: None,
         default_mode="even",
     )
@@ -780,7 +780,7 @@ def test_pairwise_edges_three_member_list_with_remainder(alice_id, bob_id, charl
         members,
         charlie_id,
         compute_allocations_fn,
-        lambda _receipt_id: None,
+        lambda _entry_id, _receipt_id: (None, None),
         lambda _list_id: None,
     )
 

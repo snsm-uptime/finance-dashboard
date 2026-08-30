@@ -371,20 +371,7 @@ def compute_viewer_balance_crc(
     default_mode = stored_default_split.mode if stored_default_split else MODE_EVEN
     default_shares = stored_default_split.shares if stored_default_split else None
 
-    def get_split_override_fn(receipt_id):
-        from domain.splits import SUBJECT_RECEIPT
-
-        if receipt_id is None:
-            return None
-        stored = repo.get_split_override(list_id, SUBJECT_RECEIPT, receipt_id)  # type: ignore[attr-defined]
-        if stored is None:
-            return None
-        return SplitSpec(
-            kind=stored.kind,
-            assignee_id=stored.assignee_id,
-            amounts=stored.amounts,
-            percentages=stored.percentages,
-        )
+    get_split_override_fn = _split_override_fn_for(repo, list_id)
 
     def get_list_default_split_fn(_list_id):
         return default_shares
@@ -402,12 +389,7 @@ def compute_viewer_balance_crc(
 
 
 def _split_override_fn_for(repo: object, list_id: UUID):
-    def get_split_override_fn(receipt_id):
-        from domain.splits import SUBJECT_RECEIPT
-
-        if receipt_id is None:
-            return None
-        stored = repo.get_split_override(list_id, SUBJECT_RECEIPT, receipt_id)  # type: ignore[attr-defined]
+    def to_spec(stored):
         if stored is None:
             return None
         return SplitSpec(
@@ -416,6 +398,25 @@ def _split_override_fn_for(repo: object, list_id: UUID):
             amounts=stored.amounts,
             percentages=stored.percentages,
         )
+
+    def get_split_override_fn(entry_id, receipt_id):
+        from domain.splits import KIND_ABSOLUTE_AMOUNTS, SUBJECT_ITEM, SUBJECT_RECEIPT
+
+        item_override = to_spec(
+            repo.get_split_override(list_id, SUBJECT_ITEM, entry_id)  # type: ignore[attr-defined]
+        )
+
+        receipt_override = None
+        if receipt_id is not None:
+            candidate = to_spec(
+                repo.get_split_override(list_id, SUBJECT_RECEIPT, receipt_id)  # type: ignore[attr-defined]
+            )
+            # Absolute receipt totals cannot apply to child line amounts
+            # (decision A — fall through toward list_default for items).
+            if candidate is not None and candidate.kind != KIND_ABSOLUTE_AMOUNTS:
+                receipt_override = candidate
+
+        return item_override, receipt_override
 
     return get_split_override_fn
 

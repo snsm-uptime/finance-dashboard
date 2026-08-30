@@ -1,4 +1,4 @@
-function formatCrcNumber(amount: string): string {
+export function formatCrcNumber(amount: string): string {
   const parsed = Number(amount);
   if (!Number.isFinite(parsed)) return amount;
   return parsed.toLocaleString("en-US", {
