@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 import { SimplifyPanel, type SimplifyTransfer } from "@/components/soft-ledger/SimplifyPanel";
 import { DiscardConfirmDialog } from "@/app/upload/DiscardConfirmDialog";
+import { formatCrcAmount } from "@/lib/currency";
 
 export type SettleControlsMessages = {
   simplifyAction: string;
@@ -57,7 +58,7 @@ function asTransfers(data: unknown): SimplifyTransfer[] | null {
       fromLabel: typeof r.from_alias === "string" && r.from_alias ? r.from_alias : memberFallback(r.from_member_id),
       toMemberId: r.to_member_id,
       toLabel: typeof r.to_alias === "string" && r.to_alias ? r.to_alias : memberFallback(r.to_member_id),
-      amountCrc: r.amount_crc,
+      amountCrc: formatCrcAmount(r.amount_crc),
     });
   }
   return out;

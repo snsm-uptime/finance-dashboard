@@ -9,6 +9,7 @@ import { ReceiptRow } from "@/components/soft-ledger/ReceiptRow";
 import { SectionLabel } from "@/components/soft-ledger/SectionLabel";
 import { requireAlias } from "@/lib/alias";
 import { getApiInternalUrl } from "@/lib/api";
+import { formatCrcAmount } from "@/lib/currency";
 import { listsMessages } from "@/lib/i18n/lists";
 import type { Locale } from "@/lib/i18n/locale";
 import { fetchSession } from "@/lib/session";
@@ -177,20 +178,6 @@ function asExpenses(data: unknown): ExpenseItem[] {
   return out;
 }
 
-function formatCrcNumber(amount: string): string {
-  const parsed = Number(amount);
-  if (!Number.isFinite(parsed)) return amount;
-  return parsed.toLocaleString("en-US", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  });
-}
-
-/** Soft-Ledger plain CRC voice (UX-DR17) — e.g. ₡10.00 / ₡42,500. */
-function formatCrcAmount(amount: string): string {
-  return `₡${formatCrcNumber(amount)}`;
-}
-
 export function formatShareLabel(
   kind: ExpenseItem["viewer_share_kind"],
   value: string | null,
@@ -340,7 +327,7 @@ export function receiptRowFxPropsFrom(
   const original = t.expenseFxOriginalTemplate
     .replace("{currency}", e.currency)
     .replace("{original}", e.amount)
-    .replace("{crc}", formatCrcNumber(e.amount_crc));
+    .replace("{crc}", formatCrcAmount(e.amount_crc));
   const fxDetail = e.fx_rate_date
     ? t.expenseFxRateDetailTemplate
       .replace("{rate}", e.fx_rate)
