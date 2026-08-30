@@ -668,8 +668,6 @@ def post_settle_payables(
         service.execute(SettlePayablesCommand(actor_user_id=user_id, list_id=list_id))
     except NotListMemberError:
         return _access_denied()
-    except ListNotFoundError:
-        return _list_not_found()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
