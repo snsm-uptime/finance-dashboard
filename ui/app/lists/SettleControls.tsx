@@ -83,6 +83,7 @@ export function SettleControls({ listId, messages, simplifyAvailable }: Props) {
   const [settleError, setSettleError] = useState<string | null>(null);
 
   const toggleSimplify = useCallback(async () => {
+    if (simplify.status === "loading") return;
     if (simplify.status === "loaded" || simplify.status === "blocked") {
       setSimplify({ status: "idle" });
       return;
