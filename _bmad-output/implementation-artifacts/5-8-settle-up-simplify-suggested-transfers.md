@@ -4,7 +4,7 @@ baseline_commit: 1c9185a
 
 # Story 5.8: Settle-up pairwise grid, simplify group plan, copy to share
 
-Status: review
+Status: done
 
 ## Story
 
@@ -106,6 +106,19 @@ So that I can settle with fewer transactions and, when I settle, my payables are
   - [x] Domain unit tests per Task 1.
   - [x] UI: `SimplifyPanel` plain-text copy-text builder (pure function, edge cases: empty transfers, single transfer, multiple); `BalanceStrip`/grid empty-column rendering (no fake zero rows); Settle confirm flow (client component, following `ListReceiptMenu`'s existing confirm-dialog test pattern if one exists — check before inventing a new render harness).
   - [x] No fabricated conflict/settle data outside integration tests — UI tests take pairwise/transfer data as literal props only (same rule Story 5.7 followed for `isIncomplete`).
+
+### Review Findings
+
+- [x] [Review][Patch] Simplify plan amounts bypass CRC currency formatting (raw `"500.00"` instead of `"₡500.00"`), breaking AC #4 / UX-DR18 for both the on-screen panel and the copied plain-text plan [ui/app/lists/SettleControls.tsx:60, ui/components/soft-ledger/SimplifyPanel.tsx:25,65]
+- [x] [Review][Patch] Settle/Simplify controls (`SettleControls`) are hidden entirely when a list has no expenses, contradicting AC #6's "all-zero balances → Simplify remains available" and the story's own deferral note ("v1 shows it for every list regardless of member count") [ui/app/lists/[listId]/page.tsx:551-552,662]
+- [x] [Review][Patch] `simplify_group_transfers` has no guard against a quantized-to-zero delta while both balances remain non-zero — such input hangs in an infinite loop (creditor/debtor lists never shrink) [api/domain/settle.py:279-307]
+- [x] [Review][Patch] `toggleSimplify` has no `status === "loading"` guard, so repeated clicks fire concurrent duplicate fetches whose responses can race and leave the panel in an inconsistent state [ui/app/lists/SettleControls.tsx:84-122]
+- [x] [Review][Patch] `except ListNotFoundError: return _list_not_found()` in `post_settle_payables` is unreachable dead code — `settle_payables` is a mutation action, so `AuthorizeListAccessService` only ever raises `NotListMemberError` (403) for both non-members and missing lists, contradicting the Dev Notes claim that list-not-found routes to `_list_not_found()` "same as every other route" [api/api/routes/lists.py:499-513]
+- [x] [Review][Defer] `GetListBalancesStubService`/`compute_viewer_pairwise_edges` re-fetches ledger entries and re-runs full allocation math 2-3x per `/balances` GET (once for the single-balance path, once-or-twice more for pairwise edges) instead of sharing one fetch — inefficiency introduced by this diff, harmless at current list sizes [api/application/lists.py:423-500,564-610] — deferred, pre-existing pattern of separate helper calls, not correctness-affecting
+- [x] [Review][Defer] `ListPairwiseBalances` dataclass is added per Task 2 but never constructed anywhere — `GetListBalancesStubService` returns `ListBalancesStub` instead, exactly as the class's own docstring admits [api/application/lists.py:234-257] — deferred, dead code but harmless, low-cost cleanup for a later pass
+- [x] [Review][Defer] `compute_pairwise_settle_balances` has no sum-to-zero invariant check, unlike its sibling `compute_settle_balance_for_list_members` which logs a warning on drift [api/domain/settle.py:155-217] — deferred, nice-to-have parity, not required for correctness
+- [x] [Review][Defer] `compute_viewer_pairwise_edges` silently returns `((), ())` via `getattr` duck-typing when a repo lacks `list_ledger_entries`/`list_members_with_alias`, rather than raising — could mask integration gaps in non-Postgres/test repos [api/application/lists.py:438-441] — deferred, matches existing duck-typing pattern elsewhere in this service
+- [x] [Review][Defer] 3-member settle-boundary interaction (settling with two distinct counterparties) is untested — existing settled_at-boundary tests only exercise the 2-member helper [api/tests/test_lists_integration.py] — deferred, test-coverage gap, not a functional defect
 
 ## Dev Notes
 
