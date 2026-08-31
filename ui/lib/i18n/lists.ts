@@ -44,6 +44,8 @@ export const listsMessages = {
     incompleteDisclosureLabel:
       "Balances may be incomplete. Check unresolved items to confirm the total.",
     incompleteDisclosureResolve: "Resolve incomplete",
+    cyclePeriodSelectorLabel: "Statement cycle",
+    cyclePeriodOptionUnknownCard: "Card",
     backToLists: "Home",
     detailNotFound: "This list is unavailable.",
     inviteTitle: "Invite someone",
@@ -163,6 +165,8 @@ export const listsMessages = {
     incompleteDisclosureLabel:
       "Los saldos podrían estar incompletos. Revisa los pendientes para confirmar el total.",
     incompleteDisclosureResolve: "Resolver pendientes",
+    cyclePeriodSelectorLabel: "Ciclo del estado de cuenta",
+    cyclePeriodOptionUnknownCard: "Tarjeta",
     backToLists: "Inicio",
     detailNotFound: "Esta lista no está disponible.",
     inviteTitle: "Invitar a alguien",

@@ -54,6 +54,11 @@ class ListDetailResponse(BaseModel):
     owner_id: UUID
 
 
+class PeriodResponse(BaseModel):
+    start: str
+    end: str
+
+
 class ExpenseItemResponse(BaseModel):
     id: UUID
     list_id: UUID
@@ -143,6 +148,20 @@ class ListBalancesStubResponse(BaseModel):
     balance_status: BalanceStatusResponse
     you_are_owed: list[PairwiseEdgeResponse] = Field(default_factory=list)
     you_owe: list[PairwiseEdgeResponse] = Field(default_factory=list)
+
+
+class CycleItemResponse(BaseModel):
+    statement_id: UUID
+    card_id: UUID | None = None
+    card_label: str | None = None
+    period_start: str
+    period_end: str
+
+
+class ListCyclesResponse(BaseModel):
+    cycles: list[CycleItemResponse] = Field(default_factory=list)
+    default_statement_id: UUID | None = None
+    fallback_period: PeriodResponse | None = None
 
 
 class TransferResponse(BaseModel):
