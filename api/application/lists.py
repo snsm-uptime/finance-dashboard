@@ -757,9 +757,10 @@ class GetListCyclesService:
             # an individual entry's origin_card_id at a different card than
             # the statement's — so take the first *non-null* value seen per
             # statement instead of the first entry regardless of value.
-            if entry.origin_card_id is not None and card_id_by_statement.get(
-                entry.statement_id
-            ) is None:
+            if (
+                entry.origin_card_id is not None
+                and card_id_by_statement.get(entry.statement_id) is None
+            ):
                 card_id_by_statement[entry.statement_id] = entry.origin_card_id
             else:
                 card_id_by_statement.setdefault(entry.statement_id, None)
