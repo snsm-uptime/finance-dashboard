@@ -297,10 +297,29 @@
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
   gap: 0.75rem;
+}
+
+/* Cards per row by viewport width, matching Tailwind's sm/md/lg/xl
+   breakpoints: xs = 1, sm = 2, md = 2, lg = 3, xl = 4. */
+@media (min-width: 640px) {
+  .list {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 /* From md, Home bounds this panel's column (home.module.scss), so the panel
@@ -328,8 +347,7 @@
 
 .row {
   position: relative;
-  flex: 0 1 14rem;
-  width: 14rem;
+  width: 100%;
   max-width: 100%;
   padding: 0;
   background: var(--surface);
@@ -338,38 +356,40 @@
   overflow: visible;
 }
 
+.cardShell {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
 .cardButton,
 .cardBody {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  width: 100%;
-  min-height: 8.25rem;
-  box-sizing: border-box;
-  padding: 1.1rem 1.25rem 0.85rem;
-  text-align: center;
-}
-
-.cardFace,
-.cardFaceTitleOnly {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 100%;
   flex: 1 1 auto;
-  min-height: 0;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0.65rem 0.85rem;
+  text-align: left;
 }
 
 .cardFace {
-  gap: 0.35rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  min-width: 0;
 }
 
-.cardFaceTitleOnly {
-  justify-content: center;
+.cardFaceMain {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .cardButton {
-  flex: 1 1 auto;
   margin: 0;
   border: none;
   background: transparent;
@@ -393,18 +413,15 @@
 }
 
 .roleBookmark {
-  position: absolute;
-  top: 0;
-  left: 0.65rem;
-  z-index: 1;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 1.45rem;
-  height: 1.95rem;
-  padding-bottom: 0.55rem;
+  width: 1.25rem;
+  height: 1.65rem;
+  padding-bottom: 0.4rem;
   font-family: var(--font-brand), Georgia, serif;
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   line-height: 1;
@@ -418,8 +435,6 @@
   display: block;
   box-sizing: border-box;
   max-width: 100%;
-  height: calc(1.05rem * 1.3 + 0.5rem);
-  padding: 0.25rem 1.75rem;
   font-weight: 650;
   font-size: 1.05rem;
   line-height: 1.3;
@@ -435,8 +450,7 @@
   max-width: 100%;
   box-sizing: border-box;
   margin: 0;
-  height: calc(1.05rem * 1.3 + 0.5rem);
-  padding: 0.25rem 0.45rem;
+  padding: 0.2rem 0.4rem;
   border: none;
   border-radius: 6px;
   background: var(--background);
@@ -445,7 +459,7 @@
   font-weight: 650;
   font-size: 1.05rem;
   line-height: 1.3;
-  text-align: center;
+  text-align: left;
   color: var(--muted);
   caret-color: var(--accent);
 }
@@ -466,36 +480,24 @@
   cursor: not-allowed;
 }
 
-.cardMiddle {
+.cardBalanceCol {
   display: flex;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   align-items: center;
-  justify-content: center;
-  min-height: 1.35rem;
-  width: 100%;
+  padding-left: 0.5rem;
 }
 
-.cardDivider {
-  display: block;
-  width: 100%;
-  max-width: 10rem;
-  height: 0;
-  margin: 0.15rem 0 0.1rem;
-  border-top: 1px solid var(--border);
+.menuCol {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  padding-right: 0.5rem;
 }
 
-.menuContainer {
-  position: absolute;
-  top: 0.55rem;
-  right: 0.55rem;
-  z-index: 2;
-}
-
-/* menuContainer is its own stacking context (absolute + z-index), so a later
-   row's menuContainer otherwise paints over an earlier row's open popup no
-   matter the popup's internal z-index. Raise the open row's container above
-   its siblings instead. */
-.menuContainer:has([data-open]) {
+/* A row's open popup panel is absolutely positioned within .row (its nearest
+   positioned ancestor), so a later sibling row otherwise paints over it.
+   Raise the open row above its siblings instead. */
+.row:has([data-open]) {
   z-index: 10;
 }
 
@@ -510,10 +512,10 @@
 }
 
 .balance {
-  display: inline-flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 0.45rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
   font-family: var(--font-brand), Georgia, serif;
   font-size: 0.9rem;
 }
@@ -548,15 +550,16 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 0.3rem;
   max-width: 100%;
+  margin-top: var(--spacing);
 }
 
 .cardError {
   margin: 0;
-  padding: 0 1.25rem 0.9rem;
-  text-align: center;
+  padding: 0 0.85rem 0.65rem;
+  text-align: left;
 }
 
 .softMain {

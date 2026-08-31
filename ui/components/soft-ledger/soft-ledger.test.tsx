@@ -266,7 +266,7 @@ describe("Soft-Ledger primitives", () => {
     );
   });
 
-  it("renders title and total on the first row, origin with payer meta, and a lent label over net", () => {
+  it("renders title alone on the first row, total beside origin/payer meta, and a lent label over net", () => {
     act(() => {
       root.render(
         <ReceiptRow
@@ -296,8 +296,7 @@ describe("Soft-Ledger primitives", () => {
     const totalEl = Array.from(host.querySelectorAll("span")).find(
       (el) => el.textContent === "₡1,000",
     );
-    expect(titleEl?.parentElement).toBe(totalEl?.parentElement);
-    expect(totalEl?.previousElementSibling).toBe(titleEl ?? null);
+    expect(titleEl?.parentElement?.textContent).toBe("1000 colones");
     const dateEl = Array.from(host.querySelectorAll("span")).find(
       (el) => el.textContent === "2026-08-19",
     );
@@ -307,6 +306,8 @@ describe("Soft-Ledger primitives", () => {
     const handle = originEl?.querySelector(".text-accent");
     expect(handle?.textContent).toContain("@sebas");
     expect(handle?.className).toContain("text-accent");
+    expect(totalEl?.parentElement).toBe(dateEl?.parentElement);
+    expect(originEl?.nextElementSibling).toBe(totalEl ?? null);
     const direction = Array.from(host.querySelectorAll("span")).find(
       (el) => el.textContent === "you lent",
     );

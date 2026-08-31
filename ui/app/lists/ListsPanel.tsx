@@ -74,34 +74,29 @@ function ListCardFace({
   memberBadge: string;
 }) {
   const roster = rosterForCard(list, currentUserId);
-  const hasBalance = Boolean(balance);
   const hasRoster = roster.length > 0;
-  const titleOnly = !hasBalance && !hasRoster;
   return (
-    <span
-      className={titleOnly ? styles.cardFaceTitleOnly : styles.cardFace}
-    >
+    <span className={styles.cardFace}>
       {isOwner ? null : (
         <ListRoleBookmark mark={memberMark} label={memberBadge} />
       )}
-      {title}
-      {hasBalance ? (
-        <span className={styles.cardMiddle}>{balance}</span>
-      ) : null}
-      {hasBalance || hasRoster ? (
-        <span className={styles.cardDivider} aria-hidden="true" />
-      ) : null}
-      {hasRoster ? (
-        <span className={styles.chipRow}>
-          {roster.map((member) => (
-            <Chip
-              key={member.user_id}
-              tone={member.user_id === list.owner_id ? "accent" : "muted"}
-            >
-              {memberLabel(member)}
-            </Chip>
-          ))}
-        </span>
+      <span className={styles.cardFaceMain}>
+        {title}
+        {hasRoster ? (
+          <span className={styles.chipRow}>
+            {roster.map((member) => (
+              <Chip
+                key={member.user_id}
+                tone={member.user_id === list.owner_id ? "accent" : "muted"}
+              >
+                {memberLabel(member)}
+              </Chip>
+            ))}
+          </span>
+        ) : null}
+      </span>
+      {balance ? (
+        <span className={styles.cardBalanceCol}>{balance}</span>
       ) : null}
     </span>
   );
@@ -388,133 +383,140 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
               };
               return (
                 <li key={list.id} className={styles.row}>
-                  {isEditing ? (
-                    <div className={styles.cardBody}>
-                      <ListCardFace
-                        {...faceProps}
-                        title={
-                          <input
-                            ref={renameInputRef}
-                            className={styles.listNameEdit}
-                            type="text"
-                            value={draft}
-                            placeholder={list.name}
-                            aria-label={t.renameAria}
-                            onChange={(e) =>
-                              setRenameDrafts((prev) => ({
-                                ...prev,
-                                [list.id]: e.target.value,
-                              }))
-                            }
-                            onBlur={() => cancelRename(list.id)}
-                            onKeyDown={(e) => onRenameKeyDown(e, list)}
-                            maxLength={200}
-                            autoComplete="off"
-                            disabled={renamingId === list.id}
-                          />
-                        }
-                      />
-                    </div>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        className={styles.cardButton}
-                        onClick={() => void openList(list)}
-                        disabled={anyOpening}
-                        aria-label={`${t.openLink}: ${list.name}`}
-                      >
+                  <div className={styles.cardShell}>
+                    {isEditing ? (
+                      <div className={styles.cardBody}>
                         <ListCardFace
                           {...faceProps}
                           title={
-                            <span className={styles.listName}>{list.name}</span>
-                          }
-                        />
-                      </button>
-                      {isOwner ? (
-                        <IconButtonPopup
-                          className={styles.menuContainer}
-                          panelClassName={
-                            deleteConfirmId === list.id ? styles.confirmPanel : undefined
-                          }
-                          panelRole={deleteConfirmId === list.id ? "alertdialog" : "menu"}
-                          open={openMenuId === list.id || deleteConfirmId === list.id}
-                          onOpenChange={(next) => {
-                            if (next) {
-                              setOpenMenuId(list.id);
-                              setDeleteConfirmId(null);
-                            } else {
-                              setOpenMenuId((current) =>
-                                current === list.id ? null : current,
-                              );
-                              setDeleteConfirmId((current) =>
-                                current === list.id ? null : current,
-                              );
-                            }
-                          }}
-                          button={
-                            <IconButton
-                              type="button"
-                              variant="muted"
-                              className={styles.renameIcon}
-                              label={t.menuAria}
-                              disabled={anyOpening || renamingId !== null}
-                              icon={<DotsIcon />}
+                            <input
+                              ref={renameInputRef}
+                              className={styles.listNameEdit}
+                              type="text"
+                              value={draft}
+                              placeholder={list.name}
+                              aria-label={t.renameAria}
+                              onChange={(e) =>
+                                setRenameDrafts((prev) => ({
+                                  ...prev,
+                                  [list.id]: e.target.value,
+                                }))
+                              }
+                              onBlur={() => cancelRename(list.id)}
+                              onKeyDown={(e) => onRenameKeyDown(e, list)}
+                              maxLength={200}
+                              autoComplete="off"
+                              disabled={renamingId === list.id}
                             />
                           }
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          className={styles.cardButton}
+                          onClick={() => void openList(list)}
+                          disabled={anyOpening}
+                          aria-label={`${t.openLink}: ${list.name}`}
                         >
-                          {deleteConfirmId === list.id ? (
-                            <>
-                              <p className={styles.confirmText}>{t.deleteConfirm}</p>
-                              <div className={styles.confirmActions}>
-                                <button
+                          <ListCardFace
+                            {...faceProps}
+                            title={
+                              <span className={styles.listName}>{list.name}</span>
+                            }
+                          />
+                        </button>
+                        {isOwner ? (
+                          <div className={styles.menuCol}>
+                            <IconButtonPopup
+                              panelClassName={
+                                deleteConfirmId === list.id
+                                  ? styles.confirmPanel
+                                  : undefined
+                              }
+                              panelRole={
+                                deleteConfirmId === list.id ? "alertdialog" : "menu"
+                              }
+                              open={openMenuId === list.id || deleteConfirmId === list.id}
+                              onOpenChange={(next) => {
+                                if (next) {
+                                  setOpenMenuId(list.id);
+                                  setDeleteConfirmId(null);
+                                } else {
+                                  setOpenMenuId((current) =>
+                                    current === list.id ? null : current,
+                                  );
+                                  setDeleteConfirmId((current) =>
+                                    current === list.id ? null : current,
+                                  );
+                                }
+                              }}
+                              button={
+                                <IconButton
                                   type="button"
-                                  className={styles.secondary}
-                                  onClick={cancelDeleteConfirm}
-                                  disabled={deletingId !== null}
-                                >
-                                  {t.deleteCancel}
-                                </button>
-                                <button
-                                  type="button"
-                                  className={`${styles.primary} ${styles.primaryDanger}`}
-                                  onClick={() => void confirmDelete(list)}
-                                  disabled={deletingId !== null}
-                                >
-                                  {deletingId === list.id
-                                    ? t.deletingAction
-                                    : t.deleteAction}
-                                </button>
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <IconButtonPopupItem
-                                onClick={() => startInvite(list.id)}
-                                disabled={anyOpening}
-                              >
-                                {t.mobileInviteAria}
-                              </IconButtonPopupItem>
-                              <IconButtonPopupItem
-                                onClick={() => startRename(list)}
-                                disabled={anyOpening || renamingId !== null}
-                              >
-                                {t.renameLabel}
-                              </IconButtonPopupItem>
-                              <IconButtonPopupItem
-                                danger
-                                stayOpen
-                                onClick={() => showDeleteConfirm(list.id)}
-                                disabled={anyOpening || deletingId !== null}
-                              >
-                                {t.deleteAria}
-                              </IconButtonPopupItem>
-                            </>
-                          )}
-                        </IconButtonPopup>
-                      ) : null}
-                    </>
-                  )}
+                                  variant="muted"
+                                  className={styles.renameIcon}
+                                  label={t.menuAria}
+                                  disabled={anyOpening || renamingId !== null}
+                                  icon={<DotsIcon />}
+                                />
+                              }
+                            >
+                              {deleteConfirmId === list.id ? (
+                                <>
+                                  <p className={styles.confirmText}>{t.deleteConfirm}</p>
+                                  <div className={styles.confirmActions}>
+                                    <button
+                                      type="button"
+                                      className={styles.secondary}
+                                      onClick={cancelDeleteConfirm}
+                                      disabled={deletingId !== null}
+                                    >
+                                      {t.deleteCancel}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className={`${styles.primary} ${styles.primaryDanger}`}
+                                      onClick={() => void confirmDelete(list)}
+                                      disabled={deletingId !== null}
+                                    >
+                                      {deletingId === list.id
+                                        ? t.deletingAction
+                                        : t.deleteAction}
+                                    </button>
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  <IconButtonPopupItem
+                                    onClick={() => startInvite(list.id)}
+                                    disabled={anyOpening}
+                                  >
+                                    {t.mobileInviteAria}
+                                  </IconButtonPopupItem>
+                                  <IconButtonPopupItem
+                                    onClick={() => startRename(list)}
+                                    disabled={anyOpening || renamingId !== null}
+                                  >
+                                    {t.renameLabel}
+                                  </IconButtonPopupItem>
+                                  <IconButtonPopupItem
+                                    danger
+                                    stayOpen
+                                    onClick={() => showDeleteConfirm(list.id)}
+                                    disabled={anyOpening || deletingId !== null}
+                                  >
+                                    {t.deleteAria}
+                                  </IconButtonPopupItem>
+                                </>
+                              )}
+                            </IconButtonPopup>
+                          </div>
+                        ) : null}
+                      </>
+                    )}
+                  </div>
                   {renameErrors[list.id] ? (
                     <p className={`${styles.error} ${styles.cardError}`} role="alert">
                       {renameErrors[list.id]}

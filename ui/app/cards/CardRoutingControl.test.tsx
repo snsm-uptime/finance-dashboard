@@ -51,21 +51,14 @@ const lists: ListItem[] = [
   { id: "list-2", name: "Trip", owner_id: "u1", role: "owner" },
 ];
 
-function saveButton(container: HTMLElement): HTMLButtonElement {
-  return Array.from(container.querySelectorAll("button")).find(
-    (b) => b.textContent === messages.routingSave || b.textContent === messages.routingSaving,
-  ) as HTMLButtonElement;
-}
-
 function routingChip(container: HTMLElement): HTMLButtonElement {
   return container.querySelector('button[aria-controls]') as HTMLButtonElement;
 }
 
-function radioFor(container: HTMLElement, label: string): HTMLInputElement {
-  const wrapper = Array.from(container.querySelectorAll("label")).find((l) =>
-    l.textContent?.includes(label),
-  );
-  return wrapper?.querySelector('input[type="radio"]') as HTMLInputElement;
+function menuOption(container: HTMLElement, label: string): HTMLButtonElement {
+  return Array.from(container.querySelectorAll('[role="region"] button')).find(
+    (b) => b.textContent === label,
+  ) as HTMLButtonElement;
 }
 
 async function expandRouting(container: HTMLElement) {
@@ -73,19 +66,6 @@ async function expandRouting(container: HTMLElement) {
   if (chip.getAttribute("aria-expanded") === "true") return;
   await act(async () => {
     chip.click();
-  });
-}
-
-async function chooseListOption(container: HTMLElement, label: string) {
-  const trigger = container.querySelector('button[aria-haspopup="listbox"]') as HTMLButtonElement;
-  await act(async () => {
-    trigger.click();
-  });
-  const option = Array.from(container.querySelectorAll('li[role="option"]')).find(
-    (li) => li.textContent === label,
-  ) as HTMLLIElement;
-  await act(async () => {
-    option.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
   });
 }
 
@@ -109,7 +89,7 @@ describe("CardRoutingControl", () => {
     container.remove();
   });
 
-  it("renders a compact row with a Review chip and keeps the form collapsed", async () => {
+  it("renders a compact row with a Review chip and keeps the menu collapsed", async () => {
     await act(async () => {
       root.render(
         <CardRoutingControl card={card} lists={lists} messages={messages} onUpdated={onUpdated} />,
@@ -123,7 +103,7 @@ describe("CardRoutingControl", () => {
     expect(container.querySelector('[role="region"]')?.getAttribute("aria-hidden")).toBe("true");
   });
 
-  it("shows a Fixed chip for a card whose saved routing is fixed", async () => {
+  it("shows the fixed list's name for a card whose saved routing is fixed", async () => {
     const fixedCard: CardItem = { ...card, routing_mode: "fixed", fixed_list_id: "list-1" };
     await act(async () => {
       root.render(
@@ -136,13 +116,29 @@ describe("CardRoutingControl", () => {
       );
     });
 
-    expect(routingChip(container).textContent).toContain(messages.routingChipFixed);
+    expect(routingChip(container).textContent).toContain("Household");
     expect(routingChip(container).getAttribute("aria-label")).toBe(
-      `${messages.routingTitle}: ${messages.routingChipFixed}`,
+      `${messages.routingTitle}: Household`,
     );
   });
 
-  it("slides the current routing form open when the chip is clicked", async () => {
+  it("falls back to the generic Fixed label when the saved list is gone", async () => {
+    const fixedCard: CardItem = { ...card, routing_mode: "fixed", fixed_list_id: "list-missing" };
+    await act(async () => {
+      root.render(
+        <CardRoutingControl
+          card={fixedCard}
+          lists={lists}
+          messages={messages}
+          onUpdated={onUpdated}
+        />,
+      );
+    });
+
+    expect(routingChip(container).textContent).toContain(messages.routingChipFixed);
+  });
+
+  it("slides a menu of Review + list chips open, excluding the current setting", async () => {
     await act(async () => {
       root.render(
         <CardRoutingControl card={card} lists={lists} messages={messages} onUpdated={onUpdated} />,
@@ -152,11 +148,13 @@ describe("CardRoutingControl", () => {
     await expandRouting(container);
 
     expect(routingChip(container).getAttribute("aria-expanded")).toBe("true");
-    expect(radioFor(container, messages.routingModeReview).checked).toBe(true);
-    expect(container.querySelector('button[aria-haspopup="listbox"]')).toBeNull();
+    // Card is already in Review mode, so "Review" is not offered again.
+    expect(menuOption(container, messages.routingChipReview)).toBeUndefined();
+    expect(menuOption(container, "Household")).toBeTruthy();
+    expect(menuOption(container, "Trip")).toBeTruthy();
   });
 
-  it("clicking the card label does not open the form", async () => {
+  it("clicking the card label does not open the menu", async () => {
     await act(async () => {
       root.render(
         <CardRoutingControl card={card} lists={lists} messages={messages} onUpdated={onUpdated} />,
@@ -173,26 +171,7 @@ describe("CardRoutingControl", () => {
     expect(routingChip(container).getAttribute("aria-expanded")).toBe("false");
   });
 
-  it("switching to Fixed disables Save until a list is chosen", async () => {
-    await act(async () => {
-      root.render(
-        <CardRoutingControl card={card} lists={lists} messages={messages} onUpdated={onUpdated} />,
-      );
-    });
-
-    await expandRouting(container);
-    await act(async () => {
-      radioFor(container, messages.routingModeFixed).click();
-    });
-
-    expect(saveButton(container).disabled).toBe(true);
-
-    await chooseListOption(container, "Household");
-
-    expect(saveButton(container).disabled).toBe(false);
-  });
-
-  it("Save in Fixed mode calls setCardRouting with the chosen list and collapses", async () => {
+  it("picking a list chip saves fixed routing to that list and collapses", async () => {
     setCardRouting.mockResolvedValue({
       ok: true,
       card: { ...card, routing_mode: "fixed", fixed_list_id: "list-1" },
@@ -206,11 +185,7 @@ describe("CardRoutingControl", () => {
 
     await expandRouting(container);
     await act(async () => {
-      radioFor(container, messages.routingModeFixed).click();
-    });
-    await chooseListOption(container, "Household");
-    await act(async () => {
-      saveButton(container).click();
+      menuOption(container, "Household").click();
     });
 
     expect(setCardRouting).toHaveBeenCalledWith(
@@ -222,7 +197,7 @@ describe("CardRoutingControl", () => {
     expect(routingChip(container).getAttribute("aria-expanded")).toBe("false");
   });
 
-  it("switching to Review then Save clears fixed_list_id", async () => {
+  it("picking the Review chip saves review routing and clears fixed_list_id", async () => {
     const fixedCard: CardItem = { ...card, routing_mode: "fixed", fixed_list_id: "list-1" };
     setCardRouting.mockResolvedValue({
       ok: true,
@@ -237,10 +212,7 @@ describe("CardRoutingControl", () => {
 
     await expandRouting(container);
     await act(async () => {
-      radioFor(container, messages.routingModeReview).click();
-    });
-    await act(async () => {
-      saveButton(container).click();
+      menuOption(container, messages.routingChipReview).click();
     });
 
     expect(setCardRouting).toHaveBeenCalledWith(
@@ -250,22 +222,7 @@ describe("CardRoutingControl", () => {
     );
   });
 
-  it("keeps the chip on the saved mode while the draft is unsaved", async () => {
-    await act(async () => {
-      root.render(
-        <CardRoutingControl card={card} lists={lists} messages={messages} onUpdated={onUpdated} />,
-      );
-    });
-
-    await expandRouting(container);
-    await act(async () => {
-      radioFor(container, messages.routingModeFixed).click();
-    });
-
-    expect(routingChip(container).textContent).toContain(messages.routingChipReview);
-  });
-
-  it("shows a 403 error via the error region", async () => {
+  it("shows a 403 error via the error region and keeps the menu open", async () => {
     setCardRouting.mockResolvedValue({ ok: false, error: messages.errorForbidden });
 
     await act(async () => {
@@ -276,11 +233,7 @@ describe("CardRoutingControl", () => {
 
     await expandRouting(container);
     await act(async () => {
-      radioFor(container, messages.routingModeFixed).click();
-    });
-    await chooseListOption(container, "Trip");
-    await act(async () => {
-      saveButton(container).click();
+      menuOption(container, "Trip").click();
     });
 
     expect(container.querySelector('[role="alert"]')?.textContent).toBe(messages.errorForbidden);
