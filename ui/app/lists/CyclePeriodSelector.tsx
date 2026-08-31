@@ -14,6 +14,7 @@ export type CyclePeriodOption = {
 export type CyclePeriodSelectorMessages = {
   cyclePeriodSelectorLabel: string;
   cyclePeriodOptionUnknownCard: string;
+  cyclePeriodOptionAll: string;
 };
 
 type Props = {
@@ -37,20 +38,28 @@ export function cyclePeriodOptionLabel(
  * Renders nothing for 0 or 1 cycles (AC #3 — single-cycle lists need no
  * picker friction); a URL-driven `?period=` navigation, not client refetch
  * (same RSC-boundary-safe pattern Story 5.7 used for its resolve link).
+ *
+ * "All periods" (empty-string sentinel) is always the first option and the
+ * default when no `?period=` is selected — narrowing to one cycle is opt-in,
+ * so it can never silently hide a just-added hand entry (debug fix).
  */
 export function CyclePeriodSelector({ listId, cycles, selectedStatementId, messages }: Props) {
   const router = useRouter();
 
   if (cycles.length <= 1) return null;
 
-  const options: SoftLedgerSelectOption[] = cycles.map((cycle) => ({
-    value: cycle.statementId,
-    label: cyclePeriodOptionLabel(cycle, messages),
-  }));
-  const value = selectedStatementId ?? cycles[0].statementId;
+  const options: SoftLedgerSelectOption[] = [
+    { value: "", label: messages.cyclePeriodOptionAll },
+    ...cycles.map((cycle) => ({
+      value: cycle.statementId,
+      label: cyclePeriodOptionLabel(cycle, messages),
+    })),
+  ];
+  const value = selectedStatementId ?? "";
 
   function onChange(next: string) {
-    router.push(`/lists/${encodeURIComponent(listId)}?period=${encodeURIComponent(next)}`);
+    const target = `/lists/${encodeURIComponent(listId)}`;
+    router.push(next === "" ? target : `${target}?period=${encodeURIComponent(next)}`);
   }
 
   return (

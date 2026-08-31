@@ -1,8 +1,14 @@
+"use client";
+
 import type { CSSProperties, ReactNode } from "react";
+import { useLayoutEffect, useRef } from "react";
 
 import { Chip, type ChipTone } from "@/components/Chip";
 
 import { ReceiptRowMenu, type ReceiptRowMenuMessages, type ReceiptRowRollback } from "./ReceiptRowMenu";
+
+/** Floor for the shrink-to-fit net amount so it never becomes unreadably small. */
+const NET_AMOUNT_MIN_SCALE = 0.62;
 
 export type ReceiptRowProps = {
   title?: string;
@@ -58,7 +64,7 @@ const typeStyle = {
   },
   net: {
     fontFamily: "var(--type-amount-inline-face)",
-    fontSize: "var(--type-strip-amount-size)",
+    fontSize: "calc(var(--type-strip-amount-size) * var(--net-amount-scale, 1))",
     lineHeight: "var(--type-amount-inline-size)",
     fontWeight: "var(--type-amount-inline-weight)"
   }
@@ -116,6 +122,67 @@ export function ReceiptRow({
   fxSummary,
   fxDetail,
 }: ReceiptRowProps) {
+  const rowRef = useRef<HTMLDivElement>(null);
+  const metaRef = useRef<HTMLDivElement>(null);
+  const netRef = useRef<HTMLSpanElement>(null);
+
+  useLayoutEffect(() => {
+    const row = rowRef.current;
+    const meta = metaRef.current;
+    const net = netRef.current;
+    if (!row || !meta || !net) return;
+
+    const recalc = () => {
+      // Reset to the base scale first so we always measure the worst case,
+      // otherwise a previous shrink would mask overflow that has since resolved.
+      // Driven through a CSS custom property (rather than net.style.fontSize
+      // directly) so this imperative write never collides with the fontSize
+      // React already owns via the `typeStyle.net` style prop.
+      net.style.setProperty("--net-amount-scale", "1");
+      net.classList.remove("truncate");
+      net.style.maxWidth = "";
+      const overflow = meta.scrollWidth - meta.clientWidth;
+      if (overflow <= 0) return;
+
+      const naturalWidth = net.scrollWidth;
+      if (naturalWidth <= 0) return;
+
+      const buffer = 4;
+      const rawTargetWidth = naturalWidth - overflow - buffer;
+      const rawScale = rawTargetWidth / naturalWidth;
+      const scale = Math.min(1, Math.max(NET_AMOUNT_MIN_SCALE, rawScale));
+      net.style.setProperty("--net-amount-scale", String(scale));
+
+      // The floor can't fully resolve overflow this wide — cap the box and
+      // truncate the remainder instead of letting it spill past the row.
+      if (rawScale < NET_AMOUNT_MIN_SCALE) {
+        net.classList.add("truncate");
+        net.style.maxWidth = `${Math.max(rawTargetWidth, 24)}px`;
+      }
+    };
+
+    recalc();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(recalc);
+    observer.observe(row);
+    return () => observer.disconnect();
+  }, [
+    title,
+    when,
+    payerAlias,
+    amount,
+    originChip,
+    originAction,
+    originDisabled,
+    originPanel,
+    newBadgeLabel,
+    netLabel,
+    directionLabel,
+    menu,
+    menuSlot,
+    rollback,
+  ]);
+
   if (emptyLabel && !title) {
     return (
       <div className={`grid grid-cols-1 ${rowChrome}`} role="status">
@@ -133,6 +200,7 @@ export function ReceiptRow({
   return (
     <div className={rowChrome}>
       <div
+        ref={rowRef}
         className="grid items-center gap-x-[var(--space-4)] gap-y-[2px]"
         style={{
           gridTemplateColumns: `${ICON_PX}px minmax(0, 1fr) auto auto`,
@@ -179,7 +247,7 @@ export function ReceiptRow({
           </div>
         ) : null}
 
-        <div className="flex min-w-0 items-center gap-2" style={{ gridArea: "meta" }}>
+        <div ref={metaRef} className="flex min-w-0 items-center gap-2" style={{ gridArea: "meta" }}>
           {when ? (
             <span style={typeStyle.meta} className="shrink-0 text-muted">
               {when}
@@ -202,6 +270,7 @@ export function ReceiptRow({
 
         {netLabel ? (
           <span
+            ref={netRef}
             style={{ ...typeStyle.net, gridArea: "net" }}
             className={`text-right tabular-nums ${netClass}`}
           >
