@@ -321,6 +321,7 @@ def list_memberships(
                 owner_id=item.owner_id,
                 role=item.role,
                 balance_crc=item.balance_crc,
+                total_crc=item.total_crc,
                 members=[
                     ListMemberItem(user_id=member.user_id, alias=member.alias)
                     for member in item.members

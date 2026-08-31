@@ -97,7 +97,7 @@ describe("CyclePeriodSelector", () => {
     act(() => {
       button.click();
     });
-    const options = Array.from(container.querySelectorAll('[role="option"]'));
+    const options = Array.from(container.querySelectorAll('[role="region"] button'));
     // "All periods" + one option per cycle.
     expect(options).toHaveLength(3);
     expect(options[0].textContent).toContain(messages.cyclePeriodOptionAll);
@@ -135,9 +135,9 @@ describe("CyclePeriodSelector", () => {
     act(() => {
       button.click();
     });
-    const option = Array.from(container.querySelectorAll('[role="option"]'))[0] as HTMLElement;
+    const option = Array.from(container.querySelectorAll('[role="region"] button'))[0] as HTMLButtonElement;
     act(() => {
-      option.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      option.click();
     });
     expect(push).toHaveBeenCalledWith("/lists/list-1");
   });
@@ -171,7 +171,7 @@ describe("CyclePeriodSelector", () => {
       act(() => {
         button.click();
       });
-      const options = Array.from(localeContainer.querySelectorAll('[role="option"]'));
+      const options = Array.from(localeContainer.querySelectorAll('[role="region"] button'));
       expect(options[2].textContent).toContain(localized.cyclePeriodOptionUnknownCard);
       act(() => {
         localeRoot.unmount();
@@ -195,9 +195,9 @@ describe("CyclePeriodSelector", () => {
     act(() => {
       button.click();
     });
-    const option = Array.from(container.querySelectorAll('[role="option"]'))[2] as HTMLElement;
+    const option = Array.from(container.querySelectorAll('[role="region"] button'))[2] as HTMLButtonElement;
     act(() => {
-      option.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      option.click();
     });
     expect(push).toHaveBeenCalledWith("/lists/list-1?period=stmt-older");
   });

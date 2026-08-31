@@ -35,6 +35,7 @@ const solo: ListItem = {
   owner_id: "owner-1",
   role: "owner",
   balance_crc: "0",
+  total_crc: "0",
   members: [{ user_id: "owner-1", alias: "sebas" }],
 };
 
@@ -75,17 +76,23 @@ describe("ListsPanel roster chips", () => {
     resetMembershipListsStore();
   });
 
-  it("shows the owner wallet bookmark and hides a settled-zero row on a solo list", () => {
+  it("shows the owner wallet bookmark and a running total on a solo list", () => {
     act(() => {
-      root.render(<ListsPanel initialLists={[solo]} currentUserId="owner-1" />);
+      root.render(
+        <ListsPanel
+          initialLists={[{ ...solo, total_crc: "42.00" }]}
+          currentUserId="owner-1"
+        />,
+      );
     });
     const card = container.querySelector('[aria-label="Open list: Personal"]');
     expect(card?.querySelector(".roleBookmark")?.querySelector("svg")).not.toBeNull();
     expect(card?.querySelector('[aria-label="Owner"]')).not.toBeNull();
     expect(chipTexts(card)).toEqual([]);
-    expect(card?.querySelector(".cardBalanceCol")).toBeNull();
+    const balanceCol = card?.querySelector(".cardBalanceCol");
+    expect(balanceCol?.textContent).toContain(t.balanceTotal);
+    expect(balanceCol?.textContent).toContain("₡42");
     expect(card?.textContent).not.toContain("sebas");
-    expect(card?.textContent).not.toContain(t.balanceZero);
   });
 
   it("sorts aliases A–Z and colors only the owner chip", () => {
@@ -123,12 +130,12 @@ describe("ListsPanel roster chips", () => {
     act(() => {
       root.render(
         <ListsPanel
-          initialLists={[{ ...solo, balance_crc: "-12.50" }]}
+          initialLists={[{ ...shared, balance_crc: "-12.50" }]}
           currentUserId="owner-1"
         />,
       );
     });
-    const card = container.querySelector('[aria-label="Open list: Personal"]');
+    const card = container.querySelector('[aria-label="Open list: Home"]');
     const balanceCol = card?.querySelector(".cardBalanceCol");
     expect(balanceCol?.textContent).toContain(t.balanceOwe);
     expect(balanceCol?.textContent).toContain("₡12.5");

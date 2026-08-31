@@ -84,6 +84,7 @@ class ListMembershipSummary:
     role: str
     balance_crc: str = PLACEHOLDER_BALANCE_CRC
     members: tuple[ListMemberLabel, ...] = ()
+    total_crc: str = PLACEHOLDER_BALANCE_CRC
 
 
 @dataclass(frozen=True, slots=True)
@@ -589,9 +590,25 @@ class ListMembershipsService:
                     actor_user_id=command.actor_user_id,
                     owner_id=item.owner_id,
                 ),
+                # A solo list (1 member) has nothing to settle, so its net
+                # balance is always zero — the card shows the running total
+                # instead (same rationale as the list-detail solo strip).
+                total_crc=(
+                    self._solo_total_crc(item.id)
+                    if len(item.members) == 1
+                    else PLACEHOLDER_BALANCE_CRC
+                ),
             )
             for item in items
         ]
+
+    def _solo_total_crc(self, list_id: UUID) -> str:
+        list_ledger = getattr(self._repo, "list_ledger_entries", None)
+        if list_ledger is None:
+            return PLACEHOLDER_BALANCE_CRC
+        entries = list_ledger(list_id)
+        total = sum((entry.amount_crc for entry in entries), Decimal("0"))
+        return str(total)
 
 
 class GetListDetailService:

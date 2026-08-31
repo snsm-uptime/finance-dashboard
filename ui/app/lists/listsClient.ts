@@ -25,6 +25,8 @@ export type ListItem = {
   owner_id: string;
   role: string;
   balance_crc?: string;
+  /** Running total for solo (1-member) lists — balance_crc is always "0" there. */
+  total_crc?: string;
   members?: ListMember[];
 };
 
@@ -142,7 +144,14 @@ export async function createList(
     if (prev.some((item) => item.id === list.id)) return prev;
     return [
       ...prev,
-      { id: list.id, name: list.name, owner_id: list.owner_id, role: "owner", balance_crc: "0" },
+      {
+        id: list.id,
+        name: list.name,
+        owner_id: list.owner_id,
+        role: "owner",
+        balance_crc: "0",
+        total_crc: "0",
+      },
     ];
   });
   return { ok: true, list };

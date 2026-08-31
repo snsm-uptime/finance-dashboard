@@ -696,21 +696,6 @@ export default async function ListDetailPage({
             <div className={styles.detailLayout}>
               <ListDetailChrome title={listTitle as string} />
               <div className={styles.detailPrimary}>
-                <CyclePeriodSelector
-                  listId={listId}
-                  cycles={cycles.map((c): CyclePeriodOption => ({
-                    statementId: c.statement_id,
-                    cardLabel: c.card_label,
-                    periodStart: c.period_start,
-                    periodEnd: c.period_end,
-                  }))}
-                  selectedStatementId={selectedStatementId}
-                  messages={{
-                    cyclePeriodSelectorLabel: t.cyclePeriodSelectorLabel,
-                    cyclePeriodOptionUnknownCard: t.cyclePeriodOptionUnknownCard,
-                    cyclePeriodOptionAll: t.cyclePeriodOptionAll,
-                  }}
-                />
                 {cyclesLoadError ? (
                   <p className={`${styles.copy} ${styles.softBack}`} role="alert">
                     {t.loadError}
@@ -836,7 +821,24 @@ export default async function ListDetailPage({
                 ) : null}
                 <div className={styles.softReceipts}>
                   <div className={styles.softReceiptsChrome}>
-                    <SectionLabel>{t.detailReceiptsTitle}</SectionLabel>
+                    <div className="flex items-center justify-between gap-[var(--space-2)]">
+                      <SectionLabel>{t.detailReceiptsTitle}</SectionLabel>
+                      <CyclePeriodSelector
+                        listId={listId}
+                        cycles={cycles.map((c): CyclePeriodOption => ({
+                          statementId: c.statement_id,
+                          cardLabel: c.card_label,
+                          periodStart: c.period_start,
+                          periodEnd: c.period_end,
+                        }))}
+                        selectedStatementId={selectedStatementId}
+                        messages={{
+                          cyclePeriodSelectorLabel: t.cyclePeriodSelectorLabel,
+                          cyclePeriodOptionUnknownCard: t.cyclePeriodOptionUnknownCard,
+                          cyclePeriodOptionAll: t.cyclePeriodOptionAll,
+                        }}
+                      />
+                    </div>
                   </div>
                   <div className={styles.softReceiptsList}>
                     {expensesLoadError ? (
