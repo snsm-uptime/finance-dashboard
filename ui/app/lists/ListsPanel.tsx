@@ -6,6 +6,7 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -125,6 +126,7 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
   const { locale } = usePreferences();
   const t = listsMessages[locale];
   const router = useRouter();
+  const createNameId = useId();
   const [newName, setNewName] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -333,30 +335,31 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
   return (
     <>
       <div className={styles.panel}>
-        <form className={styles.createForm} onSubmit={onCreate}>
-          <label className={`${styles.label} ${styles.iconInputLabel}`}>
-            {t.createLabel}
-            <div className={styles.iconInputContainer}>
-              <input
-                className={styles.iconInput}
-                type="text"
-                name="name"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                maxLength={200}
-                autoComplete="off"
-                disabled={creating}
-                placeholder={t.createLabel}
-              />
-              <IconButton
-                className={styles.iconButton}
-                type="submit"
-                disabled={!canCreate}
-                label={creating ? t.creating : t.createSubmit}
-                icon={<PlusIcon />}
-              />
-            </div>
-          </label>
+        <form className="flex w-full flex-col" onSubmit={onCreate}>
+          <div className="flex items-center gap-2 rounded-[8px] border-2 border-border bg-background px-[0.65rem] py-[0.5rem]">
+            <label htmlFor={createNameId} className="sr-only">
+              {t.createLabel}
+            </label>
+            <input
+              id={createNameId}
+              className="min-w-0 flex-1 font-inherit text-[0.9rem] bg-transparent text-foreground placeholder:text-muted outline-none"
+              type="text"
+              name="name"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              maxLength={200}
+              autoComplete="off"
+              disabled={creating}
+              placeholder={t.createLabel}
+            />
+            <IconButton
+              className="h-7 w-7 shrink-0 !p-0 !rounded-[4px]"
+              type="submit"
+              disabled={!canCreate}
+              label={creating ? t.creating : t.createSubmit}
+              icon={<PlusIcon />}
+            />
+          </div>
           {createError ? (
             <p className={styles.error} role="alert">
               {createError}

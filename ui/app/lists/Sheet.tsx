@@ -126,7 +126,7 @@ export function Sheet({
       }, CLOSE_ANIMATION_MS);
       return () => window.clearTimeout(hide);
     }
-  }, [phase, returnFocusRef, CLOSE_ANIMATION_MS]);
+  }, [phase, returnFocusRef]);
 
   // Focus management and keyboard traps when sheet is visible
   useFocusTrap({

@@ -135,85 +135,6 @@
   min-width: 0;
 }
 
-.iconInputLabel {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.iconInputContainer {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--background);
-  padding: 0.5rem 0.65rem;
-  overflow: hidden;
-}
-
-.iconInput {
-  flex: 1;
-  display: block;
-  border: none;
-  background: transparent;
-  font-family: var(--font-ui), system-ui, sans-serif;
-  font-size: 1rem;
-  font-weight: 400;
-  line-height: 1.4;
-  color: var(--foreground);
-  appearance: none;
-  padding: 0;
-  min-width: 0;
-}
-
-.iconInput::placeholder {
-  color: var(--muted);
-  opacity: 0.6;
-}
-
-.iconInput:focus {
-  outline: none;
-}
-
-.iconInput:disabled {
-  opacity: 0.65;
-  cursor: not-allowed;
-}
-
-/* Structural overrides on top of IconButton's own base chrome (see
-   ui/components/IconButton) — padding/border-radius/width/height must beat
-   IconButton's Tailwind defaults, hence !important (mirrors
-   FormIconSubmit.module.scss's established pattern for the same reason). */
-.iconButton {
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
-  padding: 0 !important;
-  border-radius: 4px !important;
-  overflow: hidden;
-}
-
-.iconButton svg {
-  display: block;
-  width: 20px;
-  height: 20px;
-}
-
-.iconButton:hover:not(:disabled) {
-  color: var(--accent) !important;
-  background: transparent !important;
-}
-
-.iconButton:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent) !important;
-  outline-offset: -2px !important;
-}
-
-.iconButton:disabled {
-  opacity: 0.55 !important;
-}
-
 .label {
   display: flex;
   flex-direction: column;
@@ -360,6 +281,7 @@
   display: flex;
   align-items: center;
   width: 100%;
+  border-radius: 8px;
 }
 
 .cardButton,
@@ -398,7 +320,7 @@
   cursor: pointer;
 }
 
-.cardButton:hover:not(:disabled) {
+.cardShell:hover:not(:has(.cardButton:disabled)) {
   background: color-mix(in srgb, var(--border) 22%, transparent);
 }
 

@@ -58,7 +58,7 @@ export function useFocusTrap({
       document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [isActive, defaultFocusRef, onEscapePress]);
+  }, [isActive, containerRef, defaultFocusRef, onEscapePress]);
 }
 
 function getFirstFocusable(container: HTMLElement): HTMLElement | null {

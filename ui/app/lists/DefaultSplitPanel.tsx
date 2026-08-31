@@ -136,31 +136,27 @@ export function DefaultSplitPanel({ listId, currentUserId, isOwner, initial, mem
   }, [mode, savedMode, percents, savedPercents]);
   const canSave = hasChanged && sumOk && !pending;
 
-  async function onSave() {
-    const body =
-      mode === "even"
-        ? { mode: "even" as const }
-        : {
-            mode: "percentage" as const,
-            shares: Object.entries(percents).map(([user_id, percentage]) => ({
-              user_id,
-              percentage,
-            })),
-          };
-    await submit(body);
-  }
-
   useFormStateSync(canSave, onCanSaveChange);
 
   useEffect(() => {
     if (isOwner) {
       onSaveRequest?.(() => {
         if (canSave) {
-          onSave();
+          const body =
+            mode === "even"
+              ? { mode: "even" as const }
+              : {
+                  mode: "percentage" as const,
+                  shares: Object.entries(percents).map(([user_id, percentage]) => ({
+                    user_id,
+                    percentage,
+                  })),
+                };
+          void submit(body);
         }
       });
     }
-  }, [isOwner, canSave, onSaveRequest, onSave]);
+  }, [isOwner, canSave, onSaveRequest, mode, percents, submit]);
 
   if (!isOwner) {
     return (
