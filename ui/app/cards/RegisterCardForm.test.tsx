@@ -178,7 +178,7 @@ describe("RegisterCardForm", () => {
     expect(ibanInput.disabled).toBe(true);
     const button = container.querySelector('button[type="submit"]') as HTMLButtonElement;
     expect(button.disabled).toBe(true);
-    expect(button.textContent).toBe(messages.submitting);
+    expect(button.getAttribute("aria-label")).toBe(messages.submitting);
 
     await act(async () => {
       resolvePromise({
