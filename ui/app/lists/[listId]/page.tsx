@@ -478,44 +478,24 @@ export type ResolvedPeriod = {
 
 /**
  * Resolves the effective `[period_start, period_end]` from the `?period=`
- * query value + fetched cycles (Story 5.9). `requestedStatementId` absent or
- * unmatched falls back to the server-computed default cycle, then the
- * calendar-month fallback; returns `null` when neither is available so the
- * caller omits period query params and lets the API compute its own default
- * (AC #4 — never blocks settle-up on a cycles-fetch miss).
+ * query value + fetched cycles (Story 5.9). "All periods" is the default —
+ * a statement cycle is only applied when `requestedStatementId` names one
+ * explicitly; absent or unmatched returns `null` so the caller omits period
+ * query params and the API returns full history (never a hidden filter that
+ * can hide a just-added hand entry — debug fix, mode-switch worktree).
  */
 export function resolveSelectedPeriod(
   payload: CyclesPayload,
   requestedStatementId: string | undefined,
 ): ResolvedPeriod | null {
-  if (requestedStatementId) {
-    const match = payload.cycles.find((c) => c.statement_id === requestedStatementId);
-    if (match) {
-      return {
-        period_start: match.period_start,
-        period_end: match.period_end,
-        selectedStatementId: match.statement_id,
-      };
-    }
-  }
-  if (payload.default_statement_id) {
-    const def = payload.cycles.find((c) => c.statement_id === payload.default_statement_id);
-    if (def) {
-      return {
-        period_start: def.period_start,
-        period_end: def.period_end,
-        selectedStatementId: def.statement_id,
-      };
-    }
-  }
-  if (payload.fallback_period) {
-    return {
-      period_start: payload.fallback_period.start,
-      period_end: payload.fallback_period.end,
-      selectedStatementId: null,
-    };
-  }
-  return null;
+  if (!requestedStatementId) return null;
+  const match = payload.cycles.find((c) => c.statement_id === requestedStatementId);
+  if (!match) return null;
+  return {
+    period_start: match.period_start,
+    period_end: match.period_end,
+    selectedStatementId: match.statement_id,
+  };
 }
 
 /** Soft-Ledger list detail shell — settle first / receipts below (empty OK). */
@@ -728,6 +708,7 @@ export default async function ListDetailPage({
                   messages={{
                     cyclePeriodSelectorLabel: t.cyclePeriodSelectorLabel,
                     cyclePeriodOptionUnknownCard: t.cyclePeriodOptionUnknownCard,
+                    cyclePeriodOptionAll: t.cyclePeriodOptionAll,
                   }}
                 />
                 {cyclesLoadError ? (

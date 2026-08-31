@@ -91,6 +91,21 @@ def derive_default_period(
     return current_calendar_month_window(today)
 
 
+def full_history_window(
+    entries: list[HasStatementAndPostedDate],
+    *,
+    today: date | None = None,
+) -> PeriodWindow:
+    """"All periods" window — spans every entry's `posted_date`, so a
+    newly-added hand entry (which never belongs to a statement cycle) is
+    never excluded by a hidden default filter. Falls back to the current
+    calendar month when the list has no entries yet."""
+    dates = [entry.posted_date for entry in entries]
+    if not dates:
+        return current_calendar_month_window(today)
+    return PeriodWindow(period_start=min(dates), period_end=max(dates))
+
+
 def resolve_period_bounds(
     entries: list[HasStatementAndPostedDate],
     *,
@@ -99,10 +114,10 @@ def resolve_period_bounds(
     today: date | None = None,
 ) -> PeriodWindow:
     """Explicit `[period_start, period_end]` when both are given, else the
-    derived default (most-recent statement cycle, or current calendar month —
-    AC #1/#4). Single shared decision point for read paths that accept
-    optional period query params, so the "both or neither" contract can't
-    drift between call sites."""
+    full-history window — "All" is the default; a statement cycle is only
+    applied when explicitly requested. Single shared decision point for read
+    paths that accept optional period query params, so the "both or neither"
+    contract can't drift between call sites."""
     if period_start is not None and period_end is not None:
         return PeriodWindow(period_start=period_start, period_end=period_end)
-    return derive_default_period(entries, today=today)
+    return full_history_window(entries, today=today)

@@ -94,33 +94,21 @@ describe("resolveSelectedPeriod", () => {
     });
   });
 
-  it("falls back to the default cycle when no period is requested", () => {
-    expect(resolveSelectedPeriod(cyclesPayload, undefined)).toEqual({
-      period_start: "2026-07-10",
-      period_end: "2026-08-09",
-      selectedStatementId: "s-newer",
-    });
+  it("returns null (All periods) when no period is requested, even with cycles available", () => {
+    expect(resolveSelectedPeriod(cyclesPayload, undefined)).toBeNull();
   });
 
-  it("falls back to the default cycle when the requested statement id is unknown", () => {
-    expect(resolveSelectedPeriod(cyclesPayload, "stale-statement")).toEqual({
-      period_start: "2026-07-10",
-      period_end: "2026-08-09",
-      selectedStatementId: "s-newer",
-    });
+  it("returns null (All periods) when the requested statement id is unknown", () => {
+    expect(resolveSelectedPeriod(cyclesPayload, "stale-statement")).toBeNull();
   });
 
-  it("falls back to the calendar-month window when there are no cycles", () => {
+  it("returns null (All periods) when there are no cycles, ignoring the calendar-month fallback", () => {
     const empty = {
       cycles: [],
       default_statement_id: null,
       fallback_period: { start: "2026-08-01", end: "2026-08-31" },
     };
-    expect(resolveSelectedPeriod(empty, undefined)).toEqual({
-      period_start: "2026-08-01",
-      period_end: "2026-08-31",
-      selectedStatementId: null,
-    });
+    expect(resolveSelectedPeriod(empty, undefined)).toBeNull();
   });
 
   it("returns null when nothing is resolvable — caller omits period params", () => {

@@ -15,6 +15,7 @@ vi.mock("next/navigation", () => ({
 const messages = {
   cyclePeriodSelectorLabel: listsMessages.en.cyclePeriodSelectorLabel,
   cyclePeriodOptionUnknownCard: listsMessages.en.cyclePeriodOptionUnknownCard,
+  cyclePeriodOptionAll: listsMessages.en.cyclePeriodOptionAll,
 };
 
 const twoCycles: CyclePeriodOption[] = [
@@ -97,9 +98,48 @@ describe("CyclePeriodSelector", () => {
       button.click();
     });
     const options = Array.from(container.querySelectorAll('[role="option"]'));
-    expect(options).toHaveLength(2);
+    // "All periods" + one option per cycle.
+    expect(options).toHaveLength(3);
+    expect(options[0].textContent).toContain(messages.cyclePeriodOptionAll);
     // Missing card label falls back to the generic "Card" copy key.
-    expect(options[1].textContent).toContain(messages.cyclePeriodOptionUnknownCard);
+    expect(options[2].textContent).toContain(messages.cyclePeriodOptionUnknownCard);
+  });
+
+  it("selectedStatementId null selects the All-periods option", () => {
+    act(() => {
+      root.render(
+        <CyclePeriodSelector
+          listId="list-1"
+          cycles={twoCycles}
+          selectedStatementId={null}
+          messages={messages}
+        />,
+      );
+    });
+    const button = container.querySelector("button") as HTMLButtonElement;
+    expect(button.textContent).toContain(messages.cyclePeriodOptionAll);
+  });
+
+  it("choosing All periods navigates back to the bare list URL", () => {
+    act(() => {
+      root.render(
+        <CyclePeriodSelector
+          listId="list-1"
+          cycles={twoCycles}
+          selectedStatementId="stmt-newer"
+          messages={messages}
+        />,
+      );
+    });
+    const button = container.querySelector("button") as HTMLButtonElement;
+    act(() => {
+      button.click();
+    });
+    const option = Array.from(container.querySelectorAll('[role="option"]'))[0] as HTMLElement;
+    act(() => {
+      option.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    });
+    expect(push).toHaveBeenCalledWith("/lists/list-1");
   });
 
   it("EN/ES both define and render the cycle-selector copy keys", () => {
@@ -107,9 +147,11 @@ describe("CyclePeriodSelector", () => {
       const localized = {
         cyclePeriodSelectorLabel: listsMessages[locale].cyclePeriodSelectorLabel,
         cyclePeriodOptionUnknownCard: listsMessages[locale].cyclePeriodOptionUnknownCard,
+        cyclePeriodOptionAll: listsMessages[locale].cyclePeriodOptionAll,
       };
       expect(localized.cyclePeriodSelectorLabel).toBeTruthy();
       expect(localized.cyclePeriodOptionUnknownCard).toBeTruthy();
+      expect(localized.cyclePeriodOptionAll).toBeTruthy();
 
       const localeContainer = document.createElement("div");
       document.body.appendChild(localeContainer);
@@ -130,7 +172,7 @@ describe("CyclePeriodSelector", () => {
         button.click();
       });
       const options = Array.from(localeContainer.querySelectorAll('[role="option"]'));
-      expect(options[1].textContent).toContain(localized.cyclePeriodOptionUnknownCard);
+      expect(options[2].textContent).toContain(localized.cyclePeriodOptionUnknownCard);
       act(() => {
         localeRoot.unmount();
       });
@@ -153,7 +195,7 @@ describe("CyclePeriodSelector", () => {
     act(() => {
       button.click();
     });
-    const option = Array.from(container.querySelectorAll('[role="option"]'))[1] as HTMLElement;
+    const option = Array.from(container.querySelectorAll('[role="option"]'))[2] as HTMLElement;
     act(() => {
       option.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     });
