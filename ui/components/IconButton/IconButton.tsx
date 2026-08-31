@@ -26,6 +26,14 @@ type Props = Omit<
    * category, not source order.
    */
   fill?: boolean;
+  /**
+   * Force the same visual state as `:hover`, for triggers that aren't a
+   * pointer over the element — e.g. a keyboard shortcut activating this
+   * button's action. Standard shared with FileImportMorphIcon/UploadButton's
+   * `active`: the parent owns real hover/focus and this is just another way
+   * to reach the identical look, not a separate state.
+   */
+  active?: boolean;
 };
 
 const baseClasses =
@@ -43,6 +51,7 @@ export const IconButton = forwardRef<HTMLButtonElement, Props>(
       onClick,
       variant = "default",
       fill = false,
+      active = false,
       className,
       ...rest
     },
@@ -68,6 +77,7 @@ export const IconButton = forwardRef<HTMLButtonElement, Props>(
         aria-label={label}
         title={label}
         onClick={onClick}
+        data-active={active || undefined}
         {...rest}
       >
         {icon}

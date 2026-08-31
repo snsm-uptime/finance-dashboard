@@ -1,12 +1,14 @@
 /* Icon button hover and focus states with color-mix */
 
-.button:not(:disabled):hover {
+.button:not(:disabled):hover,
+.button:not(:disabled)[data-active="true"] {
   color: var(--foreground);
   background: rgba(226, 216, 200, 0.3); /* Fallback for --border at 30% opacity */
 }
 
 @supports (background: color-mix(in srgb, white, transparent)) {
-  .button:not(:disabled):hover {
+  .button:not(:disabled):hover,
+  .button:not(:disabled)[data-active="true"] {
     background: color-mix(in srgb, var(--border) 30%, transparent);
   }
 }
@@ -22,13 +24,15 @@
   }
 }
 
-.muted:not(:disabled):hover {
+.muted:not(:disabled):hover,
+.muted:not(:disabled)[data-active="true"] {
   color: var(--foreground);
   background: rgba(63, 107, 69, 0.12); /* Fallback for --accent at 12% opacity */
 }
 
 @supports (background: color-mix(in srgb, white, transparent)) {
-  .muted:not(:disabled):hover {
+  .muted:not(:disabled):hover,
+  .muted:not(:disabled)[data-active="true"] {
     background: color-mix(in srgb, var(--accent) 12%, transparent);
   }
 }
@@ -61,6 +65,24 @@
 .ghost[aria-current="page"] {
   color: var(--foreground) !important;
   background: transparent !important;
+}
+
+/* `data-active` only, deliberately excluded from `:hover` above: a stronger,
+   chrome-full affordance for a non-pointer trigger (e.g. a keyboard
+   shortcut firing this button's action), so mouse users everywhere else keep
+   ghost's plain "no chrome" hover. Mirrors FileImportMorphIcon's icon family
+   via UploadButton's hover chrome in full: accent fill, accent border at
+   2 × ICON_STROKE, and the same M3 elevation-3 lift. ICON_STROKE
+   (app/icons/stroke.ts, = 2) isn't imported here since IconButton has no
+   dependency on that icon family; 4px is hardcoded instead. */
+.ghost:not(:disabled)[data-active="true"] {
+  color: var(--background) !important;
+  background: var(--accent) !important;
+  border: 4px solid var(--accent) !important;
+  box-shadow:
+    0 1px 3px 0 var(--lift-key),
+    0 4px 8px 3px var(--lift-ambient);
+  transform: translateY(-4px);
 }
 
 .ghost:focus-visible {

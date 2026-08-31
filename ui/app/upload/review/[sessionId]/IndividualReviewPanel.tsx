@@ -186,14 +186,18 @@ export function formatRowDate(iso: string, locale: Locale): string {
   return locale === "es" ? `${dayName}, ${day} ${monthAbbr}` : `${dayName}, ${monthAbbr} ${day}`;
 }
 
+type LegendKey = "up" | "left" | "down" | "right" | "backspace";
+
 function ReviewKeycap({
   glyph,
   tooltip,
   wide = false,
+  pressed = false,
 }: {
   glyph: string;
   tooltip: string;
   wide?: boolean;
+  pressed?: boolean;
 }) {
   const tooltipId = useId();
   return (
@@ -205,9 +209,30 @@ function ReviewKeycap({
     >
       <kbd
         aria-hidden
-        className={`inline-flex box-border h-[1.25rem] min-h-[1.25rem] shrink-0 items-center justify-center rounded-[4px] border border-border bg-surface px-1 align-middle text-[0.75rem] leading-none font-[550] !text-accent ${
+        className={`inline-flex box-border h-[1.25rem] min-h-[1.25rem] shrink-0 items-center justify-center rounded-[4px] border px-1 align-middle text-[0.75rem] leading-none font-[550] transition-all duration-100 hover:border-accent hover:bg-accent/10 ${
           wide ? "min-w-[2.25rem]" : "min-w-[1.25rem]"
+        } ${
+          // Same accent-fill/border standard as the IconButton `active` state
+          // this keycap mirrors (FileImportMorphIcon's family via
+          // UploadButton's hover chrome) — bg and text fully swap rather than
+          // layering a color on top of the resting classes, since two same-
+          // property utility classes on one element don't resolve by JSX
+          // order, only by their fixed order in the generated stylesheet.
+          pressed
+            ? "border-accent bg-accent !text-background"
+            : "border-border bg-surface !text-accent"
         }`}
+        style={
+          pressed
+            ? {
+                // M3 elevation level 3 — same --lift-key/--lift-ambient
+                // recipe (globals.css) as IconButton's ghost `active` state
+                // and UploadButton's hover chrome, so all three lift alike.
+                boxShadow: "0 1px 3px 0 var(--lift-key), 0 4px 8px 3px var(--lift-ambient)",
+                transform: "translateY(-2px)",
+              }
+            : undefined
+        }
       >
         {glyph}
       </kbd>
@@ -229,6 +254,7 @@ function KeyboardLegend({
   down,
   right,
   backspace,
+  pressedKey,
 }: {
   groupLabel: string;
   up: string;
@@ -236,6 +262,7 @@ function KeyboardLegend({
   down: string;
   right: string;
   backspace: string;
+  pressedKey: LegendKey | null;
 }) {
   return (
     <div
@@ -245,16 +272,24 @@ function KeyboardLegend({
     >
       <div className="grid w-fit grid-cols-3 grid-rows-2 gap-1">
         <span aria-hidden className="min-w-[1.25rem]" />
-        <ReviewKeycap glyph="↑" tooltip={up} />
+        <ReviewKeycap glyph="↑" tooltip={up} pressed={pressedKey === "up"} />
         <span aria-hidden className="min-w-[1.25rem]" />
-        <ReviewKeycap glyph="←" tooltip={left} />
-        <ReviewKeycap glyph="↓" tooltip={down} />
-        <ReviewKeycap glyph="→" tooltip={right} />
+        <ReviewKeycap glyph="←" tooltip={left} pressed={pressedKey === "left"} />
+        <ReviewKeycap glyph="↓" tooltip={down} pressed={pressedKey === "down"} />
+        <ReviewKeycap glyph="→" tooltip={right} pressed={pressedKey === "right"} />
       </div>
-      <ReviewKeycap glyph="⌫" tooltip={backspace} wide />
+      <ReviewKeycap glyph="⌫" tooltip={backspace} wide pressed={pressedKey === "backspace"} />
     </div>
   );
 }
+
+const LEGEND_KEY_BY_EVENT_KEY: Record<string, LegendKey> = {
+  ArrowUp: "up",
+  ArrowLeft: "left",
+  ArrowDown: "down",
+  ArrowRight: "right",
+  Backspace: "backspace",
+};
 
 function DirectionHint({ template }: { template: string }) {
   return (
@@ -297,6 +332,9 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const flingLockRef = useRef(false);
+  // Mirrors the keycap's hover style while its keyboard key is held down —
+  // reinforces the key ↔ action mapping without a mouse (this round's ask).
+  const [pressedKey, setPressedKey] = useState<LegendKey | null>(null);
 
   const titleContainerRef = useRef<HTMLDivElement | null>(null);
   const titleInputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -622,6 +660,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
       // in flight, when a flung card can briefly widen the layout and make
       // ArrowLeft pan horizontally.
       event.preventDefault();
+      setPressedKey(LEGEND_KEY_BY_EVENT_KEY[event.key] ?? null);
       if (!current || throwing || action.pending) return;
       if (event.key === "ArrowLeft" && canAcceptDefault) {
         flingAndSubmit({ x: -THROW_DISTANCE, y: 0 }, { kind: "acceptDefault" });
@@ -635,8 +674,23 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
         action.submit({ kind: "delete" });
       }
     }
+    // Clears on keyup rather than relying solely on natural re-renders — the
+    // row can change (and the pressed key's meaning with it) while a key is
+    // still physically held, and blur/tab-away must not leave a keycap stuck lit.
+    function onKeyUp(event: globalThis.KeyboardEvent) {
+      if (event.key in LEGEND_KEY_BY_EVENT_KEY) setPressedKey(null);
+    }
+    function onWindowBlur() {
+      setPressedKey(null);
+    }
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", onWindowBlur);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", onWindowBlur);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     current?.row.id,
@@ -659,6 +713,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   // any other ref write must happen in an effect (react-hooks/refs).
   if (lastRowIdRef.current !== current?.row.id) {
     lastRowIdRef.current = current?.row.id;
+    setPressedKey(null);
     setTitleState("idle");
     setTitleDraft("");
     setTitleError(null);
@@ -903,6 +958,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
             <IconButton
               className="col-start-1 row-start-1 w-full min-w-0 justify-center self-center"
               variant="ghost"
+              active={pressedKey === "left"}
               disabled={!canAcceptDefault || action.pending || throwing}
               onClick={() =>
                 flingAndSubmit({ x: -THROW_DISTANCE, y: 0 }, { kind: "acceptDefault" })
@@ -943,6 +999,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
               <IconButton
                 className="absolute top-2 right-2"
                 variant="ghost"
+                active={pressedKey === "backspace"}
                 disabled={!canDelete || action.pending || throwing}
                 onClick={() => action.submit({ kind: "delete" })}
                 label={
@@ -1010,6 +1067,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
             <IconButton
               className="col-start-3 row-start-1 w-full min-w-0 justify-center self-center"
               variant="ghost"
+              active={pressedKey === "right"}
               disabled={!canAcceptChosen || action.pending || throwing}
               onClick={() =>
                 flingAndSubmit({ x: THROW_DISTANCE, y: 0 }, { kind: "acceptChosen" })
@@ -1030,6 +1088,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
             <IconButton
               className="col-start-2 row-start-2 justify-self-center"
               variant="ghost"
+              active={pressedKey === "down"}
               disabled={!canUndo || action.pending || throwing}
               onClick={() => action.submit({ kind: "undo" })}
               label={action.pending ? t.individualReviewUndoing : t.individualReviewUndo}
@@ -1058,6 +1117,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
                     chosenListName || t.individualReviewChooseList,
                   )}
                   backspace={t.individualReviewKeyTooltipBackspace}
+                  pressedKey={pressedKey}
                 />
               )}
               {/* Card identification / registration (Story 4.8.1) — subordinate
