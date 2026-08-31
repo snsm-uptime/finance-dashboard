@@ -31,24 +31,24 @@ type Props = Omit<ReceiptRowProps, "originChip" | "originChipTone" | "originActi
   messages: OriginChipPickerMessages;
 };
 
+/** Full candidate list — the active setting is filtered out by `ChipOptionsPanel`, not here. */
 export function originOptionsFrom(
   cards: Pick<CardItem, "id" | "label">[],
-  current: { kind: OriginKind; cardId: string | null },
   cashLabel: string,
   noneLabel: string,
 ): OriginOption[] {
-  const options: OriginOption[] = [];
-  if (current.kind !== null) {
-    options.push({ value: "", label: noneLabel, tone: "warning" });
-  }
-  if (current.kind !== "cash") {
-    options.push({ value: "cash", label: cashLabel });
-  }
-  for (const card of cards) {
-    if (current.kind === "card" && current.cardId === card.id) continue;
-    options.push({ value: card.id, label: card.label });
-  }
-  return options;
+  return [
+    { value: "", label: noneLabel, tone: "warning" },
+    { value: "cash", label: cashLabel },
+    ...cards.map((card) => ({ value: card.id, label: card.label })),
+  ];
+}
+
+/** The option value equivalent to the current origin — always hidden in the slide-down panel. */
+export function originCurrentValue(current: { kind: OriginKind; cardId: string | null }): string {
+  if (current.kind === "cash") return "cash";
+  if (current.kind === "card") return current.cardId ?? "";
+  return "";
 }
 
 function originFieldsFromValue(value: string): {
@@ -102,12 +102,8 @@ export function OriginChipPicker({
   }
 
   const current = { kind, cardId };
-  const options = originOptionsFrom(
-    cards,
-    current,
-    messages.expenseOriginCash,
-    messages.expenseOriginNone,
-  );
+  const options = originOptionsFrom(cards, messages.expenseOriginCash, messages.expenseOriginNone);
+  const selectedValue = originCurrentValue(current);
 
   function applyChosenOrigin(value: string, knownCards: CardItem[]) {
     const fields = originFieldsFromValue(value);
@@ -211,6 +207,7 @@ export function OriginChipPicker({
       id={panelId}
       labelledBy={chipId}
       options={options}
+      selectedValue={selectedValue}
       disabled={pending || !cardsSettled}
       error={error ?? cardsError}
       onSelect={(value) => {

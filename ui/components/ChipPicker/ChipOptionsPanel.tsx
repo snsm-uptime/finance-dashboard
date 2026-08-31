@@ -25,6 +25,12 @@ export type ChipOptionsPanelProps = {
   error?: ReactNode;
   /** Overrides the default row styling (rounded box) — e.g. CardRoutingControl's plain divider row. */
   contentClassName?: string;
+  /**
+   * The currently active option's value, if any — always filtered out of
+   * the slide-down row. Callers already show the active setting on the
+   * trigger chip, so offering it again in the panel would be a no-op choice.
+   */
+  selectedValue?: string;
 };
 
 const defaultContentClassName = "mt-1 flex flex-wrap items-center gap-2 rounded-[8px] p-2";
@@ -39,11 +45,13 @@ export function ChipOptionsPanel({
   disabled = false,
   error,
   contentClassName,
+  selectedValue,
 }: ChipOptionsPanelProps) {
+  const selectableOptions = options.filter((option) => option.value !== selectedValue);
   return (
     <SlideDown open={open} id={id} labelledBy={labelledBy}>
       <div className={contentClassName ?? defaultContentClassName}>
-        {options.map((option) => (
+        {selectableOptions.map((option) => (
           <button
             key={option.value}
             type="button"
