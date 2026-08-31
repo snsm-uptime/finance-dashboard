@@ -118,6 +118,22 @@ Two circles and a diagonal slash. Used for percentage split mode.
 - Style: Stroke-based
 - Accepts: className, SVG element props
 
+### UsersIcon
+
+A group-of-people glyph: three heads (middle largest) above three shoulder domes (middle largest, drawn in front with the two side domes masked out where it overlaps them, leaving a visible gap). Used for the member-role bookmark badge on list cards.
+
+- ViewBox: `0 0 24 24`
+- Style: Fill-based
+- Accepts: className, SVG element props
+
+### WalletIcon
+
+A wallet body with a folded flap tucked into its top edge and a clasp dot cut out of the lower-right corner (via mask, same technique as `UsersIcon`). Used for the owner-role bookmark badge on list cards.
+
+- ViewBox: `0 0 24 24`
+- Style: Fill-based
+- Accepts: className, SVG element props
+
 > Not yet documented above: `HomeIcon`, `UploadIcon`, `SpinnerIcon`, `UserIcon`, `SunIcon`, `MoonIcon`, `SystemIcon`, `ArrowIcon`, `TrashIcon`.
 
 ## Usage

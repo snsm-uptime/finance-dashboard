@@ -417,18 +417,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 1.25rem;
-  height: 1.65rem;
-  padding-bottom: 0.4rem;
-  font-family: var(--font-brand), Georgia, serif;
-  font-size: 0.85rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  line-height: 1;
   pointer-events: none;
-  clip-path: polygon(0 0, 100% 0, 100% 70%, 50% 100%, 0 70%);
-  background: var(--muted);
-  color: var(--surface);
+  color: var(--muted);
+}
+
+.roleBookmarkIcon {
+  width: 1.1rem;
+  height: 1.1rem;
 }
 
 .listName {

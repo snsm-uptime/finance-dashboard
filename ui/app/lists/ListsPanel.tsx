@@ -21,7 +21,7 @@ import {
 } from "@/components/IconButtonPopup";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { listsMessages } from "@/lib/i18n/lists";
-import { DotsIcon, PlusIcon } from "@/app/icons";
+import { DotsIcon, PlusIcon, UsersIcon, WalletIcon } from "@/app/icons";
 import type { InviteFormMessages } from "./InviteForm";
 import { InviteForm } from "./InviteForm";
 import { Sheet } from "./Sheet";
@@ -48,10 +48,16 @@ function rosterForCard(list: ListItem, currentUserId: string) {
     );
 }
 
-function ListRoleBookmark({ mark, label }: { mark: string; label: string }) {
+function ListRoleBookmark({
+  label,
+  icon,
+}: {
+  label: string;
+  icon: ReactNode;
+}) {
   return (
-    <span className={styles.roleBookmark} aria-label={label}>
-      {mark}
+    <span className={`${styles.roleBookmark} px-3`} aria-label={label}>
+      {icon}
     </span>
   );
 }
@@ -62,23 +68,31 @@ function ListCardFace({
   isOwner,
   title,
   balance,
-  memberMark,
   memberBadge,
+  ownerBadge,
 }: {
   list: ListItem;
   currentUserId: string;
   isOwner: boolean;
   title: ReactNode;
   balance: ReactNode;
-  memberMark: string;
   memberBadge: string;
+  ownerBadge: string;
 }) {
   const roster = rosterForCard(list, currentUserId);
   const hasRoster = roster.length > 0;
   return (
     <span className={styles.cardFace}>
-      {isOwner ? null : (
-        <ListRoleBookmark mark={memberMark} label={memberBadge} />
+      {isOwner ? (
+        <ListRoleBookmark
+          label={ownerBadge}
+          icon={<WalletIcon className={styles.roleBookmarkIcon} />}
+        />
+      ) : (
+        <ListRoleBookmark
+          label={memberBadge}
+          icon={<UsersIcon className={styles.roleBookmarkIcon} />}
+        />
       )}
       <span className={styles.cardFaceMain}>
         {title}
@@ -378,8 +392,8 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
                 currentUserId,
                 isOwner,
                 balance,
-                memberMark: t.memberMark,
                 memberBadge: t.memberBadge,
+                ownerBadge: t.ownerBadge,
               };
               return (
                 <li key={list.id} className={styles.row}>
