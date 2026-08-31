@@ -92,7 +92,6 @@ export default async function Home() {
             <h2 id="home-cards-title" className={listsStyles.sectionTitle}>
               {tCards.title}
             </h2>
-            <p className={listsStyles.copy}>{tCards.subtitle}</p>
           </div>
           <div className={styles.columnBody}>
             <CardsPanel />

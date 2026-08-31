@@ -51,10 +51,6 @@ const lists: ListItem[] = [
   { id: "list-1", name: "Household", owner_id: "u1", role: "owner" },
 ];
 
-function classTokens(el: Element): string[] {
-  return el.className.split(/\s+/).filter(Boolean);
-}
-
 function headingTexts(container: HTMLElement): string[] {
   return Array.from(container.querySelectorAll("h2, h3"))
     .map((el) => el.textContent?.trim() ?? "")
@@ -94,22 +90,24 @@ describe("CardsPanel", () => {
     resetMembershipListsStore();
   });
 
-  it("keeps Register then list in source order", async () => {
+  it("renders the register form above the card list, with no visible Cards heading", async () => {
     await act(async () => {
       root.render(<CardsPanel />);
     });
     await waitForDom(() => container.textContent?.includes(card.label));
 
     const wrapper = container.firstElementChild as HTMLElement;
-    expect(classTokens(wrapper)).toEqual(
-      expect.arrayContaining(["flex", "flex-col", "md:flex-col-reverse", "md:justify-end", "gap-8"]),
-    );
-    expect(classTokens(wrapper)).not.toContain("flex-col-reverse");
+    expect(wrapper.tagName).toBe("SECTION");
+    expect(wrapper.getAttribute("aria-label")).toBe(t.title);
+    expect(headingTexts(container)).toEqual([]);
 
-    expect(wrapper.children).toHaveLength(2);
-    expect(wrapper.children[0].getAttribute("aria-labelledby")).toMatch(/register-title$/);
-    expect(wrapper.children[1].getAttribute("aria-labelledby")).toMatch(/list-title$/);
-    expect(headingTexts(container)).toEqual([t.submit, t.listTitle]);
+    const form = wrapper.querySelector("form") as HTMLFormElement;
+    const list = wrapper.querySelector("ul") as HTMLUListElement;
+    expect(form).not.toBeNull();
+    expect(list).not.toBeNull();
+    expect(
+      form.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it("drops a deleted list from destination dropdowns without a remount", async () => {
