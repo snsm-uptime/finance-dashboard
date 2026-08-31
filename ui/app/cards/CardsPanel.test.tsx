@@ -110,7 +110,7 @@ describe("CardsPanel", () => {
     ).toBeTruthy();
   });
 
-  it("drops a deleted list from destination dropdowns without a remount", async () => {
+  it("drops a deleted list from routing options without a remount", async () => {
     fetchCards.mockResolvedValue({
       ok: true,
       cards: [{ ...card, routing_mode: "fixed", fixed_list_id: "list-1" }],
@@ -133,21 +133,21 @@ describe("CardsPanel", () => {
     await act(async () => {
       chip.click();
     });
-    await waitForDom(() => Boolean(container.querySelector('button[aria-haspopup="listbox"]')));
 
-    const trigger = container.querySelector('button[aria-haspopup="listbox"]') as HTMLButtonElement;
-    await act(async () => {
-      trigger.click();
-    });
-    expect(
-      Array.from(container.querySelectorAll('[role="option"]')).map((el) => el.textContent),
-    ).toEqual(["Household", "Trip"]);
+    const tripOptionLabel = `${t.routingModeFixed}: Trip`;
+    await waitForDom(() =>
+      Array.from(container.querySelectorAll("button")).some(
+        (btn) => btn.getAttribute("aria-label") === tripOptionLabel,
+      ),
+    );
 
     await act(async () => {
       replaceMembershipLists([{ id: "list-1", name: "Household", owner_id: "u1", role: "owner" }]);
     });
     expect(
-      Array.from(container.querySelectorAll('[role="option"]')).map((el) => el.textContent),
-    ).toEqual(["Household"]);
+      Array.from(container.querySelectorAll("button")).some(
+        (btn) => btn.getAttribute("aria-label") === tripOptionLabel,
+      ),
+    ).toBe(false);
   });
 });
