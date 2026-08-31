@@ -67,15 +67,20 @@ type SimplifyState =
  * `available` only governs the AC #5 conflict block within this column.
  */
 export function SimplifyColumn({ listId, available, messages }: Props) {
-  const [state, setState] = useState<SimplifyState>(available ? { status: "loading" } : { status: "blocked" });
+  // Tags each fetch result with the deps that produced it, so a stale
+  // response from a superseded listId/available combo can't overwrite the
+  // in-flight one — and so render (not the effect) can derive "loading"
+  // for the new combo without a synchronous setState at the top of the effect.
+  const requestKey = `${listId}:${available}`;
+  const [result, setResult] = useState<{ key: string; state: SimplifyState }>({
+    key: requestKey,
+    state: { status: "loading" },
+  });
 
   useEffect(() => {
-    if (!available) {
-      setState({ status: "blocked" });
-      return;
-    }
+    if (!available) return;
     let cancelled = false;
-    setState({ status: "loading" });
+    const key = `${listId}:${available}`;
     (async () => {
       let response: Response;
       try {
@@ -85,47 +90,49 @@ export function SimplifyColumn({ listId, available, messages }: Props) {
           credentials: "same-origin",
         });
       } catch {
-        if (!cancelled) setState({ status: "error" });
+        if (!cancelled) setResult({ key, state: { status: "error" } });
         return;
       }
       if (cancelled) return;
       if (response.status === 409) {
-        setState({ status: "blocked" });
+        setResult({ key, state: { status: "blocked" } });
         return;
       }
       if (!response.ok) {
-        setState({ status: "error" });
+        setResult({ key, state: { status: "error" } });
         return;
       }
       let data: unknown;
       try {
         data = await response.json();
       } catch {
-        setState({ status: "error" });
+        setResult({ key, state: { status: "error" } });
         return;
       }
       if (cancelled) return;
       const transfers = asTransfers(data);
       if (transfers === null) {
-        setState({ status: "error" });
+        setResult({ key, state: { status: "error" } });
         return;
       }
-      setState({ status: "loaded", transfers });
+      setResult({ key, state: { status: "loaded", transfers } });
     })();
     return () => {
       cancelled = true;
     };
   }, [listId, available]);
 
-  if (state.status === "loading") return null;
+  const state: SimplifyState = result.key === requestKey ? result.state : { status: "loading" };
 
-  if (state.status === "blocked") {
+  if (!available || state.status === "blocked") {
     return (
       <p role="status" className="m-0 min-w-0 text-muted" style={{ fontFamily: "var(--type-meta-face)" }}>
         {messages.blockedLabel}
       </p>
     );
   }
+
+  if (state.status === "loading") return null;
 
   if (state.status === "error") {
     return (
