@@ -73,19 +73,17 @@ export function CardRoutingControl({ card, lists, messages, onUpdated, trailing 
       : messages.routingChipReview;
   const chipAria = `${messages.routingTitle}: ${chipLabel}`;
 
-  // Mirrors the origin chip menu: the currently active setting is already
-  // shown on the trigger chip, so it's left out of the selectable row.
   const selections = new Map<string, RoutingSelection>();
-  const options: ChipOption[] = [];
-  if (card.routing_mode !== "review") {
-    selections.set("review", { mode: "review", fixedListId: null });
-    options.push({ value: "review", label: messages.routingChipReview, ariaLabel: messages.routingModeReview });
-  }
+  selections.set("review", { mode: "review", fixedListId: null });
+  const options: ChipOption[] = [
+    { value: "review", label: messages.routingChipReview, ariaLabel: messages.routingModeReview },
+  ];
   for (const list of lists) {
-    if (card.routing_mode === "fixed" && card.fixed_list_id === list.id) continue;
     selections.set(list.id, { mode: "fixed", fixedListId: list.id });
     options.push({ value: list.id, label: list.name, ariaLabel: `${messages.routingModeFixed}: ${list.name}` });
   }
+  // Trigger chip already shows the active setting, so ChipOptionsPanel hides it from the row.
+  const selectedValue = card.routing_mode === "fixed" ? (card.fixed_list_id ?? "") : "review";
 
   function onSelect(value: string) {
     const selection = selections.get(value);
@@ -116,6 +114,7 @@ export function CardRoutingControl({ card, lists, messages, onUpdated, trailing 
         id={panelId}
         labelledBy={chipId}
         options={options}
+        selectedValue={selectedValue}
         disabled={pending}
         error={error}
         onSelect={onSelect}

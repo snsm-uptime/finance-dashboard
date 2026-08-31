@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { listsMessages } from "@/lib/i18n/lists";
 
-import { OriginChipPicker, originOptionsFrom } from "./OriginChipPicker";
+import { OriginChipPicker, originCurrentValue, originOptionsFrom } from "./OriginChipPicker";
 import type { CardItem } from "../cards/cardsClient";
 
 const refresh = vi.fn();
@@ -75,36 +75,34 @@ function renderPicker(
 describe("originOptionsFrom", () => {
   const cards = [card(), card({ id: "card-2", label: "Kitchen" })];
 
-  it("blank origin lists Cash plus all cards, omitting No Origin", () => {
-    expect(originOptionsFrom(cards, { kind: null, cardId: null }, "Cash", "No Origin")).toEqual([
+  it("lists No Origin, Cash, then all cards — the active one is filtered by ChipOptionsPanel", () => {
+    expect(originOptionsFrom(cards, "Cash", "No Origin")).toEqual([
+      { value: "", label: "No Origin", tone: "warning" },
       { value: "cash", label: "Cash" },
       { value: "card-1", label: "My Visa" },
       { value: "card-2", label: "Kitchen" },
     ]);
   });
 
-  it("omits Cash when current is cash and lists No Origin plus cards", () => {
-    expect(originOptionsFrom(cards, { kind: "cash", cardId: null }, "Cash", "No Origin")).toEqual([
-      { value: "", label: "No Origin", tone: "warning" },
-      { value: "card-1", label: "My Visa" },
-      { value: "card-2", label: "Kitchen" },
-    ]);
-  });
-
-  it("omits the current card and keeps No Origin, Cash, and others", () => {
-    expect(
-      originOptionsFrom(cards, { kind: "card", cardId: "card-1" }, "Cash", "No Origin"),
-    ).toEqual([
+  it("is just No Origin and Cash when there are no cards", () => {
+    expect(originOptionsFrom([], "Cash", "No Origin")).toEqual([
       { value: "", label: "No Origin", tone: "warning" },
       { value: "cash", label: "Cash" },
-      { value: "card-2", label: "Kitchen" },
     ]);
   });
+});
 
-  it("is No Origin only when current is cash and there are no cards", () => {
-    expect(originOptionsFrom([], { kind: "cash", cardId: null }, "Cash", "No Origin")).toEqual([
-      { value: "", label: "No Origin", tone: "warning" },
-    ]);
+describe("originCurrentValue", () => {
+  it("is the empty sentinel for no origin", () => {
+    expect(originCurrentValue({ kind: null, cardId: null })).toBe("");
+  });
+
+  it("is 'cash' for a cash origin", () => {
+    expect(originCurrentValue({ kind: "cash", cardId: null })).toBe("cash");
+  });
+
+  it("is the card id for a card origin", () => {
+    expect(originCurrentValue({ kind: "card", cardId: "card-1" })).toBe("card-1");
   });
 });
 

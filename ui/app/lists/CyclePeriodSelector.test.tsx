@@ -98,11 +98,11 @@ describe("CyclePeriodSelector", () => {
       button.click();
     });
     const options = Array.from(container.querySelectorAll('[role="region"] button'));
-    // "All periods" + one option per cycle.
-    expect(options).toHaveLength(3);
+    // "All periods" + one option per cycle, minus the active "stmt-newer" cycle.
+    expect(options).toHaveLength(2);
     expect(options[0].textContent).toContain(messages.cyclePeriodOptionAll);
     // Missing card label falls back to the generic "Card" copy key.
-    expect(options[2].textContent).toContain(messages.cyclePeriodOptionUnknownCard);
+    expect(options[1].textContent).toContain(messages.cyclePeriodOptionUnknownCard);
   });
 
   it("selectedStatementId null selects the All-periods option", () => {
@@ -118,6 +118,27 @@ describe("CyclePeriodSelector", () => {
     });
     const button = container.querySelector("button") as HTMLButtonElement;
     expect(button.textContent).toContain(messages.cyclePeriodOptionAll);
+  });
+
+  it("hides the All periods option from the panel when it is the active selection", () => {
+    act(() => {
+      root.render(
+        <CyclePeriodSelector
+          listId="list-1"
+          cycles={twoCycles}
+          selectedStatementId={null}
+          messages={messages}
+        />,
+      );
+    });
+    const button = container.querySelector("button") as HTMLButtonElement;
+    act(() => {
+      button.click();
+    });
+    const optionLabels = Array.from(container.querySelectorAll('[role="region"] button')).map(
+      (b) => b.textContent,
+    );
+    expect(optionLabels.some((label) => label?.includes(messages.cyclePeriodOptionAll))).toBe(false);
   });
 
   it("choosing All periods navigates back to the bare list URL", () => {
@@ -172,7 +193,7 @@ describe("CyclePeriodSelector", () => {
         button.click();
       });
       const options = Array.from(localeContainer.querySelectorAll('[role="region"] button'));
-      expect(options[2].textContent).toContain(localized.cyclePeriodOptionUnknownCard);
+      expect(options[1].textContent).toContain(localized.cyclePeriodOptionUnknownCard);
       act(() => {
         localeRoot.unmount();
       });
@@ -195,7 +216,7 @@ describe("CyclePeriodSelector", () => {
     act(() => {
       button.click();
     });
-    const option = Array.from(container.querySelectorAll('[role="region"] button'))[2] as HTMLButtonElement;
+    const option = Array.from(container.querySelectorAll('[role="region"] button'))[1] as HTMLButtonElement;
     act(() => {
       option.click();
     });

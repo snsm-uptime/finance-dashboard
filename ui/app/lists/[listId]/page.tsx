@@ -348,6 +348,7 @@ type BalanceStripMessages = {
   balanceOwe: string;
   balanceOwed: string;
   balanceZero: string;
+  balanceTotal: string;
   loadError: string;
 };
 
@@ -378,6 +379,21 @@ export function balanceStripPropsFrom(
   if (tone === "owe") return { who: t.balanceOwe, amount, polarity: "owe" };
   if (tone === "owed") return { who: t.balanceOwed, amount, polarity: "owed" };
   return { who: t.balanceZero, amount, polarity: "neutral" };
+}
+
+/**
+ * A solo list (member_count === 1) has nothing to settle, so the strip shows
+ * the running total instead of a net owe/owed figure.
+ */
+export function soloBalanceStripPropsFrom(
+  expenses: Pick<ExpenseItem, "amount_crc">[],
+  t: BalanceStripMessages,
+): BalanceStripState {
+  if (expenses.length === 0) {
+    return { who: t.detailSettleEmpty, amount: "—", polarity: "neutral" };
+  }
+  const totalCrc = expenses.reduce((sum, e) => sum + (Number(e.amount_crc) || 0), 0);
+  return { who: t.balanceTotal, amount: formatCrcAmount(String(totalCrc)), polarity: "neutral" };
 }
 
 /**
@@ -667,7 +683,10 @@ export default async function ListDetailPage({
   const showListDetail = Boolean(listTitle) && !notFound && !loadError;
   const hasExpenses = expenses.length > 0;
   const showBalancesGrid = !balancesLoadError && balances !== null;
-  const stripProps = balanceStripPropsFrom(hasExpenses, balancesLoadError, balances?.balance_crc, t);
+  const stripProps =
+    members.length === 1
+      ? soloBalanceStripPropsFrom(expenses, t)
+      : balanceStripPropsFrom(hasExpenses, balancesLoadError, balances?.balance_crc, t);
   const todayCr = calendarDateInCostaRica(new Date().toISOString());
 
   return (

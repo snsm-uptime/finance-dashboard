@@ -80,7 +80,14 @@ export function CyclePeriodSelector({ listId, cycles, selectedStatementId, messa
       >
         {selected.label}
       </ChipTrigger>
-      <ChipOptionsPanel open={open} id={panelId} labelledBy={chipId} options={options} onSelect={onSelect} />
+      <ChipOptionsPanel
+        open={open}
+        id={panelId}
+        labelledBy={chipId}
+        options={options}
+        selectedValue={value}
+        onSelect={onSelect}
+      />
     </div>
   );
 }
