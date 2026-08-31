@@ -42,6 +42,9 @@ class ListMembershipItem(BaseModel):
     role: str
     balance_crc: str = "0"
     members: list[ListMemberItem] = Field(default_factory=list)
+    # Running total for solo (1-member) lists — nothing to settle, so
+    # balance_crc is always "0" and the UI shows this instead.
+    total_crc: str = "0"
 
 
 class ListMembershipsResponse(BaseModel):
