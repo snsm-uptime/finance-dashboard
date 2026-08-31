@@ -1,17 +1,17 @@
 "use client";
 
-import { useId, useRef, useState, type KeyboardEvent } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { chipClassName, type ChipTone } from "@/components/Chip";
-import { SlideDown } from "@/components/SlideDown";
+import type { ChipTone } from "@/components/Chip";
+import { ChipOptionsPanel, ChipTrigger, useChipPicker, type ChipOption } from "@/components/ChipPicker";
 import { useFormSubmission } from "@/hooks";
 import { ReceiptRow, OriginPayerAlias, type ReceiptRowProps } from "@/components/soft-ledger/ReceiptRow";
 
 import { fetchCards, type CardItem } from "../cards/cardsClient";
 import { updateExpenseOrigin, type ListsClientMessages } from "./listsClient";
 
-export type OriginOption = { value: string; label: string; tone?: ChipTone };
+export type OriginOption = ChipOption;
 
 export type OriginChipPickerMessages = ListsClientMessages & {
   expenseOriginNone: string;
@@ -30,15 +30,6 @@ type Props = Omit<ReceiptRowProps, "originChip" | "originChipTone" | "originActi
   originTone: ChipTone;
   messages: OriginChipPickerMessages;
 };
-
-const focusRing =
-  "cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
-
-function chipButtonClass(tone: ChipTone): string {
-  const hover =
-    tone === "warning" ? "hover:bg-owe/10" : "hover:border-muted";
-  return `${chipClassName[tone]} ${focusRing} ${hover}`;
-}
 
 export function originOptionsFrom(
   cards: Pick<CardItem, "id" | "label">[],
@@ -81,12 +72,7 @@ export function OriginChipPicker({
   ...row
 }: Props) {
   const router = useRouter();
-  const reactId = useId();
-  const chipId = `${reactId}-origin-chip`;
-  const panelId = `${reactId}-origin-panel`;
-  const chipRef = useRef<HTMLButtonElement>(null);
   const fetchGen = useRef(0);
-  const [open, setOpen] = useState(false);
   const [cards, setCards] = useState<CardItem[]>([]);
   const [cardsLoaded, setCardsLoaded] = useState(false);
   const [cardsSettled, setCardsSettled] = useState(false);
@@ -141,35 +127,6 @@ export function OriginChipPicker({
     setTone("muted");
   }
 
-  const { pending, error, submit, clearError } = useFormSubmission(
-    async (value: string) => {
-      const result = await updateExpenseOrigin(
-        listId,
-        entryId,
-        originFieldsFromValue(value),
-        messages,
-      );
-      if (result.ok) {
-        applyChosenOrigin(value, cards);
-        return { ok: true as const };
-      }
-      return { ok: false as const, error: result.error };
-    },
-    {
-      onSuccess: () => {
-        setOpen(false);
-        chipRef.current?.focus();
-        router.refresh();
-      },
-    },
-  );
-
-  function closePanel() {
-    setOpen(false);
-    clearError();
-    chipRef.current?.focus();
-  }
-
   async function loadCards(): Promise<CardItem[] | "error" | "stale"> {
     if (cardsLoaded) {
       setCardsSettled(true);
@@ -197,21 +154,35 @@ export function OriginChipPicker({
     return result.cards;
   }
 
-  async function toggle() {
-    if (open) {
-      closePanel();
-      return;
-    }
-    clearError();
-    setOpen(true);
-    await loadCards();
-  }
+  const { pending, error, submit, clearError } = useFormSubmission(
+    async (value: string) => {
+      const result = await updateExpenseOrigin(
+        listId,
+        entryId,
+        originFieldsFromValue(value),
+        messages,
+      );
+      if (result.ok) {
+        applyChosenOrigin(value, cards);
+        return { ok: true as const };
+      }
+      return { ok: false as const, error: result.error };
+    },
+    {
+      onSuccess: () => {
+        close();
+        router.refresh();
+      },
+    },
+  );
 
-  function onRootKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.key !== "Escape" || !open) return;
-    event.stopPropagation();
-    closePanel();
-  }
+  const { chipId, panelId, chipRef, open, toggle, close, onRootKeyDown } = useChipPicker({
+    onOpen: () => {
+      clearError();
+      void loadCards();
+    },
+    onClose: clearError,
+  });
 
   const chipAria = payerAlias
     ? `${messages.expenseOriginLabel}: @${payerAlias}: ${label}`
@@ -220,56 +191,32 @@ export function OriginChipPicker({
   const alias = payerAlias ? <OriginPayerAlias alias={payerAlias} /> : null;
 
   const originAction = (
-    <button
+    <ChipTrigger
       ref={chipRef}
-      type="button"
       id={chipId}
-      aria-label={chipAria}
-      aria-expanded={open}
-      aria-controls={panelId}
-      title={chipAria}
-      onClick={() => {
-        void toggle();
-      }}
-      className={chipButtonClass(tone)}
+      panelId={panelId}
+      open={open}
+      tone={tone}
+      ariaLabel={chipAria}
+      onClick={toggle}
     >
       {alias}
       {label}
-      <span
-        aria-hidden="true"
-        className={`ml-1 inline-block w-[0.32rem] h-[0.32rem] border-r-[1.5px] border-b-[1.5px] border-current opacity-70 transition-transform duration-200 motion-reduce:transition-none ${
-          open ? "rotate-[225deg] translate-y-px" : "rotate-45 -translate-y-px"
-        }`}
-      />
-    </button>
+    </ChipTrigger>
   );
 
   const originPanel = (
-    <SlideDown open={open} id={panelId} labelledBy={chipId}>
-      <div className="mt-1 flex flex-wrap items-center gap-2 rounded-[8px] p-2">
-        {options.map((option) => (
-          <button
-            key={option.value || "none"}
-            type="button"
-            disabled={pending || !cardsSettled}
-            aria-label={option.label}
-            onClick={() => {
-              void submit(option.value);
-            }}
-            className={`${chipClassName[option.tone ?? "muted"]} ${focusRing} ${
-              option.tone === "warning" ? "hover:bg-owe/10" : "hover:border-muted"
-            } disabled:cursor-not-allowed disabled:opacity-60`}
-          >
-            {option.label}
-          </button>
-        ))}
-        {error || cardsError ? (
-          <p className="m-0 w-full text-[0.85rem] text-owe" role="alert" aria-live="polite">
-            {error ?? cardsError}
-          </p>
-        ) : null}
-      </div>
-    </SlideDown>
+    <ChipOptionsPanel
+      open={open}
+      id={panelId}
+      labelledBy={chipId}
+      options={options}
+      disabled={pending || !cardsSettled}
+      error={error ?? cardsError}
+      onSelect={(value) => {
+        void submit(value);
+      }}
+    />
   );
 
   return (

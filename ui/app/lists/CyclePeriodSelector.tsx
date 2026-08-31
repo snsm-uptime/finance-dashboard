@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 
-import { SoftLedgerSelect, type SoftLedgerSelectOption } from "@/components/soft-ledger/Select";
+import { ChipOptionsPanel, ChipTrigger, useChipPicker, type ChipOption } from "@/components/ChipPicker";
 
 export type CyclePeriodOption = {
   statementId: string;
@@ -42,13 +42,17 @@ export function cyclePeriodOptionLabel(
  * "All periods" (empty-string sentinel) is always the first option and the
  * default when no `?period=` is selected — narrowing to one cycle is opt-in,
  * so it can never silently hide a just-added hand entry (debug fix).
+ *
+ * Same chip + SlideDown pattern as OriginChipPicker and CardRoutingControl,
+ * via the shared `@/components/ChipPicker` primitives.
  */
 export function CyclePeriodSelector({ listId, cycles, selectedStatementId, messages }: Props) {
   const router = useRouter();
+  const { chipId, panelId, chipRef, open, toggle, close, onRootKeyDown } = useChipPicker();
 
   if (cycles.length <= 1) return null;
 
-  const options: SoftLedgerSelectOption[] = [
+  const options: ChipOption[] = [
     { value: "", label: messages.cyclePeriodOptionAll },
     ...cycles.map((cycle) => ({
       value: cycle.statementId,
@@ -56,18 +60,27 @@ export function CyclePeriodSelector({ listId, cycles, selectedStatementId, messa
     })),
   ];
   const value = selectedStatementId ?? "";
+  const selected = options.find((option) => option.value === value) ?? options[0];
 
-  function onChange(next: string) {
+  function onSelect(next: string) {
+    close();
     const target = `/lists/${encodeURIComponent(listId)}`;
     router.push(next === "" ? target : `${target}?period=${encodeURIComponent(next)}`);
   }
 
   return (
-    <SoftLedgerSelect
-      value={value}
-      options={options}
-      aria-label={messages.cyclePeriodSelectorLabel}
-      onChange={onChange}
-    />
+    <div onKeyDown={onRootKeyDown}>
+      <ChipTrigger
+        ref={chipRef}
+        id={chipId}
+        panelId={panelId}
+        open={open}
+        ariaLabel={messages.cyclePeriodSelectorLabel}
+        onClick={toggle}
+      >
+        {selected.label}
+      </ChipTrigger>
+      <ChipOptionsPanel open={open} id={panelId} labelledBy={chipId} options={options} onSelect={onSelect} />
+    </div>
   );
 }
