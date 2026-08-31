@@ -46,6 +46,10 @@ from application.lists import (
     RenameListService,
     SetListDefaultSplitCommand,
     SetListDefaultSplitService,
+    SettlePayablesCommand,
+    SettlePayablesService,
+    SimplifyGroupPlanCommand,
+    SimplifyGroupPlanService,
 )
 from application.reassign_statement import ReassignStatementCommand, ReassignStatementService
 from domain.errors import (
@@ -94,10 +98,13 @@ from api.schemas.lists import (
     ListMembershipsResponse,
     ListMembersResponse,
     ListResponse,
+    PairwiseEdgeResponse,
     ReassignStatementBody,
     ReassignStatementResponse,
     RenameListBody,
     SetDefaultSplitBody,
+    SimplifyPlanResponse,
+    TransferResponse,
     UpdateExpenseOriginBody,
 )
 from api.settings import AuthSettings
@@ -606,7 +613,62 @@ def get_list_balances_stub(
         list_id=result.list_id,
         balance_crc=result.balance_crc,
         balance_status=BalanceStatusResponse(is_incomplete=result.is_incomplete),
+        you_are_owed=[
+            PairwiseEdgeResponse(member_id=e.member_id, alias=e.alias, amount_crc=e.amount_crc)
+            for e in result.you_are_owed
+        ],
+        you_owe=[
+            PairwiseEdgeResponse(member_id=e.member_id, alias=e.alias, amount_crc=e.amount_crc)
+            for e in result.you_owe
+        ],
     )
+
+
+@router.get("/{list_id}/settle/simplify", response_model=SimplifyPlanResponse)
+def get_settle_simplify_plan(
+    list_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> SimplifyPlanResponse | JSONResponse:
+    service = SimplifyGroupPlanService(
+        SqlAlchemyListRepository(db), SqlAlchemySamePriceConflictRepository(db)
+    )
+    try:
+        result = service.execute(SimplifyGroupPlanCommand(actor_user_id=user_id, list_id=list_id))
+    except ListNotFoundError:
+        return _list_not_found()
+    if result.is_incomplete:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"detail": "Unresolved conflicts block simplify.", "code": "settle_incomplete"},
+        )
+    return SimplifyPlanResponse(
+        transfers=[
+            TransferResponse(
+                from_member_id=t.from_member_id,
+                from_alias=t.from_alias,
+                to_member_id=t.to_member_id,
+                to_alias=t.to_alias,
+                amount_crc=t.amount_crc,
+            )
+            for t in result.transfers
+        ],
+        is_incomplete=result.is_incomplete,
+    )
+
+
+@router.post("/{list_id}/settle", response_model=None)
+def post_settle_payables(
+    list_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> Response | JSONResponse:
+    service = SettlePayablesService(SqlAlchemyListRepository(db))
+    try:
+        service.execute(SettlePayablesCommand(actor_user_id=user_id, list_id=list_id))
+    except NotListMemberError:
+        return _access_denied()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(

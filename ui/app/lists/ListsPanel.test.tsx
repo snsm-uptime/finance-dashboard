@@ -82,9 +82,7 @@ describe("ListsPanel roster chips", () => {
     const card = container.querySelector('[aria-label="Open list: Personal"]');
     expect(card?.querySelector(".roleBookmark")).toBeNull();
     expect(chipTexts(card)).toEqual([]);
-    expect(card?.querySelector(".cardDivider")).toBeNull();
-    expect(card?.querySelector(".cardMiddle")).toBeNull();
-    expect(card?.querySelector(".cardFaceTitleOnly")).not.toBeNull();
+    expect(card?.querySelector(".cardBalanceCol")).toBeNull();
     expect(card?.textContent).not.toContain("sebas");
     expect(card?.textContent).not.toContain(t.balanceZero);
   });
@@ -94,7 +92,6 @@ describe("ListsPanel roster chips", () => {
       root.render(<ListsPanel initialLists={[shared]} currentUserId="owner-1" />);
     });
     const card = container.querySelector('[aria-label="Open list: Home"]');
-    expect(card?.querySelector(".cardDivider")).not.toBeNull();
     expect(chipTexts(card)).toEqual(["alex", "member-3…"]);
     const chips = Array.from(card?.querySelectorAll(".chipRow span") ?? []);
     const otherChip = chips.find((el) => el.textContent === "alex");
@@ -131,10 +128,8 @@ describe("ListsPanel roster chips", () => {
       );
     });
     const card = container.querySelector('[aria-label="Open list: Personal"]');
-    const middle = card?.querySelector(".cardMiddle");
-    expect(middle?.textContent).toContain(t.balanceOwe);
-    expect(middle?.textContent).toContain("₡12.5");
-    expect(card?.querySelector(".cardDivider")).not.toBeNull();
-    expect(card?.querySelector(".cardFaceTitleOnly")).toBeNull();
+    const balanceCol = card?.querySelector(".cardBalanceCol");
+    expect(balanceCol?.textContent).toContain(t.balanceOwe);
+    expect(balanceCol?.textContent).toContain("₡12.5");
   });
 });

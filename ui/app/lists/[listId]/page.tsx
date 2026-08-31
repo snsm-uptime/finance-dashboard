@@ -9,6 +9,7 @@ import { ReceiptRow } from "@/components/soft-ledger/ReceiptRow";
 import { SectionLabel } from "@/components/soft-ledger/SectionLabel";
 import { requireAlias } from "@/lib/alias";
 import { getApiInternalUrl } from "@/lib/api";
+import { formatCrcAmount, formatCrcNumber } from "@/lib/currency";
 import { listsMessages } from "@/lib/i18n/lists";
 import type { Locale } from "@/lib/i18n/locale";
 import { fetchSession } from "@/lib/session";
@@ -18,6 +19,8 @@ import { ListDetailMobileActions } from "../ListDetailMobileActions";
 import { ListDefaultSplitProvider } from "../ListDefaultSplitContext";
 import { ManualExpenseForm } from "../ManualExpenseForm";
 import { OriginChipPicker } from "../OriginChipPicker";
+import { SettleControls } from "../SettleControls";
+import { SimplifyColumn } from "../SimplifyColumn";
 import { TemporalNavigation } from "../TemporalNavigation";
 import {
   balanceTone,
@@ -70,11 +73,36 @@ function asDefaultSplit(data: unknown): DefaultSplitPayload | null {
   };
 }
 
+export type PairwiseEdgePayload = {
+  member_id: string;
+  alias: string | null;
+  amount_crc: string;
+};
+
 type BalancesPayload = {
   list_id: string;
   balance_crc: string;
   balance_status: { is_incomplete: boolean };
+  you_are_owed: PairwiseEdgePayload[];
+  you_owe: PairwiseEdgePayload[];
 };
+
+/** Defensive parse — malformed/absent rows default to `[]`, never fabricated (Story 5.8). */
+function asPairwiseEdges(data: unknown): PairwiseEdgePayload[] {
+  if (!Array.isArray(data)) return [];
+  const out: PairwiseEdgePayload[] = [];
+  for (const row of data) {
+    if (!row || typeof row !== "object") continue;
+    const r = row as Partial<PairwiseEdgePayload>;
+    if (typeof r.member_id !== "string" || typeof r.amount_crc !== "string") continue;
+    out.push({
+      member_id: r.member_id,
+      alias: typeof r.alias === "string" && r.alias ? r.alias : null,
+      amount_crc: r.amount_crc,
+    });
+  }
+  return out;
+}
 
 export function asBalances(data: unknown): BalancesPayload | null {
   if (!data || typeof data !== "object") return null;
@@ -96,6 +124,8 @@ export function asBalances(data: unknown): BalancesPayload | null {
     list_id: row.list_id,
     balance_crc: balanceCrc,
     balance_status: { is_incomplete: isIncomplete },
+    you_are_owed: asPairwiseEdges((row as { you_are_owed?: unknown }).you_are_owed),
+    you_owe: asPairwiseEdges((row as { you_owe?: unknown }).you_owe),
   };
 }
 
@@ -147,20 +177,6 @@ function asExpenses(data: unknown): ExpenseItem[] {
     });
   }
   return out;
-}
-
-function formatCrcNumber(amount: string): string {
-  const parsed = Number(amount);
-  if (!Number.isFinite(parsed)) return amount;
-  return parsed.toLocaleString("en-US", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  });
-}
-
-/** Soft-Ledger plain CRC voice (UX-DR17) — e.g. ₡10.00 / ₡42,500. */
-function formatCrcAmount(amount: string): string {
-  return `₡${formatCrcNumber(amount)}`;
 }
 
 export function formatShareLabel(
@@ -363,6 +379,17 @@ export function balanceStripPropsFrom(
   return { who: t.balanceZero, amount, polarity: "neutral" };
 }
 
+/** Pairwise column rows for the settle grid — alias falls back to a short id. */
+export function pairwiseRowsFrom(
+  edges: PairwiseEdgePayload[],
+): { memberId: string; label: string; amount: string }[] {
+  return edges.map((e) => ({
+    memberId: e.member_id,
+    label: e.alias ?? `${e.member_id.slice(0, 8)}…`,
+    amount: formatCrcAmount(e.amount_crc),
+  }));
+}
+
 function asMembers(data: unknown): ListMember[] {
   if (!data || typeof data !== "object") return [];
   const rows = (data as { members?: unknown }).members;
@@ -509,12 +536,9 @@ export default async function ListDetailPage({
   const listTitle = detail?.name;
   const isOwner = Boolean(detail?.owner_id && detail.owner_id === session.user_id);
   const showListDetail = Boolean(listTitle) && !notFound && !loadError;
-  const stripProps = balanceStripPropsFrom(
-    expenses.length > 0,
-    balancesLoadError,
-    balances?.balance_crc,
-    t,
-  );
+  const hasExpenses = expenses.length > 0;
+  const showBalancesGrid = !balancesLoadError && balances !== null;
+  const stripProps = balanceStripPropsFrom(hasExpenses, balancesLoadError, balances?.balance_crc, t);
   const todayCr = calendarDateInCostaRica(new Date().toISOString());
 
   return (
@@ -540,23 +564,294 @@ export default async function ListDetailPage({
           </>
         ) : (
           <ListDefaultSplitProvider initial={defaultSplit}>
-          <div className={styles.detailLayout}>
-            <ListDetailChrome title={listTitle as string} />
-            <div className={styles.detailPrimary}>
-              <BalanceStrip
-                who={stripProps.who}
-                amount={stripProps.amount}
-                polarity={stripProps.polarity}
-                action={
-                  <ListDetailMobileActions
+            <div className={styles.detailLayout}>
+              <ListDetailChrome title={listTitle as string} />
+              <div className={styles.detailPrimary}>
+                <BalanceStrip
+                  {...(showBalancesGrid
+                    ? {
+                      variant: "grid" as const,
+                      memberDetailsTitle: t.memberDetailsTitle,
+                      owesYouLabel: t.owesYouLabel,
+                      isOwedLabel: t.isOwedLabel,
+                      balanceLabel: t.balanceLabel,
+                      youAreOwed: pairwiseRowsFrom(balances?.you_are_owed ?? []),
+                      youOwe: pairwiseRowsFrom(balances?.you_owe ?? []),
+                      balanceAmount: stripProps.amount,
+                      balancePolarity: stripProps.polarity,
+                      simplify:
+                        members.length >= 3 ? (
+                          <SimplifyColumn
+                            listId={listId}
+                            available={balances?.balance_status.is_incomplete !== true}
+                            messages={{
+                              title: t.simplifyTitle,
+                              emptyLabel: t.simplifyEmpty,
+                              copyLabel: t.copyPlanLabel,
+                              copiedLabel: t.copyPlanCopiedLabel,
+                              blockedLabel: t.simplifyBlocked,
+                              errorGeneric: t.errorGeneric,
+                            }}
+                          />
+                        ) : undefined,
+                      settleAction: (
+                        <SettleControls
+                          listId={listId}
+                          messages={{
+                            settleAction: t.settleAction,
+                            settleConfirmTitle: t.settleConfirmTitle,
+                            settleConfirmBody: t.settleConfirmBody,
+                            settleConfirmAction: t.settleConfirmAction,
+                            settleCancel: t.settleCancel,
+                            errorGeneric: t.errorGeneric,
+                          }}
+                        />
+                      ),
+                    }
+                    : {
+                      who: stripProps.who,
+                      amount: stripProps.amount,
+                      polarity: stripProps.polarity,
+                    })}
+                  action={
+                    <ListDetailMobileActions
+                      listId={listId}
+                      currentUserId={session.user_id}
+                      members={members}
+                      isOwner={isOwner}
+                      canAddExpense={!membersLoadError && members.length > 0}
+                      canInvite={isOwner}
+                      defaultSplit={defaultSplit}
+                      expenseMessages={{
+                        expenseTitle: t.expenseTitle,
+                        expenseAmount: t.expenseAmount,
+                        expenseDescription: t.expenseDescription,
+                        expensePayer: t.expensePayer,
+                        expenseSubmit: t.expenseSubmit,
+                        expenseSaving: t.expenseSaving,
+                        expenseAdjustSplit: t.expenseAdjustSplit,
+                        expenseModeWhole: t.expenseModeWhole,
+                        expenseModeAbsolute: t.expenseModeAbsolute,
+                        expenseModePercentage: t.expenseModePercentage,
+                        expenseAssignee: t.expenseAssignee,
+                        expenseOriginLabel: t.expenseOriginLabel,
+                        expenseOriginBlank: t.expenseOriginBlank,
+                        expenseOriginCash: t.expenseOriginCash,
+                        errorGeneric: t.errorGeneric,
+                        errorInvalidName: t.errorInvalidName,
+                        errorForbidden: t.errorForbidden,
+                        errorUnauthorized: t.errorUnauthorized,
+                      }}
+                      inviteMessages={{
+                        inviteTitle: t.inviteTitle,
+                        inviteLabel: t.inviteLabel,
+                        inviteSubmit: t.inviteSubmit,
+                        inviteSending: t.inviteSending,
+                        inviteSent: t.inviteSent,
+                        errorGeneric: t.errorGeneric,
+                        errorInvalidName: t.errorInvalidName,
+                        errorInvalidEmail: t.errorInvalidEmail,
+                        errorForbidden: t.errorInviteForbidden,
+                        errorUnauthorized: t.errorUnauthorized,
+                        errorAlreadyMember: t.errorAlreadyMember,
+                        errorSmtp: t.errorSmtp,
+                      }}
+                      splitMessages={{
+                        errorGeneric: t.errorGeneric,
+                        errorInvalidName: t.errorInvalidName,
+                        errorForbidden: t.errorForbidden,
+                        errorUnauthorized: t.errorUnauthorized,
+                        defaultSplitTitle: t.defaultSplitTitle,
+                        defaultSplitEven: t.defaultSplitEven,
+                        defaultSplitCustom: t.defaultSplitCustom,
+                        defaultSplitSum: t.defaultSplitSum,
+                        defaultSplitSave: t.defaultSplitSave,
+                        defaultSplitSaving: t.defaultSplitSaving,
+                        defaultSplitReadOnly: t.defaultSplitReadOnly,
+                        errorInvalidSplit: t.errorInvalidSplit,
+                      }}
+                      addExpenseAria={t.mobileAddExpenseAria}
+                      inviteAria={t.mobileInviteAria}
+                      closeLabel={t.mobileSheetClose}
+                    />
+                  }
+                />
+                <IncompleteDisclosure
+                  isIncomplete={balances?.balance_status.is_incomplete === true}
+                  label={t.incompleteDisclosureLabel}
+                  resolveHref="/upload/conflicts"
+                  resolveLabel={t.incompleteDisclosureResolve}
+                />
+                {expenses.length === 0 && !expensesLoadError ? (
+                  <Hint>{t.detailHintEmpty}</Hint>
+                ) : null}
+                <div className={styles.softReceipts}>
+                  <div className={styles.softReceiptsChrome}>
+                    <SectionLabel>{t.detailReceiptsTitle}</SectionLabel>
+                  </div>
+                  <div className={styles.softReceiptsList}>
+                    {expensesLoadError ? (
+                      <p className={styles.copy} role="alert">
+                        {t.loadError}
+                      </p>
+                    ) : expenses.length === 0 ? (
+                      <ReceiptRow emptyLabel={t.detailReceiptsEmpty} />
+                    ) : (
+                      expenses.map((e) => {
+                        const rowProps = receiptRowFxPropsFrom(e, t);
+                        const net = formatNetLabel(e.viewer_net_crc, e.viewer_net_polarity);
+                        const originChip = originChipFrom(e, session.user_id, t);
+                        const rowShared = {
+                          title: rowProps.title,
+                          payerAlias: payerAliasFrom(e.payer_id, members),
+                          when: e.posted_date,
+                          amount: rowProps.amount,
+                          directionLabel: directionLabelFrom(e.viewer_net_polarity, t, {
+                            kind: e.viewer_share_kind,
+                            value: e.viewer_share_value,
+                          }),
+                          netLabel: net?.label,
+                          netPolarity: net?.polarity,
+                          newBadgeLabel: todayCr
+                            ? newBadgeLabelFrom(e, t, todayCr)
+                            : undefined,
+                          menuSlot: (
+                            <ListReceiptMenu
+                              listId={listId}
+                              statementId={e.statement_id}
+                              messages={{
+                                menuAria: t.receiptMenuAria,
+                                editLabel: t.receiptEdit,
+                                deleteLabel: t.receiptDelete,
+                                moveStatementLabel: t.receiptMoveStatement,
+                                moveConfirm: t.receiptMoveConfirm,
+                                pickerTitle: t.receiptMovePickerTitle,
+                                confirmAction: t.receiptMoveConfirmAction,
+                                cancelLabel: t.receiptMoveCancel,
+                                emptyDestLabel: t.receiptMoveNoOtherList,
+                                errorGeneric: t.errorGeneric,
+                                errorInvalidName: t.errorInvalidName,
+                                errorForbidden: t.errorForbidden,
+                                errorUnauthorized: t.errorUnauthorized,
+                                errorReassignSplit: t.errorReassignSplit,
+                              }}
+                              rollback={
+                                e.import_batch_id
+                                  ? {
+                                    listId,
+                                    batchId: e.import_batch_id,
+                                    confirmTitle: t.rollbackBatchConfirmTitle,
+                                    confirmBody: rollbackBatchConfirmBodyFrom(
+                                      expenses,
+                                      e.import_batch_id,
+                                      t,
+                                    ),
+                                    confirmAction: t.rollbackBatchConfirmAction,
+                                    cancelLabel: t.deleteCancel,
+                                    errorGeneric: t.errorGeneric,
+                                    errorForbidden: t.errorForbidden,
+                                    errorUnauthorized: t.errorUnauthorized,
+                                  }
+                                  : undefined
+                              }
+                            />
+                          ),
+                          fxSummary: rowProps.fxSummary,
+                          fxDetail: rowProps.fxDetail,
+                        };
+                        if (e.payer_id === session.user_id && originChip) {
+                          return (
+                            <OriginChipPicker
+                              key={e.id}
+                              listId={listId}
+                              entryId={e.id}
+                              originKind={
+                                e.origin_kind === "card" || e.origin_kind === "cash"
+                                  ? e.origin_kind
+                                  : null
+                              }
+                              originCardId={e.origin_card_id}
+                              originLabel={originChip}
+                              originTone={e.origin_kind == null ? "warning" : "muted"}
+                              messages={{
+                                expenseOriginNone: t.expenseOriginNone,
+                                expenseOriginCash: t.expenseOriginCash,
+                                expenseOriginLabel: t.expenseOriginLabel,
+                                errorGeneric: t.errorGeneric,
+                                errorInvalidName: t.errorInvalidName,
+                                errorForbidden: t.errorForbidden,
+                                errorUnauthorized: t.errorUnauthorized,
+                              }}
+                              {...rowShared}
+                            />
+                          );
+                        }
+                        return (
+                          <ReceiptRow
+                            key={e.id}
+                            originChip={originChip}
+                            originChipTone="muted"
+                            originDisabled
+                            {...rowShared}
+                          />
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              </div>
+              <aside className={styles.detailSidebar}>
+                {members.length > 0 && (
+                  <div>
+                    <TemporalNavigation
+                      listId={listId}
+                      currentUserId={session.user_id}
+                      members={members}
+                      isOwner={isOwner}
+                      defaultSplit={defaultSplit}
+                      inviteMessages={{
+                        inviteTitle: t.inviteTitle,
+                        inviteLabel: t.inviteLabel,
+                        inviteSubmit: t.inviteSubmit,
+                        inviteSending: t.inviteSending,
+                        inviteSent: t.inviteSent,
+                        errorGeneric: t.errorGeneric,
+                        errorInvalidName: t.errorInvalidName,
+                        errorInvalidEmail: t.errorInvalidEmail,
+                        errorForbidden: t.errorInviteForbidden,
+                        errorUnauthorized: t.errorUnauthorized,
+                        errorAlreadyMember: t.errorAlreadyMember,
+                        errorSmtp: t.errorSmtp,
+                      }}
+                      splitMessages={{
+                        errorGeneric: t.errorGeneric,
+                        errorInvalidName: t.errorInvalidName,
+                        errorForbidden: t.errorForbidden,
+                        errorUnauthorized: t.errorUnauthorized,
+                        defaultSplitTitle: t.defaultSplitTitle,
+                        defaultSplitEven: t.defaultSplitEven,
+                        defaultSplitCustom: t.defaultSplitCustom,
+                        defaultSplitSum: t.defaultSplitSum,
+                        defaultSplitSave: t.defaultSplitSave,
+                        defaultSplitSaving: t.defaultSplitSaving,
+                        defaultSplitReadOnly: t.defaultSplitReadOnly,
+                        errorInvalidSplit: t.errorInvalidSplit,
+                      }}
+                    />
+                  </div>
+
+                )}
+                {membersLoadError ? (
+                  <p className={styles.copy} role="alert">
+                    {t.loadError}
+                  </p>
+                ) : members.length > 0 ? (
+                  <ManualExpenseForm
                     listId={listId}
                     currentUserId={session.user_id}
                     members={members}
-                    isOwner={isOwner}
-                    canAddExpense={!membersLoadError && members.length > 0}
-                    canInvite={isOwner}
                     defaultSplit={defaultSplit}
-                    expenseMessages={{
+                    messages={{
                       expenseTitle: t.expenseTitle,
                       expenseAmount: t.expenseAmount,
                       expenseDescription: t.expenseDescription,
@@ -576,244 +871,15 @@ export default async function ListDetailPage({
                       errorForbidden: t.errorForbidden,
                       errorUnauthorized: t.errorUnauthorized,
                     }}
-                    inviteMessages={{
-                      inviteTitle: t.inviteTitle,
-                      inviteLabel: t.inviteLabel,
-                      inviteSubmit: t.inviteSubmit,
-                      inviteSending: t.inviteSending,
-                      inviteSent: t.inviteSent,
-                      errorGeneric: t.errorGeneric,
-                      errorInvalidName: t.errorInvalidName,
-                      errorInvalidEmail: t.errorInvalidEmail,
-                      errorForbidden: t.errorInviteForbidden,
-                      errorUnauthorized: t.errorUnauthorized,
-                      errorAlreadyMember: t.errorAlreadyMember,
-                      errorSmtp: t.errorSmtp,
-                    }}
-                    splitMessages={{
-                      errorGeneric: t.errorGeneric,
-                      errorInvalidName: t.errorInvalidName,
-                      errorForbidden: t.errorForbidden,
-                      errorUnauthorized: t.errorUnauthorized,
-                      defaultSplitTitle: t.defaultSplitTitle,
-                      defaultSplitEven: t.defaultSplitEven,
-                      defaultSplitCustom: t.defaultSplitCustom,
-                      defaultSplitSum: t.defaultSplitSum,
-                      defaultSplitSave: t.defaultSplitSave,
-                      defaultSplitSaving: t.defaultSplitSaving,
-                      defaultSplitReadOnly: t.defaultSplitReadOnly,
-                      errorInvalidSplit: t.errorInvalidSplit,
-                    }}
-                    addExpenseAria={t.mobileAddExpenseAria}
-                    inviteAria={t.mobileInviteAria}
-                    closeLabel={t.mobileSheetClose}
                   />
-                }
-              />
-              <IncompleteDisclosure
-                isIncomplete={balances?.balance_status.is_incomplete === true}
-                label={t.incompleteDisclosureLabel}
-                resolveHref="/upload/conflicts"
-                resolveLabel={t.incompleteDisclosureResolve}
-              />
-              {expenses.length === 0 && !expensesLoadError ? (
-                <Hint>{t.detailHintEmpty}</Hint>
-              ) : null}
-              <div className={styles.softReceipts}>
-                <div className={styles.softReceiptsChrome}>
-                  <SectionLabel>{t.detailReceiptsTitle}</SectionLabel>
-                </div>
-                <div className={styles.softReceiptsList}>
-                  {expensesLoadError ? (
-                    <p className={styles.copy} role="alert">
-                      {t.loadError}
-                    </p>
-                  ) : expenses.length === 0 ? (
-                    <ReceiptRow emptyLabel={t.detailReceiptsEmpty} />
-                  ) : (
-                    expenses.map((e) => {
-                      const rowProps = receiptRowFxPropsFrom(e, t);
-                      const net = formatNetLabel(e.viewer_net_crc, e.viewer_net_polarity);
-                      const originChip = originChipFrom(e, session.user_id, t);
-                      const rowShared = {
-                        title: rowProps.title,
-                        payerAlias: payerAliasFrom(e.payer_id, members),
-                        when: e.posted_date,
-                        amount: rowProps.amount,
-                        directionLabel: directionLabelFrom(e.viewer_net_polarity, t, {
-                          kind: e.viewer_share_kind,
-                          value: e.viewer_share_value,
-                        }),
-                        netLabel: net?.label,
-                        netPolarity: net?.polarity,
-                        newBadgeLabel: todayCr
-                          ? newBadgeLabelFrom(e, t, todayCr)
-                          : undefined,
-                        menuSlot: (
-                          <ListReceiptMenu
-                            listId={listId}
-                            statementId={e.statement_id}
-                            messages={{
-                              menuAria: t.receiptMenuAria,
-                              editLabel: t.receiptEdit,
-                              deleteLabel: t.receiptDelete,
-                              moveStatementLabel: t.receiptMoveStatement,
-                              moveConfirm: t.receiptMoveConfirm,
-                              pickerTitle: t.receiptMovePickerTitle,
-                              confirmAction: t.receiptMoveConfirmAction,
-                              cancelLabel: t.receiptMoveCancel,
-                              emptyDestLabel: t.receiptMoveNoOtherList,
-                              errorGeneric: t.errorGeneric,
-                              errorInvalidName: t.errorInvalidName,
-                              errorForbidden: t.errorForbidden,
-                              errorUnauthorized: t.errorUnauthorized,
-                              errorReassignSplit: t.errorReassignSplit,
-                            }}
-                            rollback={
-                              e.import_batch_id
-                                ? {
-                                    listId,
-                                    batchId: e.import_batch_id,
-                                    confirmTitle: t.rollbackBatchConfirmTitle,
-                                    confirmBody: rollbackBatchConfirmBodyFrom(
-                                      expenses,
-                                      e.import_batch_id,
-                                      t,
-                                    ),
-                                    confirmAction: t.rollbackBatchConfirmAction,
-                                    cancelLabel: t.deleteCancel,
-                                    errorGeneric: t.errorGeneric,
-                                    errorForbidden: t.errorForbidden,
-                                    errorUnauthorized: t.errorUnauthorized,
-                                  }
-                                : undefined
-                            }
-                          />
-                        ),
-                        fxSummary: rowProps.fxSummary,
-                        fxDetail: rowProps.fxDetail,
-                      };
-                      if (e.payer_id === session.user_id && originChip) {
-                        return (
-                          <OriginChipPicker
-                            key={e.id}
-                            listId={listId}
-                            entryId={e.id}
-                            originKind={
-                              e.origin_kind === "card" || e.origin_kind === "cash"
-                                ? e.origin_kind
-                                : null
-                            }
-                            originCardId={e.origin_card_id}
-                            originLabel={originChip}
-                            originTone={e.origin_kind == null ? "warning" : "muted"}
-                            messages={{
-                              expenseOriginNone: t.expenseOriginNone,
-                              expenseOriginCash: t.expenseOriginCash,
-                              expenseOriginLabel: t.expenseOriginLabel,
-                              errorGeneric: t.errorGeneric,
-                              errorInvalidName: t.errorInvalidName,
-                              errorForbidden: t.errorForbidden,
-                              errorUnauthorized: t.errorUnauthorized,
-                            }}
-                            {...rowShared}
-                          />
-                        );
-                      }
-                      return (
-                        <ReceiptRow
-                          key={e.id}
-                          originChip={originChip}
-                          originChipTone="muted"
-                          originDisabled
-                          {...rowShared}
-                        />
-                      );
-                    })
-                  )}
-                </div>
-              </div>
+                ) : null}
+                {isOwner && splitLoadError ? (
+                  <p className={styles.copy} role="alert">
+                    {t.errorDefaultSplitLoad}
+                  </p>
+                ) : null}
+              </aside>
             </div>
-            <aside className={styles.detailSidebar}>
-              {members.length > 0 && (
-                <div>
-                  <TemporalNavigation
-                    listId={listId}
-                    currentUserId={session.user_id}
-                    members={members}
-                    isOwner={isOwner}
-                    defaultSplit={defaultSplit}
-                    inviteMessages={{
-                      inviteTitle: t.inviteTitle,
-                      inviteLabel: t.inviteLabel,
-                      inviteSubmit: t.inviteSubmit,
-                      inviteSending: t.inviteSending,
-                      inviteSent: t.inviteSent,
-                      errorGeneric: t.errorGeneric,
-                      errorInvalidName: t.errorInvalidName,
-                      errorInvalidEmail: t.errorInvalidEmail,
-                      errorForbidden: t.errorInviteForbidden,
-                      errorUnauthorized: t.errorUnauthorized,
-                      errorAlreadyMember: t.errorAlreadyMember,
-                      errorSmtp: t.errorSmtp,
-                    }}
-                    splitMessages={{
-                      errorGeneric: t.errorGeneric,
-                      errorInvalidName: t.errorInvalidName,
-                      errorForbidden: t.errorForbidden,
-                      errorUnauthorized: t.errorUnauthorized,
-                      defaultSplitTitle: t.defaultSplitTitle,
-                      defaultSplitEven: t.defaultSplitEven,
-                      defaultSplitCustom: t.defaultSplitCustom,
-                      defaultSplitSum: t.defaultSplitSum,
-                      defaultSplitSave: t.defaultSplitSave,
-                      defaultSplitSaving: t.defaultSplitSaving,
-                      defaultSplitReadOnly: t.defaultSplitReadOnly,
-                      errorInvalidSplit: t.errorInvalidSplit,
-                    }}
-                  />
-                </div>
-
-              )}
-              {membersLoadError ? (
-                <p className={styles.copy} role="alert">
-                  {t.loadError}
-                </p>
-              ) : members.length > 0 ? (
-                <ManualExpenseForm
-                  listId={listId}
-                  currentUserId={session.user_id}
-                  members={members}
-                  defaultSplit={defaultSplit}
-                  messages={{
-                    expenseTitle: t.expenseTitle,
-                    expenseAmount: t.expenseAmount,
-                    expenseDescription: t.expenseDescription,
-                    expensePayer: t.expensePayer,
-                    expenseSubmit: t.expenseSubmit,
-                    expenseSaving: t.expenseSaving,
-                    expenseAdjustSplit: t.expenseAdjustSplit,
-                    expenseModeWhole: t.expenseModeWhole,
-                    expenseModeAbsolute: t.expenseModeAbsolute,
-                    expenseModePercentage: t.expenseModePercentage,
-                    expenseAssignee: t.expenseAssignee,
-                    expenseOriginLabel: t.expenseOriginLabel,
-                    expenseOriginBlank: t.expenseOriginBlank,
-                    expenseOriginCash: t.expenseOriginCash,
-                    errorGeneric: t.errorGeneric,
-                    errorInvalidName: t.errorInvalidName,
-                    errorForbidden: t.errorForbidden,
-                    errorUnauthorized: t.errorUnauthorized,
-                  }}
-                />
-              ) : null}
-              {isOwner && splitLoadError ? (
-                <p className={styles.copy} role="alert">
-                  {t.errorDefaultSplitLoad}
-                </p>
-              ) : null}
-            </aside>
-          </div>
           </ListDefaultSplitProvider>
         )}
       </div>

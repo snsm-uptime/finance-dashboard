@@ -76,8 +76,9 @@ def compute_settle_balance_for_list_members(
         list_owner_id: UUID of the list creator (remainder sink for percentages).
         compute_allocations_fn: Callable to compute share allocations
             (signature: compute_share_allocations(...) -> AllocationResult).
-        get_split_override_fn: Callable to fetch split override for receipt_id
-            (signature: get_split_override(receipt_id) -> SplitOverrideModel | None).
+        get_split_override_fn: Callable to fetch item/receipt split overrides for
+            an entry (signature: get_split_override(entry_id, receipt_id) ->
+            tuple[SplitSpec | None, SplitSpec | None] of (item_override, receipt_override)).
         get_list_default_split_fn: Callable to fetch list default split config
             (signature: get_list_default_split(list_id) -> StoredDefaultSplit | None).
         currency_exponent: Currency exponent for precision (default 2 for CRC).
@@ -108,16 +109,12 @@ def compute_settle_balance_for_list_members(
         sign = Decimal("1") if raw_amount > 0 else Decimal("-1")
         split_total = abs(raw_amount)
 
-        receipt_override = None
-        if entry.receipt_id:
-            split_override = get_split_override_fn(entry.receipt_id)
-            if split_override:
-                receipt_override = split_override
+        item_override, receipt_override = get_split_override_fn(entry.id, entry.receipt_id)
 
         allocations = compute_allocations_fn(
             total=split_total,
             currency=entry.currency,
-            item_override=None,
+            item_override=item_override,
             receipt_override=receipt_override,
             list_default_mode=default_mode,
             list_default_shares=get_list_default_split_fn(entry.list_id),
@@ -150,3 +147,157 @@ def compute_settle_balance_for_list_members(
         logger.warning(f"Settle-up invariant violated: sum of balances = {total} (expected 0)")
 
     return balance_dict
+
+
+def compute_pairwise_settle_balances(
+    ledger_entries: Iterable[LedgerEntryRecord],
+    list_members: Iterable[ListMemberView],
+    list_owner_id: UUID,
+    compute_allocations_fn: Callable,
+    get_split_override_fn: Callable,
+    get_list_default_split_fn: Callable,
+    default_mode: str = "even",
+    currency_exponent: int = 2,
+) -> dict[tuple[UUID, UUID], Decimal]:
+    """Compute directional pairwise settle-up edges between list members.
+
+    Mirrors `compute_settle_balance_for_list_members`'s entry-iteration loop
+    (same line-type filter, same sign/reversal handling, same allocation call)
+    but accumulates per-counterparty edges instead of a single per-member
+    balance. Edge key `(A, B)` means "B owes A" (positive = A is owed),
+    matching the polarity convention of the existing per-member function.
+
+    Edges are not netted against their reverse direction here — call
+    `net_pairwise_edges` to collapse `(A, B)` and `(B, A)` into one signed
+    value per unordered pair.
+    """
+    member_list = list(list_members)
+    member_ids = [m.user_id for m in member_list]
+
+    edges: dict[tuple[UUID, UUID], Decimal] = {}
+
+    for entry in ledger_entries:
+        if entry.line_type not in INCLUDED_LINE_TYPES:
+            continue
+
+        payer_id = entry.payer_id
+        raw_amount = entry.amount_crc
+        if raw_amount == 0:
+            continue
+        sign = Decimal("1") if raw_amount > 0 else Decimal("-1")
+        split_total = abs(raw_amount)
+
+        item_override, receipt_override = get_split_override_fn(entry.id, entry.receipt_id)
+
+        allocations = compute_allocations_fn(
+            total=split_total,
+            currency=entry.currency,
+            item_override=item_override,
+            receipt_override=receipt_override,
+            list_default_mode=default_mode,
+            list_default_shares=get_list_default_split_fn(entry.list_id),
+            member_ids=member_ids,
+            creator_user_id=list_owner_id,
+            currency_exponent=currency_exponent,
+        )
+
+        for allocation in allocations.allocations:
+            if allocation.member_id == payer_id:
+                continue
+            key = (payer_id, allocation.member_id)
+            edges[key] = edges.get(key, Decimal("0")) + allocation.amount * sign
+
+    return edges
+
+
+def net_pairwise_edges(
+    edges: dict[tuple[UUID, UUID], Decimal],
+) -> dict[tuple[UUID, UUID], Decimal]:
+    """Collapse directional edges into one signed value per unordered pair.
+
+    Canonical key ordering is the lexicographically smaller UUID first. The
+    resulting value at `(X, Y)` (X < Y) is positive when Y owes X, negative
+    when X owes Y — a member appears on only one side of a pair once nets
+    are collapsed this way.
+    """
+    pairs: set[tuple[UUID, UUID]] = set()
+    for a, b in edges:
+        pairs.add((a, b) if str(a) < str(b) else (b, a))
+
+    net: dict[tuple[UUID, UUID], Decimal] = {}
+    for x, y in pairs:
+        forward = edges.get((x, y), Decimal("0"))
+        backward = edges.get((y, x), Decimal("0"))
+        value = forward - backward
+        if value != Decimal("0"):
+            net[(x, y)] = value
+
+    return net
+
+
+@dataclass(frozen=True, slots=True)
+class SuggestedTransfer:
+    """A single suggested transfer produced by `simplify_group_transfers`."""
+
+    from_member_id: UUID
+    to_member_id: UUID
+    amount_crc: Decimal
+
+
+def simplify_group_transfers(
+    net_balances: dict[UUID, Decimal],
+    currency_exponent: int = 2,
+) -> list[SuggestedTransfer]:
+    """Reduce list-wide net balances to a minimal-transaction transfer plan.
+
+    Classic "settle up with minimum transactions" greedy reduction: repeatedly
+    match the largest current creditor with the largest current debtor,
+    transfer the smaller magnitude, and reduce both. Pure and deterministic
+    (ties broken by member UUID). Never invents a transfer between two
+    zero-balance members and never produces a zero-amount transfer.
+    """
+    creditors = [(mid, bal) for mid, bal in net_balances.items() if bal > 0]
+    debtors = [(mid, bal) for mid, bal in net_balances.items() if bal < 0]
+
+    def sort_key(item: tuple[UUID, Decimal]) -> tuple[Decimal, str]:
+        mid, bal = item
+        return (-abs(bal), str(mid))
+
+    creditors.sort(key=sort_key)
+    debtors.sort(key=sort_key)
+
+    transfers: list[SuggestedTransfer] = []
+    quantum = Decimal(1).scaleb(-currency_exponent)
+
+    while creditors and debtors:
+        creditor_id, creditor_bal = creditors[0]
+        debtor_id, debtor_bal = debtors[0]
+
+        amount = min(creditor_bal, abs(debtor_bal)).quantize(quantum)
+        if amount == 0:
+            raise ValueError("net_balances not quantized to currency_exponent")
+        transfers.append(
+            SuggestedTransfer(
+                from_member_id=debtor_id,
+                to_member_id=creditor_id,
+                amount_crc=amount,
+            )
+        )
+
+        creditor_bal -= amount
+        debtor_bal += amount
+
+        if creditor_bal == 0:
+            creditors.pop(0)
+        else:
+            creditors[0] = (creditor_id, creditor_bal)
+
+        if debtor_bal == 0:
+            debtors.pop(0)
+        else:
+            debtors[0] = (debtor_id, debtor_bal)
+
+        creditors.sort(key=sort_key)
+        debtors.sort(key=sort_key)
+
+    return transfers

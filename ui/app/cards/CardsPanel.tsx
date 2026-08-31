@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { CopyButton } from "@/components/CopyButton";
 import { usePreferences } from "@/components/PreferencesProvider";
@@ -23,11 +23,6 @@ function maskIban(iban: string): string {
 export function CardsPanel() {
   const { locale } = usePreferences();
   const t = cardsCopy(locale);
-  const baseId = useId();
-  const listTitleId = `${baseId}-list-title`;
-  const registerTitleId = `${baseId}-register-title`;
-  // Nested under the host page's own <h2>, so these drop a level to <h3>.
-  const HeadingTag = "h3";
   const [cards, setCards] = useState<CardItem[]>([]);
   const lists = useMembershipLists() ?? [];
   const [loading, setLoading] = useState(true);
@@ -88,84 +83,66 @@ export function CardsPanel() {
   }
 
   const sections = (
-    // Source order = mobile stack (Register, then list).
-    // md:flex-col-reverse restores desktop (list, then Register).
-    // md:justify-end keeps a reversed column top-aligned if a parent stretches it.
-    // Tailwind md is 768px — same breakpoint as Home's lists/cards split (home.module.scss).
-    <div className="flex flex-col gap-8 md:flex-col-reverse md:justify-end">
-      <section aria-labelledby={registerTitleId}>
-        <HeadingTag
-          id={registerTitleId}
-          className="m-0 mb-[0.6rem] text-[0.72rem] font-[550] text-muted tracking-[0.02rem]"
-        >
-          {t.submit}
-        </HeadingTag>
-        <RegisterCardForm
-          messages={{
-            ...messages,
-            labelField: t.labelField,
-            ibanField: t.ibanField,
-            submit: t.submit,
-            submitting: t.submitting,
-          }}
-          onRegistered={onRegistered}
-        />
-      </section>
+    <section aria-label={t.title} className="relative flex flex-col gap-2">
+      {/* absolute: an in-flow sr-only node is still a flex item and would eat
+          an extra `gap` slot even though it renders at zero size. */}
+      <p className="sr-only absolute" aria-live="polite">
+        {registeredStatus}
+      </p>
+      <RegisterCardForm
+        messages={{
+          ...messages,
+          labelField: t.labelField,
+          ibanField: t.ibanField,
+          submit: t.submit,
+          submitting: t.submitting,
+        }}
+        onRegistered={onRegistered}
+      />
 
-      <section aria-labelledby={listTitleId}>
-        <HeadingTag
-          id={listTitleId}
-          className="m-0 mb-[0.6rem] text-[0.72rem] font-[550] text-muted tracking-[0.02rem]"
-        >
-          {t.listTitle}
-        </HeadingTag>
-        <p className="sr-only" aria-live="polite">
-          {registeredStatus}
+      {loading ? (
+        <p className="text-muted text-[0.85rem]">{t.loading}</p>
+      ) : loadError ? (
+        <p className="text-owe text-[0.9rem]" role="alert">
+          {loadError}
         </p>
-        {loading ? (
-          <p className="text-muted text-[0.85rem]">{t.loading}</p>
-        ) : loadError ? (
-          <p className="text-owe text-[0.9rem]" role="alert">
-            {loadError}
-          </p>
-        ) : cards.length === 0 ? (
-          <p className="text-muted text-[0.85rem]">{t.emptyState}</p>
-        ) : (
-          <ul className="list-none m-0 p-0 flex flex-col gap-2">
-            {cards.map((card) => (
-              <li
-                key={card.id}
-                className="py-[0.6rem] px-[0.85rem] rounded-[8px] border border-border bg-surface"
-              >
-                <CardRoutingControl
-                  card={card}
-                  lists={lists}
-                  trailing={
-                    <CopyButton value={card.iban} label={t.copyIban} copiedLabel={t.ibanCopied}>
-                      <span className="text-muted text-[0.85rem] tracking-[0.02rem]">
-                        {maskIban(card.iban)}
-                      </span>
-                    </CopyButton>
-                  }
-                  messages={{
-                    ...messages,
-                    routingTitle: t.routingTitle,
-                    routingChipFixed: t.routingChipFixed,
-                    routingChipReview: t.routingChipReview,
-                    routingModeFixed: t.routingModeFixed,
-                    routingModeReview: t.routingModeReview,
-                    routingListLabel: t.routingListLabel,
-                    routingSave: t.routingSave,
-                    routingSaving: t.routingSaving,
-                  }}
-                  onUpdated={onRoutingUpdated}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-    </div>
+      ) : cards.length === 0 ? (
+        <p className="text-muted text-[0.85rem]">{t.emptyState}</p>
+      ) : (
+        <ul className="list-none m-0 p-0 flex flex-col gap-2">
+          {cards.map((card) => (
+            <li
+              key={card.id}
+              className="py-[0.6rem] px-[0.85rem] rounded-[8px] border border-border bg-surface"
+            >
+              <CardRoutingControl
+                card={card}
+                lists={lists}
+                trailing={
+                  <CopyButton value={card.iban} label={t.copyIban} copiedLabel={t.ibanCopied}>
+                    <span className="text-muted text-[0.85rem] tracking-[0.02rem]">
+                      {maskIban(card.iban)}
+                    </span>
+                  </CopyButton>
+                }
+                messages={{
+                  ...messages,
+                  routingTitle: t.routingTitle,
+                  routingChipFixed: t.routingChipFixed,
+                  routingChipReview: t.routingChipReview,
+                  routingModeFixed: t.routingModeFixed,
+                  routingModeReview: t.routingModeReview,
+                  routingListLabel: t.routingListLabel,
+                  routingSave: t.routingSave,
+                  routingSaving: t.routingSaving,
+                }}
+                onUpdated={onRoutingUpdated}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 
   return sections;

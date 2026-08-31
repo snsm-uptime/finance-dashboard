@@ -47,10 +47,32 @@ services:
       PORT: "3000"
       WATCHPACK_POLLING: "true"
       CHOKIDAR_USEPOLLING: "true"
+    # Bypasses `npm run dev` to invoke node directly with --inspect as a real
+    # CLI flag (not NODE_OPTIONS): jest-worker strips --inspect/--debug from
+    # execArgv before forking its child processes, but NOT from inherited env
+    # vars, so NODE_OPTIONS would leak --inspect into every jest-worker child
+    # and crash them on a port collision. See JS-DAP.md.
+    # Must bind 0.0.0.0 — the container's loopback isn't reachable from the host.
+    #
+    # `next dev`'s CLI process (PID 1 here) only supervises — it forks a second
+    # process ("next-server", running start-server.js) that actually executes
+    # route handlers/server components. Next detects the inherited --inspect
+    # on PID 1 and auto-starts a second inspector on port+1 (9230) for that
+    # child, bound to the same host. Breakpoints in app code only bind on
+    # that child's inspector, so 9230 must be published too. See JS-DAP.md.
+    command: ["node", "--inspect=0.0.0.0:9229", "node_modules/next/dist/bin/next", "dev", "--webpack", "-H", "0.0.0.0", "-p", "3000"]
+    ports:
+      - "${UI_DEBUG_PORT:-9229}:9229"
+      - "${UI_DEBUG_WORKER_PORT:-9230}:9230"
     volumes:
       - ./ui:/app
       - ui_node_modules:/app/node_modules
-      - ui_next:/app/.next
+      # Bind mount, not a named volume: js-debug-adapter runs on the HOST and
+      # reads .js.map sidecar files straight off local disk for file:// script
+      # URLs (it never fetches them over the CDP connection). A named volume
+      # keeps .next container-only, so every source-map read 404s. See
+      # JS-DAP.md. Already gitignored (ui/.gitignore).
+      - ./ui/.next:/app/.next
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 1h
@@ -60,4 +82,3 @@ services:
 
 volumes:
   ui_node_modules:
-  ui_next:

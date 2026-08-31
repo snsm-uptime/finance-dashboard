@@ -158,12 +158,6 @@ export function ReceiptRow({
               {title}
             </span>
           ) : null}
-          {amount ? (
-            <span style={typeStyle.amount} className="shrink-0 tabular-nums text-muted">
-              {amount}
-            </span>
-          ) : null}
-          {newBadgeLabel ? <Chip tone="accent">{newBadgeLabel}</Chip> : null}
         </div>
 
         {directionLabel ? (
@@ -198,6 +192,12 @@ export function ReceiptRow({
             originDisabled={originDisabled}
             originAction={originAction}
           />
+          {amount ? (
+            <span style={typeStyle.amount} className="shrink-0 tabular-nums text-muted">
+              {amount}
+            </span>
+          ) : null}
+          {newBadgeLabel ? <Chip tone="accent">{newBadgeLabel}</Chip> : null}
         </div>
 
         {netLabel ? (

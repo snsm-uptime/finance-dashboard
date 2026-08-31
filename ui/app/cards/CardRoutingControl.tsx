@@ -2,10 +2,9 @@
 
 import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
+import { chipClassName } from "@/components/Chip";
 import { SlideDown } from "@/components/SlideDown";
 import { useFormSubmission } from "@/hooks";
-import { SoftLedgerRadio } from "@/components/soft-ledger/Radio";
-import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
 import type { ListItem } from "../lists/listsClient";
 import { setCardRouting, type CardItem, type CardsClientMessages } from "./cardsClient";
 
@@ -29,31 +28,31 @@ type Props = {
   trailing?: ReactNode;
 };
 
+type RoutingSelection = { mode: "fixed" | "review"; fixedListId: string | null };
+
+const focusRing =
+  "cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+
 /**
- * Compact card row: label + saved-routing chip. Clicking the chip slides the
- * routing form down from beneath the row. The chip always reflects the last
- * saved setting, not in-progress edits.
+ * Compact card row: label + saved-routing chip. Clicking the chip slides a
+ * menu of selectable chips down from beneath the row — "Review" plus one
+ * per list. Picking a chip applies and saves it immediately. The chip
+ * always reflects the last saved setting, not in-progress edits.
  */
 export function CardRoutingControl({ card, lists, messages, onUpdated, trailing }: Props) {
   const baseId = useId();
-  const modeName = `${baseId}-routing-mode`;
   const chipId = `${baseId}-chip`;
   const panelId = `${baseId}-panel`;
   const chipRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<"fixed" | "review">(card.routing_mode);
-  const [fixedListId, setFixedListId] = useState(card.fixed_list_id ?? "");
-  // Membership can drop the previously-selected list out of `lists`; derive
-  // instead of syncing via effect so a stale id never renders as selected.
-  const activeFixedListId = lists.some((list) => list.id === fixedListId) ? fixedListId : "";
 
   const { pending, error, submit, clearError } = useFormSubmission(
-    async (input: { mode: "fixed" | "review"; fixedListId: string }) => {
+    async (selection: RoutingSelection) => {
       const result = await setCardRouting(
         card.id,
         {
-          routing_mode: input.mode,
-          fixed_list_id: input.mode === "fixed" ? input.fixedListId : null,
+          routing_mode: selection.mode,
+          fixed_list_id: selection.mode === "fixed" ? selection.fixedListId : null,
         },
         messages,
       );
@@ -68,19 +67,18 @@ export function CardRoutingControl({ card, lists, messages, onUpdated, trailing 
     },
   );
 
-  const canSubmit = !pending && (mode === "review" || activeFixedListId.length > 0);
+  const fixedListName =
+    card.routing_mode === "fixed"
+      ? lists.find((list) => list.id === card.fixed_list_id)?.name
+      : undefined;
   const chipLabel =
-    card.routing_mode === "fixed" ? messages.routingChipFixed : messages.routingChipReview;
+    card.routing_mode === "fixed"
+      ? (fixedListName ?? messages.routingChipFixed)
+      : messages.routingChipReview;
   const chipAria = `${messages.routingTitle}: ${chipLabel}`;
 
-  function discardDraft() {
-    setMode(card.routing_mode);
-    setFixedListId(card.fixed_list_id ?? "");
-    clearError();
-  }
-
   function closePanel() {
-    if (!pending) discardDraft();
+    clearError();
     setOpen(false);
     chipRef.current?.focus();
   }
@@ -90,14 +88,35 @@ export function CardRoutingControl({ card, lists, messages, onUpdated, trailing 
       closePanel();
       return;
     }
+    clearError();
     setOpen(true);
   }
 
   function onRootKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key !== "Escape" || !open) return;
-    if ((event.target as HTMLElement).closest('[role="listbox"]')) return;
     event.stopPropagation();
     closePanel();
+  }
+
+  // Mirrors the origin chip menu: the currently active setting is already
+  // shown on the trigger chip, so it's left out of the selectable row.
+  const options: { key: string; label: string; ariaLabel: string; onSelect: () => void }[] = [];
+  if (card.routing_mode !== "review") {
+    options.push({
+      key: "review",
+      label: messages.routingChipReview,
+      ariaLabel: messages.routingModeReview,
+      onSelect: () => submit({ mode: "review", fixedListId: null }),
+    });
+  }
+  for (const list of lists) {
+    if (card.routing_mode === "fixed" && card.fixed_list_id === list.id) continue;
+    options.push({
+      key: list.id,
+      label: list.name,
+      ariaLabel: `${messages.routingModeFixed}: ${list.name}`,
+      onSelect: () => submit({ mode: "fixed", fixedListId: list.id }),
+    });
   }
 
   return (
@@ -132,51 +151,19 @@ export function CardRoutingControl({ card, lists, messages, onUpdated, trailing 
         {trailing}
       </div>
       <SlideDown open={open} id={panelId} labelledBy={chipId}>
-        <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-border">
-          <div className="flex items-center gap-4">
-            <SoftLedgerRadio
-              name={modeName}
-              checked={mode === "review"}
+        <div className="mt-2 flex flex-wrap items-center gap-2 pt-2 border-t border-border">
+          {options.map((option) => (
+            <button
+              key={option.key}
+              type="button"
               disabled={pending}
-              onChange={() => {
-                setMode("review");
-                clearError();
-              }}
+              aria-label={option.ariaLabel}
+              onClick={option.onSelect}
+              className={`${chipClassName.muted} ${focusRing} hover:border-muted disabled:cursor-not-allowed disabled:opacity-60`}
             >
-              {messages.routingModeReview}
-            </SoftLedgerRadio>
-            <SoftLedgerRadio
-              name={modeName}
-              checked={mode === "fixed"}
-              disabled={pending}
-              onChange={() => {
-                setMode("fixed");
-                clearError();
-              }}
-            >
-              {messages.routingModeFixed}
-            </SoftLedgerRadio>
-          </div>
-          {mode === "fixed" ? (
-            <SoftLedgerSelect
-              aria-label={messages.routingListLabel}
-              value={activeFixedListId}
-              disabled={pending}
-              options={lists.map((l) => ({ value: l.id, label: l.name }))}
-              onChange={(value) => {
-                setFixedListId(value);
-                clearError();
-              }}
-            />
-          ) : null}
-          <button
-            type="button"
-            className="font-inherit text-[0.8rem] font-semibold py-[0.4rem] px-[0.75rem] rounded-[8px] border border-accent bg-accent text-on-accent cursor-pointer self-start disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={!canSubmit}
-            onClick={() => submit({ mode, fixedListId: activeFixedListId })}
-          >
-            {pending ? messages.routingSaving : messages.routingSave}
-          </button>
+              {option.label}
+            </button>
+          ))}
           <div aria-live="polite">
             {error ? (
               <p className="text-owe text-[0.85rem] m-0" role="alert">

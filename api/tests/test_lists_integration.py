@@ -5,7 +5,7 @@ Requires DATABASE_URL (Compose db or CI Postgres 16). Skips when unset.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
@@ -19,7 +19,7 @@ from adapters.persistence.models import (
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from tests.integration_db import claim_alias, database_url
+from tests.integration_db import alias_from_email, claim_alias, database_url
 
 pytestmark = pytest.mark.skipif(
     database_url() is None,
@@ -466,3 +466,261 @@ def test_balances_conflict_on_one_of_actors_own_lists_does_not_flag_a_sibling_li
     sibling = client.get(f"/lists/{sibling_list}/balances")
     assert sibling.status_code == 200
     assert sibling.json()["balance_status"] == {"is_incomplete": False}
+
+
+# --- Story 5.8: pairwise grid, simplify, settle ------------------------------
+
+
+def _seed_full_ledger_entry(
+    db_session: Session,
+    *,
+    list_id: UUID,
+    payer_id: UUID,
+    amount: Decimal,
+    line_type: str = "purchase",
+    posted_date: date = date(2026, 8, 10),
+    created_at: datetime | None = None,
+) -> UUID:
+    entry_id = uuid4()
+    db_session.add(
+        LedgerEntryModel(
+            id=entry_id,
+            list_id=list_id,
+            amount=amount,
+            currency="CRC",
+            normalized_description="Entry",
+            payer_id=payer_id,
+            provenance="hand",
+            line_type=line_type,
+            posted_date=posted_date,
+            amount_crc=amount,
+            fx_rate=Decimal("1"),
+            created_at=created_at or datetime.now(UTC),
+        )
+    )
+    db_session.flush()
+    return entry_id
+
+
+def _add_member(db_session: Session, *, list_id: UUID, user_id: UUID, role: str = "member") -> None:
+    db_session.add(ListMembershipModel(id=uuid4(), list_id=list_id, user_id=user_id, role=role))
+    db_session.flush()
+
+
+def _make_two_member_list(
+    client: TestClient, db_session: Session, owner_email: str, member_email: str
+) -> tuple[UUID, UUID, UUID]:
+    """Register owner + member, add member to owner's new list, sign back in
+    as owner. Returns (list_id, owner_id, member_id)."""
+    _register(client, owner_email)
+    owner_id = UUID(client.get("/auth/me").json()["user_id"])
+    created = client.post("/lists", json={"name": "Household"})
+    list_id = UUID(created.json()["id"])
+
+    client.post("/auth/sign-out")
+    _register(client, member_email)
+    member_id = UUID(client.get("/auth/me").json()["user_id"])
+    _add_member(db_session, list_id=list_id, user_id=member_id)
+
+    client.post("/auth/sign-out")
+    signed_in = client.post("/auth/sign-in", json={"email": owner_email, "password": "password1"})
+    assert signed_in.status_code == 200, signed_in.text
+    return list_id, owner_id, member_id
+
+
+def test_balances_pairwise_edges_two_member_list(client: TestClient, db_session: Session) -> None:
+    list_id, owner_id, member_id = _make_two_member_list(
+        client, db_session, "pairwiseowner@example.com", "pairwisemember@example.com"
+    )
+    _seed_full_ledger_entry(
+        db_session, list_id=list_id, payer_id=owner_id, amount=Decimal("1000.00")
+    )
+
+    balances = client.get(f"/lists/{list_id}/balances")
+    assert balances.status_code == 200, balances.text
+    body = balances.json()
+    assert body["balance_crc"] == "500.00"
+    assert body["you_owe"] == []
+    assert len(body["you_are_owed"]) == 1
+    owed = body["you_are_owed"][0]
+    assert owed["member_id"] == str(member_id)
+    assert owed["amount_crc"] == "500.00"
+    assert owed["alias"] == alias_from_email("pairwisemember@example.com")
+
+
+def test_balances_pairwise_edges_three_member_list(client: TestClient, db_session: Session) -> None:
+    list_id, owner_id, member_id = _make_two_member_list(
+        client, db_session, "pairwise3owner@example.com", "pairwise3memberb@example.com"
+    )
+    client.post("/auth/sign-out")
+    _register(client, "pairwise3memberc@example.com")
+    charlie_id = UUID(client.get("/auth/me").json()["user_id"])
+    _add_member(db_session, list_id=list_id, user_id=charlie_id)
+
+    client.post(
+        "/auth/sign-in",
+        json={"email": "pairwise3owner@example.com", "password": "password1"},
+    )
+    # Bob pays 900, even 3-way split -> 300 each: Bob is owed 300 by owner, 300 by Charlie.
+    _seed_full_ledger_entry(
+        db_session, list_id=list_id, payer_id=member_id, amount=Decimal("900.00")
+    )
+
+    balances = client.get(f"/lists/{list_id}/balances")
+    assert balances.status_code == 200, balances.text
+    body = balances.json()
+    assert body["balance_crc"] == "-300.00"
+    assert body["you_are_owed"] == []
+    assert len(body["you_owe"]) == 1
+    assert body["you_owe"][0]["member_id"] == str(member_id)
+    assert body["you_owe"][0]["amount_crc"] == "300.00"
+
+
+def test_settle_clears_you_owe_but_not_you_are_owed_or_balance(
+    client: TestClient, db_session: Session
+) -> None:
+    list_id, owner_id, member_id = _make_two_member_list(
+        client, db_session, "settleowner@example.com", "settlemember@example.com"
+    )
+    # Member pays 1000 -> owner owes member 500.
+    _seed_full_ledger_entry(
+        db_session, list_id=list_id, payer_id=member_id, amount=Decimal("1000.00")
+    )
+
+    before = client.get(f"/lists/{list_id}/balances")
+    assert before.json()["you_owe"][0]["amount_crc"] == "500.00"
+    assert before.json()["balance_crc"] == "-500.00"
+
+    settled = client.post(f"/lists/{list_id}/settle")
+    assert settled.status_code == 204, settled.text
+
+    after = client.get(f"/lists/{list_id}/balances")
+    body = after.json()
+    assert body["you_owe"] == []
+    # Balance and you_are_owed never move — no money actually moved (AD-21).
+    assert body["balance_crc"] == "-500.00"
+    assert body["you_are_owed"] == []
+
+
+def test_settle_is_a_point_in_time_boundary_new_debt_reappears(
+    client: TestClient, db_session: Session
+) -> None:
+    list_id, owner_id, member_id = _make_two_member_list(
+        client, db_session, "settleboundary@example.com", "settleboundarymember@example.com"
+    )
+    _seed_full_ledger_entry(
+        db_session, list_id=list_id, payer_id=member_id, amount=Decimal("1000.00")
+    )
+
+    settled = client.post(f"/lists/{list_id}/settle")
+    assert settled.status_code == 204, settled.text
+    cleared = client.get(f"/lists/{list_id}/balances")
+    assert cleared.json()["you_owe"] == []
+
+    # A new purchase after settling reappears in you_owe (not a permanent clear).
+    _seed_full_ledger_entry(
+        db_session, list_id=list_id, payer_id=member_id, amount=Decimal("200.00")
+    )
+    after = client.get(f"/lists/{list_id}/balances")
+    body = after.json()
+    assert len(body["you_owe"]) == 1
+    assert body["you_owe"][0]["amount_crc"] == "100.00"
+    assert body["balance_crc"] == "-600.00"
+
+
+def test_settle_is_idempotent_repeat_settle_moves_timestamp_forward(
+    client: TestClient, db_session: Session
+) -> None:
+    list_id, owner_id, member_id = _make_two_member_list(
+        client, db_session, "settleidempotent@example.com", "settleidempotentmember@example.com"
+    )
+    _seed_full_ledger_entry(
+        db_session, list_id=list_id, payer_id=member_id, amount=Decimal("1000.00")
+    )
+
+    first = client.post(f"/lists/{list_id}/settle")
+    assert first.status_code == 204
+    second = client.post(f"/lists/{list_id}/settle")
+    assert second.status_code == 204
+
+    after = client.get(f"/lists/{list_id}/balances")
+    assert after.json()["you_owe"] == []
+
+
+def test_settle_non_member_and_missing_list_forbidden(
+    client: TestClient, db_session: Session
+) -> None:
+    list_id, _owner_id, _member_id = _make_two_member_list(
+        client, db_session, "settleaclowner@example.com", "settleaclmember@example.com"
+    )
+    client.post("/auth/sign-out")
+    _register(client, "settleoutsider@example.com")
+
+    denied = client.post(f"/lists/{list_id}/settle")
+    assert denied.status_code == 403
+    assert denied.json()["code"] == "not_list_member"
+
+    missing = client.post(f"/lists/{uuid4()}/settle")
+    assert missing.status_code == 403
+    assert missing.json()["code"] == "not_list_member"
+
+
+def test_simplify_returns_transfers_preserving_nets(
+    client: TestClient, db_session: Session
+) -> None:
+    list_id, owner_id, member_id = _make_two_member_list(
+        client, db_session, "simplifyowner@example.com", "simplifymember@example.com"
+    )
+    _seed_full_ledger_entry(
+        db_session, list_id=list_id, payer_id=owner_id, amount=Decimal("1000.00")
+    )
+
+    plan = client.get(f"/lists/{list_id}/settle/simplify")
+    assert plan.status_code == 200, plan.text
+    body = plan.json()
+    assert body["is_incomplete"] is False
+    assert len(body["transfers"]) == 1
+    transfer = body["transfers"][0]
+    assert transfer["from_member_id"] == str(member_id)
+    assert transfer["to_member_id"] == str(owner_id)
+    assert transfer["amount_crc"] == "500.00"
+
+
+def test_simplify_blocked_409_when_unresolved_conflict_touches_list(
+    client: TestClient, db_session: Session
+) -> None:
+    _register(client, "simplifyblocked@example.com")
+    created = client.post("/lists", json={"name": "Household"})
+    list_id = UUID(created.json()["id"])
+
+    manual_id = _seed_ledger_entry(db_session, list_id=list_id, provenance="hand")
+    parsed_id = _seed_ledger_entry(db_session, list_id=list_id, provenance="parser")
+    _seed_conflict(
+        db_session,
+        manual_entry_id=manual_id,
+        parsed_entry_id=parsed_id,
+        manual_list_id=list_id,
+        parsed_list_id=list_id,
+    )
+
+    plan = client.get(f"/lists/{list_id}/settle/simplify")
+    assert plan.status_code == 409, plan.text
+    assert plan.json()["code"] == "settle_incomplete"
+
+
+def test_simplify_non_member_and_missing_list_not_found(
+    client: TestClient, db_session: Session
+) -> None:
+    list_id, _owner_id, _member_id = _make_two_member_list(
+        client, db_session, "simplifyaclowner@example.com", "simplifyaclmember@example.com"
+    )
+    client.post("/auth/sign-out")
+    _register(client, "simplifyoutsider@example.com")
+
+    denied = client.get(f"/lists/{list_id}/settle/simplify")
+    assert denied.status_code == 404
+    assert denied.json()["code"] == "list_not_found"
+
+    missing = client.get(f"/lists/{uuid4()}/settle/simplify")
+    assert missing.status_code == 404
+    assert missing.json()["code"] == "list_not_found"

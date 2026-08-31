@@ -43,6 +43,7 @@ from domain.splits import (
     KIND_WHOLE_ASSIGNEE,
 )
 from sqlalchemy import delete, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -54,6 +55,7 @@ from adapters.persistence.models import (
     ListDefaultSplitShareModel,
     ListMembershipModel,
     ListModel,
+    ListSettleAssertionModel,
     ReceiptModel,
     SplitOverrideModel,
     UserModel,
@@ -415,6 +417,32 @@ class SqlAlchemyListRepository:
                     )
                 )
         self._session.flush()
+
+    def upsert_settle_assertion(self, list_id: UUID, actor_user_id: UUID, settled_at) -> None:
+        stmt = pg_insert(ListSettleAssertionModel).values(
+            id=uuid4(),
+            list_id=list_id,
+            actor_user_id=actor_user_id,
+            settled_at=settled_at,
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[
+                ListSettleAssertionModel.list_id,
+                ListSettleAssertionModel.actor_user_id,
+            ],
+            set_={"settled_at": settled_at},
+        )
+        self._session.execute(stmt)
+        self._session.flush()
+
+    def get_settled_at(self, list_id: UUID, actor_user_id: UUID):
+        row = self._session.scalars(
+            select(ListSettleAssertionModel).where(
+                ListSettleAssertionModel.list_id == list_id,
+                ListSettleAssertionModel.actor_user_id == actor_user_id,
+            )
+        ).first()
+        return row.settled_at if row is not None else None
 
     def get_ledger_entry(self, list_id: UUID, entry_id: UUID) -> AllocatableSubject | None:
         row = self._session.get(LedgerEntryModel, entry_id)

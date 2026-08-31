@@ -23,3 +23,4 @@ export { PercentageIcon } from "./PercentageIcon";
 export { ArrowIcon } from "./ArrowIcon";
 export { BackIcon } from "./BackIcon";
 export { TrashIcon } from "./TrashIcon";
+export { CreditCardIcon } from "./CreditCardIcon";

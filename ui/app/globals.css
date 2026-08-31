@@ -115,6 +115,19 @@
   --type-tab-face: var(--font-ui), system-ui, sans-serif;
   --type-tab-size: 0.58rem;
   --type-tab-weight: 500;
+
+  /* Material 3 elevation: two lights cast every shadow — a key light straight
+     overhead (tight, dark, no spread) and an ambient light all around (soft,
+     wide, spread). The pair is what reads as a sheet of paper off the page;
+     a single wide blur reads as a glow. M3's alphas assume black on white, so
+     the ink is pulled most of the way to black — enough weight on the cream
+     background while keeping the palette's warm cast. Shared by any control
+     that lifts on activation (UploadButton, IconButton's ghost `active`
+     state, the review screen's keycap legend) so they all cast the same
+     shadow rather than each re-deriving it. */
+  --lift-ink: color-mix(in srgb, var(--foreground) 45%, #000);
+  --lift-key: color-mix(in srgb, var(--lift-ink) 0%, transparent);
+  --lift-ambient: color-mix(in srgb, var(--lift-ink) 50%, transparent);
 }
 
 html.dark {
@@ -137,6 +150,9 @@ html.dark {
   --on-accent: var(--wb-on-accent);
   --owe: var(--wb-owe);
   --owed: var(--wb-owed);
+
+  /* --foreground is cream here and would halo the shadow instead of shading it. */
+  --lift-ink: #000;
 }
 
 /*
@@ -164,6 +180,8 @@ html.dark {
     --on-accent: var(--wb-on-accent);
     --owe: var(--wb-owe);
     --owed: var(--wb-owed);
+
+    --lift-ink: #000;
   }
 }
 

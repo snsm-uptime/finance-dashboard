@@ -376,6 +376,27 @@ class SamePriceConflictModel(Base):
     )
 
 
+class ListSettleAssertionModel(Base):
+    """Viewer-only "my payables are done" timestamp per (list, actor) — Story 5.8.
+
+    One row per member per list (upsert target, not an append-only log); never
+    an inter-member transfer/payment ledger line (AD-21)."""
+
+    __tablename__ = "list_settle_assertions"
+    __table_args__ = (
+        UniqueConstraint("list_id", "actor_user_id", name="uq_list_settle_assertion_member"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    list_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("lists.id", ondelete="CASCADE"), nullable=False
+    )
+    actor_user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    settled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class DescriptionAliasModel(Base):
     """Manual-label ↔ bank-description alias, written as a silent side effect
     of a survivor-pick same-price conflict resolution (Story 5.6, FR-23).
