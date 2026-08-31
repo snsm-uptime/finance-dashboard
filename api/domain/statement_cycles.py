@@ -96,7 +96,7 @@ def full_history_window(
     *,
     today: date | None = None,
 ) -> PeriodWindow:
-    """"All periods" window — spans every entry's `posted_date`, so a
+    """ "All periods" window — spans every entry's `posted_date`, so a
     newly-added hand entry (which never belongs to a statement cycle) is
     never excluded by a hidden default filter. Falls back to the current
     calendar month when the list has no entries yet."""
