@@ -173,6 +173,19 @@ export function ManualExpenseForm({
     [members, assigneeId],
   );
 
+  // The split-adjust UI is hidden once membership drops to 1 (this story),
+  // so a stale mode/split from before the drop would otherwise submit
+  // silently with no visible control left to correct it.
+  const previousMemberCountRef = useRef(members.length);
+  useEffect(() => {
+    const previousCount = previousMemberCountRef.current;
+    previousMemberCountRef.current = members.length;
+    if (members.length <= 1 && previousCount > 1) {
+      resetAdjustFields();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [members.length]);
+
   useEffect(() => {
     let cancelled = false;
     // Origin is optional — a failed card fetch just narrows the dropdown to
@@ -371,89 +384,91 @@ export function ManualExpenseForm({
           </div>
         ) : null}
 
-        <div className={styles.splitBlock}>
-          <TriSwitch
-            aria-label={messages.expenseAdjustSplit}
-            value={mode}
-            disabled={pending}
-            onChange={(next) => {
-              setMode(next);
-              clearError();
-              if (next === "percentage") {
-                setPercentages(percentMapFromDefault(members, effectiveSplit));
-              }
-            }}
-            options={[
-              {
-                value: "whole_assignee",
-                label: messages.expenseModeWhole,
-                icon: <UserIcon />,
-              },
-              {
-                value: "percentage",
-                label: messages.expenseModePercentage,
-                icon: <PercentageIcon />,
-              },
-              {
-                value: "absolute_amounts",
-                label: messages.expenseModeAbsolute,
-                icon: <HashtagIcon />,
-              },
-            ]}
-          />
-
-          {mode === "whole_assignee" ? (
-            <div className={styles.field}>
-              <span className={styles.label} id={`${baseId}-assignee-label`}>
-                {messages.expenseAssignee}
-              </span>
-              <SoftLedgerSelect
-                id={`${baseId}-assignee`}
-                value={activeAssigneeId}
-                options={memberOptions}
-                disabled={pending}
-                aria-labelledby={`${baseId}-assignee-label`}
-                onChange={setAssigneeId}
-              />
-            </div>
-          ) : null}
-
-          {mode === "percentage" ? (
-            <PercentageSplitTrack
-              userIds={members.map((m) => m.user_id)}
-              currentUserId={currentUserId}
-              members={members}
-              percents={percentages}
-              onChangePercents={setPercentages}
+        {members.length > 1 ? (
+          <div className={styles.splitBlock}>
+            <TriSwitch
+              aria-label={messages.expenseAdjustSplit}
+              value={mode}
               disabled={pending}
+              onChange={(next) => {
+                setMode(next);
+                clearError();
+                if (next === "percentage") {
+                  setPercentages(percentMapFromDefault(members, effectiveSplit));
+                }
+              }}
+              options={[
+                {
+                  value: "whole_assignee",
+                  label: messages.expenseModeWhole,
+                  icon: <UserIcon />,
+                },
+                {
+                  value: "percentage",
+                  label: messages.expenseModePercentage,
+                  icon: <PercentageIcon />,
+                },
+                {
+                  value: "absolute_amounts",
+                  label: messages.expenseModeAbsolute,
+                  icon: <HashtagIcon />,
+                },
+              ]}
             />
-          ) : null}
 
-          {mode === "absolute_amounts" ? (
-            <div className={styles.memberGrid}>
-              {members.map((m) => (
-                <div key={m.user_id} className={styles.memberRow}>
-                  <label className={styles.label} htmlFor={`${baseId}-abs-${m.user_id}`}>
-                    {memberLabel(m)}
-                  </label>
-                  <input
-                    id={`${baseId}-abs-${m.user_id}`}
-                    className={styles.input}
-                    inputMode="decimal"
-                    value={absoluteAmounts[m.user_id] ?? ""}
-                    disabled={pending}
-                    onChange={(e) =>
-                      setAbsoluteAmounts((prev) => ({
-                        ...prev,
-                        [m.user_id]: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </div>
+            {mode === "whole_assignee" ? (
+              <div className={styles.field}>
+                <span className={styles.label} id={`${baseId}-assignee-label`}>
+                  {messages.expenseAssignee}
+                </span>
+                <SoftLedgerSelect
+                  id={`${baseId}-assignee`}
+                  value={activeAssigneeId}
+                  options={memberOptions}
+                  disabled={pending}
+                  aria-labelledby={`${baseId}-assignee-label`}
+                  onChange={setAssigneeId}
+                />
+              </div>
+            ) : null}
+
+            {mode === "percentage" ? (
+              <PercentageSplitTrack
+                userIds={members.map((m) => m.user_id)}
+                currentUserId={currentUserId}
+                members={members}
+                percents={percentages}
+                onChangePercents={setPercentages}
+                disabled={pending}
+              />
+            ) : null}
+
+            {mode === "absolute_amounts" ? (
+              <div className={styles.memberGrid}>
+                {members.map((m) => (
+                  <div key={m.user_id} className={styles.memberRow}>
+                    <label className={styles.label} htmlFor={`${baseId}-abs-${m.user_id}`}>
+                      {memberLabel(m)}
+                    </label>
+                    <input
+                      id={`${baseId}-abs-${m.user_id}`}
+                      className={styles.input}
+                      inputMode="decimal"
+                      value={absoluteAmounts[m.user_id] ?? ""}
+                      disabled={pending}
+                      onChange={(e) =>
+                        setAbsoluteAmounts((prev) => ({
+                          ...prev,
+                          [m.user_id]: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         {error ? (
           <p id={errorId} className={styles.error} role="alert">

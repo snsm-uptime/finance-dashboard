@@ -925,6 +925,40 @@ describe("ManualExpenseForm", () => {
     expect(originAfter.value).toBe("");
   });
 
+  it("hides the split-adjust switch for a solo (1-member) list", async () => {
+    await act(async () => {
+      root.render(
+        <ManualExpenseForm
+          listId="list-1"
+          currentUserId="user-a"
+          members={[members[0]]}
+          messages={messages}
+        />,
+      );
+    });
+
+    expect(
+      container.querySelector(`[aria-label="${messages.expenseAdjustSplit}"]`),
+    ).toBeNull();
+  });
+
+  it("shows the split-adjust switch for a 2+-member list", async () => {
+    await act(async () => {
+      root.render(
+        <ManualExpenseForm
+          listId="list-1"
+          currentUserId="user-a"
+          members={members}
+          messages={messages}
+        />,
+      );
+    });
+
+    expect(
+      container.querySelector(`[aria-label="${messages.expenseAdjustSplit}"]`),
+    ).not.toBeNull();
+  });
+
   it("does not submit a payer id that is missing from memberships", async () => {
     await act(async () => {
       root.render(

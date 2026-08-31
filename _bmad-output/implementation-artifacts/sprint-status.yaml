@@ -140,8 +140,8 @@ development_status:
 
   # Epic 6 — individual-list (post-v1). Do not start until Epic 5 is done unless product pulls it.
   # Sprint Change Proposal 2026-08-26-individual-list.md
-  epic-6: backlog
-  6-1-mode-switch-on-member-count: backlog
+  epic-6: in-progress
+  6-1-mode-switch-on-member-count: done
   6-2-spend-by-origin-statement-cycle: backlog
   6-3-budget-list: backlog
   6-4-budget-detail: backlog

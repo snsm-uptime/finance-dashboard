@@ -380,6 +380,15 @@ export function balanceStripPropsFrom(
   return { who: t.balanceZero, amount, polarity: "neutral" };
 }
 
+/**
+ * Chrome mode is live membership count, not a list type (AD-29): a solo list
+ * (member_count === 1) never shows shared-expenses settle chrome, regardless
+ * of the underlying balances fetch outcome.
+ */
+export function showSettleChromeFrom(memberCount: number, showBalancesGrid: boolean): boolean {
+  return memberCount >= 2 && showBalancesGrid;
+}
+
 /** Pairwise column rows for the settle grid — alias falls back to a short id. */
 export function pairwiseRowsFrom(
   edges: PairwiseEdgePayload[],
@@ -727,7 +736,7 @@ export default async function ListDetailPage({
                   </p>
                 ) : null}
                 <BalanceStrip
-                  {...(showBalancesGrid
+                  {...(showSettleChromeFrom(members.length, showBalancesGrid)
                     ? {
                       variant: "grid" as const,
                       memberDetailsTitle: t.memberDetailsTitle,
