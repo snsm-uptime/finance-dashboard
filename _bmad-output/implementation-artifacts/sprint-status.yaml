@@ -142,7 +142,7 @@ development_status:
   # Sprint Change Proposal 2026-08-26-individual-list.md
   epic-6: in-progress
   6-1-mode-switch-on-member-count: done
-  6-2-spend-by-origin-statement-cycle: backlog
+  6-2-spend-by-origin-statement-cycle: done
   6-3-budget-list: backlog
   6-4-budget-detail: backlog
   6-5-budget-attribution-manual-and-rules: backlog

@@ -407,3 +407,14 @@ describe("lists i18n rollback keys", () => {
     }
   });
 });
+
+describe("lists i18n origin-spend keys (Story 6.2)", () => {
+  it("has matching EN/ES origin-spend copy", async () => {
+    const { listsMessages } = await import("@/lib/i18n/lists");
+    for (const key of ["originSpendTitle", "originSpendEmpty"] as const) {
+      expect(listsMessages.en[key].length).toBeGreaterThan(0);
+      expect(listsMessages.es[key].length).toBeGreaterThan(0);
+      expect(listsMessages.en[key]).not.toBe(listsMessages.es[key]);
+    }
+  });
+});

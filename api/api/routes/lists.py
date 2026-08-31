@@ -43,6 +43,8 @@ from application.lists import (
     GetListDefaultSplitService,
     GetListDetailCommand,
     GetListDetailService,
+    GetListOriginSpendCommand,
+    GetListOriginSpendService,
     ListMembershipsCommand,
     ListMembershipsService,
     RenameListCommand,
@@ -102,7 +104,9 @@ from api.schemas.lists import (
     ListMembershipItem,
     ListMembershipsResponse,
     ListMembersResponse,
+    ListOriginSpendResponse,
     ListResponse,
+    OriginSpendItemResponse,
     PairwiseEdgeResponse,
     PeriodResponse,
     ReassignStatementBody,
@@ -702,6 +706,44 @@ def get_list_cycles(
             if result.fallback_period is not None
             else None
         ),
+    )
+
+
+@router.get("/{list_id}/origin-spend", response_model=ListOriginSpendResponse)
+def get_list_origin_spend(
+    list_id: uuid.UUID,
+    period_start: date | None = Query(default=None),
+    period_end: date | None = Query(default=None),
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> ListOriginSpendResponse | JSONResponse:
+    if _period_params_invalid(period_start, period_end):
+        return _invalid_period()
+    service = GetListOriginSpendService(SqlAlchemyListRepository(db))
+    try:
+        result = service.execute(
+            GetListOriginSpendCommand(
+                actor_user_id=user_id,
+                list_id=list_id,
+                period_start=period_start,
+                period_end=period_end,
+            )
+        )
+    except ListNotFoundError:
+        return _list_not_found()
+    return ListOriginSpendResponse(
+        list_id=result.list_id,
+        origins=[
+            OriginSpendItemResponse(
+                kind=origin.kind,
+                card_id=origin.card_id,
+                card_label=origin.card_label,
+                total_crc=origin.total_crc,
+            )
+            for origin in result.origins
+        ],
+        period_start=result.period_start.isoformat(),
+        period_end=result.period_end.isoformat(),
     )
 
 

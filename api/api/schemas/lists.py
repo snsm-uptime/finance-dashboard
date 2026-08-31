@@ -164,6 +164,20 @@ class ListCyclesResponse(BaseModel):
     fallback_period: PeriodResponse | None = None
 
 
+class OriginSpendItemResponse(BaseModel):
+    kind: Literal["card", "cash", "blank"]
+    card_id: UUID | None = None
+    card_label: str | None = None
+    total_crc: str
+
+
+class ListOriginSpendResponse(BaseModel):
+    list_id: UUID
+    origins: list[OriginSpendItemResponse] = Field(default_factory=list)
+    period_start: str
+    period_end: str
+
+
 class TransferResponse(BaseModel):
     from_member_id: UUID
     from_alias: str | None = None
