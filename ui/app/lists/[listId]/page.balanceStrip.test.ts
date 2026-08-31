@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { asBalances, balanceStripPropsFrom } from "./page";
+import { asBalances, balanceStripPropsFrom, soloBalanceStripPropsFrom } from "./page";
 
 const t = {
   detailSettleEmpty: "No balances yet.",
   balanceOwe: "You owe",
   balanceOwed: "You’re owed",
   balanceZero: "Settled",
+  balanceTotal: "Total",
   loadError: "Could not load your lists. Refresh and try again.",
 };
 
@@ -52,6 +53,29 @@ describe("balanceStripPropsFrom", () => {
     expect(balanceStripPropsFrom(true, true, "0", t)).toEqual({
       who: t.loadError,
       amount: "—",
+      polarity: "neutral",
+    });
+  });
+});
+
+describe("soloBalanceStripPropsFrom", () => {
+  it("no expenses yet is neutral with no amount", () => {
+    expect(soloBalanceStripPropsFrom([], t)).toEqual({
+      who: t.detailSettleEmpty,
+      amount: "—",
+      polarity: "neutral",
+    });
+  });
+
+  it("sums expense amounts into a neutral total, never owe/owed", () => {
+    expect(
+      soloBalanceStripPropsFrom(
+        [{ amount_crc: "1000" }, { amount_crc: "2500.50" }],
+        t,
+      ),
+    ).toEqual({
+      who: t.balanceTotal,
+      amount: "₡3,500.5",
       polarity: "neutral",
     });
   });
