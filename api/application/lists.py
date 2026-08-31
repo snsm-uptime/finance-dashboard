@@ -26,6 +26,7 @@ from domain.settle import (
     net_pairwise_edges,
     simplify_group_transfers,
 )
+from domain.spend_by_origin import compute_spend_by_origin
 from domain.splits import SplitSpec, compute_share_allocations
 from domain.statement_cycles import (
     PeriodWindow,
@@ -816,6 +817,98 @@ class GetListCyclesService:
             cycles=(),
             default_statement_id=None,
             fallback_period=current_calendar_month_window(),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class GetListOriginSpendCommand:
+    actor_user_id: UUID
+    list_id: UUID
+    period_start: date | None = None
+    period_end: date | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class OriginSpendItem:
+    kind: str
+    card_id: UUID | None
+    card_label: str | None
+    total_crc: str
+
+
+@dataclass(frozen=True, slots=True)
+class GetListOriginSpendResult:
+    list_id: UUID
+    origins: tuple[OriginSpendItem, ...]
+    period_start: date
+    period_end: date
+
+
+class GetListOriginSpendService:
+    """Period spend per origin (card/cash/blank) for the solo-list hero (Story 6.2, FR-47).
+
+    Structural sibling of `GetListCyclesService` — same authorize action,
+    same entries fetch, same card-label resolution pattern. Computes and
+    returns origin totals for any list a member can read; the UI decides
+    whether to render this or the settle chrome based on live member count
+    (AD-29 — no member-count gate here).
+    """
+
+    def __init__(self, repo: ListRepository) -> None:
+        self._repo = repo
+
+    def execute(self, command: GetListOriginSpendCommand) -> GetListOriginSpendResult:
+        grant = AuthorizeListAccessService(self._repo).execute(
+            AuthorizeListAccessCommand(
+                acting_user_id=command.actor_user_id,
+                list_id=command.list_id,
+                action="read_balances",
+            )
+        )
+        self._repo.get_list_with_grant(grant, command.list_id)
+
+        list_ledger = getattr(self._repo, "list_ledger_entries", None)
+        entries = list(list_ledger(command.list_id)) if list_ledger is not None else []
+
+        period_start, period_end = resolve_effective_period(
+            self._repo,
+            list_id=command.list_id,
+            period_start=command.period_start,
+            period_end=command.period_end,
+            entries=entries,
+        )
+
+        filtered_entries = _filter_entries_by_period(
+            entries, period_start=period_start, period_end=period_end
+        )
+
+        groups = compute_spend_by_origin(filtered_entries)
+
+        get_card_label = getattr(self._repo, "get_card_label", None)
+        label_cache: dict[UUID, str | None] = {}
+
+        def resolve_label(card_id: UUID | None) -> str | None:
+            if card_id is None or get_card_label is None:
+                return None
+            if card_id not in label_cache:
+                label_cache[card_id] = get_card_label(card_id)
+            return label_cache[card_id]
+
+        origins = tuple(
+            OriginSpendItem(
+                kind=group.kind,
+                card_id=group.card_id,
+                card_label=resolve_label(group.card_id),
+                total_crc=str(group.total_crc),
+            )
+            for group in groups
+        )
+
+        return GetListOriginSpendResult(
+            list_id=command.list_id,
+            origins=origins,
+            period_start=period_start,
+            period_end=period_end,
         )
 
 

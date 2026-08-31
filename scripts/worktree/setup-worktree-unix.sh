@@ -111,6 +111,18 @@ port_pair_from_path() {
   printf '%s %s' "$((8000 + offset * 10))" "$((3000 + offset * 10))"
 }
 
+debug_port_pair_from_path() {
+  # Same offset scheme as port_pair_from_path but a disjoint range, so the
+  # Node inspector pair (docker-compose.dev.yml) is also unique per worktree
+  # instead of getting clobbered by whatever the primary checkout's .env has.
+  # UI_DEBUG_WORKER_PORT must stay UI_DEBUG_PORT + 1 (Next.js hardcodes that
+  # offset internally) → step by 2 to keep pairs non-overlapping.
+  local hash offset
+  hash="$(printf '%s' "$1" | cksum | awk '{print $1}')"
+  offset=$((hash % 40 + 1))
+  printf '%s %s' "$((9200 + offset * 2))" "$((9201 + offset * 2))"
+}
+
 if [[ "${1:-}" == "pr" ]]; then
   shift
   cmd_pr "$@"
@@ -134,6 +146,7 @@ BRANCH_SLUG="$(slugify "$BRANCH")"
 COMPOSE_NAME="fh-${BRANCH_SLUG:-$WT_SLUG}"
 COMPOSE_NAME="$(printf '%s' "$COMPOSE_NAME" | cut -c1-50)"
 read -r API_HOST_PORT UI_HOST_PORT <<<"$(port_pair_from_path "$WT_ROOT")"
+read -r UI_DEBUG_PORT UI_DEBUG_WORKER_PORT <<<"$(debug_port_pair_from_path "$WT_ROOT")"
 DATA_DIR="${HOME}/finance-helper-wt/${COMPOSE_NAME}"
 PUBLIC_APP_URL="http://localhost:${UI_HOST_PORT}"
 
@@ -152,7 +165,7 @@ if [[ -f "$WT_ROOT/.env" ]]; then
     $0 == "# --- cursor worktree overrides (generated) ---" { skip=1; next }
     $0 == "# --- end cursor worktree overrides ---" { skip=0; next }
     skip { next }
-    /^(FH_COMPOSE_NAME|API_HOST_PORT|UI_HOST_PORT|FINANCE_HELPER_DATA|PUBLIC_APP_URL)=/ { next }
+    /^(FH_COMPOSE_NAME|API_HOST_PORT|UI_HOST_PORT|FINANCE_HELPER_DATA|PUBLIC_APP_URL|UI_DEBUG_PORT|UI_DEBUG_WORKER_PORT)=/ { next }
     { print }
   ' "$WT_ROOT/.env" >"$tmp_keys"
   mv "$tmp_keys" "$WT_ROOT/.env"
@@ -173,10 +186,12 @@ if [[ -f "$WT_ROOT/.env" ]]; then
     echo "UI_HOST_PORT=${UI_HOST_PORT}"
     echo "FINANCE_HELPER_DATA=${DATA_DIR}"
     echo "PUBLIC_APP_URL=${PUBLIC_APP_URL}"
+    echo "UI_DEBUG_PORT=${UI_DEBUG_PORT}"
+    echo "UI_DEBUG_WORKER_PORT=${UI_DEBUG_WORKER_PORT}"
     echo "$MARKER_END"
   } >"$WT_ROOT/.env"
   rm -f "$tmp"
-  log "Worktree Compose: name=${COMPOSE_NAME} api=:${API_HOST_PORT} ui=:${UI_HOST_PORT}"
+  log "Worktree Compose: name=${COMPOSE_NAME} api=:${API_HOST_PORT} ui=:${UI_HOST_PORT} debug=:${UI_DEBUG_PORT}/:${UI_DEBUG_WORKER_PORT}"
   log "Postgres data: ${DATA_DIR}/pgdata"
   log "PUBLIC_APP_URL=${PUBLIC_APP_URL}"
 fi
@@ -243,6 +258,7 @@ Branch:         ${BRANCH}
 Compose name:   ${COMPOSE_NAME}
 UI:             ${PUBLIC_APP_URL}
 API:            http://localhost:${API_HOST_PORT}
+Debug (dev):    inspector :${UI_DEBUG_PORT} / next-server :${UI_DEBUG_WORKER_PORT} (update nvim dap.lua \`port\` to match)
 
 PR tip (AD-13): one story per branch. Stage your changes, then:
   ./scripts/worktree/setup-worktree-unix.sh pr --title "..." --body "..." --commit-title "..."

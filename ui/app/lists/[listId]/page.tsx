@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { BalanceStrip, type BalancePolarity } from "@/components/soft-ledger/BalanceStrip";
 import { Hint } from "@/components/soft-ledger/Hint";
 import { IncompleteDisclosure } from "@/components/soft-ledger/IncompleteDisclosure";
+import { OriginCards } from "@/components/soft-ledger/OriginCards";
 import { ReceiptRow } from "@/components/soft-ledger/ReceiptRow";
 import { SectionLabel } from "@/components/soft-ledger/SectionLabel";
 import { requireAlias } from "@/lib/alias";
@@ -514,6 +515,72 @@ export function resolveSelectedPeriod(
   };
 }
 
+type OriginSpendItemPayload = {
+  kind: "card" | "cash" | "blank";
+  card_id: string | null;
+  card_label: string | null;
+  total_crc: string;
+};
+
+export type OriginSpendPayload = {
+  origins: OriginSpendItemPayload[];
+};
+
+/** Defensive parse — malformed/absent rows resolve to no origins, never fabricated. */
+export function asOriginSpend(data: unknown): OriginSpendPayload {
+  const empty: OriginSpendPayload = { origins: [] };
+  if (!data || typeof data !== "object") return empty;
+  const row = data as Partial<{ origins: unknown }>;
+  const origins: OriginSpendItemPayload[] = [];
+  if (Array.isArray(row.origins)) {
+    for (const item of row.origins) {
+      if (!item || typeof item !== "object") continue;
+      const o = item as Partial<OriginSpendItemPayload>;
+      if (
+        (o.kind !== "card" && o.kind !== "cash" && o.kind !== "blank") ||
+        typeof o.total_crc !== "string"
+      ) {
+        continue;
+      }
+      origins.push({
+        kind: o.kind,
+        card_id: typeof o.card_id === "string" ? o.card_id : null,
+        card_label: typeof o.card_label === "string" ? o.card_label : null,
+        total_crc: o.total_crc,
+      });
+    }
+  }
+  return { origins };
+}
+
+type OriginCardsMessages = {
+  cyclePeriodOptionUnknownCard: string;
+  expenseOriginCash: string;
+  expenseOriginBlank: string;
+};
+
+/** Maps each origin to its display label + formatted amount for `OriginCards` (Story 6.2). */
+export function originCardsPropsFrom(
+  payload: OriginSpendPayload,
+  t: OriginCardsMessages,
+): { kind: "card" | "cash" | "blank"; label: string; amountCrc: string; isNegative: boolean }[] {
+  return payload.origins.map((o) => {
+    const label =
+      o.kind === "card"
+        ? (o.card_label ?? t.cyclePeriodOptionUnknownCard)
+        : o.kind === "cash"
+          ? t.expenseOriginCash
+          : t.expenseOriginBlank;
+    // A reversal outside the period offsetting a purchase inside it can net an origin
+    // below zero — show the sign explicitly (never a bare "₡-30") rather than hiding it.
+    const trimmed = o.total_crc.trim();
+    const isNegative = trimmed.startsWith("-");
+    const magnitude = isNegative ? trimmed.slice(1) : trimmed;
+    const amountCrc = `${isNegative ? "-" : ""}${formatCrcAmount(magnitude)}`;
+    return { kind: o.kind, label, amountCrc, isNegative };
+  });
+}
+
 /** Soft-Ledger list detail shell — settle first / receipts below (empty OK). */
 export default async function ListDetailPage({
   params,
@@ -545,11 +612,13 @@ export default async function ListDetailPage({
   let balances: BalancesPayload | null = null;
   let cycles: CyclePayload[] = [];
   let selectedStatementId: string | null = null;
+  let originSpend: OriginSpendPayload | null = null;
   let splitLoadError = false;
   let expensesLoadError = false;
   let membersLoadError = false;
   let balancesLoadError = false;
   let cyclesLoadError = false;
+  let originSpendLoadError = false;
   let notFound = false;
   let loadError = false;
   try {
@@ -634,7 +703,7 @@ export default async function ListDetailPage({
         ? `?period_start=${encodeURIComponent(resolvedPeriod.period_start)}&period_end=${encodeURIComponent(resolvedPeriod.period_end)}`
         : "";
 
-      const [expensesRes, balancesRes] = await Promise.all([
+      const [expensesRes, balancesRes, originSpendRes] = await Promise.all([
         fetch(`${getApiInternalUrl()}/lists/${encodeURIComponent(listId)}/expenses${periodQuery}`, {
           method: "GET",
           headers: {
@@ -651,6 +720,19 @@ export default async function ListDetailPage({
           },
           cache: "no-store",
         }),
+        members.length === 1
+          ? fetch(
+              `${getApiInternalUrl()}/lists/${encodeURIComponent(listId)}/origin-spend${periodQuery}`,
+              {
+                method: "GET",
+                headers: {
+                  Accept: "application/json",
+                  ...(header ? { Cookie: header } : {}),
+                },
+                cache: "no-store",
+              },
+            )
+          : Promise.resolve(null),
       ]);
       if (expensesRes.ok) {
         expenses = asExpenses(await expensesRes.json());
@@ -671,6 +753,19 @@ export default async function ListDetailPage({
       } else {
         balancesLoadError = true;
       }
+      if (members.length === 1) {
+        if (originSpendRes && originSpendRes.ok) {
+          try {
+            originSpend = asOriginSpend(await originSpendRes.json());
+          } catch {
+            originSpendLoadError = true;
+            originSpend = { origins: [] };
+          }
+        } else {
+          originSpendLoadError = true;
+          originSpend = { origins: [] };
+        }
+      }
     } else {
       loadError = true;
     }
@@ -688,6 +783,69 @@ export default async function ListDetailPage({
       ? soloBalanceStripPropsFrom(expenses, t)
       : balanceStripPropsFrom(hasExpenses, balancesLoadError, balances?.balance_crc, t);
   const todayCr = calendarDateInCostaRica(new Date().toISOString());
+
+  const mobileActions = (
+    <ListDetailMobileActions
+      listId={listId}
+      currentUserId={session.user_id}
+      members={members}
+      isOwner={isOwner}
+      canAddExpense={!membersLoadError && members.length > 0}
+      canInvite={isOwner}
+      defaultSplit={defaultSplit}
+      expenseMessages={{
+        expenseTitle: t.expenseTitle,
+        expenseAmount: t.expenseAmount,
+        expenseDescription: t.expenseDescription,
+        expensePayer: t.expensePayer,
+        expenseSubmit: t.expenseSubmit,
+        expenseSaving: t.expenseSaving,
+        expenseAdjustSplit: t.expenseAdjustSplit,
+        expenseModeWhole: t.expenseModeWhole,
+        expenseModeAbsolute: t.expenseModeAbsolute,
+        expenseModePercentage: t.expenseModePercentage,
+        expenseAssignee: t.expenseAssignee,
+        expenseOriginLabel: t.expenseOriginLabel,
+        expenseOriginBlank: t.expenseOriginBlank,
+        expenseOriginCash: t.expenseOriginCash,
+        errorGeneric: t.errorGeneric,
+        errorInvalidName: t.errorInvalidName,
+        errorForbidden: t.errorForbidden,
+        errorUnauthorized: t.errorUnauthorized,
+      }}
+      inviteMessages={{
+        inviteTitle: t.inviteTitle,
+        inviteLabel: t.inviteLabel,
+        inviteSubmit: t.inviteSubmit,
+        inviteSending: t.inviteSending,
+        inviteSent: t.inviteSent,
+        errorGeneric: t.errorGeneric,
+        errorInvalidName: t.errorInvalidName,
+        errorInvalidEmail: t.errorInvalidEmail,
+        errorForbidden: t.errorInviteForbidden,
+        errorUnauthorized: t.errorUnauthorized,
+        errorAlreadyMember: t.errorAlreadyMember,
+        errorSmtp: t.errorSmtp,
+      }}
+      splitMessages={{
+        errorGeneric: t.errorGeneric,
+        errorInvalidName: t.errorInvalidName,
+        errorForbidden: t.errorForbidden,
+        errorUnauthorized: t.errorUnauthorized,
+        defaultSplitTitle: t.defaultSplitTitle,
+        defaultSplitEven: t.defaultSplitEven,
+        defaultSplitCustom: t.defaultSplitCustom,
+        defaultSplitSum: t.defaultSplitSum,
+        defaultSplitSave: t.defaultSplitSave,
+        defaultSplitSaving: t.defaultSplitSaving,
+        defaultSplitReadOnly: t.defaultSplitReadOnly,
+        errorInvalidSplit: t.errorInvalidSplit,
+      }}
+      addExpenseAria={t.mobileAddExpenseAria}
+      inviteAria={t.mobileInviteAria}
+      closeLabel={t.mobileSheetClose}
+    />
+  );
 
   return (
     <main className={styles.softMain}>
@@ -720,115 +878,74 @@ export default async function ListDetailPage({
                     {t.loadError}
                   </p>
                 ) : null}
-                <BalanceStrip
-                  {...(showSettleChromeFrom(members.length, showBalancesGrid)
-                    ? {
-                      variant: "grid" as const,
-                      memberDetailsTitle: t.memberDetailsTitle,
-                      owesYouLabel: t.owesYouLabel,
-                      isOwedLabel: t.isOwedLabel,
-                      balanceLabel: t.balanceLabel,
-                      youAreOwed: pairwiseRowsFrom(balances?.you_are_owed ?? []),
-                      youOwe: pairwiseRowsFrom(balances?.you_owe ?? []),
-                      balanceAmount: stripProps.amount,
-                      balancePolarity: stripProps.polarity,
-                      simplify:
-                        members.length >= 3 ? (
-                          <SimplifyColumn
+                {members.length === 1 ? (
+                  <>
+                    <div className="flex items-start justify-between gap-[var(--space-4)]">
+                      <div className="min-w-0 flex-1">
+                        <OriginCards
+                          origins={originCardsPropsFrom(originSpend ?? { origins: [] }, t)}
+                          emptyLabel={t.originSpendEmpty}
+                          sectionLabel={t.originSpendTitle}
+                        />
+                      </div>
+                      {mobileActions}
+                    </div>
+                    {originSpendLoadError ? (
+                      <p className={`${styles.copy} ${styles.softBack}`} role="alert">
+                        {t.loadError}
+                      </p>
+                    ) : null}
+                  </>
+                ) : (
+                  <BalanceStrip
+                    {...(showSettleChromeFrom(members.length, showBalancesGrid)
+                      ? {
+                        variant: "grid" as const,
+                        memberDetailsTitle: t.memberDetailsTitle,
+                        owesYouLabel: t.owesYouLabel,
+                        isOwedLabel: t.isOwedLabel,
+                        balanceLabel: t.balanceLabel,
+                        youAreOwed: pairwiseRowsFrom(balances?.you_are_owed ?? []),
+                        youOwe: pairwiseRowsFrom(balances?.you_owe ?? []),
+                        balanceAmount: stripProps.amount,
+                        balancePolarity: stripProps.polarity,
+                        simplify:
+                          members.length >= 3 ? (
+                            <SimplifyColumn
+                              listId={listId}
+                              available={balances?.balance_status.is_incomplete !== true}
+                              messages={{
+                                title: t.simplifyTitle,
+                                emptyLabel: t.simplifyEmpty,
+                                copyLabel: t.copyPlanLabel,
+                                copiedLabel: t.copyPlanCopiedLabel,
+                                blockedLabel: t.simplifyBlocked,
+                                errorGeneric: t.errorGeneric,
+                              }}
+                            />
+                          ) : undefined,
+                        settleAction: (
+                          <SettleControls
                             listId={listId}
-                            available={balances?.balance_status.is_incomplete !== true}
                             messages={{
-                              title: t.simplifyTitle,
-                              emptyLabel: t.simplifyEmpty,
-                              copyLabel: t.copyPlanLabel,
-                              copiedLabel: t.copyPlanCopiedLabel,
-                              blockedLabel: t.simplifyBlocked,
+                              settleAction: t.settleAction,
+                              settleConfirmTitle: t.settleConfirmTitle,
+                              settleConfirmBody: t.settleConfirmBody,
+                              settleConfirmAction: t.settleConfirmAction,
+                              settleCancel: t.settleCancel,
                               errorGeneric: t.errorGeneric,
                             }}
                           />
-                        ) : undefined,
-                      settleAction: (
-                        <SettleControls
-                          listId={listId}
-                          messages={{
-                            settleAction: t.settleAction,
-                            settleConfirmTitle: t.settleConfirmTitle,
-                            settleConfirmBody: t.settleConfirmBody,
-                            settleConfirmAction: t.settleConfirmAction,
-                            settleCancel: t.settleCancel,
-                            errorGeneric: t.errorGeneric,
-                          }}
-                        />
-                      ),
-                    }
-                    : {
-                      who: stripProps.who,
-                      amount: stripProps.amount,
-                      polarity: stripProps.polarity,
-                    })}
-                  action={
-                    <ListDetailMobileActions
-                      listId={listId}
-                      currentUserId={session.user_id}
-                      members={members}
-                      isOwner={isOwner}
-                      canAddExpense={!membersLoadError && members.length > 0}
-                      canInvite={isOwner}
-                      defaultSplit={defaultSplit}
-                      expenseMessages={{
-                        expenseTitle: t.expenseTitle,
-                        expenseAmount: t.expenseAmount,
-                        expenseDescription: t.expenseDescription,
-                        expensePayer: t.expensePayer,
-                        expenseSubmit: t.expenseSubmit,
-                        expenseSaving: t.expenseSaving,
-                        expenseAdjustSplit: t.expenseAdjustSplit,
-                        expenseModeWhole: t.expenseModeWhole,
-                        expenseModeAbsolute: t.expenseModeAbsolute,
-                        expenseModePercentage: t.expenseModePercentage,
-                        expenseAssignee: t.expenseAssignee,
-                        expenseOriginLabel: t.expenseOriginLabel,
-                        expenseOriginBlank: t.expenseOriginBlank,
-                        expenseOriginCash: t.expenseOriginCash,
-                        errorGeneric: t.errorGeneric,
-                        errorInvalidName: t.errorInvalidName,
-                        errorForbidden: t.errorForbidden,
-                        errorUnauthorized: t.errorUnauthorized,
-                      }}
-                      inviteMessages={{
-                        inviteTitle: t.inviteTitle,
-                        inviteLabel: t.inviteLabel,
-                        inviteSubmit: t.inviteSubmit,
-                        inviteSending: t.inviteSending,
-                        inviteSent: t.inviteSent,
-                        errorGeneric: t.errorGeneric,
-                        errorInvalidName: t.errorInvalidName,
-                        errorInvalidEmail: t.errorInvalidEmail,
-                        errorForbidden: t.errorInviteForbidden,
-                        errorUnauthorized: t.errorUnauthorized,
-                        errorAlreadyMember: t.errorAlreadyMember,
-                        errorSmtp: t.errorSmtp,
-                      }}
-                      splitMessages={{
-                        errorGeneric: t.errorGeneric,
-                        errorInvalidName: t.errorInvalidName,
-                        errorForbidden: t.errorForbidden,
-                        errorUnauthorized: t.errorUnauthorized,
-                        defaultSplitTitle: t.defaultSplitTitle,
-                        defaultSplitEven: t.defaultSplitEven,
-                        defaultSplitCustom: t.defaultSplitCustom,
-                        defaultSplitSum: t.defaultSplitSum,
-                        defaultSplitSave: t.defaultSplitSave,
-                        defaultSplitSaving: t.defaultSplitSaving,
-                        defaultSplitReadOnly: t.defaultSplitReadOnly,
-                        errorInvalidSplit: t.errorInvalidSplit,
-                      }}
-                      addExpenseAria={t.mobileAddExpenseAria}
-                      inviteAria={t.mobileInviteAria}
-                      closeLabel={t.mobileSheetClose}
-                    />
-                  }
-                />
+                        ),
+                      }
+                      : {
+                        who: stripProps.who,
+                        amount: stripProps.amount,
+                        polarity: stripProps.polarity,
+                      })}
+                    action={mobileActions}
+                  />
+                )}
                 <IncompleteDisclosure
                   isIncomplete={balances?.balance_status.is_incomplete === true}
                   label={t.incompleteDisclosureLabel}

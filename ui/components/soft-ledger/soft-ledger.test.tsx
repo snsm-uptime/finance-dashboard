@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BalanceStrip } from "./BalanceStrip";
 import { Hint } from "./Hint";
 import { IncompleteDisclosure } from "./IncompleteDisclosure";
+import { OriginCards } from "./OriginCards";
 import { PrimaryButton } from "./PrimaryButton";
 import { ReceiptRow } from "./ReceiptRow";
 import { SectionLabel } from "./SectionLabel";
@@ -185,6 +186,92 @@ describe("Soft-Ledger primitives", () => {
     expect(host.querySelectorAll("li").length).toBe(0);
     expect(host.textContent).not.toContain("Member details");
     expect(host.textContent).not.toContain("₡0.00");
+  });
+
+  it("OriginCards renders one island per origin with correct label + amount (Story 6.2)", () => {
+    act(() => {
+      root.render(
+        <OriginCards
+          origins={[
+            { kind: "card", label: "BAC Visa", amountCrc: "₡100" },
+            { kind: "cash", label: "Cash", amountCrc: "₡20" },
+            { kind: "blank", label: "None", amountCrc: "₡5" },
+          ]}
+          emptyLabel="No purchases yet this period"
+          sectionLabel="Spend by origin"
+        />,
+      );
+    });
+    expect(host.textContent).toContain("Spend by origin");
+    expect(host.textContent).toContain("BAC Visa");
+    expect(host.textContent).toContain("₡100");
+    expect(host.textContent).toContain("Cash");
+    expect(host.textContent).toContain("₡20");
+    expect(host.textContent).toContain("None");
+    expect(host.textContent).toContain("₡5");
+    expect(host.querySelectorAll('[role="status"]').length).toBe(0);
+  });
+
+  it("OriginCards renders a neutral empty state, not a fabricated ₡0 card (Story 6.2 AC #3)", () => {
+    act(() => {
+      root.render(
+        <OriginCards
+          origins={[]}
+          emptyLabel="No purchases yet this period"
+          sectionLabel="Spend by origin"
+        />,
+      );
+    });
+    expect(host.textContent).toContain("No purchases yet this period");
+    expect(host.textContent).not.toContain("₡0");
+    expect(host.querySelector('[role="status"]')).not.toBeNull();
+  });
+
+  it("OriginCards labels come from passed-in message props, no hardcoded English (Story 6.2)", () => {
+    act(() => {
+      root.render(
+        <OriginCards
+          origins={[{ kind: "cash", label: "Efectivo", amountCrc: "₡20" }]}
+          emptyLabel="Aún no hay compras este período"
+          sectionLabel="Gasto por origen"
+        />,
+      );
+    });
+    expect(host.textContent).toContain("Gasto por origen");
+    expect(host.textContent).toContain("Efectivo");
+    expect(host.textContent).not.toContain("Cash");
+  });
+
+  it("OriginCards's section label isn't announced twice to assistive tech (Story 6.2 review)", () => {
+    act(() => {
+      root.render(
+        <OriginCards
+          origins={[{ kind: "cash", label: "Cash", amountCrc: "₡20" }]}
+          emptyLabel="No purchases yet this period"
+          sectionLabel="Spend by origin"
+        />,
+      );
+    });
+    const section = host.querySelector("section");
+    expect(section?.hasAttribute("aria-label")).toBe(false);
+    expect(host.querySelectorAll("h2").length).toBe(1);
+  });
+
+  it("OriginCards marks a negative total explicitly, never a bare unsigned amount (Story 6.2 review)", () => {
+    act(() => {
+      root.render(
+        <OriginCards
+          origins={[{ kind: "card", label: "BAC Visa", amountCrc: "-₡30", isNegative: true }]}
+          emptyLabel="No purchases yet this period"
+          sectionLabel="Spend by origin"
+        />,
+      );
+    });
+    expect(host.textContent).toContain("-₡30");
+    const amount = Array.from(host.querySelectorAll("p")).find((p) =>
+      p.textContent?.includes("-₡30"),
+    );
+    expect(amount?.className).toContain("text-owe");
   });
 
   it("simplifyPlanTextFrom builds plain-text lines, never says 'paid' (AC #4)", () => {

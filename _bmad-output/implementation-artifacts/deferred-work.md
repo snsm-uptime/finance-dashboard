@@ -316,3 +316,9 @@
 - `compute_pairwise_settle_balances` has no sum-to-zero invariant check, unlike its sibling `compute_settle_balance_for_list_members` which logs a warning on drift (`api/domain/settle.py:155-217`). Nice-to-have parity, not required for correctness.
 - `compute_viewer_pairwise_edges` silently returns `((), ())` via `getattr` duck-typing when a repo lacks `list_ledger_entries`/`list_members_with_alias`, rather than raising (`api/application/lists.py:438-441`). Could mask integration gaps in non-Postgres/test repos; matches an existing duck-typing pattern elsewhere in this service.
 - 3-member settle-boundary interaction (settling with two distinct counterparties) is untested — existing settled_at-boundary tests only exercise the 2-member helper (`api/tests/test_lists_integration.py`). Test-coverage gap, not a functional defect.
+
+## Deferred from: code review of 6-2-spend-by-origin-statement-cycle.md (2026-08-31)
+
+- Origin-spend fetch can reject the whole page's `Promise.all`, discarding already-successful expenses/balances data (`ui/app/lists/[listId]/page.tsx:681-705`) — the same throw-vs-non-ok gap already exists for the `expensesRes`/`balancesRes` fetches this diff sits beside; this diff extends the established pattern rather than introducing a new one.
+- `GetListOriginSpendService` performs its own independent full-ledger fetch (`api/application/lists.py:170-171`) — every sibling read service (`GetListCyclesService`, balances, expenses) already re-fetches `list_ledger_entries` independently on the same page render; established architecture, not a regression this diff introduces.
+- Origin-spend fetch/render gating doesn't distinguish "not solo" from "members failed to load" (`ui/app/lists/[listId]/page.tsx:702,731`) — mirrors `showSettleChromeFrom`'s existing coupling to bare `members.length` from Story 6.1; not a new ambiguity introduced here.
