@@ -19,6 +19,7 @@ import { ListDetailMobileActions } from "../ListDetailMobileActions";
 import { ListDefaultSplitProvider } from "../ListDefaultSplitContext";
 import { ManualExpenseForm } from "../ManualExpenseForm";
 import { OriginChipPicker } from "../OriginChipPicker";
+import { CyclePeriodSelector, type CyclePeriodOption } from "../CyclePeriodSelector";
 import { SettleControls } from "../SettleControls";
 import { SimplifyColumn } from "../SimplifyColumn";
 import { TemporalNavigation } from "../TemporalNavigation";
@@ -407,13 +408,120 @@ function asMembers(data: unknown): ListMember[] {
   return out;
 }
 
+export type CyclePayload = {
+  statement_id: string;
+  card_id: string | null;
+  card_label: string | null;
+  period_start: string;
+  period_end: string;
+};
+
+type CyclesPayload = {
+  cycles: CyclePayload[];
+  default_statement_id: string | null;
+  fallback_period: { start: string; end: string } | null;
+};
+
+/** Defensive parse — malformed/absent rows resolve to no cycles, never fabricated. */
+export function asCycles(data: unknown): CyclesPayload {
+  const empty: CyclesPayload = { cycles: [], default_statement_id: null, fallback_period: null };
+  if (!data || typeof data !== "object") return empty;
+  const row = data as Partial<CyclesPayload>;
+  const cycles: CyclePayload[] = [];
+  if (Array.isArray(row.cycles)) {
+    for (const item of row.cycles) {
+      if (!item || typeof item !== "object") continue;
+      const c = item as Partial<CyclePayload>;
+      if (
+        typeof c.statement_id !== "string" ||
+        typeof c.period_start !== "string" ||
+        typeof c.period_end !== "string"
+      ) {
+        continue;
+      }
+      cycles.push({
+        statement_id: c.statement_id,
+        card_id: typeof c.card_id === "string" ? c.card_id : null,
+        card_label: typeof c.card_label === "string" ? c.card_label : null,
+        period_start: c.period_start,
+        period_end: c.period_end,
+      });
+    }
+  }
+  const defaultStatementId = typeof row.default_statement_id === "string" ? row.default_statement_id : null;
+  const fallbackRaw = row.fallback_period;
+  const fallback =
+    fallbackRaw && typeof fallbackRaw === "object"
+      ? (fallbackRaw as { start?: unknown; end?: unknown })
+      : null;
+  const fallbackPeriod =
+    fallback && typeof fallback.start === "string" && typeof fallback.end === "string"
+      ? { start: fallback.start, end: fallback.end }
+      : null;
+  return { cycles, default_statement_id: defaultStatementId, fallback_period: fallbackPeriod };
+}
+
+export type ResolvedPeriod = {
+  period_start: string;
+  period_end: string;
+  selectedStatementId: string | null;
+};
+
+/**
+ * Resolves the effective `[period_start, period_end]` from the `?period=`
+ * query value + fetched cycles (Story 5.9). `requestedStatementId` absent or
+ * unmatched falls back to the server-computed default cycle, then the
+ * calendar-month fallback; returns `null` when neither is available so the
+ * caller omits period query params and lets the API compute its own default
+ * (AC #4 — never blocks settle-up on a cycles-fetch miss).
+ */
+export function resolveSelectedPeriod(
+  payload: CyclesPayload,
+  requestedStatementId: string | undefined,
+): ResolvedPeriod | null {
+  if (requestedStatementId) {
+    const match = payload.cycles.find((c) => c.statement_id === requestedStatementId);
+    if (match) {
+      return {
+        period_start: match.period_start,
+        period_end: match.period_end,
+        selectedStatementId: match.statement_id,
+      };
+    }
+  }
+  if (payload.default_statement_id) {
+    const def = payload.cycles.find((c) => c.statement_id === payload.default_statement_id);
+    if (def) {
+      return {
+        period_start: def.period_start,
+        period_end: def.period_end,
+        selectedStatementId: def.statement_id,
+      };
+    }
+  }
+  if (payload.fallback_period) {
+    return {
+      period_start: payload.fallback_period.start,
+      period_end: payload.fallback_period.end,
+      selectedStatementId: null,
+    };
+  }
+  return null;
+}
+
 /** Soft-Ledger list detail shell — settle first / receipts below (empty OK). */
 export default async function ListDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ listId: string }>;
+  searchParams: Promise<{ period?: string | string[] }>;
 }) {
   const { listId } = await params;
+  const { period: requestedPeriodRaw } = await searchParams;
+  const requestedPeriod = Array.isArray(requestedPeriodRaw)
+    ? requestedPeriodRaw[0]
+    : requestedPeriodRaw;
   const session = await fetchSession();
   if (!session) {
     redirect(`/sign-in?returnTo=/lists/${encodeURIComponent(listId)}`);
@@ -430,10 +538,13 @@ export default async function ListDetailPage({
   let expenses: ExpenseItem[] = [];
   let members: ListMember[] = [];
   let balances: BalancesPayload | null = null;
+  let cycles: CyclePayload[] = [];
+  let selectedStatementId: string | null = null;
   let splitLoadError = false;
   let expensesLoadError = false;
   let membersLoadError = false;
   let balancesLoadError = false;
+  let cyclesLoadError = false;
   let notFound = false;
   let loadError = false;
   try {
@@ -455,16 +566,8 @@ export default async function ListDetailPage({
       notFound = true;
     } else if (response.ok) {
       detail = (await response.json()) as DetailPayload;
-      const [splitRes, expensesRes, membersRes, balancesRes] = await Promise.all([
+      const [splitRes, membersRes, cyclesRes] = await Promise.all([
         fetch(`${getApiInternalUrl()}/lists/${encodeURIComponent(listId)}/default-split`, {
-          method: "GET",
-          headers: {
-            Accept: "application/json",
-            ...(header ? { Cookie: header } : {}),
-          },
-          cache: "no-store",
-        }),
-        fetch(`${getApiInternalUrl()}/lists/${encodeURIComponent(listId)}/expenses`, {
           method: "GET",
           headers: {
             Accept: "application/json",
@@ -480,7 +583,7 @@ export default async function ListDetailPage({
           },
           cache: "no-store",
         }),
-        fetch(`${getApiInternalUrl()}/lists/${encodeURIComponent(listId)}/balances`, {
+        fetch(`${getApiInternalUrl()}/lists/${encodeURIComponent(listId)}/cycles`, {
           method: "GET",
           headers: {
             Accept: "application/json",
@@ -499,11 +602,6 @@ export default async function ListDetailPage({
       } else {
         splitLoadError = true;
       }
-      if (expensesRes.ok) {
-        expenses = asExpenses(await expensesRes.json());
-      } else {
-        expensesLoadError = true;
-      }
       if (membersRes.ok) {
         members = asMembers(await membersRes.json());
         if (members.length === 0) {
@@ -511,6 +609,48 @@ export default async function ListDetailPage({
         }
       } else {
         membersLoadError = true;
+      }
+      // A cycles-fetch miss must never block settle-up (AC #4) — falls
+      // through to no period filtering, same as the "no cycles" case.
+      let cyclesPayload: { cycles: CyclePayload[]; default_statement_id: string | null; fallback_period: { start: string; end: string } | null } = {
+        cycles: [],
+        default_statement_id: null,
+        fallback_period: null,
+      };
+      if (cyclesRes.ok) {
+        cyclesPayload = asCycles(await cyclesRes.json());
+      } else {
+        cyclesLoadError = true;
+      }
+      cycles = cyclesPayload.cycles;
+      const resolvedPeriod = resolveSelectedPeriod(cyclesPayload, requestedPeriod);
+      selectedStatementId = resolvedPeriod?.selectedStatementId ?? null;
+      const periodQuery = resolvedPeriod
+        ? `?period_start=${encodeURIComponent(resolvedPeriod.period_start)}&period_end=${encodeURIComponent(resolvedPeriod.period_end)}`
+        : "";
+
+      const [expensesRes, balancesRes] = await Promise.all([
+        fetch(`${getApiInternalUrl()}/lists/${encodeURIComponent(listId)}/expenses${periodQuery}`, {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            ...(header ? { Cookie: header } : {}),
+          },
+          cache: "no-store",
+        }),
+        fetch(`${getApiInternalUrl()}/lists/${encodeURIComponent(listId)}/balances${periodQuery}`, {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            ...(header ? { Cookie: header } : {}),
+          },
+          cache: "no-store",
+        }),
+      ]);
+      if (expensesRes.ok) {
+        expenses = asExpenses(await expensesRes.json());
+      } else {
+        expensesLoadError = true;
       }
       if (balancesRes.ok) {
         try {
@@ -567,6 +707,25 @@ export default async function ListDetailPage({
             <div className={styles.detailLayout}>
               <ListDetailChrome title={listTitle as string} />
               <div className={styles.detailPrimary}>
+                <CyclePeriodSelector
+                  listId={listId}
+                  cycles={cycles.map((c): CyclePeriodOption => ({
+                    statementId: c.statement_id,
+                    cardLabel: c.card_label,
+                    periodStart: c.period_start,
+                    periodEnd: c.period_end,
+                  }))}
+                  selectedStatementId={selectedStatementId}
+                  messages={{
+                    cyclePeriodSelectorLabel: t.cyclePeriodSelectorLabel,
+                    cyclePeriodOptionUnknownCard: t.cyclePeriodOptionUnknownCard,
+                  }}
+                />
+                {cyclesLoadError ? (
+                  <p className={`${styles.copy} ${styles.softBack}`} role="alert">
+                    {t.loadError}
+                  </p>
+                ) : null}
                 <BalanceStrip
                   {...(showBalancesGrid
                     ? {

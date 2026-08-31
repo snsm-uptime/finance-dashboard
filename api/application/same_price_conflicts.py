@@ -282,6 +282,31 @@ def conflicts_touching_list(
     ]
 
 
+def conflicts_overlapping_period(
+    records: list[SamePriceConflictRecord],
+    *,
+    period_start: date | None,
+    period_end: date | None,
+) -> list[SamePriceConflictRecord]:
+    """Further narrow to conflicts whose manual or parsed side falls inside
+    `[period_start, period_end]` (Story 5.9 — gives real meaning to Story 5.7
+    AC #4 "outside the selected cycle"). Composes with `conflicts_touching_list`
+    — callers must apply both, not one instead of the other (AD-10)."""
+    if period_start is None and period_end is None:
+        return records
+
+    def _in_range(posted_date: date) -> bool:
+        return (period_start is None or posted_date >= period_start) and (
+            period_end is None or posted_date <= period_end
+        )
+
+    return [
+        record
+        for record in records
+        if _in_range(record.manual.posted_date) or _in_range(record.parsed.posted_date)
+    ]
+
+
 class ListSamePriceConflictQueueService:
     """The acting user's full unresolved queue (AC #4) — reads the durable
     `same_price_conflicts` table directly, not any ephemeral Import Session
@@ -301,6 +326,7 @@ __all__ = [
     "DetectSamePriceConflictsCommand",
     "DetectSamePriceConflictsService",
     "ListSamePriceConflictQueueService",
+    "conflicts_overlapping_period",
     "conflicts_touching_list",
     "ManualCandidateRecord",
     "NullSamePriceConflictRepository",

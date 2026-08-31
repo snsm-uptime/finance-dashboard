@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from datetime import date
 from decimal import Decimal, InvalidOperation
 
 from adapters.email import SmtpEmailSender, load_smtp_settings
@@ -36,6 +37,8 @@ from application.lists import (
     DeleteListService,
     GetListBalancesStubCommand,
     GetListBalancesStubService,
+    GetListCyclesCommand,
+    GetListCyclesService,
     GetListDefaultSplitCommand,
     GetListDefaultSplitService,
     GetListDetailCommand,
@@ -75,7 +78,7 @@ from domain.errors import (
     SmtpSendError,
     SubjectNotFoundError,
 )
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy.orm import Session
 
@@ -85,12 +88,14 @@ from api.schemas.lists import (
     CreateExpenseBody,
     CreateExpenseResponse,
     CreateListBody,
+    CycleItemResponse,
     DefaultSplitResponse,
     DefaultSplitShareItem,
     ExpenseItemResponse,
     InviteMemberBody,
     InviteMemberResponse,
     ListBalancesStubResponse,
+    ListCyclesResponse,
     ListDetailResponse,
     ListExpensesStubResponse,
     ListMemberItem,
@@ -99,6 +104,7 @@ from api.schemas.lists import (
     ListMembersResponse,
     ListResponse,
     PairwiseEdgeResponse,
+    PeriodResponse,
     ReassignStatementBody,
     ReassignStatementResponse,
     RenameListBody,
@@ -139,6 +145,25 @@ def _subject_not_found() -> JSONResponse:
         status_code=status.HTTP_404_NOT_FOUND,
         content={"detail": SubjectNotFoundError.MESSAGE, "code": "subject_not_found"},
     )
+
+
+def _invalid_period() -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content={
+            "detail": (
+                "period_start and period_end must be provided together, "
+                "and period_start must not be after period_end."
+            ),
+            "code": "invalid_period",
+        },
+    )
+
+
+def _period_params_invalid(period_start: date | None, period_end: date | None) -> bool:
+    if (period_start is None) != (period_end is None):
+        return True
+    return period_start is not None and period_end is not None and period_start > period_end
 
 
 def _money_str(value: Decimal) -> str:
@@ -415,12 +440,23 @@ def put_list_default_split(
 @router.get("/{list_id}/expenses", response_model=ListExpensesStubResponse)
 def get_list_expenses(
     list_id: uuid.UUID,
+    period_start: date | None = Query(default=None),
+    period_end: date | None = Query(default=None),
     user_id: uuid.UUID = Depends(require_authenticated_user),
     db: Session = Depends(get_db),
 ) -> ListExpensesStubResponse | JSONResponse:
+    if _period_params_invalid(period_start, period_end):
+        return _invalid_period()
     service = ListExpensesService(SqlAlchemyListRepository(db))
     try:
-        result = service.execute(ListExpensesCommand(actor_user_id=user_id, list_id=list_id))
+        result = service.execute(
+            ListExpensesCommand(
+                actor_user_id=user_id,
+                list_id=list_id,
+                period_start=period_start,
+                period_end=period_end,
+            )
+        )
     except ListNotFoundError:
         return _list_not_found()
     return ListExpensesStubResponse(
@@ -599,14 +635,25 @@ def get_list_members(
 @router.get("/{list_id}/balances", response_model=ListBalancesStubResponse)
 def get_list_balances_stub(
     list_id: uuid.UUID,
+    period_start: date | None = Query(default=None),
+    period_end: date | None = Query(default=None),
     user_id: uuid.UUID = Depends(require_authenticated_user),
     db: Session = Depends(get_db),
 ) -> ListBalancesStubResponse | JSONResponse:
+    if _period_params_invalid(period_start, period_end):
+        return _invalid_period()
     service = GetListBalancesStubService(
         SqlAlchemyListRepository(db), SqlAlchemySamePriceConflictRepository(db)
     )
     try:
-        result = service.execute(GetListBalancesStubCommand(actor_user_id=user_id, list_id=list_id))
+        result = service.execute(
+            GetListBalancesStubCommand(
+                actor_user_id=user_id,
+                list_id=list_id,
+                period_start=period_start,
+                period_end=period_end,
+            )
+        )
     except ListNotFoundError:
         return _list_not_found()
     return ListBalancesStubResponse(
@@ -621,6 +668,40 @@ def get_list_balances_stub(
             PairwiseEdgeResponse(member_id=e.member_id, alias=e.alias, amount_crc=e.amount_crc)
             for e in result.you_owe
         ],
+    )
+
+
+@router.get("/{list_id}/cycles", response_model=ListCyclesResponse)
+def get_list_cycles(
+    list_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> ListCyclesResponse | JSONResponse:
+    service = GetListCyclesService(SqlAlchemyListRepository(db))
+    try:
+        result = service.execute(GetListCyclesCommand(actor_user_id=user_id, list_id=list_id))
+    except ListNotFoundError:
+        return _list_not_found()
+    return ListCyclesResponse(
+        cycles=[
+            CycleItemResponse(
+                statement_id=cycle.statement_id,
+                card_id=cycle.card_id,
+                card_label=cycle.card_label,
+                period_start=cycle.period_start.isoformat(),
+                period_end=cycle.period_end.isoformat(),
+            )
+            for cycle in result.cycles
+        ],
+        default_statement_id=result.default_statement_id,
+        fallback_period=(
+            PeriodResponse(
+                start=result.fallback_period.period_start.isoformat(),
+                end=result.fallback_period.period_end.isoformat(),
+            )
+            if result.fallback_period is not None
+            else None
+        ),
     )
 
 

@@ -1,5 +1,5 @@
 # generated: 2026-08-03T22:46:31
-# last_updated: 2026-08-27
+# last_updated: 2026-08-31
 
 # project: finance-dashboard
 # project_key: NOKEY
@@ -42,7 +42,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-03T22:46:31
-last_updated: 2026-08-30
+last_updated: 2026-08-31
 
 project: finance-dashboard
 project_key: NOKEY
@@ -135,7 +135,7 @@ development_status:
   5-6-alias-on-confirm-manual-entry-re-upload-conflict: done
   5-7-wire-incomplete-balance-disclosure-on-strip: done
   5-8-settle-up-simplify-suggested-transfers: done # 5.8 title 2026-08-26: pairwise grid + group plan + copy + payable-clean settle
-  5-9-statement-cycle-period-selector: ready-for-dev
+  5-9-statement-cycle-period-selector: done
   epic-5-retrospective: optional
 
   # Epic 6 — individual-list (post-v1). Do not start until Epic 5 is done unless product pulls it.

@@ -538,6 +538,11 @@ class SqlAlchemyListRepository:
             fixed_list_id=row.fixed_list_id,
         )
 
+    def get_card_label(self, card_id: UUID) -> str | None:
+        """Label for any card by id, no owner filter — used by the cycle
+        selector (Story 5.9) to distinguish cards across list members."""
+        return self._session.scalar(select(CardModel.label).where(CardModel.id == card_id).limit(1))
+
     def get_ledger_entry_payer(self, *, list_id: UUID, entry_id: UUID) -> UUID | None:
         row = self._session.get(LedgerEntryModel, entry_id)
         if (

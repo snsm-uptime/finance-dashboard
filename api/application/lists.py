@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Protocol
 from uuid import UUID, uuid4
@@ -27,6 +27,12 @@ from domain.settle import (
     simplify_group_transfers,
 )
 from domain.splits import SplitSpec, compute_share_allocations
+from domain.statement_cycles import (
+    PeriodWindow,
+    current_calendar_month_window,
+    derive_statement_cycles,
+    resolve_period_bounds,
+)
 
 from application.list_access import (
     AuthorizeListAccessCommand,
@@ -41,6 +47,7 @@ from application.ports import (
 from application.same_price_conflicts import (
     NullSamePriceConflictRepository,
     SamePriceConflictRepository,
+    conflicts_overlapping_period,
     conflicts_touching_list,
 )
 
@@ -181,6 +188,8 @@ class GetListExpensesStubCommand:
 class GetListBalancesStubCommand:
     actor_user_id: UUID
     list_id: UUID
+    period_start: date | None = None
+    period_end: date | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -225,6 +234,8 @@ class ListBalancesStub:
     is_incomplete: bool = False
     you_are_owed: tuple[PairwiseEdge, ...] = ()
     you_owe: tuple[PairwiseEdge, ...] = ()
+    period_start: date | None = None
+    period_end: date | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -352,20 +363,65 @@ class DeleteListService:
         self._repo.delete_list(command.list_id)
 
 
+def _filter_entries_by_period(
+    entries: list,
+    *,
+    period_start: date | None,
+    period_end: date | None,
+):
+    """Boundary-inclusive posted_date filter — no-op unless both bounds are set
+    (callers only ever pass both or neither; see `_invalid_period` at the route
+    layer for the both-or-neither validation)."""
+    if period_start is None or period_end is None:
+        return entries
+    return [entry for entry in entries if period_start <= entry.posted_date <= period_end]
+
+
+def resolve_effective_period(
+    repo: object,
+    *,
+    list_id: UUID,
+    period_start: date | None,
+    period_end: date | None,
+    entries: list | None = None,
+) -> tuple[date, date]:
+    """Explicit `[period_start, period_end]` when both given, else the
+    derived default (most-recent statement cycle, or current calendar month
+    in America/Costa_Rica — AC #1/#4). Pass `entries` when the caller has
+    already fetched the list's ledger, to avoid a second fetch."""
+    if entries is None:
+        list_ledger = getattr(repo, "list_ledger_entries", None)
+        entries = list_ledger(list_id) if list_ledger is not None else []
+    window = resolve_period_bounds(entries, period_start=period_start, period_end=period_end)
+    return window.period_start, window.period_end
+
+
 def compute_viewer_balance_crc(
     repo: object,
     *,
     list_id: UUID,
     actor_user_id: UUID,
     owner_id: UUID,
+    period_start: date | None = None,
+    period_end: date | None = None,
+    entries: list | None = None,
 ) -> str:
-    """Viewer settle balance for a membership row — same math as the list-detail strip."""
-    list_ledger = getattr(repo, "list_ledger_entries", None)
-    list_members = getattr(repo, "list_members_with_alias", None)
-    if list_ledger is None or list_members is None:
-        return PLACEHOLDER_BALANCE_CRC
+    """Viewer settle balance for a membership row — same math as the list-detail strip.
 
-    ledger_entries = list_ledger(list_id)
+    Pass `entries` when the caller has already fetched the list's ledger, to
+    avoid a second fetch."""
+    list_members = getattr(repo, "list_members_with_alias", None)
+    if list_members is None:
+        return PLACEHOLDER_BALANCE_CRC
+    if entries is None:
+        list_ledger = getattr(repo, "list_ledger_entries", None)
+        if list_ledger is None:
+            return PLACEHOLDER_BALANCE_CRC
+        entries = list_ledger(list_id)
+
+    ledger_entries = _filter_entries_by_period(
+        entries, period_start=period_start, period_end=period_end
+    )
     members = list_members(list_id)
     stored_default_split = repo.get_stored_default_split(list_id)  # type: ignore[attr-defined]
     default_mode = stored_default_split.mode if stored_default_split else MODE_EVEN
@@ -428,20 +484,32 @@ def compute_viewer_pairwise_edges(
     actor_user_id: UUID,
     owner_id: UUID,
     settled_at: datetime | None = None,
+    period_start: date | None = None,
+    period_end: date | None = None,
+    entries: list | None = None,
 ) -> tuple[tuple[PairwiseEdge, ...], tuple[PairwiseEdge, ...]]:
     """Viewer-perspective pairwise edges: (you_are_owed, you_owe).
 
-    `you_are_owed` always reflects the full, unfiltered ledger. `you_owe` is
-    additionally filtered to entries created after `settled_at` when provided
-    — a settle assertion clears the payable side for the viewer, but never
-    the true net (AD-21).
-    """
-    list_ledger = getattr(repo, "list_ledger_entries", None)
-    list_members = getattr(repo, "list_members_with_alias", None)
-    if list_ledger is None or list_members is None:
-        return (), ()
+    `you_are_owed` always reflects the full ledger for the selected period
+    (unfiltered by `settled_at`). `you_owe` is additionally filtered to
+    entries created after `settled_at` when provided — a settle assertion
+    clears the payable side for the viewer, but never the true net (AD-21).
 
-    all_entries = list(list_ledger(list_id))
+    Pass `entries` when the caller has already fetched the list's ledger, to
+    avoid a second fetch.
+    """
+    list_members = getattr(repo, "list_members_with_alias", None)
+    if list_members is None:
+        return (), ()
+    if entries is None:
+        list_ledger = getattr(repo, "list_ledger_entries", None)
+        if list_ledger is None:
+            return (), ()
+        entries = list(list_ledger(list_id))
+
+    all_entries = _filter_entries_by_period(
+        entries, period_start=period_start, period_end=period_end
+    )
     members = list_members(list_id)
     alias_by_id = {m.user_id: m.alias for m in members}
     stored_default_split = repo.get_stored_default_split(list_id)  # type: ignore[attr-defined]
@@ -582,8 +650,22 @@ class GetListBalancesStubService:
             )
         )
         lst = self._repo.get_list_with_grant(grant, command.list_id)
+        list_ledger = getattr(self._repo, "list_ledger_entries", None)
+        entries = list(list_ledger(command.list_id)) if list_ledger is not None else []
+        period_start, period_end = resolve_effective_period(
+            self._repo,
+            list_id=command.list_id,
+            period_start=command.period_start,
+            period_end=command.period_end,
+            entries=entries,
+        )
+
         unresolved = self._conflict_repo.list_unresolved_conflicts(command.actor_user_id)
-        is_incomplete = len(conflicts_touching_list(unresolved, command.list_id)) > 0
+        touching = conflicts_touching_list(unresolved, command.list_id)
+        overlapping = conflicts_overlapping_period(
+            touching, period_start=period_start, period_end=period_end
+        )
+        is_incomplete = len(overlapping) > 0
 
         get_settled_at = getattr(self._repo, "get_settled_at", None)
         settled_at = (
@@ -595,6 +677,9 @@ class GetListBalancesStubService:
             actor_user_id=command.actor_user_id,
             owner_id=lst.owner_id,
             settled_at=settled_at,
+            period_start=period_start,
+            period_end=period_end,
+            entries=entries,
         )
 
         return ListBalancesStub(
@@ -604,10 +689,115 @@ class GetListBalancesStubService:
                 list_id=command.list_id,
                 actor_user_id=command.actor_user_id,
                 owner_id=lst.owner_id,
+                period_start=period_start,
+                period_end=period_end,
+                entries=entries,
             ),
             is_incomplete=is_incomplete,
             you_are_owed=you_are_owed,
             you_owe=you_owe,
+            period_start=period_start,
+            period_end=period_end,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class GetListCyclesCommand:
+    actor_user_id: UUID
+    list_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class CycleOption:
+    statement_id: UUID
+    card_id: UUID | None
+    card_label: str | None
+    period_start: date
+    period_end: date
+
+
+@dataclass(frozen=True, slots=True)
+class ListCyclesResult:
+    list_id: UUID
+    cycles: tuple[CycleOption, ...]
+    default_statement_id: UUID | None
+    fallback_period: PeriodWindow | None
+
+
+class GetListCyclesService:
+    """Available statement/billing cycles for a list — authorize_list_access(read_balances).
+
+    Derives cycles from already-fetched `list_ledger_entries` (Story 5.9,
+    Task 1's `derive_statement_cycles`) — no new query path, no new schema.
+    """
+
+    def __init__(self, repo: ListRepository) -> None:
+        self._repo = repo
+
+    def execute(self, command: GetListCyclesCommand) -> ListCyclesResult:
+        grant = AuthorizeListAccessService(self._repo).execute(
+            AuthorizeListAccessCommand(
+                acting_user_id=command.actor_user_id,
+                list_id=command.list_id,
+                action="read_balances",
+            )
+        )
+        self._repo.get_list_with_grant(grant, command.list_id)
+
+        list_ledger = getattr(self._repo, "list_ledger_entries", None)
+        entries = list_ledger(command.list_id) if list_ledger is not None else []
+        statement_cycles = derive_statement_cycles(entries)
+
+        card_id_by_statement: dict[UUID, UUID | None] = {}
+        for entry in entries:
+            if entry.statement_id is None:
+                continue
+            # origin_card_id is set alongside statement_id at commit time for
+            # bulk-committed rows, but the per-row assign flow can later point
+            # an individual entry's origin_card_id at a different card than
+            # the statement's — so take the first *non-null* value seen per
+            # statement instead of the first entry regardless of value.
+            if entry.origin_card_id is not None and card_id_by_statement.get(
+                entry.statement_id
+            ) is None:
+                card_id_by_statement[entry.statement_id] = entry.origin_card_id
+            else:
+                card_id_by_statement.setdefault(entry.statement_id, None)
+
+        get_card_label = getattr(self._repo, "get_card_label", None)
+        label_cache: dict[UUID, str | None] = {}
+
+        def resolve_label(card_id: UUID | None) -> str | None:
+            if card_id is None or get_card_label is None:
+                return None
+            if card_id not in label_cache:
+                label_cache[card_id] = get_card_label(card_id)
+            return label_cache[card_id]
+
+        cycles = tuple(
+            CycleOption(
+                statement_id=cycle.statement_id,
+                card_id=card_id_by_statement.get(cycle.statement_id),
+                card_label=resolve_label(card_id_by_statement.get(cycle.statement_id)),
+                period_start=cycle.period_start,
+                period_end=cycle.period_end,
+            )
+            for cycle in statement_cycles
+        )
+
+        if cycles:
+            return ListCyclesResult(
+                list_id=command.list_id,
+                cycles=cycles,
+                default_statement_id=cycles[0].statement_id,
+                fallback_period=None,
+            )
+
+        return ListCyclesResult(
+            list_id=command.list_id,
+            cycles=(),
+            default_statement_id=None,
+            fallback_period=current_calendar_month_window(),
         )
 
 
