@@ -305,6 +305,14 @@ class LedgerEntryModel(Base):
         nullable=True,
         index=True,
     )
+    # Manual budget attribution (Story 6.5, FR-49). Null = unattributed, or
+    # attributed only via a rule scan at read time (never written for rules).
+    budget_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("budgets.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     # FX materialized at commit (Story 3.5 / AD-7) — CRC entries pass through 1:1.
     amount_crc: Mapped[Decimal] = mapped_column(Numeric(19, 2), nullable=False, server_default="0")
     fx_rate: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False, server_default="1")
@@ -503,6 +511,34 @@ class BudgetModel(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     cap_amount: Mapped[Decimal] = mapped_column(Numeric, nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class BudgetRuleModel(Base):
+    """A case-insensitive substring rule attributing matching lines to a
+    budget at read time (Story 6.5, FR-49). No uniqueness on match_text —
+    nothing requires a budget's rules to have distinct text."""
+
+    __tablename__ = "budget_rules"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    budget_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("budgets.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # Denormalized alongside budget_id (mirrors SplitOverrideModel.list_id
+    # beside subject_id) so list-scoped queries don't require a join through budgets.
+    list_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("lists.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    match_text: Mapped[str] = mapped_column(String(100), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

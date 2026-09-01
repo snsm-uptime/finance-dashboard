@@ -87,6 +87,7 @@ def _ledger_entry_record(row: LedgerEntryModel, statement_id: UUID | None = None
         origin_card_id=row.origin_card_id,
         import_batch_id=row.import_batch_id,
         statement_id=statement_id,
+        budget_id=row.budget_id,
     )
 
 
