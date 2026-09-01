@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { CopyButton } from "@/components/CopyButton";
 import { usePreferences } from "@/components/PreferencesProvider";
+import { StackedListPanel } from "@/components/StackedListPanel";
 import { cardsCopy } from "@/lib/i18n/cards";
 import { fetchLists } from "../lists/listsClient";
 import {
@@ -82,68 +83,53 @@ export function CardsPanel() {
     setCards((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
   }
 
-  const sections = (
-    <section aria-label={t.title} className="relative flex flex-col gap-2">
-      {/* absolute: an in-flow sr-only node is still a flex item and would eat
-          an extra `gap` slot even though it renders at zero size. */}
-      <p className="sr-only absolute" aria-live="polite">
-        {registeredStatus}
-      </p>
-      <RegisterCardForm
-        messages={{
-          ...messages,
-          labelField: t.labelField,
-          ibanField: t.ibanField,
-          submit: t.submit,
-          submitting: t.submitting,
-        }}
-        onRegistered={onRegistered}
-      />
-
-      {loading ? (
-        <p className="text-muted text-[0.85rem]">{t.loading}</p>
-      ) : loadError ? (
-        <p className="text-owe text-[0.9rem]" role="alert">
-          {loadError}
-        </p>
-      ) : cards.length === 0 ? (
-        <p className="text-muted text-[0.85rem]">{t.emptyState}</p>
-      ) : (
-        <ul className="list-none m-0 p-0 flex flex-col gap-2">
-          {cards.map((card) => (
-            <li
-              key={card.id}
-              className="py-[0.6rem] px-[0.85rem] rounded-[8px] border border-border bg-surface"
-            >
-              <CardRoutingControl
-                card={card}
-                lists={lists}
-                trailing={
-                  <CopyButton value={card.iban} label={t.copyIban} copiedLabel={t.ibanCopied}>
-                    <span className="text-muted text-[0.85rem] tracking-[0.02rem]">
-                      {maskIban(card.iban)}
-                    </span>
-                  </CopyButton>
-                }
-                messages={{
-                  ...messages,
-                  routingTitle: t.routingTitle,
-                  routingChipFixed: t.routingChipFixed,
-                  routingChipReview: t.routingChipReview,
-                  routingModeFixed: t.routingModeFixed,
-                  routingModeReview: t.routingModeReview,
-                  routingListLabel: t.routingListLabel,
-                  routingSave: t.routingSave,
-                  routingSaving: t.routingSaving,
-                }}
-                onUpdated={onRoutingUpdated}
-              />
-            </li>
-          ))}
-        </ul>
+  return (
+    <StackedListPanel
+      ariaLabel={t.title}
+      liveRegionText={registeredStatus}
+      input={
+        <RegisterCardForm
+          messages={{
+            ...messages,
+            labelField: t.labelField,
+            ibanField: t.ibanField,
+            submit: t.submit,
+            submitting: t.submitting,
+          }}
+          onRegistered={onRegistered}
+        />
+      }
+      items={cards}
+      itemKey={(card) => card.id}
+      loading={loading}
+      loadingLabel={t.loading}
+      error={loadError}
+      emptyLabel={t.emptyState}
+      renderItem={(card) => (
+        <CardRoutingControl
+          card={card}
+          lists={lists}
+          trailing={
+            <CopyButton value={card.iban} label={t.copyIban} copiedLabel={t.ibanCopied}>
+              <span className="text-muted text-[0.85rem] tracking-[0.02rem]">
+                {maskIban(card.iban)}
+              </span>
+            </CopyButton>
+          }
+          messages={{
+            ...messages,
+            routingTitle: t.routingTitle,
+            routingChipFixed: t.routingChipFixed,
+            routingChipReview: t.routingChipReview,
+            routingModeFixed: t.routingModeFixed,
+            routingModeReview: t.routingModeReview,
+            routingListLabel: t.routingListLabel,
+            routingSave: t.routingSave,
+            routingSaving: t.routingSaving,
+          }}
+          onUpdated={onRoutingUpdated}
+        />
       )}
-    </section>
+    />
   );
-
-  return sections;
 }
