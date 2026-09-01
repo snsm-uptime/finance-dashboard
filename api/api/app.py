@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 
 from api.deps import require_user_alias
 from api.routes.auth import router as auth_router
+from api.routes.budgets import router as budgets_router
 from api.routes.cards import router as cards_router
 from api.routes.health import router as health_router
 from api.routes.import_conflicts import router as import_conflicts_router
@@ -43,6 +44,7 @@ def create_app() -> FastAPI:
     # List chrome needs a person label; invites/auth stay open so the alias can be claimed.
     application.include_router(lists_router, dependencies=[Depends(require_user_alias)])
     application.include_router(splits_router, dependencies=[Depends(require_user_alias)])
+    application.include_router(budgets_router, dependencies=[Depends(require_user_alias)])
     application.include_router(invites_router)
     # Cards are a personal resource, not a list-roster surface — no alias gate.
     application.include_router(cards_router)
