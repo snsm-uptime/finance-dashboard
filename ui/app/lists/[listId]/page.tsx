@@ -5,7 +5,6 @@ import { redirect } from "next/navigation";
 import { BalanceStrip, type BalancePolarity } from "@/components/soft-ledger/BalanceStrip";
 import { Hint } from "@/components/soft-ledger/Hint";
 import { IncompleteDisclosure } from "@/components/soft-ledger/IncompleteDisclosure";
-import { OriginCards } from "@/components/soft-ledger/OriginCards";
 import { ReceiptRow } from "@/components/soft-ledger/ReceiptRow";
 import { SectionLabel } from "@/components/soft-ledger/SectionLabel";
 import { requireAlias } from "@/lib/alias";
@@ -14,6 +13,7 @@ import { formatCrcAmount, formatCrcNumber } from "@/lib/currency";
 import { listsMessages } from "@/lib/i18n/lists";
 import type { Locale } from "@/lib/i18n/locale";
 import { fetchSession } from "@/lib/session";
+import { BudgetsPanel } from "./budgets/BudgetsPanel";
 import { ListReceiptMenu } from "../ListReceiptMenu";
 import { ListDetailChrome } from "../ListDetailChrome";
 import { ListDetailMobileActions } from "../ListDetailMobileActions";
@@ -515,72 +515,6 @@ export function resolveSelectedPeriod(
   };
 }
 
-type OriginSpendItemPayload = {
-  kind: "card" | "cash" | "blank";
-  card_id: string | null;
-  card_label: string | null;
-  total_crc: string;
-};
-
-export type OriginSpendPayload = {
-  origins: OriginSpendItemPayload[];
-};
-
-/** Defensive parse — malformed/absent rows resolve to no origins, never fabricated. */
-export function asOriginSpend(data: unknown): OriginSpendPayload {
-  const empty: OriginSpendPayload = { origins: [] };
-  if (!data || typeof data !== "object") return empty;
-  const row = data as Partial<{ origins: unknown }>;
-  const origins: OriginSpendItemPayload[] = [];
-  if (Array.isArray(row.origins)) {
-    for (const item of row.origins) {
-      if (!item || typeof item !== "object") continue;
-      const o = item as Partial<OriginSpendItemPayload>;
-      if (
-        (o.kind !== "card" && o.kind !== "cash" && o.kind !== "blank") ||
-        typeof o.total_crc !== "string"
-      ) {
-        continue;
-      }
-      origins.push({
-        kind: o.kind,
-        card_id: typeof o.card_id === "string" ? o.card_id : null,
-        card_label: typeof o.card_label === "string" ? o.card_label : null,
-        total_crc: o.total_crc,
-      });
-    }
-  }
-  return { origins };
-}
-
-type OriginCardsMessages = {
-  cyclePeriodOptionUnknownCard: string;
-  expenseOriginCash: string;
-  expenseOriginBlank: string;
-};
-
-/** Maps each origin to its display label + formatted amount for `OriginCards` (Story 6.2). */
-export function originCardsPropsFrom(
-  payload: OriginSpendPayload,
-  t: OriginCardsMessages,
-): { kind: "card" | "cash" | "blank"; label: string; amountCrc: string; isNegative: boolean }[] {
-  return payload.origins.map((o) => {
-    const label =
-      o.kind === "card"
-        ? (o.card_label ?? t.cyclePeriodOptionUnknownCard)
-        : o.kind === "cash"
-          ? t.expenseOriginCash
-          : t.expenseOriginBlank;
-    // A reversal outside the period offsetting a purchase inside it can net an origin
-    // below zero — show the sign explicitly (never a bare "₡-30") rather than hiding it.
-    const trimmed = o.total_crc.trim();
-    const isNegative = trimmed.startsWith("-");
-    const magnitude = isNegative ? trimmed.slice(1) : trimmed;
-    const amountCrc = `${isNegative ? "-" : ""}${formatCrcAmount(magnitude)}`;
-    return { kind: o.kind, label, amountCrc, isNegative };
-  });
-}
-
 /** Soft-Ledger list detail shell — settle first / receipts below (empty OK). */
 export default async function ListDetailPage({
   params,
@@ -612,13 +546,11 @@ export default async function ListDetailPage({
   let balances: BalancesPayload | null = null;
   let cycles: CyclePayload[] = [];
   let selectedStatementId: string | null = null;
-  let originSpend: OriginSpendPayload | null = null;
   let splitLoadError = false;
   let expensesLoadError = false;
   let membersLoadError = false;
   let balancesLoadError = false;
   let cyclesLoadError = false;
-  let originSpendLoadError = false;
   let notFound = false;
   let loadError = false;
   try {
@@ -699,11 +631,14 @@ export default async function ListDetailPage({
       cycles = cyclesPayload.cycles;
       const resolvedPeriod = resolveSelectedPeriod(cyclesPayload, requestedPeriod);
       selectedStatementId = resolvedPeriod?.selectedStatementId ?? null;
-      const periodQuery = resolvedPeriod
-        ? `?period_start=${encodeURIComponent(resolvedPeriod.period_start)}&period_end=${encodeURIComponent(resolvedPeriod.period_end)}`
+      // Filter by the statement itself, not its date span — overlapping
+      // statements can share dates, so a period-range filter can leak in
+      // entries from a different statement (or a hand entry) on the same day.
+      const periodQuery = selectedStatementId
+        ? `?statement_id=${encodeURIComponent(selectedStatementId)}`
         : "";
 
-      const [expensesRes, balancesRes, originSpendRes] = await Promise.all([
+      const [expensesRes, balancesRes] = await Promise.all([
         fetch(`${getApiInternalUrl()}/lists/${encodeURIComponent(listId)}/expenses${periodQuery}`, {
           method: "GET",
           headers: {
@@ -720,19 +655,6 @@ export default async function ListDetailPage({
           },
           cache: "no-store",
         }),
-        members.length === 1
-          ? fetch(
-              `${getApiInternalUrl()}/lists/${encodeURIComponent(listId)}/origin-spend${periodQuery}`,
-              {
-                method: "GET",
-                headers: {
-                  Accept: "application/json",
-                  ...(header ? { Cookie: header } : {}),
-                },
-                cache: "no-store",
-              },
-            )
-          : Promise.resolve(null),
       ]);
       if (expensesRes.ok) {
         expenses = asExpenses(await expensesRes.json());
@@ -752,19 +674,6 @@ export default async function ListDetailPage({
         }
       } else {
         balancesLoadError = true;
-      }
-      if (members.length === 1) {
-        if (originSpendRes && originSpendRes.ok) {
-          try {
-            originSpend = asOriginSpend(await originSpendRes.json());
-          } catch {
-            originSpendLoadError = true;
-            originSpend = { origins: [] };
-          }
-        } else {
-          originSpendLoadError = true;
-          originSpend = { origins: [] };
-        }
       }
     } else {
       loadError = true;
@@ -878,82 +787,55 @@ export default async function ListDetailPage({
                     {t.loadError}
                   </p>
                 ) : null}
-                {members.length === 1 ? (
-                  <>
-                    <div className="flex items-start justify-between gap-[var(--space-4)]">
-                      <div className="min-w-0 flex-1">
-                        <OriginCards
-                          origins={originCardsPropsFrom(originSpend ?? { origins: [] }, t)}
-                          emptyLabel={t.originSpendEmpty}
-                          sectionLabel={t.originSpendTitle}
-                        />
-                      </div>
-                      {mobileActions}
-                    </div>
-                    {originSpendLoadError ? (
-                      <p className={`${styles.copy} ${styles.softBack}`} role="alert">
-                        {t.loadError}
-                      </p>
-                    ) : null}
-                    <p className="m-0 mx-strip-inset">
-                      <Link
-                        className="text-muted"
-                        href={`/lists/${encodeURIComponent(listId)}/budgets`}
-                      >
-                        {t.budgetsEntryLabel}
-                      </Link>
-                    </p>
-                  </>
-                ) : (
-                  <BalanceStrip
-                    {...(showSettleChromeFrom(members.length, showBalancesGrid)
-                      ? {
-                        variant: "grid" as const,
-                        memberDetailsTitle: t.memberDetailsTitle,
-                        owesYouLabel: t.owesYouLabel,
-                        isOwedLabel: t.isOwedLabel,
-                        balanceLabel: t.balanceLabel,
-                        youAreOwed: pairwiseRowsFrom(balances?.you_are_owed ?? []),
-                        youOwe: pairwiseRowsFrom(balances?.you_owe ?? []),
-                        balanceAmount: stripProps.amount,
-                        balancePolarity: stripProps.polarity,
-                        simplify:
-                          members.length >= 3 ? (
-                            <SimplifyColumn
-                              listId={listId}
-                              available={balances?.balance_status.is_incomplete !== true}
-                              messages={{
-                                title: t.simplifyTitle,
-                                emptyLabel: t.simplifyEmpty,
-                                copyLabel: t.copyPlanLabel,
-                                copiedLabel: t.copyPlanCopiedLabel,
-                                blockedLabel: t.simplifyBlocked,
-                                errorGeneric: t.errorGeneric,
-                              }}
-                            />
-                          ) : undefined,
-                        settleAction: (
-                          <SettleControls
+                <BalanceStrip
+                  {...(showSettleChromeFrom(members.length, showBalancesGrid)
+                    ? {
+                      variant: "grid" as const,
+                      memberDetailsTitle: t.memberDetailsTitle,
+                      owesYouLabel: t.owesYouLabel,
+                      isOwedLabel: t.isOwedLabel,
+                      balanceLabel: t.balanceLabel,
+                      youAreOwed: pairwiseRowsFrom(balances?.you_are_owed ?? []),
+                      youOwe: pairwiseRowsFrom(balances?.you_owe ?? []),
+                      balanceAmount: stripProps.amount,
+                      balancePolarity: stripProps.polarity,
+                      simplify:
+                        members.length >= 3 ? (
+                          <SimplifyColumn
                             listId={listId}
+                            available={balances?.balance_status.is_incomplete !== true}
                             messages={{
-                              settleAction: t.settleAction,
-                              settleConfirmTitle: t.settleConfirmTitle,
-                              settleConfirmBody: t.settleConfirmBody,
-                              settleConfirmAction: t.settleConfirmAction,
-                              settleCancel: t.settleCancel,
+                              title: t.simplifyTitle,
+                              emptyLabel: t.simplifyEmpty,
+                              copyLabel: t.copyPlanLabel,
+                              copiedLabel: t.copyPlanCopiedLabel,
+                              blockedLabel: t.simplifyBlocked,
                               errorGeneric: t.errorGeneric,
                             }}
                           />
-                        ),
-                      }
-                      : {
-                        who: stripProps.who,
-                        amount: stripProps.amount,
-                        polarity: stripProps.polarity,
-                      })}
-                    action={mobileActions}
-                  />
-                )}
+                        ) : undefined,
+                      settleAction: (
+                        <SettleControls
+                          listId={listId}
+                          messages={{
+                            settleAction: t.settleAction,
+                            settleConfirmTitle: t.settleConfirmTitle,
+                            settleConfirmBody: t.settleConfirmBody,
+                            settleConfirmAction: t.settleConfirmAction,
+                            settleCancel: t.settleCancel,
+                            errorGeneric: t.errorGeneric,
+                          }}
+                        />
+                      ),
+                    }
+                    : {
+                      who: stripProps.who,
+                      amount: stripProps.amount,
+                      polarity: stripProps.polarity,
+                    })}
+                  action={mobileActions}
+                />
+                {members.length === 1 ? <BudgetsPanel listId={listId} /> : null}
                 <IncompleteDisclosure
                   isIncomplete={balances?.balance_status.is_incomplete === true}
                   label={t.incompleteDisclosureLabel}

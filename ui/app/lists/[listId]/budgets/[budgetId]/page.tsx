@@ -10,8 +10,7 @@ import { listsMessages } from "@/lib/i18n/lists";
 import type { Locale } from "@/lib/i18n/locale";
 import { fetchSession } from "@/lib/session";
 
-import { budgetStateLabel } from "../page";
-import type { BudgetItem } from "../budgetsClient";
+import { budgetStateLabel, type BudgetItem } from "../budgetsClient";
 import { BudgetAssignPanel } from "./BudgetAssignPanel";
 import { BudgetRulesPanel } from "./BudgetRulesPanel";
 import { UnassignButton } from "./UnassignButton";
@@ -184,8 +183,8 @@ export default async function BudgetDetailPage({
   return (
     <main className="flex flex-col gap-[var(--space-4)] px-[var(--page-gutter)] py-[var(--space-4)]">
       <p className="m-0">
-        <Link className="text-muted" href={`/lists/${encodeURIComponent(listId)}/budgets`}>
-          {t.budgetsTitle}
+        <Link className="text-muted" href={`/lists/${encodeURIComponent(listId)}`}>
+          {t.budgetsBackToList}
         </Link>
       </p>
 
