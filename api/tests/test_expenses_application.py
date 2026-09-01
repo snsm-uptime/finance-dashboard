@@ -478,3 +478,70 @@ def test_list_expenses_omits_lens_on_value_error(monkeypatch: pytest.MonkeyPatch
     assert len(listed.expenses) == 1
     assert listed.expenses[0].lens is None
     assert listed.expenses[0].entry.normalized_description == "Coffee"
+
+
+def _ledger_entry(
+    *,
+    list_id: UUID,
+    payer_id: UUID,
+    posted_date: date,
+    statement_id: UUID | None,
+    description: str,
+) -> LedgerEntryRecord:
+    return LedgerEntryRecord(
+        id=uuid4(),
+        list_id=list_id,
+        amount=Decimal("10.00"),
+        currency="CRC",
+        normalized_description=description,
+        payer_id=payer_id,
+        provenance="parser" if statement_id is not None else "hand",
+        line_type="expense",
+        posted_date=posted_date,
+        created_at=datetime.now(UTC),
+        amount_crc=Decimal("10.00"),
+        fx_rate=Decimal("1"),
+        fx_rate_date=None,
+        fx_fallback=False,
+        statement_id=statement_id,
+    )
+
+
+def test_list_expenses_by_statement_id_excludes_overlapping_statement() -> None:
+    """Selecting a statement must isolate that upload, not its date span —
+    a same-day entry from a different statement (or a hand entry) must not
+    leak in, even though a [period_start, period_end] range would include it."""
+    actor = uuid4()
+    repo = _FakeExpenseRepo(list_id=uuid4(), member_ids=[actor])
+    walmart = uuid4()
+    other_card = uuid4()
+    shared_date = date(2026, 8, 5)
+    walmart_entry = _ledger_entry(
+        list_id=repo.list_id,
+        payer_id=actor,
+        posted_date=shared_date,
+        statement_id=walmart,
+        description="Walmart groceries",
+    )
+    other_entry = _ledger_entry(
+        list_id=repo.list_id,
+        payer_id=actor,
+        posted_date=shared_date,
+        statement_id=other_card,
+        description="Other card purchase",
+    )
+    hand_entry = _ledger_entry(
+        list_id=repo.list_id,
+        payer_id=actor,
+        posted_date=shared_date,
+        statement_id=None,
+        description="Cash tip",
+    )
+    for entry in (walmart_entry, other_entry, hand_entry):
+        repo.entries[entry.id] = entry
+
+    listed = ListExpensesService(repo).execute(
+        ListExpensesCommand(actor_user_id=actor, list_id=repo.list_id, statement_id=walmart)
+    )
+
+    assert [row.entry.id for row in listed.expenses] == [walmart_entry.id]

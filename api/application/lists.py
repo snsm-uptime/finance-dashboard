@@ -32,6 +32,8 @@ from domain.statement_cycles import (
     PeriodWindow,
     current_calendar_month_window,
     derive_statement_cycles,
+    filter_entries_by_statement,
+    full_history_window,
     resolve_period_bounds,
 )
 
@@ -192,6 +194,7 @@ class GetListBalancesStubCommand:
     list_id: UUID
     period_start: date | None = None
     period_end: date | None = None
+    statement_id: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -670,13 +673,21 @@ class GetListBalancesStubService:
         lst = self._repo.get_list_with_grant(grant, command.list_id)
         list_ledger = getattr(self._repo, "list_ledger_entries", None)
         entries = list(list_ledger(command.list_id)) if list_ledger is not None else []
-        period_start, period_end = resolve_effective_period(
-            self._repo,
-            list_id=command.list_id,
-            period_start=command.period_start,
-            period_end=command.period_end,
-            entries=entries,
-        )
+
+        if command.statement_id is not None:
+            entries = filter_entries_by_statement(entries, statement_id=command.statement_id)
+            window = full_history_window(entries)
+            period_start, period_end = window.period_start, window.period_end
+            filter_period_start, filter_period_end = None, None
+        else:
+            period_start, period_end = resolve_effective_period(
+                self._repo,
+                list_id=command.list_id,
+                period_start=command.period_start,
+                period_end=command.period_end,
+                entries=entries,
+            )
+            filter_period_start, filter_period_end = period_start, period_end
 
         unresolved = self._conflict_repo.list_unresolved_conflicts(command.actor_user_id)
         touching = conflicts_touching_list(unresolved, command.list_id)
@@ -695,8 +706,8 @@ class GetListBalancesStubService:
             actor_user_id=command.actor_user_id,
             owner_id=lst.owner_id,
             settled_at=settled_at,
-            period_start=period_start,
-            period_end=period_end,
+            period_start=filter_period_start,
+            period_end=filter_period_end,
             entries=entries,
         )
 
@@ -707,8 +718,8 @@ class GetListBalancesStubService:
                 list_id=command.list_id,
                 actor_user_id=command.actor_user_id,
                 owner_id=lst.owner_id,
-                period_start=period_start,
-                period_end=period_end,
+                period_start=filter_period_start,
+                period_end=filter_period_end,
                 entries=entries,
             ),
             is_incomplete=is_incomplete,
@@ -826,6 +837,7 @@ class GetListOriginSpendCommand:
     list_id: UUID
     period_start: date | None = None
     period_end: date | None = None
+    statement_id: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -870,17 +882,23 @@ class GetListOriginSpendService:
         list_ledger = getattr(self._repo, "list_ledger_entries", None)
         entries = list(list_ledger(command.list_id)) if list_ledger is not None else []
 
-        period_start, period_end = resolve_effective_period(
-            self._repo,
-            list_id=command.list_id,
-            period_start=command.period_start,
-            period_end=command.period_end,
-            entries=entries,
-        )
-
-        filtered_entries = _filter_entries_by_period(
-            entries, period_start=period_start, period_end=period_end
-        )
+        if command.statement_id is not None:
+            filtered_entries = filter_entries_by_statement(
+                entries, statement_id=command.statement_id
+            )
+            window = full_history_window(filtered_entries)
+            period_start, period_end = window.period_start, window.period_end
+        else:
+            period_start, period_end = resolve_effective_period(
+                self._repo,
+                list_id=command.list_id,
+                period_start=command.period_start,
+                period_end=command.period_end,
+                entries=entries,
+            )
+            filtered_entries = _filter_entries_by_period(
+                entries, period_start=period_start, period_end=period_end
+            )
 
         groups = compute_spend_by_origin(filtered_entries)
 

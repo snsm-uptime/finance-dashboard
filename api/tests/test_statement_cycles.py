@@ -10,6 +10,7 @@ from domain.statement_cycles import (
     current_calendar_month_window,
     derive_default_period,
     derive_statement_cycles,
+    filter_entries_by_statement,
 )
 
 
@@ -119,3 +120,27 @@ def test_current_calendar_month_window_handles_leap_year() -> None:
 
     assert window.period_start == date(2028, 2, 1)
     assert window.period_end == date(2028, 2, 29)
+
+
+def test_filter_entries_by_statement_excludes_overlapping_statement() -> None:
+    """Two statements sharing a date must not leak into each other — a
+    [period_start, period_end] range filter would let this through."""
+    walmart = uuid4()
+    other_card = uuid4()
+    shared_date = date(2026, 8, 5)
+    entries = [
+        FakeEntry(statement_id=walmart, posted_date=date(2026, 8, 1)),
+        FakeEntry(statement_id=walmart, posted_date=shared_date),
+        FakeEntry(statement_id=other_card, posted_date=shared_date),
+        FakeEntry(statement_id=None, posted_date=shared_date),
+    ]
+
+    filtered = filter_entries_by_statement(entries, statement_id=walmart)
+
+    assert filtered == [entries[0], entries[1]]
+
+
+def test_filter_entries_by_statement_is_noop_when_none() -> None:
+    entries = [FakeEntry(statement_id=uuid4(), posted_date=date(2026, 8, 5))]
+
+    assert filter_entries_by_statement(entries, statement_id=None) == entries

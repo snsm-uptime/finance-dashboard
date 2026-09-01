@@ -447,10 +447,11 @@ def get_list_expenses(
     list_id: uuid.UUID,
     period_start: date | None = Query(default=None),
     period_end: date | None = Query(default=None),
+    statement_id: uuid.UUID | None = Query(default=None),
     user_id: uuid.UUID = Depends(require_authenticated_user),
     db: Session = Depends(get_db),
 ) -> ListExpensesStubResponse | JSONResponse:
-    if _period_params_invalid(period_start, period_end):
+    if statement_id is None and _period_params_invalid(period_start, period_end):
         return _invalid_period()
     service = ListExpensesService(SqlAlchemyListRepository(db))
     try:
@@ -460,6 +461,7 @@ def get_list_expenses(
                 list_id=list_id,
                 period_start=period_start,
                 period_end=period_end,
+                statement_id=statement_id,
             )
         )
     except ListNotFoundError:
@@ -642,10 +644,11 @@ def get_list_balances_stub(
     list_id: uuid.UUID,
     period_start: date | None = Query(default=None),
     period_end: date | None = Query(default=None),
+    statement_id: uuid.UUID | None = Query(default=None),
     user_id: uuid.UUID = Depends(require_authenticated_user),
     db: Session = Depends(get_db),
 ) -> ListBalancesStubResponse | JSONResponse:
-    if _period_params_invalid(period_start, period_end):
+    if statement_id is None and _period_params_invalid(period_start, period_end):
         return _invalid_period()
     service = GetListBalancesStubService(
         SqlAlchemyListRepository(db), SqlAlchemySamePriceConflictRepository(db)
@@ -657,6 +660,7 @@ def get_list_balances_stub(
                 list_id=list_id,
                 period_start=period_start,
                 period_end=period_end,
+                statement_id=statement_id,
             )
         )
     except ListNotFoundError:
@@ -715,10 +719,11 @@ def get_list_origin_spend(
     list_id: uuid.UUID,
     period_start: date | None = Query(default=None),
     period_end: date | None = Query(default=None),
+    statement_id: uuid.UUID | None = Query(default=None),
     user_id: uuid.UUID = Depends(require_authenticated_user),
     db: Session = Depends(get_db),
 ) -> ListOriginSpendResponse | JSONResponse:
-    if _period_params_invalid(period_start, period_end):
+    if statement_id is None and _period_params_invalid(period_start, period_end):
         return _invalid_period()
     service = GetListOriginSpendService(SqlAlchemyListRepository(db))
     try:
@@ -728,6 +733,7 @@ def get_list_origin_spend(
                 list_id=list_id,
                 period_start=period_start,
                 period_end=period_end,
+                statement_id=statement_id,
             )
         )
     except ListNotFoundError:

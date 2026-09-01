@@ -121,3 +121,19 @@ def resolve_period_bounds(
     if period_start is not None and period_end is not None:
         return PeriodWindow(period_start=period_start, period_end=period_end)
     return full_history_window(entries, today=today)
+
+
+def filter_entries_by_statement(
+    entries: list[HasStatementAndPostedDate],
+    *,
+    statement_id: UUID | None,
+) -> list[HasStatementAndPostedDate]:
+    """Entries whose `statement_id` matches exactly — a no-op when none is
+    given. Selecting a statement cycle must isolate that upload, not just its
+    date span: overlapping statements can share `period_end` (see
+    `derive_statement_cycles`), so a `[period_start, period_end]` range filter
+    can leak in entries from a different statement (or a hand entry) that
+    merely falls on the same dates."""
+    if statement_id is None:
+        return entries
+    return [entry for entry in entries if entry.statement_id == statement_id]

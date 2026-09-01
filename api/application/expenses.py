@@ -20,7 +20,7 @@ from domain.errors import (
 from domain.expense_lens import ViewerExpenseLens, build_viewer_expense_lens
 from domain.expenses import ManualExpenseDraft, validate_manual_expense, validate_origin_update
 from domain.splits import SUBJECT_ITEM, compute_share_allocations, resolve_override_source
-from domain.statement_cycles import resolve_period_bounds
+from domain.statement_cycles import filter_entries_by_statement, resolve_period_bounds
 
 from application.cards import CardRecord
 from application.fx_service import MaterializedFx, MaterializeFxService
@@ -163,6 +163,7 @@ class ListExpensesCommand:
     list_id: UUID
     period_start: date | None = None
     period_end: date | None = None
+    statement_id: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -324,11 +325,15 @@ class ListExpensesService:
         )
         lst = self._repo.get_list_with_grant(grant, command.list_id)
         rows = self._repo.list_ledger_entries(command.list_id)
-        window = resolve_period_bounds(
-            rows, period_start=command.period_start, period_end=command.period_end
-        )
-        period_start, period_end = window.period_start, window.period_end
-        rows = [row for row in rows if period_start <= row.posted_date <= period_end]
+        if command.statement_id is not None:
+            rows = filter_entries_by_statement(rows, statement_id=command.statement_id)
+            period_start, period_end = command.period_start, command.period_end
+        else:
+            window = resolve_period_bounds(
+                rows, period_start=command.period_start, period_end=command.period_end
+            )
+            period_start, period_end = window.period_start, window.period_end
+            rows = [row for row in rows if period_start <= row.posted_date <= period_end]
         members = self._repo.list_member_ids(command.list_id)
         stored_default = self._repo.get_stored_default_split(command.list_id)
         default_mode = stored_default.mode if stored_default is not None else "even"
