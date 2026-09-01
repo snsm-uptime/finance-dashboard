@@ -62,6 +62,7 @@ class LedgerEntryRecord:
     origin_card_id: UUID | None = None
     import_batch_id: UUID | None = None
     statement_id: UUID | None = None
+    budget_id: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)

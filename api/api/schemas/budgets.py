@@ -1,8 +1,9 @@
-"""Pydantic DTOs for budget create/list (Story 6.3)."""
+"""Pydantic DTOs for budget create/list (Story 6.3) and attribution — manual
+assign, rules, candidates (Story 6.5)."""
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
@@ -32,6 +33,20 @@ class BudgetsListResponse(BaseModel):
     budgets: list[BudgetResponse] = Field(default_factory=list)
 
 
+class BudgetHistoryLineResponse(BaseModel):
+    id: UUID
+    description: str
+    posted_date: date
+    amount_crc: str
+    attributed_via: Literal["manual", "rule"]
+
+
+class BudgetRuleResponse(BaseModel):
+    id: UUID
+    match_text: str
+    created_at: datetime
+
+
 class BudgetDetailResponse(BaseModel):
     id: UUID
     list_id: UUID
@@ -41,6 +56,24 @@ class BudgetDetailResponse(BaseModel):
     spent: str
     state: Literal["ok", "near", "over"]
     created_at: datetime
-    # Always [] until Story 6.5 attributes ledger lines — loosely typed on
-    # purpose since 6.5's eventual line shape isn't decided yet.
-    history: list[dict] = Field(default_factory=list)
+    history: list[BudgetHistoryLineResponse] = Field(default_factory=list)
+    rules: list[BudgetRuleResponse] = Field(default_factory=list)
+
+
+class AssignBudgetEntryBody(BaseModel):
+    ledger_entry_id: UUID
+
+
+class CreateBudgetRuleBody(BaseModel):
+    match_text: str
+
+
+class BudgetCandidateResponse(BaseModel):
+    id: UUID
+    description: str
+    posted_date: date
+    amount_crc: str
+
+
+class BudgetCandidatesResponse(BaseModel):
+    candidates: list[BudgetCandidateResponse] = Field(default_factory=list)

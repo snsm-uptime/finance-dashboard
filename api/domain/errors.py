@@ -660,6 +660,36 @@ class BudgetNotFoundError(DomainError):
         super().__init__(self.MESSAGE)
 
 
+class InvalidBudgetRuleMatchTextError(DomainError):
+    """Raised when a budget rule's match text is empty, whitespace-only, or too long."""
+
+    MESSAGE = "Enter rule text."
+    CODE = "invalid_budget_rule_match_text"
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(detail or self.MESSAGE)
+
+
+class LedgerEntryNotFoundError(DomainError):
+    """Raised when a ledger entry id does not exist for the acting user's list."""
+
+    MESSAGE = "Transaction not found."
+    CODE = "ledger_entry_not_found"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
+class BudgetRuleNotFoundError(DomainError):
+    """Raised when a budget rule id does not exist for the given budget."""
+
+    MESSAGE = "Rule not found."
+    CODE = "budget_rule_not_found"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
 class SamePriceConflictInvalidResolutionError(DomainError):
     """Raised when `resolution` is not one of the three known constants
     (Story 5.5) — guards against an unrecognized value silently resolving a

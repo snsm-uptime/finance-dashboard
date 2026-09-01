@@ -276,10 +276,12 @@ def _seed_ledger_entry(
     *,
     list_id: UUID,
     provenance: str,
+    payer_id: UUID,
     amount: Decimal = Decimal("10.00"),
     currency: str = "CRC",
     posted_date: date = date(2026, 8, 10),
     normalized_description: str = "Entry",
+    line_type: str = "purchase",
 ) -> UUID:
     entry_id = uuid4()
     db_session.add(
@@ -289,7 +291,9 @@ def _seed_ledger_entry(
             amount=amount,
             currency=currency,
             normalized_description=normalized_description,
+            payer_id=payer_id,
             provenance=provenance,
+            line_type=line_type,
             posted_date=posted_date,
             amount_crc=amount,
             fx_rate=Decimal("1"),
@@ -337,11 +341,16 @@ def test_balances_incomplete_when_list_is_parsed_side(
     client: TestClient, db_session: Session
 ) -> None:
     _register(client, "parsedside@example.com")
+    owner_id = UUID(client.get("/auth/me").json()["user_id"])
     created = client.post("/lists", json={"name": "Household"})
     list_id = UUID(created.json()["id"])
 
-    manual_id = _seed_ledger_entry(db_session, list_id=list_id, provenance="hand")
-    parsed_id = _seed_ledger_entry(db_session, list_id=list_id, provenance="parser")
+    manual_id = _seed_ledger_entry(
+        db_session, list_id=list_id, provenance="hand", payer_id=owner_id
+    )
+    parsed_id = _seed_ledger_entry(
+        db_session, list_id=list_id, provenance="parser", payer_id=owner_id
+    )
     _seed_conflict(
         db_session,
         manual_entry_id=manual_id,
@@ -361,11 +370,16 @@ def test_balances_incomplete_when_list_is_manual_side_on_related_list(
     """AD-10 'related lists': manual and parsed entries can sit on different
     lists that share the actor's membership."""
     _register(client, "manualside@example.com")
+    owner_id = UUID(client.get("/auth/me").json()["user_id"])
     manual_list = UUID(client.post("/lists", json={"name": "Manual List"}).json()["id"])
     parsed_list = UUID(client.post("/lists", json={"name": "Parsed List"}).json()["id"])
 
-    manual_id = _seed_ledger_entry(db_session, list_id=manual_list, provenance="hand")
-    parsed_id = _seed_ledger_entry(db_session, list_id=parsed_list, provenance="parser")
+    manual_id = _seed_ledger_entry(
+        db_session, list_id=manual_list, provenance="hand", payer_id=owner_id
+    )
+    parsed_id = _seed_ledger_entry(
+        db_session, list_id=parsed_list, provenance="parser", payer_id=owner_id
+    )
     _seed_conflict(
         db_session,
         manual_entry_id=manual_id,
@@ -382,11 +396,16 @@ def test_balances_resolving_conflict_clears_incomplete(
     client: TestClient, db_session: Session
 ) -> None:
     _register(client, "resolveflow@example.com")
+    owner_id = UUID(client.get("/auth/me").json()["user_id"])
     created = client.post("/lists", json={"name": "Household"})
     list_id = UUID(created.json()["id"])
 
-    manual_id = _seed_ledger_entry(db_session, list_id=list_id, provenance="hand")
-    parsed_id = _seed_ledger_entry(db_session, list_id=list_id, provenance="parser")
+    manual_id = _seed_ledger_entry(
+        db_session, list_id=list_id, provenance="hand", payer_id=owner_id
+    )
+    parsed_id = _seed_ledger_entry(
+        db_session, list_id=list_id, provenance="parser", payer_id=owner_id
+    )
     conflict_id = _seed_conflict(
         db_session,
         manual_entry_id=manual_id,
@@ -417,9 +436,14 @@ def test_balances_conflict_on_unrelated_list_does_not_flag_this_list(
 
     client.post("/auth/sign-out")
     _register(client, "otherowner@example.com")
+    other_owner_id = UUID(client.get("/auth/me").json()["user_id"])
     other_list = UUID(client.post("/lists", json={"name": "Other"}).json()["id"])
-    manual_id = _seed_ledger_entry(db_session, list_id=other_list, provenance="hand")
-    parsed_id = _seed_ledger_entry(db_session, list_id=other_list, provenance="parser")
+    manual_id = _seed_ledger_entry(
+        db_session, list_id=other_list, provenance="hand", payer_id=other_owner_id
+    )
+    parsed_id = _seed_ledger_entry(
+        db_session, list_id=other_list, provenance="parser", payer_id=other_owner_id
+    )
     _seed_conflict(
         db_session,
         manual_entry_id=manual_id,
@@ -446,11 +470,16 @@ def test_balances_conflict_on_one_of_actors_own_lists_does_not_flag_a_sibling_li
     would pass this only by accident of the unrelated-list test above — this
     exercises `conflicts_touching_list`'s per-list_id filter directly."""
     _register(client, "twolists@example.com")
+    owner_id = UUID(client.get("/auth/me").json()["user_id"])
     touched_list = UUID(client.post("/lists", json={"name": "Touched"}).json()["id"])
     sibling_list = UUID(client.post("/lists", json={"name": "Sibling"}).json()["id"])
 
-    manual_id = _seed_ledger_entry(db_session, list_id=touched_list, provenance="hand")
-    parsed_id = _seed_ledger_entry(db_session, list_id=touched_list, provenance="parser")
+    manual_id = _seed_ledger_entry(
+        db_session, list_id=touched_list, provenance="hand", payer_id=owner_id
+    )
+    parsed_id = _seed_ledger_entry(
+        db_session, list_id=touched_list, provenance="parser", payer_id=owner_id
+    )
     _seed_conflict(
         db_session,
         manual_entry_id=manual_id,
@@ -690,11 +719,16 @@ def test_simplify_blocked_409_when_unresolved_conflict_touches_list(
     client: TestClient, db_session: Session
 ) -> None:
     _register(client, "simplifyblocked@example.com")
+    owner_id = UUID(client.get("/auth/me").json()["user_id"])
     created = client.post("/lists", json={"name": "Household"})
     list_id = UUID(created.json()["id"])
 
-    manual_id = _seed_ledger_entry(db_session, list_id=list_id, provenance="hand")
-    parsed_id = _seed_ledger_entry(db_session, list_id=list_id, provenance="parser")
+    manual_id = _seed_ledger_entry(
+        db_session, list_id=list_id, provenance="hand", payer_id=owner_id
+    )
+    parsed_id = _seed_ledger_entry(
+        db_session, list_id=list_id, provenance="parser", payer_id=owner_id
+    )
     _seed_conflict(
         db_session,
         manual_entry_id=manual_id,
