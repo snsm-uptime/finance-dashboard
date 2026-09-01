@@ -11,6 +11,7 @@ import { listsMessages } from "@/lib/i18n/lists";
 import { BudgetsCreateForm } from "./BudgetsCreateForm";
 import {
   budgetStateLabel,
+  budgetUsageRatio,
   fetchBudgets,
   type BudgetItem,
   type BudgetsClientMessages,
@@ -94,25 +95,38 @@ export function BudgetsPanel({ listId }: Props) {
           loadingLabel={t.budgetsLoading}
           error={loadError}
           emptyLabel={t.budgetsEmpty}
-          renderItem={(budget) => (
-            <Link
-              href={`/lists/${encodeURIComponent(listId)}/budgets/${encodeURIComponent(budget.id)}`}
-              className="flex items-center justify-between gap-[var(--space-3)] no-underline"
-            >
-              <div className="min-w-0 flex-1">
-                <p className="m-0 truncate text-foreground">{budget.name}</p>
-                <p
-                  className={`m-0 ${budget.state === "ok" ? "text-muted" : "text-owe font-semibold"}`}
-                >
-                  {budgetStateLabel(budget.state, t)}
+          listClassName="list-none m-0 p-0 grid grid-cols-2 gap-[var(--space-3)] sm:grid-cols-3"
+          itemClassName="aspect-square py-[0.6rem] px-[0.85rem] rounded-[8px] border border-border bg-surface"
+          renderItem={(budget) => {
+            const ratio = budgetUsageRatio(budget);
+            const usageDotClass =
+              ratio === null
+                ? "bg-muted"
+                : ratio < 70
+                  ? "bg-owed"
+                  : ratio <= 90
+                    ? "bg-warn"
+                    : "bg-owe";
+            return (
+              <Link
+                href={`/lists/${encodeURIComponent(listId)}/budgets/${encodeURIComponent(budget.id)}`}
+                className="flex h-full flex-col justify-between no-underline"
+              >
+                <div className="flex items-center justify-between gap-[var(--space-2)]">
+                  <p className="m-0 min-w-0 flex-1 truncate text-foreground">{budget.name}</p>
+                  <span
+                    className={`h-[10px] w-[10px] shrink-0 rounded-full ${usageDotClass}`}
+                    role="img"
+                    aria-label={budgetStateLabel(budget.state, t)}
+                  />
+                </div>
+                <p className="m-0 tabular-nums text-foreground">
+                  {formatMoneyAmount(budget.spent, budget.currency)} /{" "}
+                  {formatMoneyAmount(budget.cap, budget.currency)}
                 </p>
-              </div>
-              <p className="m-0 tabular-nums text-foreground">
-                {formatMoneyAmount(budget.spent, budget.currency)} /{" "}
-                {formatMoneyAmount(budget.cap, budget.currency)}
-              </p>
-            </Link>
-          )}
+              </Link>
+            );
+          }}
         />
       </div>
     </>
