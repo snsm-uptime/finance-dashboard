@@ -304,9 +304,7 @@ def unassign_budget_entry(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.get(
-    "/{list_id}/budgets/{budget_id}/candidates", response_model=BudgetCandidatesResponse
-)
+@router.get("/{list_id}/budgets/{budget_id}/candidates", response_model=BudgetCandidatesResponse)
 def list_budget_candidates(
     list_id: uuid.UUID,
     budget_id: uuid.UUID,
@@ -324,9 +322,7 @@ def list_budget_candidates(
         return _list_not_found()
     except BudgetNotFoundError:
         return _budget_not_found()
-    return BudgetCandidatesResponse(
-        candidates=[_budget_candidate_response(c) for c in candidates]
-    )
+    return BudgetCandidatesResponse(candidates=[_budget_candidate_response(c) for c in candidates])
 
 
 @router.post(
@@ -365,9 +361,7 @@ def create_budget_rule(
     return _budget_rule_response(rule)
 
 
-@router.delete(
-    "/{list_id}/budgets/{budget_id}/rules/{rule_id}", response_model=None
-)
+@router.delete("/{list_id}/budgets/{budget_id}/rules/{rule_id}", response_model=None)
 def delete_budget_rule(
     list_id: uuid.UUID,
     budget_id: uuid.UUID,

@@ -649,6 +649,7 @@ def test_delete_rule_removes_previously_rule_attributed_line_from_spent_and_hist
     after = client.get(f"/lists/{list_id}/budgets/{budget_id}")
     assert after.json()["spent"] == "0"
     assert after.json()["history"] == []
-    assert [c["id"] for c in client.get(
-        f"/lists/{list_id}/budgets/{budget_id}/candidates"
-    ).json()["candidates"]] == [entry_id]
+    assert [
+        c["id"]
+        for c in client.get(f"/lists/{list_id}/budgets/{budget_id}/candidates").json()["candidates"]
+    ] == [entry_id]
