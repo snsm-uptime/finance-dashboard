@@ -13,6 +13,7 @@
   --color-on-accent: var(--on-accent);
   --color-owe: var(--owe);
   --color-owed: var(--owed);
+  --color-warn: var(--warn);
 
   --radius-sm: var(--rounded-sm);
   --radius-md: var(--rounded-md);
@@ -35,6 +36,7 @@
   --wb-on-accent: #fffcf7;
   --wb-owe: #a04936;
   --wb-owed: #2f6e48;
+  --wb-warn: #a6791f;
 
   --background: var(--wb-bg);
   --surface: var(--wb-surface);
@@ -45,6 +47,7 @@
   --on-accent: var(--wb-on-accent);
   --owe: var(--wb-owe);
   --owed: var(--wb-owed);
+  --warn: var(--wb-warn);
 
   /* Dropdown rows: tint --surface so --foreground stays readable. Hover < selected. */
   --menu-item-hover: color-mix(in srgb, var(--accent) 10%, var(--surface));
@@ -140,6 +143,7 @@ html.dark {
   --wb-on-accent: #17140f;
   --wb-owe: #d48b78;
   --wb-owed: #7ec794;
+  --wb-warn: #d9b866;
 
   --background: var(--wb-bg);
   --surface: var(--wb-surface);
@@ -150,6 +154,7 @@ html.dark {
   --on-accent: var(--wb-on-accent);
   --owe: var(--wb-owe);
   --owed: var(--wb-owed);
+  --warn: var(--wb-warn);
 
   /* --foreground is cream here and would halo the shadow instead of shading it. */
   --lift-ink: #000;
@@ -170,6 +175,7 @@ html.dark {
     --wb-on-accent: #17140f;
     --wb-owe: #d48b78;
     --wb-owed: #7ec794;
+    --wb-warn: #d9b866;
 
     --background: var(--wb-bg);
     --surface: var(--wb-surface);
@@ -180,6 +186,7 @@ html.dark {
     --on-accent: var(--wb-on-accent);
     --owe: var(--wb-owe);
     --owed: var(--wb-owed);
+    --warn: var(--wb-warn);
 
     --lift-ink: #000;
   }

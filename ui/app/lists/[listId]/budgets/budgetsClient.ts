@@ -32,6 +32,14 @@ export function budgetStateLabel(state: BudgetItem["state"], t: BudgetStateMessa
   return t.budgetsStateOk;
 }
 
+/** spent / cap as a 0-100+ percentage, or null when cap is missing/zero/non-numeric. */
+export function budgetUsageRatio(budget: Pick<BudgetItem, "spent" | "cap">): number | null {
+  const spent = Number.parseFloat(budget.spent);
+  const cap = Number.parseFloat(budget.cap);
+  if (!Number.isFinite(spent) || !Number.isFinite(cap) || cap <= 0) return null;
+  return (spent / cap) * 100;
+}
+
 type ErrorResult = { ok: false; error: string };
 type OkBudgets = { ok: true; budgets: BudgetItem[] };
 type OkBudget = { ok: true; budget: BudgetItem };
