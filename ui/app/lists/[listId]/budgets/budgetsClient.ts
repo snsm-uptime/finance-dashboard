@@ -19,7 +19,21 @@ export type BudgetsClientMessages = {
   errorInvalidBudgetCurrency: string;
 };
 
+export type BudgetStateMessages = {
+  budgetsStateOk: string;
+  budgetsStateNear: string;
+  budgetsStateOver: string;
+};
+
+/** Near-cap-state to display label mapping (AC #2 — distinct treatment, not a bare percentage). */
+export function budgetStateLabel(state: BudgetItem["state"], t: BudgetStateMessages): string {
+  if (state === "over") return t.budgetsStateOver;
+  if (state === "near") return t.budgetsStateNear;
+  return t.budgetsStateOk;
+}
+
 type ErrorResult = { ok: false; error: string };
+type OkBudgets = { ok: true; budgets: BudgetItem[] };
 type OkBudget = { ok: true; budget: BudgetItem };
 
 function mapError(
@@ -68,6 +82,36 @@ function asBudget(data: unknown): BudgetItem | null {
     state: row.state,
     created_at: row.created_at,
   };
+}
+
+export async function fetchBudgets(
+  listId: string,
+  messages: BudgetsClientMessages,
+): Promise<OkBudgets | ErrorResult> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/lists/${encodeURIComponent(listId)}/budgets`, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+    });
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  if (!response.ok) {
+    const body = (await parseJson(response)) as { detail?: unknown; code?: unknown } | null;
+    return { ok: false, error: mapError(response.status, body, messages) };
+  }
+  const data = (await parseJson(response)) as { budgets?: unknown } | null;
+  if (!data || !Array.isArray(data.budgets)) {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  const budgets: BudgetItem[] = [];
+  for (const row of data.budgets) {
+    const parsed = asBudget(row);
+    if (parsed) budgets.push(parsed);
+  }
+  return { ok: true, budgets };
 }
 
 export async function createBudget(

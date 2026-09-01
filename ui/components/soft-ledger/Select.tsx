@@ -29,6 +29,8 @@ type SoftLedgerSelectProps = {
   options: SoftLedgerSelectOption[];
   disabled?: boolean;
   required?: boolean;
+  /** Borderless/transparent trigger for embedding in a ghost input row (e.g. RegisterCardForm). */
+  ghost?: boolean;
   "aria-label"?: string;
   "aria-labelledby"?: string;
   "aria-describedby"?: string;
@@ -45,6 +47,7 @@ export const SoftLedgerSelect = forwardRef<SoftLedgerSelectHandle, SoftLedgerSel
       options,
       disabled = false,
       required = false,
+      ghost = false,
       "aria-label": ariaLabel,
       "aria-labelledby": ariaLabelledBy,
       "aria-describedby": ariaDescribedBy,
@@ -168,10 +171,14 @@ export const SoftLedgerSelect = forwardRef<SoftLedgerSelectHandle, SoftLedgerSel
       <button
         type="button"
         id={triggerId}
-        className="flex items-center justify-between gap-2 w-full m-0 box-border px-[0.7rem] py-[0.55rem] border border-border rounded-sm bg-surface text-foreground text-left cursor-pointer font-semibold leading-[1.4] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-55 disabled:cursor-not-allowed aria-invalid:border-[#b33]"
+        className={
+          ghost
+            ? "flex items-center justify-between gap-1 w-full m-0 bg-transparent text-foreground text-left cursor-pointer leading-[1.4] outline-none disabled:opacity-55 disabled:cursor-not-allowed"
+            : "flex items-center justify-between gap-2 w-full m-0 box-border px-[0.7rem] py-[0.55rem] border border-border rounded-sm bg-surface text-foreground text-left cursor-pointer font-semibold leading-[1.4] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-55 disabled:cursor-not-allowed aria-invalid:border-[#b33]"
+        }
         style={{
-          fontFamily: "var(--font-ui), system-ui, sans-serif",
-          fontSize: "1rem",
+          fontFamily: ghost ? "inherit" : "var(--font-ui), system-ui, sans-serif",
+          fontSize: ghost ? "0.9rem" : "1rem",
         }}
         disabled={disabled}
         aria-haspopup="listbox"
@@ -205,7 +212,11 @@ export const SoftLedgerSelect = forwardRef<SoftLedgerSelectHandle, SoftLedgerSel
         <ul
           id={listboxId}
           ref={listboxRef}
-          className={`${menuSurface.panel} absolute z-20 top-[calc(100%_+_0.25rem)] left-0 right-0 m-0 p-1 list-none max-h-56`}
+          className={
+            ghost
+              ? `${menuSurface.panel} absolute z-20 top-[calc(100%_+_0.25rem)] left-0 m-0 p-1 list-none max-h-56 w-max min-w-full whitespace-nowrap`
+              : `${menuSurface.panel} absolute z-20 top-[calc(100%_+_0.25rem)] left-0 right-0 m-0 p-1 list-none max-h-56`
+          }
           role="listbox"
           tabIndex={0}
           aria-activedescendant={`${listboxId}-opt-${highlightIndex}`}

@@ -1,12 +1,13 @@
 "use client";
 
 import { FormEvent, useId, useState } from "react";
-import { useRouter } from "next/navigation";
 
+import { IconButton } from "@/components/IconButton";
 import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
 import { useFormSubmission } from "@/hooks";
+import { PlusIcon } from "@/app/icons";
 
-import { createBudget, type BudgetsClientMessages } from "./budgetsClient";
+import { createBudget, type BudgetItem, type BudgetsClientMessages } from "./budgetsClient";
 
 export type BudgetsCreateFormMessages = BudgetsClientMessages & {
   budgetsCreateTitle: string;
@@ -20,6 +21,7 @@ export type BudgetsCreateFormMessages = BudgetsClientMessages & {
 type Props = {
   listId: string;
   messages: BudgetsCreateFormMessages;
+  onCreated: (budget: BudgetItem) => void;
 };
 
 const CURRENCY_OPTIONS = [
@@ -27,23 +29,29 @@ const CURRENCY_OPTIONS = [
   { value: "USD", label: "USD" },
 ];
 
-export function BudgetsCreateForm({ listId, messages }: Props) {
-  const router = useRouter();
+const fieldInputClass =
+  "min-w-0 flex-1 font-inherit text-[0.9rem] bg-transparent text-foreground placeholder:text-muted outline-none";
+
+export function BudgetsCreateForm({ listId, messages, onCreated }: Props) {
   const baseId = useId();
+  const currencyId = `${baseId}-currency`;
+  const currencyLabelId = `${baseId}-currency-label`;
+  const nameId = `${baseId}-name`;
+  const capId = `${baseId}-cap`;
   const [name, setName] = useState("");
   const [cap, setCap] = useState("");
   const [currency, setCurrency] = useState("CRC");
 
   const { pending, error, submit, clearError } = useFormSubmission(
-    async (body: { name: string; cap: string; currency: string }) =>
-      createBudget(listId, body, messages),
-    {
-      onSuccess: () => {
+    async (body: { name: string; cap: string; currency: string }) => {
+      const result = await createBudget(listId, body, messages);
+      if (result.ok) {
         setName("");
         setCap("");
         setCurrency("CRC");
-        router.refresh();
-      },
+        onCreated(result.budget);
+      }
+      return result;
     },
   );
 
@@ -56,80 +64,74 @@ export function BudgetsCreateForm({ listId, messages }: Props) {
   }
 
   return (
-    <section className="flex flex-col gap-[var(--space-3)] mx-strip-inset">
-      <h2 className="m-0 text-foreground" style={{ fontFamily: "var(--type-body-face)" }}>
-        {messages.budgetsCreateTitle}
-      </h2>
-      <form
-        className="flex flex-col gap-[var(--space-3)] p-[var(--space-4)] bg-surface border border-border rounded-md"
-        onSubmit={onSubmit}
-      >
-        <div className="flex flex-col gap-1">
-          <label className="text-muted" htmlFor={`${baseId}-name`}>
-            {messages.budgetsNameLabel}
-          </label>
-          <input
-            id={`${baseId}-name`}
-            className="w-full box-border px-[0.7rem] py-[0.55rem] border border-border rounded-sm bg-surface text-foreground"
-            required
-            value={name}
-            disabled={pending}
-            onChange={(e) => {
-              setName(e.target.value);
-              clearError();
-            }}
-          />
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-muted" htmlFor={`${baseId}-cap`}>
-            {messages.budgetsCapLabel}
-          </label>
-          <input
-            id={`${baseId}-cap`}
-            className="w-full box-border px-[0.7rem] py-[0.55rem] border border-border rounded-sm bg-surface text-foreground"
-            inputMode="decimal"
-            required
-            value={cap}
-            disabled={pending}
-            onChange={(e) => {
-              setCap(e.target.value);
-              clearError();
-            }}
-          />
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <span className="text-muted" id={`${baseId}-currency-label`}>
-            {messages.budgetsCurrencyLabel}
-          </span>
+    <form className="flex w-full flex-col" onSubmit={onSubmit}>
+      <div className="flex items-center gap-2 rounded-[8px] border-2 border-border bg-background px-[0.65rem] py-[0.5rem]">
+        <span className="sr-only" id={currencyLabelId}>
+          {messages.budgetsCurrencyLabel}
+        </span>
+        <div className="w-fit shrink-0">
           <SoftLedgerSelect
-            id={`${baseId}-currency`}
+            id={currencyId}
+            ghost
             value={currency}
             options={CURRENCY_OPTIONS}
             disabled={pending}
-            aria-labelledby={`${baseId}-currency-label`}
+            aria-labelledby={currencyLabelId}
             onChange={(value) => {
               setCurrency(value);
               clearError();
             }}
           />
         </div>
-
+        <span className="h-5 w-px shrink-0 bg-border" aria-hidden="true" />
+        <label htmlFor={capId} className="sr-only">
+          {messages.budgetsCapLabel}
+        </label>
+        <input
+          id={capId}
+          className={`${fieldInputClass} basis-[30%] flex-none`}
+          inputMode="decimal"
+          value={cap}
+          placeholder={messages.budgetsCapLabel}
+          required
+          disabled={pending}
+          onChange={(e) => {
+            setCap(e.target.value);
+            clearError();
+          }}
+        />
+        <span className="h-5 w-px shrink-0 bg-border" aria-hidden="true" />
+        <label htmlFor={nameId} className="sr-only">
+          {messages.budgetsNameLabel}
+        </label>
+        <input
+          id={nameId}
+          className={fieldInputClass}
+          type="text"
+          value={name}
+          placeholder={messages.budgetsNameLabel}
+          required
+          disabled={pending}
+          onChange={(e) => {
+            setName(e.target.value);
+            clearError();
+          }}
+        />
+        <IconButton
+          type="submit"
+          className="h-7 w-7 shrink-0 !p-0 !rounded-[4px]"
+          disabled={!canSubmit}
+          label={pending ? messages.budgetsCreating : messages.budgetsCreateSubmit}
+          icon={<PlusIcon />}
+        />
+      </div>
+      <div aria-live="polite">
         {error ? (
-          <p className="m-0 text-owe" role="alert">
+          <p className="m-0 mt-1 text-[0.85rem] text-owe" role="alert">
             {error}
           </p>
         ) : null}
-
-        <button
-          type="submit"
-          className="self-start px-[var(--space-4)] py-[var(--space-2)] rounded-sm bg-accent text-background font-semibold disabled:opacity-55 disabled:cursor-not-allowed"
-          disabled={!canSubmit}
-        >
-          {pending ? messages.budgetsCreating : messages.budgetsCreateSubmit}
-        </button>
-      </form>
-    </section>
+      </div>
+    </form>
   );
 }
