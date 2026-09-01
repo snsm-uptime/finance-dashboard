@@ -620,6 +620,46 @@ class SamePriceConflictConfirmRequiredError(DomainError):
         super().__init__(self.MESSAGE)
 
 
+class InvalidBudgetNameError(DomainError):
+    """Raised when a budget name is empty, whitespace-only, or too long."""
+
+    MESSAGE = "Enter a budget name."
+    CODE = "invalid_budget_name"
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(detail or self.MESSAGE)
+
+
+class InvalidBudgetCapError(DomainError):
+    """Raised when a budget cap fails parse/positivity/decimal-precision validation."""
+
+    MESSAGE = "Enter a valid budget cap."
+    CODE = "invalid_budget_cap"
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(detail or self.MESSAGE)
+
+
+class InvalidBudgetCurrencyError(DomainError):
+    """Raised when a budget currency is not a supported 3-letter code (v1: CRC/USD)."""
+
+    MESSAGE = "Choose a supported currency."
+    CODE = "invalid_budget_currency"
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(detail or self.MESSAGE)
+
+
+class BudgetNotFoundError(DomainError):
+    """Raised when a budget id does not exist for the acting user's list."""
+
+    MESSAGE = "Budget not found."
+    CODE = "budget_not_found"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
 class SamePriceConflictInvalidResolutionError(DomainError):
     """Raised when `resolution` is not one of the three known constants
     (Story 5.5) — guards against an unrecognized value silently resolving a
