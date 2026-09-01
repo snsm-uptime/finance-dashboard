@@ -1,5 +1,5 @@
 # generated: 2026-08-03T22:46:31
-# last_updated: 2026-08-31
+# last_updated: 2026-09-01
 
 # project: finance-dashboard
 # project_key: NOKEY
@@ -144,7 +144,7 @@ development_status:
   6-1-mode-switch-on-member-count: done
   6-2-spend-by-origin-statement-cycle: done
   6-3-budget-list: done
-  6-4-budget-detail: backlog
+  6-4-budget-detail: done
   6-5-budget-attribution-manual-and-rules: backlog
   epic-6-retrospective: optional
 

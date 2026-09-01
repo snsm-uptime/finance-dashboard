@@ -5,6 +5,8 @@ Requires DATABASE_URL (Compose db or CI Postgres 16). Skips when unset.
 
 from __future__ import annotations
 
+import uuid
+
 import pytest
 from fastapi.testclient import TestClient
 from tests.integration_db import claim_alias, database_url
@@ -141,3 +143,73 @@ def test_non_member_post_budgets_returns_403(client: TestClient) -> None:
     )
     assert response.status_code == 403
     assert response.json()["code"] == "not_list_member"
+
+
+def test_get_budget_detail_happy_path(client: TestClient) -> None:
+    _register(client, "budgetdetailok@example.com")
+    list_id = _own_list_id(client)
+
+    created = client.post(
+        f"/lists/{list_id}/budgets",
+        json={"name": "Groceries", "cap": "500.00", "currency": "CRC"},
+    )
+    assert created.status_code == 201, created.text
+    budget_id = created.json()["id"]
+
+    detail = client.get(f"/lists/{list_id}/budgets/{budget_id}")
+    assert detail.status_code == 200, detail.text
+    body = detail.json()
+    assert body["id"] == budget_id
+    assert body["list_id"] == list_id
+    assert body["name"] == "Groceries"
+    assert body["cap"] == "500.00"
+    assert body["currency"] == "CRC"
+    assert body["spent"] == "0"
+    assert body["state"] == "ok"
+    assert body["history"] == []
+
+
+def test_get_budget_detail_returns_404_for_budget_on_other_list(client: TestClient) -> None:
+    _register(client, "budgetdetailownera@example.com")
+    list_a_id = _own_list_id(client)
+    created = client.post(
+        f"/lists/{list_a_id}/budgets",
+        json={"name": "Groceries", "cap": "500.00", "currency": "CRC"},
+    )
+    assert created.status_code == 201, created.text
+    budget_on_a_id = created.json()["id"]
+
+    create_response = client.post("/lists", json={"name": "Second list"})
+    assert create_response.status_code == 201, create_response.text
+    list_b_id = create_response.json()["id"]
+
+    response = client.get(f"/lists/{list_b_id}/budgets/{budget_on_a_id}")
+    assert response.status_code == 404
+    assert response.json()["code"] == "budget_not_found"
+
+
+def test_get_budget_detail_returns_404_for_nonexistent_budget(client: TestClient) -> None:
+    _register(client, "budgetdetailmissing@example.com")
+    list_id = _own_list_id(client)
+
+    response = client.get(f"/lists/{list_id}/budgets/{uuid.uuid4()}")
+    assert response.status_code == 404
+    assert response.json()["code"] == "budget_not_found"
+
+
+def test_get_budget_detail_non_member_returns_404(client: TestClient) -> None:
+    _register(client, "budgetdetailownerc@example.com")
+    list_id = _own_list_id(client)
+    created = client.post(
+        f"/lists/{list_id}/budgets",
+        json={"name": "Groceries", "cap": "500.00", "currency": "CRC"},
+    )
+    assert created.status_code == 201, created.text
+    budget_id = created.json()["id"]
+
+    client.post("/auth/sign-out")
+    _register(client, "budgetdetailownerd@example.com")
+
+    response = client.get(f"/lists/{list_id}/budgets/{budget_id}")
+    assert response.status_code == 404
+    assert response.json()["code"] == "list_not_found"

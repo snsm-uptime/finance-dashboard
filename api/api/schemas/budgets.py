@@ -30,3 +30,17 @@ class BudgetResponse(BaseModel):
 
 class BudgetsListResponse(BaseModel):
     budgets: list[BudgetResponse] = Field(default_factory=list)
+
+
+class BudgetDetailResponse(BaseModel):
+    id: UUID
+    list_id: UUID
+    name: str
+    cap: str
+    currency: str
+    spent: str
+    state: Literal["ok", "near", "over"]
+    created_at: datetime
+    # Always [] until Story 6.5 attributes ledger lines — loosely typed on
+    # purpose since 6.5's eventual line shape isn't decided yet.
+    history: list[dict] = Field(default_factory=list)

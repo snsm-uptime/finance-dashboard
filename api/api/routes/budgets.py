@@ -9,14 +9,18 @@ from decimal import Decimal
 from adapters.persistence.budgets import SqlAlchemyBudgetRepository
 from adapters.persistence.repositories import SqlAlchemyListRepository
 from application.budgets import (
+    BudgetDetailView,
     BudgetView,
     CreateBudgetCommand,
     CreateBudgetService,
+    GetBudgetDetailCommand,
+    GetBudgetDetailService,
     ListBudgetsCommand,
     ListBudgetsService,
 )
 from domain.budgets import classify_budget_state
 from domain.errors import (
+    BudgetNotFoundError,
     InvalidBudgetCapError,
     InvalidBudgetCurrencyError,
     InvalidBudgetNameError,
@@ -28,7 +32,12 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from api.deps import get_db, require_authenticated_user
-from api.schemas.budgets import BudgetResponse, BudgetsListResponse, CreateBudgetBody
+from api.schemas.budgets import (
+    BudgetDetailResponse,
+    BudgetResponse,
+    BudgetsListResponse,
+    CreateBudgetBody,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +58,13 @@ def _not_list_member() -> JSONResponse:
     )
 
 
+def _budget_not_found() -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={"detail": BudgetNotFoundError.MESSAGE, "code": "budget_not_found"},
+    )
+
+
 def _budget_response(list_id: uuid.UUID, view: BudgetView) -> BudgetResponse:
     return BudgetResponse(
         id=view.id,
@@ -59,6 +75,20 @@ def _budget_response(list_id: uuid.UUID, view: BudgetView) -> BudgetResponse:
         spent=format(view.spent, "f"),
         state=view.state,
         created_at=view.created_at,
+    )
+
+
+def _budget_detail_response(list_id: uuid.UUID, view: BudgetDetailView) -> BudgetDetailResponse:
+    return BudgetDetailResponse(
+        id=view.id,
+        list_id=list_id,
+        name=view.name,
+        cap=format(view.cap_amount, "f"),
+        currency=view.currency,
+        spent=format(view.spent, "f"),
+        state=view.state,
+        created_at=view.created_at,
+        history=view.history,
     )
 
 
@@ -127,3 +157,22 @@ def create_budget(
         created_at=record.created_at,
     )
     return _budget_response(list_id, view)
+
+
+@router.get("/{list_id}/budgets/{budget_id}", response_model=BudgetDetailResponse)
+def get_budget_detail(
+    list_id: uuid.UUID,
+    budget_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> BudgetDetailResponse | JSONResponse:
+    service = GetBudgetDetailService(SqlAlchemyBudgetRepository(db), SqlAlchemyListRepository(db))
+    try:
+        view = service.execute(
+            GetBudgetDetailCommand(actor_user_id=user_id, list_id=list_id, budget_id=budget_id)
+        )
+    except ListNotFoundError:
+        return _list_not_found()
+    except BudgetNotFoundError:
+        return _budget_not_found()
+    return _budget_detail_response(list_id, view)
