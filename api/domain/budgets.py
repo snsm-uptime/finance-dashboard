@@ -86,9 +86,7 @@ def validate_budget_currency(raw: str) -> str:
     if raw is None:
         raise InvalidBudgetCurrencyError()
     if not _CURRENCY_SHAPE.match(raw):
-        raise InvalidBudgetCurrencyError(
-            "Currency must be a 3-letter uppercase code."
-        )
+        raise InvalidBudgetCurrencyError("Currency must be a 3-letter uppercase code.")
     if raw not in SUPPORTED_BUDGET_CURRENCIES:
         raise InvalidBudgetCurrencyError(f"Currency {raw!r} is not supported.")
     return raw
