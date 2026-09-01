@@ -326,3 +326,8 @@
 ## Deferred from: code review of 6-3-budget-list.md (2026-08-31)
 
 - The new budgets page's `redirect()` call for a 401 response sits inside a bare `try { ... } catch { loadError = true }` block that would swallow the Next.js `NEXT_REDIRECT` throw if ever reached (`ui/app/lists/[listId]/budgets/page.tsx:115,124`) — byte-for-byte the same pattern already shipped in `ui/app/lists/[listId]/page.tsx:637,772`. The session is already checked via `fetchSession()`/`requireAlias()` before either fetch runs, so the branch is effectively unreachable in practice; the real fix is a whole-codebase pattern change (rethrow on `isRedirectError`), not something scoped to this one story.
+
+## Deferred from: code review of 6-4-budget-detail.md (2026-08-31)
+
+- The new budget detail page copies the same bare `try { ... } catch { loadError = true }` block around a 401 `redirect()` call (`ui/app/lists/[listId]/budgets/[budgetId]/page.tsx:97-112`) — a third instance of the exact pattern already deferred from Story 6.3's review (itself matching `ui/app/lists/[listId]/page.tsx`). Still a whole-codebase pattern fix, not scoped to this story.
+- `resolvePageLocale`/`cookieHeader` are duplicated verbatim between the list page and the new detail page (`ui/app/lists/[listId]/budgets/[budgetId]/page.tsx:18-29` vs. `ui/app/lists/[listId]/budgets/page.tsx:18-29`) — matches the same per-page duplication convention already established across this module; a shared helper extraction would need to span multiple existing pages, out of this story's scope.

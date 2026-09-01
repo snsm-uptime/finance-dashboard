@@ -15,6 +15,7 @@ from domain.budgets import (
     validate_budget_currency,
     validate_budget_name,
 )
+from domain.errors import BudgetNotFoundError
 
 from application.list_access import (
     AuthorizeListAccessCommand,
@@ -45,6 +46,8 @@ class BudgetRepository(Protocol):
     ) -> BudgetRecord: ...
 
     def list_budgets_for_list(self, list_id: UUID) -> list[BudgetRecord]: ...
+
+    def get_budget(self, budget_id: UUID, list_id: UUID) -> BudgetRecord | None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,3 +138,56 @@ class ListBudgetsService:
                 )
             )
         return views
+
+
+@dataclass(frozen=True, slots=True)
+class GetBudgetDetailCommand:
+    actor_user_id: UUID
+    list_id: UUID
+    budget_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class BudgetDetailView:
+    id: UUID
+    name: str
+    cap_amount: Decimal
+    currency: str
+    spent: Decimal
+    state: BudgetState
+    created_at: datetime
+    # Always empty until Story 6.5 attributes ledger lines to budgets — see
+    # that story for the eventual element shape.
+    history: list
+
+
+class GetBudgetDetailService:
+    def __init__(self, repo: BudgetRepository, list_lookup: ListAccessLookup) -> None:
+        self._repo = repo
+        self._list_lookup = list_lookup
+
+    def execute(self, command: GetBudgetDetailCommand) -> BudgetDetailView:
+        AuthorizeListAccessService(self._list_lookup).execute(
+            AuthorizeListAccessCommand(
+                acting_user_id=command.actor_user_id,
+                list_id=command.list_id,
+                action="read_budgets",
+            )
+        )
+
+        record = self._repo.get_budget(budget_id=command.budget_id, list_id=command.list_id)
+        if record is None:
+            raise BudgetNotFoundError()
+
+        spent = Decimal("0")
+        state = classify_budget_state(spent, record.cap_amount)
+        return BudgetDetailView(
+            id=record.id,
+            name=record.name,
+            cap_amount=record.cap_amount,
+            currency=record.currency,
+            spent=spent,
+            state=state,
+            created_at=record.created_at,
+            history=[],
+        )

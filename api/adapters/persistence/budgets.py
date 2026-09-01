@@ -55,3 +55,13 @@ class SqlAlchemyBudgetRepository:
         )
         rows = self._session.scalars(stmt).all()
         return [_budget_record(row) for row in rows]
+
+    def get_budget(self, budget_id: UUID, list_id: UUID) -> BudgetRecord | None:
+        # Scoping by (id, list_id) together — not id alone, then a separate
+        # ownership check — is what makes a budget on a different list 404
+        # exactly like a nonexistent one (Story 6.4 AC #3).
+        stmt = select(BudgetModel).where(
+            BudgetModel.id == budget_id, BudgetModel.list_id == list_id
+        )
+        row = self._session.scalars(stmt).one_or_none()
+        return _budget_record(row) if row is not None else None

@@ -151,8 +151,9 @@ export default async function BudgetsPage({
             ) : (
               <div className="flex flex-col gap-[var(--space-2)]">
                 {budgets.map((budget) => (
-                  <div
+                  <Link
                     key={budget.id}
+                    href={`/lists/${encodeURIComponent(listId)}/budgets/${encodeURIComponent(budget.id)}`}
                     className="flex items-center justify-between gap-[var(--space-3)] px-[var(--space-4)] py-[var(--space-3)] bg-surface border border-border rounded-md"
                   >
                     <div className="min-w-0 flex-1">
@@ -167,7 +168,7 @@ export default async function BudgetsPage({
                       {formatMoneyAmount(budget.spent, budget.currency)} /{" "}
                       {formatMoneyAmount(budget.cap, budget.currency)}
                     </p>
-                  </div>
+                  </Link>
                 ))}
               </div>
             )}
