@@ -11,3 +11,20 @@ export function formatCrcNumber(amount: string): string {
 export function formatCrcAmount(amount: string): string {
   return `₡${formatCrcNumber(amount)}`;
 }
+
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  CRC: "₡",
+  USD: "$",
+};
+
+/**
+ * Currency-aware amount formatter for surfaces that aren't CRC-only
+ * (Story 6.3 budgets: v1 FX scope is CRC + USD). Falls back to the raw
+ * currency code as a prefix for anything outside that set rather than
+ * guessing a symbol.
+ */
+export function formatMoneyAmount(amount: string, currency: string): string {
+  const symbol = CURRENCY_SYMBOLS[currency];
+  if (symbol) return `${symbol}${formatCrcNumber(amount)}`;
+  return `${currency} ${formatCrcNumber(amount)}`;
+}

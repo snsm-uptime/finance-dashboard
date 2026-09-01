@@ -487,6 +487,27 @@ class CardModel(Base):
     owner: Mapped[UserModel] = relationship(back_populates="cards")
 
 
+class BudgetModel(Base):
+    """A list-scoped named cap (Story 6.3, FR-48). No uniqueness on
+    (list_id, name) — nothing in FR-48/epics.md requires unique budget names."""
+
+    __tablename__ = "budgets"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    list_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("lists.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    cap_amount: Mapped[Decimal] = mapped_column(Numeric, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 class ImportSessionModel(Base):
     """One staged upload (Story 4.6, AD-4). discarded_at is a soft-delete
     timestamp, never a row delete — "discard drops only uncommitted state,

@@ -418,3 +418,31 @@ describe("lists i18n origin-spend keys (Story 6.2)", () => {
     }
   });
 });
+
+describe("lists i18n budgets keys (Story 6.3)", () => {
+  it("has matching EN/ES budgets copy", async () => {
+    const { listsMessages } = await import("@/lib/i18n/lists");
+    for (const key of [
+      "budgetsEntryLabel",
+      "budgetsTitle",
+      "budgetsEmpty",
+      "budgetsCreateTitle",
+      "budgetsNameLabel",
+      "budgetsCapLabel",
+      "budgetsCurrencyLabel",
+      "budgetsCreateSubmit",
+      "budgetsCreating",
+      "budgetsStateOk",
+      "budgetsStateNear",
+      "budgetsStateOver",
+      "budgetsBackToList",
+      "errorInvalidBudgetName",
+      "errorInvalidBudgetCap",
+      "errorInvalidBudgetCurrency",
+    ] as const) {
+      expect(listsMessages.en[key].length).toBeGreaterThan(0);
+      expect(listsMessages.es[key].length).toBeGreaterThan(0);
+      expect(listsMessages.en[key]).not.toBe(listsMessages.es[key]);
+    }
+  });
+});

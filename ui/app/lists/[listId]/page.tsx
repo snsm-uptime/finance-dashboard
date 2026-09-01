@@ -895,6 +895,14 @@ export default async function ListDetailPage({
                         {t.loadError}
                       </p>
                     ) : null}
+                    <p className="m-0 mx-strip-inset">
+                      <Link
+                        className="text-muted"
+                        href={`/lists/${encodeURIComponent(listId)}/budgets`}
+                      >
+                        {t.budgetsEntryLabel}
+                      </Link>
+                    </p>
                   </>
                 ) : (
                   <BalanceStrip
