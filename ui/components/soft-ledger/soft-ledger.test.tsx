@@ -122,7 +122,7 @@ describe("Soft-Ledger primitives", () => {
     expect(section?.contains(action)).toBe(true);
   });
 
-  it("renders BalanceStrip grid variant with a Member details disclosure and balance (Story 5.8)", () => {
+  it("renders BalanceStrip grid variant with a Total figure and a Member details disclosure showing the balance (Story 5.8)", () => {
     act(() => {
       root.render(
         <BalanceStrip
@@ -130,7 +130,8 @@ describe("Soft-Ledger primitives", () => {
           memberDetailsTitle="Member details"
           owesYouLabel="owes you"
           isOwedLabel="is owed"
-          balanceLabel="Balance"
+          totalLabel="Total"
+          totalAmount="₡1,200.00"
           youAreOwed={[{ memberId: "m1", label: "Alice", amount: "₡500.00" }]}
           youOwe={[]}
           balanceAmount="₡500.00"
@@ -143,9 +144,19 @@ describe("Soft-Ledger primitives", () => {
     expect(host.textContent).toContain("Member details");
     expect(host.textContent).toContain("Alice");
     expect(host.textContent).toContain("owes you");
-    expect(host.textContent).toContain("Balance");
-    // Two ₡500.00 occurrences: one in the member details row, one in Balance.
+    expect(host.textContent).toContain("Total");
+    expect(host.textContent).toContain("₡1,200.00");
+    expect(host.textContent).toContain("(₡500.00)");
+    // Two ₡500.00 occurrences: one in the member details row, one in the Member details parenthetical.
     expect(host.textContent?.match(/₡500\.00/g)?.length).toBe(2);
+    const totalAmountEl = Array.from(host.querySelectorAll("p")).find(
+      (p) => p.textContent === "₡1,200.00",
+    );
+    expect(totalAmountEl?.className).toContain("text-muted");
+    const balanceParenEl = Array.from(host.querySelectorAll("span")).find(
+      (span) => span.textContent === "(₡500.00)",
+    );
+    expect(balanceParenEl?.className).toContain("text-owed");
   });
 
   it("Member details disclosure defaults open (Story 5.8)", () => {
@@ -156,7 +167,8 @@ describe("Soft-Ledger primitives", () => {
           memberDetailsTitle="Member details"
           owesYouLabel="owes you"
           isOwedLabel="is owed"
-          balanceLabel="Balance"
+          totalLabel="Total"
+          totalAmount="₡500.00"
           youAreOwed={[{ memberId: "m1", label: "Alice", amount: "₡500.00" }]}
           youOwe={[]}
           balanceAmount="₡500.00"
@@ -176,7 +188,8 @@ describe("Soft-Ledger primitives", () => {
           memberDetailsTitle="Member details"
           owesYouLabel="owes you"
           isOwedLabel="is owed"
-          balanceLabel="Balance"
+          totalLabel="Total"
+          totalAmount="₡0"
           youAreOwed={[]}
           youOwe={[]}
           balanceAmount="₡0"
@@ -185,7 +198,6 @@ describe("Soft-Ledger primitives", () => {
     });
     expect(host.querySelectorAll("li").length).toBe(0);
     expect(host.textContent).not.toContain("Member details");
-    expect(host.textContent).not.toContain("₡0.00");
   });
 
   it("OriginCards renders one island per origin with correct label + amount (Story 6.2)", () => {

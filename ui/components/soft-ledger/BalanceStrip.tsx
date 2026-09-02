@@ -82,7 +82,8 @@ type BalanceStripGridProps = {
   memberDetailsTitle: string;
   owesYouLabel: string;
   isOwedLabel: string;
-  balanceLabel: string;
+  totalLabel: string;
+  totalAmount: string;
   youAreOwed: PairwiseRow[];
   youOwe: PairwiseRow[];
   balanceAmount: string;
@@ -109,7 +110,8 @@ export function BalanceStrip(props: BalanceStripProps) {
       memberDetailsTitle,
       owesYouLabel,
       isOwedLabel,
-      balanceLabel,
+      totalLabel,
+      totalAmount,
       youAreOwed,
       youOwe,
       balanceAmount,
@@ -122,24 +124,29 @@ export function BalanceStrip(props: BalanceStripProps) {
     return (
       <section
         className="flex flex-col gap-[var(--space-4)] mx-strip-inset px-[var(--space-4)] py-[var(--space-5)] bg-surface border border-border rounded-md"
-        aria-label={balanceLabel}
+        aria-label={totalLabel}
       >
         <div className="flex items-start justify-between gap-[var(--space-4)]">
           <div className="min-w-0">
             <p className="m-0 text-muted" style={whoStyle}>
-              {balanceLabel}
+              {totalLabel}
             </p>
-            <p
-              className={`m-0 tabular-nums ${toneClass(balancePolarity)}`}
-              style={amountStyle}
-            >
-              {balanceAmount}
+            <p className="m-0 tabular-nums text-muted" style={amountStyle}>
+              {totalAmount}
             </p>
           </div>
           {action}
         </div>
         {memberRows.length > 0 ? (
-          <Disclosure title={memberDetailsTitle} defaultOpen>
+          <Disclosure
+            title={
+              <>
+                {memberDetailsTitle}{" "}
+                <span className={toneClass(balancePolarity)}>({balanceAmount})</span>
+              </>
+            }
+            defaultOpen
+          >
             <MemberDetailsList rows={memberRows} owesYouLabel={owesYouLabel} isOwedLabel={isOwedLabel} />
           </Disclosure>
         ) : null}

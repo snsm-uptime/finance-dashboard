@@ -696,6 +696,8 @@ export default async function ListDetailPage({
     members.length === 1
       ? soloBalanceStripPropsFrom(expenses, t)
       : balanceStripPropsFrom(hasExpenses, balancesLoadError, balances?.balance_crc, t);
+  const totalCrc = expenses.reduce((sum, e) => sum + (Number(e.amount_crc) || 0), 0);
+  const totalAmount = formatCrcAmount(String(totalCrc));
   const todayCr = calendarDateInCostaRica(new Date().toISOString());
 
   const mobileActions = (
@@ -799,7 +801,8 @@ export default async function ListDetailPage({
                       memberDetailsTitle: t.memberDetailsTitle,
                       owesYouLabel: t.owesYouLabel,
                       isOwedLabel: t.isOwedLabel,
-                      balanceLabel: t.balanceLabel,
+                      totalLabel: t.balanceTotal,
+                      totalAmount,
                       youAreOwed: pairwiseRowsFrom(balances?.you_are_owed ?? []),
                       youOwe: pairwiseRowsFrom(balances?.you_owe ?? []),
                       balanceAmount: stripProps.amount,

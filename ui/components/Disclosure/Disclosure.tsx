@@ -6,7 +6,7 @@ import { BackIcon } from "@/app/icons";
 import { SlideDown } from "@/components/SlideDown";
 
 export type DisclosureProps = {
-  title: string;
+  title: ReactNode;
   children: ReactNode;
   /** Uncontrolled initial state — this component owns its own open/closed toggle. */
   defaultOpen?: boolean;
