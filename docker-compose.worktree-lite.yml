@@ -1,0 +1,44 @@
+# Lite worktree overlay — starts ONLY the `ui` service, joined to the PRIMARY
+# checkout's Compose network so it reaches the primary's already-running
+# `api` container as api:8000 (default API_INTERNAL_URL, unset here). No
+# db/api container is built or started in this project.
+#
+# ui/node_modules is mounted read-only from the PRIMARY checkout's own
+# Docker volume (already populated with Linux-built native binaries) instead
+# of installing a fresh one — a plain per-project named volume starts empty
+# at container boot (Docker does not auto-seed it from the image here,
+# because the sibling `./ui:/app` bind mount shadows the image's own
+# /app/node_modules first), which would otherwise force a real npm ci.
+# Safe only because setup-worktree-unix.sh --lite refuses to proceed unless
+# this worktree's ui/package-lock.json is byte-identical to the primary's —
+# it never writes to the shared volume (read-only mount), so there's no
+# concurrent-write risk with the primary's own running ui container.
+#
+# Requires: primary checkout stack already running (its `internal` network
+# and `ui_node_modules` volume must exist), and PRIMARY_COMPOSE_NAME /
+# PRIMARY_NETWORK_NAME set in the environment (setup-worktree-unix.sh --lite
+# sets both).
+#
+# Usage (see setup-worktree-unix.sh):
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml \
+#     -f docker-compose.worktree.yml -f docker-compose.worktree-lite.yml \
+#     up -d --no-deps --build ui
+
+services:
+  ui:
+    networks:
+      - primary
+    volumes:
+      - ./ui:/app
+      - ui_node_modules:/app/node_modules:ro
+      - ./ui/.next:/app/.next
+
+volumes:
+  ui_node_modules:
+    external: true
+    name: ${PRIMARY_COMPOSE_NAME}_ui_node_modules
+
+networks:
+  primary:
+    external: true
+    name: ${PRIMARY_NETWORK_NAME}

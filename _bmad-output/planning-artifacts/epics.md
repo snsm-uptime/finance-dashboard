@@ -332,6 +332,11 @@ When a list has one member, list detail is a personal spend surface (origin tota
 **Demo gate:** solo list shows origin spend; inviting a second member restores settle chrome
 **Sequencing note:** Do not start until Epic 5 is done (or product explicitly pulls this epic). v1 MVP does not include this epic.
 
+### Epic 8: Onboarding & documentation
+Replaces the placeholder landing page with a real product introduction for signed-out visitors, and adds a `/docs` index of tutorials plus UX-feature call-outs (accessibility, keyboard navigation). v1, independent of other epics.
+**FRs covered:** FR-52, FR-53 (new 2026-09-02)
+**Demo gate:** signed-out visitor lands on an intro page and can reach a docs index listing tutorials and UX-feature call-outs
+
 ## Epic 1: Accounts & personal workspace
 
 Users can sign up, sign in, reset password, land with a personal list, and set EN/ES language plus Light / Dark / System theme in the Account menu. Includes greenfield Compose scaffold (`db`/`api`/`ui`).
@@ -909,6 +914,41 @@ So that when Epic 5 wires quarantine data, understated totals are never silent.
 **Given** this story alone
 **When** product behavior is tested
 **Then** there is no requirement to fabricate incomplete data — Epic 5 wires FR-43 for real quarantine
+
+**Amendment (2026-09-02):** Story 3.7 is appended as a UI polish addendum
+— see Sprint Change Proposal 2026-09-02. Does not reopen 3.1-3.6 ACs.
+
+### Story 3.7: Percentage split track — centered avatars + default-position reference bar
+
+As a user adjusting a percentage split, I want each member's avatar
+centered under its own segment, and a muted bar showing where the list's
+default split originally was, so I can see how far I've moved from the
+default at a glance.
+
+**Acceptance Criteria:**
+
+**Given** `PercentageSplitTrack.tsx` renders member avatars below the
+track
+**When** it lays them out
+**Then** each avatar is horizontally centered relative to the width of
+its own segment's div, not left-aligned within a flex row
+
+**Given** a member's percentage differs from the list's current default
+split (Story 2.5/2.6 default)
+**When** the track renders
+**Then** a muted bar renders at the position corresponding to the
+original default split, as a visual reference against the current custom
+position
+
+**Given** a member's percentage equals the list default
+**When** the track renders
+**Then** no muted reference bar is shown for that segment (nothing to
+contrast against)
+
+**Given** this is a UI-only refinement
+**When** implemented
+**Then** no changes to FR-9/FR-10, the split-sum-to-100 validation, or
+`orderPercentageSplitUserIds` ordering logic
 
 ## Epic 3.5: UI styling stack — Tailwind + SCSS
 
@@ -1981,15 +2021,24 @@ manual assignment both attribute lines to a budget across all its source
 lists; rule-matched history lines carry a "Rule" badge, manual assignment
 does not (and always wins over a rule match).
 
-**FRs covered:** FR-48, FR-49 (amended 2026-09-01), FR-50 (amended
-2026-09-01)  
+**FRs covered:** FR-48 (amended 2026-09-01, 2026-09-02), FR-49 (amended
+2026-09-01), FR-50 (amended 2026-09-01), FR-51 (new 2026-09-02)  
 **Demo gate:** a budget sourcing two different lists (one solo, one shared)
 shows combined near-cap state and history; a rule-matched line shows "Rule",
 a manually-assigned line does not; a non-owner with access to a source list
 cannot see the budget  
 **Sequencing:** After Epic 6. Supersedes Epic 6 Stories 6.3-6.5's
 budget-specific ACs (6.1/6.2 individual-list chrome is unaffected). Out of
-this epic: loans; recording payments.
+this epic: loans; recording payments.  
+**Scope addition (2026-09-02):** Stories 7.4-7.6 added — see Sprint Change
+Proposal 2026-09-02. Stories 7.4-7.6 build after 7.1-7.3; 7.4 is
+independent UI-only and can parallelize with 7.5/7.6 prep; 7.6 (archive)
+should land after 7.5 (period range) since both touch the budget update
+form.  
+**Deferred (2026-09-02):** Archiving for **lists** and **cards** (raised
+alongside Story 7.6's budget archiving) is out of scope for Epic 7. No FR
+or story yet — revisit in a future correct-course once budget archiving
+(7.6) ships and the box-icon toggle pattern is validated.
 
 ### Story 7.1: Standalone budget list + create
 
@@ -2058,4 +2107,203 @@ badge on budget detail history (FR-49)
 **Given** this story
 **When** scope is considered
 **Then** loans are out; shared-list budgets are in scope
+
+### Story 7.4: Budget progress-bar visualization
+
+As a budget owner, I want the budget's cap progress shown as a thin bar
+instead of a colored circle — on the tile's top border in the budgets
+list, and as a full-width bar at the very top of the budget detail page —
+with a hover/focus tooltip showing current/total,
+So that I can read near-cap state at a glance, and the app gets a
+reusable top-of-page progress affordance for future use (e.g. import
+progress, CSV export).
+
+**Acceptance Criteria:**
+
+**Given** `BudgetsPanel.tsx` renders a budget tile
+**When** it shows spend against the cap
+**Then** the colored circle is replaced by a thin progress bar along the
+top border of the tile card, using the same severity colors (near-cap/
+over-cap) as today
+
+**Given** a user hovers (or focuses, for keyboard/a11y) a tile's
+top-border bar
+**When** the pointer/focus rests on it
+**Then** a tooltip shows "current/total" formatted in the budget's
+currency
+
+**Given** `/budgets/[budgetId]/page.tsx`
+**When** the page renders
+**Then** a full-width progress bar spans the very top of the page (above
+`BudgetDetailChrome`), reflecting this budget's cap usage with the same
+severity coloring, and is reachable/focusable for the same current/total
+tooltip
+
+**Given** this top-of-page bar is introduced
+**When** it's implemented
+**Then** it's built as a generic, reusable component (e.g.
+`TopProgressBar`) parameterized by ratio/color/tooltip — not hardcoded to
+budgets — so a later story can reuse it for import/export progress
+without rework
+
+**Given** the previous bottom-of-card placement idea
+**When** this story lands
+**Then** no bottom-of-card bar is added — the cap card on detail keeps
+its existing content, only the page-top bar communicates progress
+
+**Given** the budget detail page
+**When** the source-list chips render
+**Then** they appear below the cap card (not beside or above it)
+
+### Story 7.5: Budget period range
+
+As a budget owner, I want to optionally set a date-range period (from/to)
+on a budget via a date-range picker in the create/update form,
+So that spend and attribution can be scoped to a specific window when I
+choose to set one.
+
+**Acceptance Criteria:**
+
+**Given** the budget create or update form
+**When** I open it
+**Then** it includes an optional date-range picker (from/to); leaving it
+unset keeps the budget open-ended (no date bound), matching today's
+behavior
+
+**Given** a budget with a period set
+**When** a transaction is considered for manual assignment or
+rule-matching in any of its source lists
+**Then** only transactions posted within `[from, to]` are eligible;
+out-of-period transactions are not offered/attributed
+
+**Given** an existing budget (open-ended or already period-bound)
+**When** the owner changes the period (narrows `from`/`to`, or sets a
+period for the first time) such that some already-assigned lines fall
+outside the new bounds
+**Then** before applying the change, a confirmation Sheet lists exactly
+which assigned lines will be removed from the budget, and the change is
+only applied on explicit confirm (irreversible, so no silent removal)
+
+**Given** the owner confirms a period change that excludes lines
+**When** the change is applied
+**Then** those lines are unassigned from the budget (manual assignment
+and rule attribution both cleared for those lines) and detail/history/
+spend immediately reflect the new period only
+
+**Given** the owner cancels out of the confirmation Sheet
+**When** they do so
+**Then** the period change is discarded and the budget keeps its
+previous period/state
+
+**Given** budgets created before this story (Epic 6/7.1 migration)
+**When** this story ships
+**Then** they default to open-ended (no period), no data loss, no forced
+backfill
+
+### Story 7.6: Archive budgets
+
+As a budget owner, I want to archive a budget and toggle a filtered
+"archived" view via a box icon on the budgets page, so I can hide
+budgets I no longer track without deleting their history.
+
+**Acceptance Criteria:**
+
+**Given** the `/budgets` page title
+**When** the page renders
+**Then** a box icon appears at the opposite end of the title, acting as a
+toggle (closed box = showing active budgets, open box = showing archived
+budgets)
+
+**Given** the toggle is OFF (closed box)
+**When** the page renders
+**Then** only non-archived budgets are shown, and the create form is
+visible as today
+
+**Given** the user clicks the toggle to turn it ON
+**When** it activates
+**Then** the icon morphs to an open box, the list filters to archived
+budgets only, and the create form is hidden
+
+**Given** the toggle is ON
+**When** the user clicks it again
+**Then** it morphs back to closed, and the view returns to non-archived
+budgets with the create form visible
+
+**Given** the toggle is ON
+**When** the user navigates away from `/budgets` to a different screen
+**Then** the toggle resets to OFF; returning to `/budgets` later shows
+non-archived budgets by default
+
+**Given** a budget (from the list tile or its detail page)
+**When** the owner archives it
+**Then** it's excluded from the default (non-archived) view, its data/
+history is preserved, and it can be unarchived from the archived view
+
+**Given** this story
+**When** scope is considered
+**Then** archiving lists and cards (also mentioned in the originating
+backlog note) is out of scope here — tracked as a deferred note above,
+not a story in this epic
+
+## Epic 8: Onboarding & documentation (v1)
+
+Replaces the placeholder "Stack is up" landing page with a real
+introduction to the app for signed-out visitors, and adds a
+documentation/tutorials index covering UX features (accessibility,
+keyboard navigation, etc.). Both are v1 surfaces — no dependency on
+other epics.
+
+**FRs covered:** FR-52, FR-53
+**Demo gate:** a signed-out visitor lands on an intro page describing
+what the app does and can navigate to a docs index listing tutorials and
+UX feature call-outs
+**Sequencing:** Independent — can run any time; no prerequisite epics.
+
+### Story 8.1: Landing page introduction
+
+As a new visitor,
+I want the landing page to explain what the app does instead of just
+confirming the stack is up,
+So that I understand the product before signing up.
+
+**Acceptance Criteria:**
+
+**Given** a signed-out visitor opens `/`
+**When** the page renders
+**Then** it shows an introduction to the app (what it does: shared
+expenses, budgets, statement import) instead of "Stack is up" infra text
+
+**Given** the existing authenticated-redirect behavior
+**When** a signed-in user opens `/`
+**Then** the redirect to their landing destination
+(`resolveServerAuthenticatedLanding`) is unchanged
+
+**Given** the intro content
+**When** it renders
+**Then** sign-up/sign-in CTAs remain present and reachable, same as
+today
+
+### Story 8.2: Documentation index page
+
+As a user (new or existing),
+I want a documentation page indexing tutorials and UX features,
+So that I can discover things like keyboard navigation and accessibility
+support.
+
+**Acceptance Criteria:**
+
+**Given** a new `/docs` route
+**When** any user (signed in or not) opens it
+**Then** it shows an index of tutorial entries (topic + link/anchor),
+grouped by area (e.g. lists, budgets, import)
+
+**Given** the docs index
+**When** it renders
+**Then** it includes a UX-features section calling out accessibility and
+keyboard-navigation support already built into the app (e.g. AD-9
+non-gesture paths, ARIA patterns already shipped)
+
+**Given** the landing page (Story 8.1)
+**When** it renders
+**Then** it links to `/docs`
 

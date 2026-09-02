@@ -3,7 +3,20 @@
 # Usage (from inside the worktree):
 #   <primary>/scripts/worktree/worktree-bootstrap.sh
 #   START_COMPOSE=0 <primary>/scripts/worktree/worktree-bootstrap.sh
+#   <primary>/scripts/worktree/worktree-bootstrap.sh --lite
+#
+# --lite: no npm ci/uv sync, no Compose. Symlinks ui/node_modules from the
+# primary checkout and points the UI at the primary's running API instead.
+# Only for small, mostly-UI, easy-to-validate changes — see README.md.
 set -euo pipefail
+
+LITE=0
+for arg in "$@"; do
+  case "$arg" in
+    --lite) LITE=1 ;;
+    *) echo "error: unknown option: $arg" >&2; exit 1 ;;
+  esac
+done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SETUP="$SCRIPT_DIR/setup-worktree-unix.sh"
@@ -48,6 +61,12 @@ fi
 export ROOT_WORKTREE_PATH
 echo "==> Primary checkout: $ROOT_WORKTREE_PATH"
 echo "==> Worktree:         $WT_ROOT"
+
+if [[ "$LITE" == "1" ]]; then
+  bash "$SETUP" --lite
+  exit 0
+fi
+
 # Prefer shared compose-up path so -f selection stays single-sourced.
 # setup still owns .env rewriting + deps; we force START_COMPOSE=0 then up ourselves when requested.
 WANT_COMPOSE="${START_COMPOSE:-1}"

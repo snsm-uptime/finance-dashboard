@@ -7,12 +7,19 @@
 #   START_COMPOSE=1   bring up db/api/ui (default: 1)
 #   START_COMPOSE=0   deps + .env only
 #   ROOT_WORKTREE_PATH  set by Cursor to the primary checkout
+#
+# --lite: skip npm ci/uv sync and Compose entirely. Symlinks ui/node_modules
+# from the primary checkout (only if package-lock.json matches) and points
+# the UI at the primary checkout's already-running API instead of starting
+# a second stack. Only appropriate for small, mostly-UI, easy-to-validate
+# changes — see scripts/worktree/README.md before recommending it.
 set -euo pipefail
 
 ROOT_WORKTREE_PATH="${ROOT_WORKTREE_PATH:-}"
 WT_ROOT="$(pwd)"
 MARKER_BEGIN="# --- cursor worktree overrides (generated) ---"
 MARKER_END="# --- end cursor worktree overrides ---"
+LITE=0
 
 log() { printf '==> %s\n' "$*"; }
 warn() { printf '!!  %s\n' "$*" >&2; }
@@ -129,6 +136,13 @@ if [[ "${1:-}" == "pr" ]]; then
   exit 0
 fi
 
+for arg in "$@"; do
+  case "$arg" in
+    --lite) LITE=1 ;;
+    *) echo "error: unknown option: $arg" >&2; exit 1 ;;
+  esac
+done
+
 # --- .env ---
 if [[ -n "$ROOT_WORKTREE_PATH" && -f "$ROOT_WORKTREE_PATH/.env" ]]; then
   cp "$ROOT_WORKTREE_PATH/.env" "$WT_ROOT/.env"
@@ -141,60 +155,67 @@ else
 fi
 
 BRANCH="$(git -C "$WT_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo worktree)"
-WT_SLUG="$(slugify "$(basename "$WT_ROOT")")"
-BRANCH_SLUG="$(slugify "$BRANCH")"
-COMPOSE_NAME="fh-${BRANCH_SLUG:-$WT_SLUG}"
-COMPOSE_NAME="$(printf '%s' "$COMPOSE_NAME" | cut -c1-50)"
-read -r API_HOST_PORT UI_HOST_PORT <<<"$(port_pair_from_path "$WT_ROOT")"
-read -r UI_DEBUG_PORT UI_DEBUG_WORKER_PORT <<<"$(debug_port_pair_from_path "$WT_ROOT")"
-DATA_DIR="${HOME}/finance-helper-wt/${COMPOSE_NAME}"
-PUBLIC_APP_URL="http://localhost:${UI_HOST_PORT}"
 
-mkdir -p "$DATA_DIR"
-# api's Dockerfile runs as non-root appuser (uid 10001) with no chown-on-start
-# entrypoint (unlike the official postgres image, which fixes pgdata's
-# ownership itself) — pre-create pdfs/ and open it up so appuser can write.
-mkdir -p "$DATA_DIR/pdfs"
-chmod 777 "$DATA_DIR/pdfs"
+# Always assign a unique Compose project name/ports/data dir, even in --lite
+# mode where Compose is never started here: worktree-remove.sh and any
+# ad-hoc compose-up/down run from this worktree must not resolve to the same
+# default project name as the primary checkout and collide with it.
+{
+  WT_SLUG="$(slugify "$(basename "$WT_ROOT")")"
+  BRANCH_SLUG="$(slugify "$BRANCH")"
+  COMPOSE_NAME="fh-${BRANCH_SLUG:-$WT_SLUG}"
+  COMPOSE_NAME="$(printf '%s' "$COMPOSE_NAME" | cut -c1-50)"
+  read -r API_HOST_PORT UI_HOST_PORT <<<"$(port_pair_from_path "$WT_ROOT")"
+  read -r UI_DEBUG_PORT UI_DEBUG_WORKER_PORT <<<"$(debug_port_pair_from_path "$WT_ROOT")"
+  DATA_DIR="${HOME}/finance-helper-wt/${COMPOSE_NAME}"
+  PUBLIC_APP_URL="http://localhost:${UI_HOST_PORT}"
 
-if [[ -f "$WT_ROOT/.env" ]]; then
-  # Drop keys that must be unique per worktree (Compose uses last wins, but be explicit).
-  tmp_keys="$(mktemp)"
-  awk '
-    BEGIN { skip=0 }
-    $0 == "# --- cursor worktree overrides (generated) ---" { skip=1; next }
-    $0 == "# --- end cursor worktree overrides ---" { skip=0; next }
-    skip { next }
-    /^(FH_COMPOSE_NAME|API_HOST_PORT|UI_HOST_PORT|FINANCE_HELPER_DATA|PUBLIC_APP_URL|UI_DEBUG_PORT|UI_DEBUG_WORKER_PORT)=/ { next }
-    { print }
-  ' "$WT_ROOT/.env" >"$tmp_keys"
-  mv "$tmp_keys" "$WT_ROOT/.env"
+  mkdir -p "$DATA_DIR"
+  # api's Dockerfile runs as non-root appuser (uid 10001) with no chown-on-start
+  # entrypoint (unlike the official postgres image, which fixes pgdata's
+  # ownership itself) — pre-create pdfs/ and open it up so appuser can write.
+  mkdir -p "$DATA_DIR/pdfs"
+  chmod 777 "$DATA_DIR/pdfs"
 
-  # Strip a previous generated block, then append a fresh one.
-  tmp="$(mktemp)"
-  awk -v b="$MARKER_BEGIN" -v e="$MARKER_END" '
-    $0 == b {skip=1; next}
-    $0 == e {skip=0; next}
-    !skip {print}
-  ' "$WT_ROOT/.env" >"$tmp"
-  {
-    cat "$tmp"
-    echo ""
-    echo "$MARKER_BEGIN"
-    echo "FH_COMPOSE_NAME=${COMPOSE_NAME}"
-    echo "API_HOST_PORT=${API_HOST_PORT}"
-    echo "UI_HOST_PORT=${UI_HOST_PORT}"
-    echo "FINANCE_HELPER_DATA=${DATA_DIR}"
-    echo "PUBLIC_APP_URL=${PUBLIC_APP_URL}"
-    echo "UI_DEBUG_PORT=${UI_DEBUG_PORT}"
-    echo "UI_DEBUG_WORKER_PORT=${UI_DEBUG_WORKER_PORT}"
-    echo "$MARKER_END"
-  } >"$WT_ROOT/.env"
-  rm -f "$tmp"
-  log "Worktree Compose: name=${COMPOSE_NAME} api=:${API_HOST_PORT} ui=:${UI_HOST_PORT} debug=:${UI_DEBUG_PORT}/:${UI_DEBUG_WORKER_PORT}"
-  log "Postgres data: ${DATA_DIR}/pgdata"
-  log "PUBLIC_APP_URL=${PUBLIC_APP_URL}"
-fi
+  if [[ -f "$WT_ROOT/.env" ]]; then
+    # Drop keys that must be unique per worktree (Compose uses last wins, but be explicit).
+    tmp_keys="$(mktemp)"
+    awk '
+      BEGIN { skip=0 }
+      $0 == "# --- cursor worktree overrides (generated) ---" { skip=1; next }
+      $0 == "# --- end cursor worktree overrides ---" { skip=0; next }
+      skip { next }
+      /^(FH_COMPOSE_NAME|API_HOST_PORT|UI_HOST_PORT|FINANCE_HELPER_DATA|PUBLIC_APP_URL|UI_DEBUG_PORT|UI_DEBUG_WORKER_PORT)=/ { next }
+      { print }
+    ' "$WT_ROOT/.env" >"$tmp_keys"
+    mv "$tmp_keys" "$WT_ROOT/.env"
+
+    # Strip a previous generated block, then append a fresh one.
+    tmp="$(mktemp)"
+    awk -v b="$MARKER_BEGIN" -v e="$MARKER_END" '
+      $0 == b {skip=1; next}
+      $0 == e {skip=0; next}
+      !skip {print}
+    ' "$WT_ROOT/.env" >"$tmp"
+    {
+      cat "$tmp"
+      echo ""
+      echo "$MARKER_BEGIN"
+      echo "FH_COMPOSE_NAME=${COMPOSE_NAME}"
+      echo "API_HOST_PORT=${API_HOST_PORT}"
+      echo "UI_HOST_PORT=${UI_HOST_PORT}"
+      echo "FINANCE_HELPER_DATA=${DATA_DIR}"
+      echo "PUBLIC_APP_URL=${PUBLIC_APP_URL}"
+      echo "UI_DEBUG_PORT=${UI_DEBUG_PORT}"
+      echo "UI_DEBUG_WORKER_PORT=${UI_DEBUG_WORKER_PORT}"
+      echo "$MARKER_END"
+    } >"$WT_ROOT/.env"
+    rm -f "$tmp"
+    log "Worktree Compose: name=${COMPOSE_NAME} api=:${API_HOST_PORT} ui=:${UI_HOST_PORT} debug=:${UI_DEBUG_PORT}/:${UI_DEBUG_WORKER_PORT}"
+    log "Postgres data: ${DATA_DIR}/pgdata"
+    log "PUBLIC_APP_URL=${PUBLIC_APP_URL}"
+  fi
+}
 
 # --- bmad and claude configs ---
 # _bmad and .claude are gitignored per-user tool config, so a fresh worktree
@@ -217,6 +238,75 @@ if [[ -n "$ROOT_WORKTREE_PATH" ]]; then
   done
 else
   warn "ROOT_WORKTREE_PATH not set — skipping _bmad/.claude copy"
+fi
+
+if [[ "$LITE" == "1" ]]; then
+  # --- lite: only the ui container, joined to the primary's Compose network ---
+  # No db/api container in this project; ui talks to the primary's already-
+  # running api over its Compose network (api:8000), and mounts the
+  # primary's own populated ui_node_modules volume read-only instead of
+  # installing a fresh one.
+  if [[ -z "$ROOT_WORKTREE_PATH" ]]; then
+    echo "error: --lite requires ROOT_WORKTREE_PATH (primary checkout not found)" >&2
+    exit 1
+  fi
+
+  if [[ ! -f "$WT_ROOT/ui/package-lock.json" || ! -f "$ROOT_WORKTREE_PATH/ui/package-lock.json" ]]; then
+    echo "error: ui/package-lock.json missing (worktree or primary) — cannot verify the shared node_modules volume is safe to reuse" >&2
+    exit 1
+  fi
+  WT_LOCK_SUM="$(cksum <"$WT_ROOT/ui/package-lock.json")"
+  PRIMARY_LOCK_SUM="$(cksum <"$ROOT_WORKTREE_PATH/ui/package-lock.json")"
+  if [[ "$WT_LOCK_SUM" != "$PRIMARY_LOCK_SUM" ]]; then
+    echo "error: ui/package-lock.json differs from primary checkout — the primary's node_modules volume would be missing/mismatched deps for this worktree." >&2
+    echo "       Re-run without --lite (full setup) instead." >&2
+    exit 1
+  fi
+
+  if [[ ! -f "$WT_ROOT/docker-compose.worktree-lite.yml" ]]; then
+    echo "error: docker-compose.worktree-lite.yml missing in $WT_ROOT — pull the branch that adds it, or drop --lite" >&2
+    exit 1
+  fi
+
+  PRIMARY_COMPOSE_NAME="$(grep -E '^FH_COMPOSE_NAME=' "$ROOT_WORKTREE_PATH/.env" 2>/dev/null | tail -1 | cut -d= -f2 || true)"
+  PRIMARY_COMPOSE_NAME="${PRIMARY_COMPOSE_NAME:-finance-helper}"
+  PRIMARY_API_PORT="$(grep -E '^API_HOST_PORT=' "$ROOT_WORKTREE_PATH/.env" 2>/dev/null | tail -1 | cut -d= -f2 || true)"
+  PRIMARY_API_PORT="${PRIMARY_API_PORT:-8000}"
+
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "error: docker not on PATH — required for --lite" >&2
+    exit 1
+  fi
+  if ! curl -sf -o /dev/null --max-time 2 "http://127.0.0.1:${PRIMARY_API_PORT}/health"; then
+    echo "error: primary checkout's API not reachable at http://127.0.0.1:${PRIMARY_API_PORT}/health" >&2
+    echo "       Start it first: cd $ROOT_WORKTREE_PATH && ./scripts/compose-up.sh -d" >&2
+    exit 1
+  fi
+
+  export ROOT_WORKTREE_PATH
+  export PRIMARY_COMPOSE_NAME
+  export PRIMARY_NETWORK_NAME="${PRIMARY_COMPOSE_NAME}_internal"
+  log "Starting ui-only container (joined to ${PRIMARY_NETWORK_NAME}, node_modules from ${PRIMARY_COMPOSE_NAME}_ui_node_modules)"
+  (cd "$WT_ROOT" && docker compose \
+    -f docker-compose.yml -f docker-compose.dev.yml \
+    -f docker-compose.worktree.yml -f docker-compose.worktree-lite.yml \
+    up -d --no-deps --build ui)
+
+  cat <<EOF
+
+Worktree ready (lite mode): ${WT_ROOT}
+Branch:         ${BRANCH}
+Skipped:        db/api containers, npm ci (reusing ${PRIMARY_COMPOSE_NAME}_ui_node_modules read-only)
+UI:             ${PUBLIC_APP_URL}
+API:            http://127.0.0.1:${PRIMARY_API_PORT} (primary checkout's, via ${PRIMARY_NETWORK_NAME})
+
+Stop this worktree's ui container only:
+  docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.worktree.yml -f docker-compose.worktree-lite.yml down
+
+PR tip (AD-13): one story per branch. Stage your changes, then:
+  ./scripts/worktree/setup-worktree-unix.sh pr --title "..." --body "..." --commit-title "..."
+EOF
+  exit 0
 fi
 
 # --- host deps (fast feedback without relying only on container builds) ---

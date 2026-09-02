@@ -19,10 +19,11 @@ This setup ensures each Claude Code session (or developer) can run the full stac
 | File | Role |
 | --- | --- |
 | `worktree-add.sh` | Create `../finance-dashboard-wt-<slug>` sibling checkout + branch |
-| `worktree-bootstrap.sh` | Copy `.env`, assign unique ports/project/data dir, install deps, optional Compose |
-| `setup-worktree-unix.sh` | Core bootstrap logic: `.env` rewrites, `uv`/`npm`, Compose lifecycle (see also its `pr` subcommand below) |
+| `worktree-bootstrap.sh` | Copy `.env`, assign unique ports/project/data dir, install deps, optional Compose (or `--lite`, see below) |
+| `setup-worktree-unix.sh` | Core bootstrap logic: `.env` rewrites, `uv`/`npm`, Compose lifecycle (see also its `pr` subcommand and `--lite` mode below) |
 | `worktree-remove.sh` | Compose-down (best effort) + `git worktree remove` |
 | `worktrees.json` (under `.cursor/`) | Cursor IDE: auto-runs `setup-worktree-unix.sh` on new worktrees |
+| `../docker-compose.worktree-lite.yml` (repo root) | `--lite` overlay: `ui` service only, joined to the primary checkout's network/`ui_node_modules` volume |
 
 Day-to-day Compose helpers (work in primary or any worktree):
 
@@ -110,6 +111,37 @@ This launches Claude Code with the worktree as the root. Claude sees only this b
   This commits what's staged, pushes the current branch explicitly to `origin/<branch>` (worktree branches intentionally track `origin/main` for easy `git pull`, so a plain `git push` would target the wrong branch), then runs `gh pr create`.
   - `--commit-title` is required whenever something is staged.
   - If nothing is staged, it prompts `Continue and just push + open PR? [y/N]` (interactive terminals only — fails fast with an error if stdin isn't a TTY).
+
+---
+
+## Lightweight Mode (UI-only story: `ui` container only, no db/api/npm ci)
+
+For a **UI-only story** — a copy tweak, a layout fix, a component prop, anything that doesn't touch `api/` — a full worktree bootstrap is overkill: `npm ci` alone installs ~1k packages (600+ MB), and a full Compose stack builds/starts its own Postgres + API. `--lite` mode starts **only the `ui` container**, wired to the **primary checkout's already-running `api`**:
+
+- **No db/api container in this project.** The worktree's `ui` container joins the primary checkout's Docker network (`docker-compose.worktree-lite.yml`, external network) and talks to the primary's `api` service directly at `http://api:8000` — the default `API_INTERNAL_URL`, unchanged. Requires the primary checkout's stack to already be running (`docker compose ps` from the primary, or `./scripts/compose-up.sh -d`); `--lite` fails fast with a clear error if it isn't.
+- **No `npm ci`.** The worktree's `ui/node_modules` is mounted read-only from the *primary checkout's own* `ui_node_modules` Docker volume (already populated, Linux-built native binaries) instead of installing a fresh one. Safe only because `--lite` first confirms this worktree's `ui/package-lock.json` is byte-identical to the primary's — on any mismatch it refuses and tells you to re-run without `--lite`.
+- **No `uv sync`** — the API isn't touched at all.
+- Drop/build/restart/stop in this worktree only ever affects its own `ui` container — the primary's `db`/`api`/`ui` and any other worktree's stack are never started, stopped, or rebuilt by `--lite`.
+
+**When to use it:** whenever the story is UI-only (no `api/` changes). This is meant to be the automatic choice for such stories, not something to ask about each time — see [BMad dev-story integration](#bmad-dev-story-integration) below. Fall back to the full bootstrap the moment a story touches `api/`.
+
+Usage:
+```bash
+./scripts/worktree/worktree-add.sh <slug> <branch>
+cd ../finance-dashboard-wt-<slug>
+../finance-dashboard/scripts/worktree/worktree-bootstrap.sh --lite
+```
+This prints the assigned `UI_HOST_PORT` (e.g. `http://localhost:3140`) — open that in a browser, no further steps needed.
+
+Stop just this worktree's `ui` container:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.worktree.yml -f docker-compose.worktree-lite.yml down
+```
+(`worktree-remove.sh <slug>` does this automatically as part of removing the worktree, same as full mode.)
+
+### BMad dev-story integration
+
+When `bmad-dev-story` (or `bmad-quick-dev`) is about to work a story, check the story's file-change scope first: if it's entirely under `ui/` (no `api/` changes), bootstrap the worktree with `--lite` automatically instead of asking. If the scope is mixed or touches `api/`, use the full bootstrap.
 
 ---
 

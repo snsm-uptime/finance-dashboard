@@ -796,6 +796,18 @@ Only included line types (purchases and classified purchase reversals) contribut
 
 ---
 
+### Onboarding and documentation
+
+#### FR-52: Landing page introduction
+
+*(New 2026-09-02 — see Sprint Change Proposal 2026-09-02.)* A signed-out visitor opening `/` sees an introduction to the app (what it does: shared expenses, budgets, statement import) instead of placeholder infra text. Signed-in redirect behavior and sign-up/sign-in CTAs are unaffected.
+
+#### FR-53: Documentation index
+
+*(New 2026-09-02 — see Sprint Change Proposal 2026-09-02.)* A `/docs` route, reachable without signing in, indexes tutorials grouped by area (lists, budgets, import) and calls out UX features already shipped (accessibility, keyboard navigation). The landing page links to it.
+
+---
+
 ## Non-functional requirements
 
 Cross-cutting qualities for v1. Feature-specific constraints stay with their FRs where already stated (e.g. mobile comparison view).
@@ -895,9 +907,10 @@ Specified so v1 stories do not invent a personal dashboard. **Not In for v1.** S
 
 - **FR-46:** List-detail chrome follows **live member count**. `1` → individual-list; `≥ 2` → shared-expenses settle (FR-38–45). Same list entity; no `list_kind`.
 - **FR-47:** Solo default hero is **spend by origin** (registered card / Cash / blank) for the selected **statement-cycle** period (FR-39). Totals are **period spend** (purchase-like lines, FR-45 spirit), not issuer current balance or minimum due. Hide split, simplify, copy settle plan, Settle CTA, and the You are owed / You owe / Balance grid.
-- **FR-48:** **Budgets** tab: named budgets with caps and near-cap treatment, **independent of any single list**. Each budget selects one or more lists (from any list the user belongs to) as its **spend sources**. Budget **detail** shows cap and **related transaction history** pulled from all source lists. *(Amended 2026-09-01 — see Sprint Change Proposal 2026-09-01.)*
+- **FR-48:** **Budgets** tab: named budgets with caps and near-cap treatment, **independent of any single list**. Each budget selects one or more lists (from any list the user belongs to) as its **spend sources**. Budget **detail** shows cap and **related transaction history** pulled from all source lists. A budget **may optionally** carry a date-range period (`from`/`to`); when set, only transactions posted within that range are eligible for attribution, and narrowing/setting the period requires explicit confirmation of any lines it will unassign. *(Amended 2026-09-01, 2026-09-02 — see Sprint Change Proposal 2026-09-02.)*
 - **FR-49:** Budget attribution is **manual assign and rules**, scanned across a budget's selected source lists. History lines attributed by a matching rule show a **"Rule"** badge; manually assigned lines show no badge. **Loans** are out of Epic 6/7. *(Amended 2026-09-01.)*
 - **FR-50:** When a second member joins **a list**, that list's chrome **switches** to shared settle. Budgets are **independent of list membership count** and unaffected — a budget sourcing that list keeps pulling its lines regardless of the list's member count. *(Amended 2026-09-01.)*
+- **FR-51:** A budget owner can **archive** a budget. Archived budgets are hidden from the default `/budgets` view and excluded from create-form interactions; a toggle (box icon) switches the view to archived-only, resetting to non-archived on navigation away. Archiving preserves all budget data and history and is reversible (unarchive). *(New 2026-09-02 — see Sprint Change Proposal 2026-09-02.)*
 
 ## Constraints and commitments
 
