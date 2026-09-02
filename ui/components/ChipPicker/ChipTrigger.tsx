@@ -44,9 +44,8 @@ export const ChipTrigger = forwardRef<HTMLButtonElement, ChipTriggerProps>(funct
       {children}
       <span
         aria-hidden="true"
-        className={`ml-1 inline-block w-[0.32rem] h-[0.32rem] border-r-[1.5px] border-b-[1.5px] border-current opacity-70 transition-transform duration-200 motion-reduce:transition-none ${
-          open ? "rotate-[225deg] translate-y-px" : "rotate-45 -translate-y-px"
-        }`}
+        className={`ml-1 inline-block w-[0.32rem] h-[0.32rem] border-r-[1.5px] border-b-[1.5px] border-current opacity-70 transition-transform duration-200 motion-reduce:transition-none ${open ? "rotate-[225deg] translate-y-px" : "rotate-45 -translate-y-px"
+          }`}
       />
     </button>
   );

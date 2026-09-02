@@ -351,9 +351,7 @@ class SqlAlchemyListRepository:
                 .where(ListMembershipModel.list_id.in_(list_ids))
                 .order_by(ListMembershipModel.created_at.asc())
             )
-            for list_id, member_id, alias, photo_base64 in self._session.execute(
-                member_stmt
-            ).all():
+            for list_id, member_id, alias, photo_base64 in self._session.execute(member_stmt).all():
                 members_by_list[list_id].append(
                     ListMemberLabel(user_id=member_id, alias=alias, photo_base64=photo_base64)
                 )

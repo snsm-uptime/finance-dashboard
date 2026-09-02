@@ -148,12 +148,15 @@ describe("OriginChipPicker", () => {
     expect(fetchCards).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps the accent alias inside the trigger while SlideDown is open", async () => {
+  it("keeps the payer avatar inside the trigger while SlideDown is open", async () => {
     await act(async () => {
-      renderPicker(root, { payerAlias: "sebas" });
+      // payerSeed is what real callers always pass — it's what makes
+      // OriginPayerAlias render the Avatar instead of its text fallback.
+      renderPicker(root, { payerAlias: "sebas", payerSeed: "user-1" });
     });
     const trigger = container.querySelector("button[aria-expanded]") as HTMLButtonElement;
-    expect(trigger.querySelector(".text-accent")?.textContent).toContain("@sebas");
+    expect(trigger.querySelector('[title="sebas"]')).not.toBeNull();
+    expect(trigger.textContent).not.toContain("@sebas");
     expect(trigger.textContent).toContain(messages.expenseOriginNone);
 
     await act(async () => {
@@ -161,10 +164,10 @@ describe("OriginChipPicker", () => {
     });
 
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
-    expect(trigger.querySelector(".text-accent")?.textContent).toContain("@sebas");
+    expect(trigger.querySelector('[title="sebas"]')).not.toBeNull();
     expect(trigger.textContent).toContain(messages.expenseOriginNone);
     for (const option of container.querySelectorAll('[role="region"] button')) {
-      expect(option.textContent).not.toContain("@sebas");
+      expect(option.querySelector('[title="sebas"]')).toBeNull();
     }
   });
 

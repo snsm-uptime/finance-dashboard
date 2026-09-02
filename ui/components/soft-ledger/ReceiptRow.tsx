@@ -88,7 +88,16 @@ export function OriginPayerAlias({
   // the avatar's native hover tooltip. Falls back to text only when there's
   // no stable seed to render an avatar for (no member id available).
   if (seed) {
-    return <Avatar alias={alias} seed={seed} photoBase64={photo} size="xs" />;
+    return <>
+      <Avatar
+        alias={alias}
+        seed={seed}
+        photoBase64={photo}
+        size="xs"
+        className="-ml-[0.5rem] -my-[0.18rem] rounded-r-none"
+      />
+      &nbsp;&nbsp;
+    </>;
   }
   return (
     <span style={typeStyle.meta} className="truncate text-accent">

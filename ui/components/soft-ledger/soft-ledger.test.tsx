@@ -358,6 +358,7 @@ describe("Soft-Ledger primitives", () => {
         <ReceiptRow
           title="1000 colones"
           payerAlias="sebas"
+          payerSeed="user-1"
           when="2026-08-19"
           amount="₡1,000"
           originChip="Cash"
@@ -370,7 +371,10 @@ describe("Soft-Ledger primitives", () => {
     });
     expect(host.querySelector('[data-slot="type-icon"]')).not.toBeNull();
     expect(host.textContent).toContain("1000 colones");
-    expect(host.textContent).toContain("@sebas");
+    // The payer alias is an Avatar, not visible text — it only shows up as
+    // the avatar's native hover tooltip/aria-label.
+    expect(host.textContent).not.toContain("@sebas");
+    expect(host.querySelector('[title="sebas"]')).not.toBeNull();
     expect(host.textContent).toContain("2026-08-19");
     expect(host.textContent).toContain("Cash");
     expect(host.textContent).toContain("you lent");
@@ -388,10 +392,8 @@ describe("Soft-Ledger primitives", () => {
     );
     const originEl = dateEl?.nextElementSibling as HTMLElement | null;
     expect(originEl?.textContent).toContain("Cash");
-    expect(originEl?.textContent).toContain("@sebas");
-    const handle = originEl?.querySelector(".text-accent");
-    expect(handle?.textContent).toContain("@sebas");
-    expect(handle?.className).toContain("text-accent");
+    const handle = originEl?.querySelector('[title="sebas"]');
+    expect(handle).not.toBeNull();
     expect(totalEl?.parentElement).toBe(dateEl?.parentElement);
     expect(originEl?.nextElementSibling).toBe(totalEl ?? null);
     const direction = Array.from(host.querySelectorAll("span")).find(
@@ -516,6 +518,7 @@ describe("Soft-Ledger primitives", () => {
         <ReceiptRow
           title="grill out"
           payerAlias="dotmail"
+          payerSeed="user-2"
           when="2026-08-19"
           amount="₡10,000"
           originChip="Unknown"
@@ -528,7 +531,10 @@ describe("Soft-Ledger primitives", () => {
     });
     expect(host.textContent).toContain("grill out");
     expect(host.textContent).toContain("Unknown");
-    expect(host.textContent).toContain("@dotmail");
+    // The payer alias is an Avatar, not visible text — it only shows up as
+    // the avatar's native hover tooltip/aria-label.
+    expect(host.textContent).not.toContain("@dotmail");
+    expect(host.querySelector('[title="dotmail"]')).not.toBeNull();
     expect(host.textContent).toContain("you borrowed");
     expect(host.querySelector("button[aria-expanded]")).toBeNull();
     const chip = Array.from(host.querySelectorAll("span")).find((el) =>
@@ -539,8 +545,8 @@ describe("Soft-Ledger primitives", () => {
       (el) => el.textContent === "Unknown",
     );
     expect(originLabel?.className).toContain("text-muted");
-    const handle = chip?.querySelector(".text-accent");
-    expect(handle?.textContent).toContain("@dotmail");
+    const handle = chip?.querySelector('[title="dotmail"]');
+    expect(handle).not.toBeNull();
     const direction = Array.from(host.querySelectorAll("span")).find(
       (el) => el.textContent === "you borrowed",
     );
@@ -553,6 +559,7 @@ describe("Soft-Ledger primitives", () => {
         <ReceiptRow
           title="Coffee"
           payerAlias="dotmail"
+          payerSeed="user-2"
           when="2026-08-19"
           amount="₡10"
           originChip="Cash"
@@ -570,7 +577,9 @@ describe("Soft-Ledger primitives", () => {
       (el) => el.textContent === "Cash",
     );
     expect(originLabel?.className).toContain("text-muted");
-    expect(chip?.querySelector(".text-accent")?.textContent).toContain("@dotmail");
+    // The payer alias is an Avatar, not visible text.
+    expect(chip?.textContent).not.toContain("@dotmail");
+    expect(chip?.querySelector('[title="dotmail"]')).not.toBeNull();
   });
 
   it("renders a warning No Origin chip and a below-row origin panel slot", () => {

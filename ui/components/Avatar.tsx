@@ -48,7 +48,7 @@ export function Avatar({ alias, seed, photoBase64, size = "sm", className }: Ava
         alt={alias ?? ""}
         title={title}
         onError={() => setPhotoFailed(true)}
-        className={`inline-block flex-shrink-0 rounded-full object-cover ${className ?? ""}`}
+        className={`inline-block flex-shrink-0 rounded-[8px] object-cover ${className ?? ""}`}
         style={{ width: px, height: px }}
       />
     );
@@ -61,7 +61,7 @@ export function Avatar({ alias, seed, photoBase64, size = "sm", className }: Ava
       role="img"
       aria-label={alias ?? ""}
       title={title}
-      className={`inline-flex flex-shrink-0 items-center justify-center rounded-full font-[600] leading-none ${className ?? ""}`}
+      className={`inline-flex flex-shrink-0 items-center justify-center rounded-[8px] font-[600] leading-none ${className ?? ""}`}
       style={{
         width: px,
         height: px,
