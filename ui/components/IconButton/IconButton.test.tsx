@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { act } from "react";
+import { act, createRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -165,12 +165,16 @@ describe("IconButton", () => {
     expect(button.getAttribute("aria-label")).toBe("Close");
   });
 
-  it("renders the tooltip bubble for a plain icon-only button", async () => {
+  it("renders the tooltip bubble on hover for a plain icon-only button", async () => {
     await act(async () => {
       root.render(<IconButton icon={<span />} label="Close" />);
     });
+    const button = container.querySelector("button") as HTMLButtonElement;
+    await act(async () => {
+      button.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+    });
     expect(
-      container.querySelector('[data-testid="tooltip-bubble"]')?.textContent,
+      document.querySelector('[data-testid="tooltip-bubble"]')?.textContent,
     ).toBe("Close");
   });
 
@@ -178,7 +182,11 @@ describe("IconButton", () => {
     await act(async () => {
       root.render(<IconButton icon={<span />} label="Close" disabled />);
     });
-    expect(container.querySelector('[data-testid="tooltip-bubble"]')).toBeNull();
+    const button = container.querySelector("button") as HTMLButtonElement;
+    await act(async () => {
+      button.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+    });
+    expect(document.querySelector('[data-testid="tooltip-bubble"]')).toBeNull();
   });
 
   it("suppresses the tooltip when caption is set", async () => {
@@ -187,7 +195,11 @@ describe("IconButton", () => {
         <IconButton icon={<span />} label="Add to Personal" caption="Personal" />,
       );
     });
-    expect(container.querySelector('[data-testid="tooltip-bubble"]')).toBeNull();
+    const button = container.querySelector("button") as HTMLButtonElement;
+    await act(async () => {
+      button.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+    });
+    expect(document.querySelector('[data-testid="tooltip-bubble"]')).toBeNull();
   });
 
   it("suppresses the tooltip when aria-expanded is true", async () => {
@@ -196,7 +208,11 @@ describe("IconButton", () => {
         <IconButton icon={<span />} label="Menu" aria-expanded={true} />,
       );
     });
-    expect(container.querySelector('[data-testid="tooltip-bubble"]')).toBeNull();
+    const button = container.querySelector("button") as HTMLButtonElement;
+    await act(async () => {
+      button.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+    });
+    expect(document.querySelector('[data-testid="tooltip-bubble"]')).toBeNull();
   });
 
   it("keeps the tooltip when aria-expanded is false", async () => {
@@ -205,21 +221,38 @@ describe("IconButton", () => {
         <IconButton icon={<span />} label="Menu" aria-expanded={false} />,
       );
     });
+    const button = container.querySelector("button") as HTMLButtonElement;
+    await act(async () => {
+      button.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+    });
     expect(
-      container.querySelector('[data-testid="tooltip-bubble"]'),
+      document.querySelector('[data-testid="tooltip-bubble"]'),
     ).not.toBeNull();
   });
 
-  it("forwards flex-shrink-0 and fill's width classes onto the Tooltip wrapper, not just the button", async () => {
+  it("renders the button itself as IconButton's root — no wrapper element inserted", async () => {
     await act(async () => {
       root.render(<IconButton icon={<span />} label="Save" fill />);
     });
-    const button = container.querySelector("button") as HTMLButtonElement;
-    const wrapper = button.parentElement as HTMLElement;
-    const wrapperClasses = wrapper.className.split(/\s+/);
-    expect(wrapperClasses).toContain("flex-shrink-0");
-    expect(wrapperClasses).toContain("!w-full");
-    expect(wrapperClasses).toContain("min-w-0");
+    // IconButton's root rendered node is the <button> itself: it's the
+    // render container's direct/only child, not nested inside a wrapper.
+    expect(container.children).toHaveLength(1);
+    const button = container.firstElementChild as HTMLButtonElement;
+    expect(button.tagName).toBe("BUTTON");
+    const classList = button.className.split(/\s+/);
+    expect(classList).toContain("flex-shrink-0");
+    expect(classList).toContain("!w-full");
+    expect(classList).toContain("min-w-0");
+  });
+
+  it("resolves a forwarded ref to the actual <button> DOM node through Tooltip's ref-merge", async () => {
+    const ref = createRef<HTMLButtonElement>();
+    await act(async () => {
+      root.render(<IconButton ref={ref} icon={<span />} label="Save" />);
+    });
+
+    expect(ref.current).toBeInstanceOf(HTMLButtonElement);
+    expect(ref.current).toBe(container.querySelector("button"));
   });
 });
 

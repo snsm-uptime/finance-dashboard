@@ -68,14 +68,6 @@ export const IconButton = forwardRef<HTMLButtonElement, Props>(
     const classes = [baseClasses, layoutClass, fill ? fillClasses : "", variantClass, styles.button, className]
       .filter(Boolean)
       .join(" ");
-    // The Tooltip wrapper becomes the flex/grid item IconButton's parents
-    // actually see, so the layout classes that used to matter on the button
-    // itself have to be forwarded onto it too (`flex-shrink-0` is
-    // load-bearing across ~24 consumer files; fill's width classes make the
-    // wrapper — not just the inner button — stretch).
-    const tooltipWrapperClasses = ["flex-shrink-0", fill ? fillClasses : ""]
-      .filter(Boolean)
-      .join(" ");
     const tooltipDisabled =
       Boolean(disabled) ||
       Boolean(caption) ||
@@ -83,11 +75,7 @@ export const IconButton = forwardRef<HTMLButtonElement, Props>(
       !label;
 
     return (
-      <Tooltip
-        label={label}
-        disabled={tooltipDisabled}
-        wrapperClassName={tooltipWrapperClasses}
-      >
+      <Tooltip label={label} disabled={tooltipDisabled}>
         <button
           ref={ref}
           type="button"

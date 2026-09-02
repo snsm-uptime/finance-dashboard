@@ -125,6 +125,26 @@ describe("ButtonGroup", () => {
     expect(buttons[1]?.className.split(/\s+/)).toContain("item");
   });
 
+  it("lands the .item class on the IconButton's own root button, not a wrapper (Tooltip clones, doesn't wrap)", async () => {
+    await act(async () => {
+      root.render(
+        <ButtonGroup
+          aria-label="Group"
+          buttons={[<IconButton key="add" icon={<span />} label="Add" />]}
+        />,
+      );
+    });
+
+    const group = container.querySelector('[role="group"]') as HTMLElement;
+    const button = container.querySelector("button") as HTMLButtonElement;
+    // No wrapper element between the group and the button: it's the
+    // group's direct (and here, only) child, so :first-child/:last-child
+    // and equal-width flex-item selectors in ButtonGroup.module.scss apply
+    // to the actual button.
+    expect(button.parentElement).toBe(group);
+    expect(button.className.split(/\s+/)).toContain("item");
+  });
+
   it("forwards caller className onto the group and each button", async () => {
     await act(async () => {
       root.render(
