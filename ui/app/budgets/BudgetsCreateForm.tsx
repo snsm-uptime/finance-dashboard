@@ -1,12 +1,13 @@
 "use client";
 
-import { FormEvent, useEffect, useId, useState } from "react";
+import { FormEvent, useId, useState } from "react";
 
+import { chipClassName } from "@/components/Chip";
 import { IconButton } from "@/components/IconButton";
 import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
 import { useFormSubmission } from "@/hooks";
 import { PlusIcon } from "@/app/icons";
-import { fetchLists, type ListItem } from "@/app/lists/listsClient";
+import type { ListItem } from "@/app/lists/listsClient";
 
 import { createBudget, type BudgetItem, type BudgetsClientMessages } from "./budgetsClient";
 
@@ -21,6 +22,7 @@ export type BudgetsCreateFormMessages = BudgetsClientMessages & {
 };
 
 type Props = {
+  lists: ListItem[];
   messages: BudgetsCreateFormMessages;
   onCreated: (budget: BudgetItem) => void;
 };
@@ -33,7 +35,19 @@ const CURRENCY_OPTIONS = [
 const fieldInputClass =
   "min-w-0 flex-1 font-inherit text-[0.9rem] bg-transparent text-foreground placeholder:text-muted outline-none";
 
-export function BudgetsCreateForm({ messages, onCreated }: Props) {
+// Same trigger look as CardRoutingControl's routing chip: accent tone = the
+// active/selected setting, muted = unselected. Hover + selection are both
+// animated (color/border transition plus a small press/lift scale).
+const chipFocusRing =
+  "cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+const chipTransition =
+  "transition-[color,background-color,border-color,transform] duration-150 ease-out motion-reduce:transition-none";
+function sourceListChipClassName(selected: boolean): string {
+  const hover = selected ? "hover:bg-accent/10" : "hover:border-muted";
+  return `${chipClassName[selected ? "accent" : "muted"]} ${chipFocusRing} ${chipTransition} ${hover} hover:scale-[1.04] active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100`;
+}
+
+export function BudgetsCreateForm({ lists, messages, onCreated }: Props) {
   const baseId = useId();
   const currencyId = `${baseId}-currency`;
   const currencyLabelId = `${baseId}-currency-label`;
@@ -42,27 +56,7 @@ export function BudgetsCreateForm({ messages, onCreated }: Props) {
   const [name, setName] = useState("");
   const [cap, setCap] = useState("");
   const [currency, setCurrency] = useState("CRC");
-  const [lists, setLists] = useState<ListItem[]>([]);
   const [selectedListIds, setSelectedListIds] = useState<string[]>([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      const result = await fetchLists({
-        errorGeneric: messages.errorGeneric,
-        errorInvalidName: messages.errorGeneric,
-        errorForbidden: messages.errorForbidden,
-        errorUnauthorized: messages.errorUnauthorized,
-      });
-      if (cancelled) return;
-      if (result.ok) setLists(result.lists);
-    }
-    void load();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const { pending, error, submit, clearError } = useFormSubmission(
     async (body: { name: string; cap: string; currency: string; source_list_ids: string[] }) => {
@@ -161,24 +155,23 @@ export function BudgetsCreateForm({ messages, onCreated }: Props) {
           icon={<PlusIcon />}
         />
       </div>
-      <fieldset className="flex flex-col gap-1 rounded-[8px] border-2 border-border bg-background px-[0.65rem] py-[0.5rem]">
-        <legend className="px-1 text-[0.8rem] text-muted">
-          {messages.budgetsSourceListsLabel}
-        </legend>
-        <div className="flex flex-wrap gap-x-4 gap-y-1">
-          {lists.map((list) => (
-            <label key={list.id} className="flex items-center gap-1.5 text-[0.9rem] text-foreground">
-              <input
-                type="checkbox"
-                checked={selectedListIds.includes(list.id)}
-                disabled={pending}
-                onChange={() => toggleListId(list.id)}
-              />
+      <div className="flex flex-wrap gap-2" role="group" aria-label={messages.budgetsSourceListsLabel}>
+        {lists.map((list) => {
+          const selected = selectedListIds.includes(list.id);
+          return (
+            <button
+              key={list.id}
+              type="button"
+              aria-pressed={selected}
+              disabled={pending}
+              onClick={() => toggleListId(list.id)}
+              className={sourceListChipClassName(selected)}
+            >
               {list.name}
-            </label>
-          ))}
-        </div>
-      </fieldset>
+            </button>
+          );
+        })}
+      </div>
       <div aria-live="polite">
         {error ? (
           <p className="m-0 text-[0.85rem] text-owe" role="alert">

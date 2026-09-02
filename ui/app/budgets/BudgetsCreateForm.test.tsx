@@ -7,11 +7,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BudgetsCreateForm, type BudgetsCreateFormMessages } from "./BudgetsCreateForm";
 import type { BudgetItem } from "./budgetsClient";
 
-const fetchListsMock = vi.fn();
-vi.mock("@/app/lists/listsClient", () => ({
-  fetchLists: (...args: unknown[]) => fetchListsMock(...args),
-}));
-
 const createBudgetMock = vi.fn();
 vi.mock("./budgetsClient", async () => {
   const actual = await vi.importActual<typeof import("./budgetsClient")>("./budgetsClient");
@@ -48,8 +43,6 @@ describe("BudgetsCreateForm", () => {
   let root: Root;
 
   beforeEach(() => {
-    fetchListsMock.mockReset();
-    fetchListsMock.mockResolvedValue({ ok: true, lists });
     createBudgetMock.mockReset();
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -65,28 +58,24 @@ describe("BudgetsCreateForm", () => {
 
   async function render(onCreated: (budget: BudgetItem) => void = vi.fn()) {
     await act(async () => {
-      root.render(<BudgetsCreateForm messages={messages} onCreated={onCreated} />);
-    });
-    // Flush the fetchLists() effect.
-    await act(async () => {
-      await Promise.resolve();
+      root.render(<BudgetsCreateForm lists={lists} messages={messages} onCreated={onCreated} />);
     });
   }
 
-  function checkboxFor(listName: string): HTMLInputElement {
-    const label = Array.from(container.querySelectorAll("label")).find((el) =>
+  function chipFor(listName: string): HTMLButtonElement {
+    return Array.from(container.querySelectorAll('button[aria-pressed]')).find((el) =>
       el.textContent?.includes(listName),
-    );
-    return label?.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    ) as HTMLButtonElement;
   }
 
-  it("renders one checkbox per source list from fetchLists", async () => {
+  it("renders one toggle chip per source list from the lists prop", async () => {
     await render();
-    expect(checkboxFor("Groceries List")).not.toBeNull();
-    expect(checkboxFor("Roommates List")).not.toBeNull();
+    expect(chipFor("Groceries List")).not.toBeNull();
+    expect(chipFor("Roommates List")).not.toBeNull();
+    expect(chipFor("Groceries List").getAttribute("aria-pressed")).toBe("false");
   });
 
-  it("disables submit until at least one source list is checked", async () => {
+  it("toggling a chip flips its pressed state and disables submit until one is selected", async () => {
     await render();
     const nameInput = container.querySelector('input[placeholder="Name"]') as HTMLInputElement;
     const capInput = container.querySelector('input[placeholder="Cap"]') as HTMLInputElement;
@@ -102,9 +91,16 @@ describe("BudgetsCreateForm", () => {
     expect(submitButton.disabled).toBe(true);
 
     await act(async () => {
-      checkboxFor("Groceries List").click();
+      chipFor("Groceries List").click();
     });
     expect(submitButton.disabled).toBe(false);
+    expect(chipFor("Groceries List").getAttribute("aria-pressed")).toBe("true");
+
+    await act(async () => {
+      chipFor("Groceries List").click();
+    });
+    expect(submitButton.disabled).toBe(true);
+    expect(chipFor("Groceries List").getAttribute("aria-pressed")).toBe("false");
   });
 
   it("submits the checked source list ids and clears the form on success", async () => {
@@ -132,7 +128,7 @@ describe("BudgetsCreateForm", () => {
       capInput.dispatchEvent(new Event("input", { bubbles: true }));
     });
     await act(async () => {
-      checkboxFor("Groceries List").click();
+      chipFor("Groceries List").click();
     });
 
     const form = container.querySelector("form") as HTMLFormElement;
@@ -161,7 +157,7 @@ describe("BudgetsCreateForm", () => {
       capInput.dispatchEvent(new Event("input", { bubbles: true }));
     });
     await act(async () => {
-      checkboxFor("Groceries List").click();
+      chipFor("Groceries List").click();
     });
 
     const form = container.querySelector("form") as HTMLFormElement;

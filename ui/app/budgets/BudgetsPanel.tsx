@@ -2,11 +2,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { Chip } from "@/components/Chip";
 import { SectionLabel } from "@/components/soft-ledger/SectionLabel";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { StackedListPanel } from "@/components/StackedListPanel";
 import { formatMoneyAmount } from "@/lib/currency";
 import { listsMessages } from "@/lib/i18n/lists";
+import { fetchLists } from "@/app/lists/listsClient";
+import {
+  getMembershipListsSnapshot,
+  replaceMembershipLists,
+  useMembershipLists,
+} from "@/app/lists/membershipListsStore";
 import { BudgetsCreateForm } from "./BudgetsCreateForm";
 import {
   budgetStateLabel,
@@ -21,6 +28,7 @@ export function BudgetsPanel() {
   const { locale } = usePreferences();
   const t = listsMessages[locale];
   const [budgets, setBudgets] = useState<BudgetItem[]>([]);
+  const lists = useMembershipLists() ?? [];
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -47,7 +55,18 @@ export function BudgetsPanel() {
       } else {
         setBudgets(result.budgets);
       }
-      setLoading(false);
+      // Seed the shared membership store once — BudgetsCreateForm's source-list
+      // picker and this panel's per-tile chips both read from it.
+      if (getMembershipListsSnapshot() === null) {
+        const listsResult = await fetchLists({
+          errorGeneric: t.errorGeneric,
+          errorInvalidName: t.errorGeneric,
+          errorForbidden: t.errorForbidden,
+          errorUnauthorized: t.errorUnauthorized,
+        });
+        if (listsResult.ok) replaceMembershipLists(listsResult.lists);
+      }
+      if (!cancelled) setLoading(false);
     }
     void load();
     return () => {
@@ -69,6 +88,7 @@ export function BudgetsPanel() {
           <>
             <SectionLabel>{t.budgetsCreateTitle}</SectionLabel>
             <BudgetsCreateForm
+              lists={lists}
               messages={{
                 ...messages,
                 budgetsCreateTitle: t.budgetsCreateTitle,
@@ -112,7 +132,18 @@ export function BudgetsPanel() {
             // /budgets/{id} doesn't exist until Story 7.2 builds it.
             <div className="flex h-full flex-col justify-between">
               <div className="flex items-center justify-between gap-[var(--space-2)]">
-                <p className="m-0 min-w-0 flex-1 truncate text-foreground">{budget.name}</p>
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+                  <p className="m-0 truncate text-foreground">{budget.name}</p>
+                  {budget.source_list_ids.map((listId) => {
+                    const list = lists.find((l) => l.id === listId);
+                    if (!list) return null;
+                    return (
+                      <Chip key={listId} tone="muted">
+                        {list.name}
+                      </Chip>
+                    );
+                  })}
+                </div>
                 <span
                   className={`h-[10px] w-[10px] shrink-0 rounded-full ${usageDotClass}`}
                   role="img"
