@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 
 import { Avatar } from "@/components/Avatar";
+import { Tooltip } from "@/components/Tooltip";
 
 import { orderPercentageSplitUserIds } from "./orderPercentageSplitUserIds";
 import styles from "./PercentageSplitTrack.module.scss";
@@ -20,6 +21,8 @@ type Props = {
   percents: Record<string, string>;
   onChangePercents: (newPercents: Record<string, string>) => void;
   disabled?: boolean;
+  /** List's default split (Story 2.5/2.6), used to render a muted reference bar per segment. */
+  defaultPercents?: Record<string, string>;
 };
 
 /**
@@ -33,6 +36,7 @@ export function PercentageSplitTrack({
   percents,
   onChangePercents,
   disabled = false,
+  defaultPercents,
 }: Props) {
   const orderedUserIds = useMemo(
     () => orderPercentageSplitUserIds(userIds, currentUserId),
@@ -60,6 +64,10 @@ export function PercentageSplitTrack({
   const percentValues = useMemo(() => {
     return orderedUserIds.map((id) => Number(percents[id]) || 0);
   }, [orderedUserIds, percents]);
+  const defaultPercentValues = useMemo(() => {
+    if (!defaultPercents) return null;
+    return orderedUserIds.map((id) => Number(defaultPercents[id]) || 0);
+  }, [orderedUserIds, defaultPercents]);
 
   const handleMouseDown = (index: number) => (e: React.MouseEvent) => {
     if (disabled) return;
@@ -233,6 +241,27 @@ export function PercentageSplitTrack({
           );
         })}
 
+        {defaultPercentValues
+          ? orderedUserIds.map((userId, i) => {
+              if (Math.round(defaultPercentValues[i]) === Math.round(percentValues[i])) {
+                return null;
+              }
+              const leftSum = defaultPercentValues
+                .slice(0, i + 1)
+                .reduce((a, b) => a + b, 0);
+              return (
+                <div
+                  key={`default-bar-${userId}`}
+                  data-default-bar={userId}
+                  className={styles.defaultReferenceBar}
+                  style={{
+                    left: `${leftSum}%`,
+                  }}
+                />
+              );
+            })
+          : null}
+
         {draggedHandleIndex !== null ? (
           <div
             className={styles.sliderTooltip}
@@ -252,14 +281,24 @@ export function PercentageSplitTrack({
       </div>
 
       <div className={styles.sliderLabels}>
-        {orderedUserIds.map((userId) => (
-          <div key={`label-${userId}`} className={`${styles.sliderLabel} flex items-center gap-1`}>
-            <Avatar
-              alias={memberMap.get(userId) || userId.slice(0, 8)}
-              seed={userId}
-              photoBase64={photoMap.get(userId)}
-              size="xs"
-            />
+        {orderedUserIds.map((userId, i) => (
+          <div
+            key={`label-${userId}`}
+            className={`${styles.sliderLabel} flex items-center justify-center gap-1`}
+            style={{
+              width: `${Math.max(percentValues[i], 1)}%`,
+            }}
+          >
+            <Tooltip label={memberMap.get(userId) || userId.slice(0, 8)}>
+              <span className="inline-flex">
+                <Avatar
+                  alias={memberMap.get(userId) || userId.slice(0, 8)}
+                  seed={userId}
+                  photoBase64={photoMap.get(userId)}
+                  size="xs"
+                />
+              </span>
+            </Tooltip>
           </div>
         ))}
       </div>

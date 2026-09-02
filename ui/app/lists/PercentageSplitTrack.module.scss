@@ -102,6 +102,19 @@
 }
 
 .sliderLabel {
-  flex: 1;
+  flex: 0 0 auto;
   text-align: center;
+  transition: width 150ms ease;
+}
+
+.defaultReferenceBar {
+  position: absolute;
+  width: 2px;
+  height: 48px;
+  top: 0;
+  background: color-mix(in srgb, var(--foreground) 30%, transparent);
+  border-radius: 1px;
+  pointer-events: none;
+  z-index: 5;
+  transform: translateX(-50%);
 }
