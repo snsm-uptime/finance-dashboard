@@ -259,7 +259,6 @@ export function AccountMenu() {
                 lists={lists}
                 messages={{
                   defaultListTitle: t.defaultListTitle,
-                  defaultListHint: t.defaultListHint,
                   errorGeneric: t.errorGeneric,
                   errorUnauthorized: t.errorUnauthorized,
                   errorForbidden: t.errorForbidden,

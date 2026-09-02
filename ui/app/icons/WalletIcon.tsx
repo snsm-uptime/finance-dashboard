@@ -1,7 +1,6 @@
-import { useId, type SVGProps } from "react";
+import type { SVGProps } from "react";
 
 export function WalletIcon({ className, ...props }: SVGProps<SVGSVGElement>) {
-  const maskId = useId();
   return (
     <svg
       className={className}
@@ -11,23 +10,20 @@ export function WalletIcon({ className, ...props }: SVGProps<SVGSVGElement>) {
       aria-hidden="true"
       {...props}
     >
-      <mask id={maskId} maskUnits="userSpaceOnUse">
-        <rect width="24" height="24" fill="white" />
-        <rect x="2" y="8.7" width="20" height="1.4" rx="0.7" fill="black" />
-        <circle cx="16.6" cy="15.3" r="1.3" fill="black" />
-      </mask>
-      <g mask={`url(#${maskId})`}>
-        <rect
-          x="2.5"
-          y="5.6"
-          width="17.5"
-          height="4"
-          rx="2"
-          transform="rotate(-7 11.25 7.6)"
-          fill="currentColor"
-        />
-        <rect x="2" y="8.5" width="20" height="13" rx="4.2" fill="currentColor" />
-      </g>
+      <path
+        d="M3 7.5a2 2 0 0 1 2-2h11.5a2 2 0 0 1 2 2v1.2"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M3 7.5V18a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7.3a2 2 0 0 0-2-2H6.5A3.5 3.5 0 0 1 3 7.5Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <circle cx="16.6" cy="14.5" r="1.1" stroke="currentColor" strokeWidth="2" />
     </svg>
   );
 }

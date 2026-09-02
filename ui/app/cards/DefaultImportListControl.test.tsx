@@ -22,7 +22,6 @@ vi.mock("../lists/listsClient", async () => {
 
 const messages = {
   defaultListTitle: accountMessages.en.defaultListTitle,
-  defaultListHint: accountMessages.en.defaultListHint,
   errorGeneric: accountMessages.en.errorGeneric,
   errorUnauthorized: accountMessages.en.errorUnauthorized,
   errorForbidden: accountMessages.en.errorForbidden,
