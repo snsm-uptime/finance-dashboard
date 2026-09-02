@@ -11,7 +11,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
-from adapters.persistence.models import LedgerEntryModel
+from adapters.persistence.models import BudgetSourceListModel, LedgerEntryModel
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 from tests.integration_db import claim_alias, database_url
@@ -285,6 +285,74 @@ def test_get_budget_detail_returns_404_for_nonexistent_budget(client: TestClient
     response = client.get(f"/budgets/{uuid.uuid4()}")
     assert response.status_code == 404
     assert response.json()["code"] == "budget_not_found"
+
+
+def test_get_budget_detail_merges_history_across_source_lists(
+    client: TestClient, db_session: Session
+) -> None:
+    owner_id = _register(client, "budgetdetailmulti@example.com")
+    list_a = _own_list_id(client)
+    list_b = _create_second_list(client)
+    budget_id = _create_budget(client, [list_a, list_b])
+
+    entry_a = _create_expense(client, list_a, owner_id, "Automercado")
+    entry_b = _create_expense(client, list_b, owner_id, "Walmart")
+
+    # Force distinct, unambiguous posted_date ordering — both entries are
+    # created "today" by default, which would make newest-first order flaky.
+    db_session.query(LedgerEntryModel).filter(LedgerEntryModel.id == uuid.UUID(entry_a)).update(
+        {"posted_date": date(2026, 8, 1)}
+    )
+    db_session.query(LedgerEntryModel).filter(LedgerEntryModel.id == uuid.UUID(entry_b)).update(
+        {"posted_date": date(2026, 8, 10)}
+    )
+    db_session.flush()
+
+    assigned_a = client.post(f"/budgets/{budget_id}/assignments", json={"ledger_entry_id": entry_a})
+    assert assigned_a.status_code == 204, assigned_a.text
+    assigned_b = client.post(f"/budgets/{budget_id}/assignments", json={"ledger_entry_id": entry_b})
+    assert assigned_b.status_code == 204, assigned_b.text
+
+    detail = client.get(f"/budgets/{budget_id}")
+    assert detail.status_code == 200, detail.text
+    body = detail.json()
+    assert body["spent"] == "20.00"
+    assert [line["id"] for line in body["history"]] == [entry_b, entry_a]
+
+
+def test_get_budget_detail_reflects_current_source_list_set(
+    client: TestClient, db_session: Session
+) -> None:
+    owner_id = _register(client, "budgetdetailcurrent@example.com")
+    list_a = _own_list_id(client)
+    list_b = _create_second_list(client)
+    budget_id = _create_budget(client, [list_a])
+    entry_a = _create_expense(client, list_a, owner_id, "Automercado")
+    assigned = client.post(f"/budgets/{budget_id}/assignments", json={"ledger_entry_id": entry_a})
+    assert assigned.status_code == 204, assigned.text
+
+    first = client.get(f"/budgets/{budget_id}")
+    assert first.status_code == 200, first.text
+    assert sorted(first.json()["source_lists"]) == sorted([list_a])
+    assert [line["id"] for line in first.json()["history"]] == [entry_a]
+
+    # No source-list-edit endpoint exists in this epic (AC #2's Dev Notes) —
+    # manipulate the join table directly to prove the read has no caching.
+    db_session.add(BudgetSourceListModel(budget_id=uuid.UUID(budget_id), list_id=uuid.UUID(list_b)))
+    db_session.query(BudgetSourceListModel).filter(
+        BudgetSourceListModel.budget_id == uuid.UUID(budget_id),
+        BudgetSourceListModel.list_id == uuid.UUID(list_a),
+    ).delete()
+    db_session.flush()
+
+    entry_b = _create_expense(client, list_b, owner_id, "Walmart")
+    assigned_b = client.post(f"/budgets/{budget_id}/assignments", json={"ledger_entry_id": entry_b})
+    assert assigned_b.status_code == 204, assigned_b.text
+
+    second = client.get(f"/budgets/{budget_id}")
+    assert second.status_code == 200, second.text
+    assert sorted(second.json()["source_lists"]) == sorted([list_b])
+    assert [line["id"] for line in second.json()["history"]] == [entry_b]
 
 
 # --- Story 6.5: attribution (manual assign, rules, candidates) ---

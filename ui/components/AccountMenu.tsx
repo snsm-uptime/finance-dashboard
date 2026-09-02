@@ -2,7 +2,6 @@
 
 import { useEffect, useState, type ChangeEvent } from "react";
 
-import { CardsPanel } from "@/app/cards/CardsPanel";
 import { DefaultImportListControl } from "@/app/cards/DefaultImportListControl";
 import { MoonIcon, PencilIcon, SunIcon, SystemIcon, TrashIcon } from "@/app/icons";
 import { fetchLists, type ListItem } from "@/app/lists/listsClient";
@@ -29,7 +28,7 @@ export function AccountMenu() {
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lists, setLists] = useState<ListItem[]>([]);
-  const [cardsRefreshToken, setCardsRefreshToken] = useState(0);
+  const [, setCardsRefreshToken] = useState(0);
   const [photoPending, setPhotoPending] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
 
@@ -182,7 +181,9 @@ export function AccountMenu() {
             <label
               className={`${avatarActionClass} -bottom-2 -left-2`}
             >
-              <Tooltip label={t.photoUpload} children={<PencilIcon className="w-4 h-4" />} />
+              <Tooltip label={t.photoUpload}>
+                <PencilIcon className="w-4 h-4" />
+              </Tooltip>
               <input
                 type="file"
                 accept="image/png,image/jpeg"
@@ -198,9 +199,8 @@ export function AccountMenu() {
                 disabled={controlsDisabled || photoPending}
                 onClick={() => void savePhoto(null)}
               >
-                <Tooltip
-                  label={t.photoRemove}
-                  children={<TrashIcon className="w-4 h-4" />}>
+                <Tooltip label={t.photoRemove}>
+                  <TrashIcon className="w-4 h-4" />
                 </Tooltip>
               </button>
             ) : null}
