@@ -9,6 +9,7 @@ from uuid import UUID
 
 from application.budgets import BudgetRecord, BudgetRuleRecord
 from application.expenses import LedgerEntryRecord
+from domain.errors import BudgetNotFoundError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -100,6 +101,40 @@ class SqlAlchemyBudgetRepository:
             return None
         source_list_ids = self._source_list_ids_for([row.id]).get(row.id, ())
         return _budget_record(row, source_list_ids)
+
+    def update_budget(
+        self,
+        *,
+        budget_id: UUID,
+        name: str,
+        cap_amount: Decimal,
+        currency: str,
+        source_list_ids: tuple[UUID, ...],
+    ) -> BudgetRecord:
+        row = self._session.get(BudgetModel, budget_id)
+        if row is None:
+            raise BudgetNotFoundError()
+        row.name = name
+        row.cap_amount = cap_amount
+        row.currency = currency
+        existing = self._session.scalars(
+            select(BudgetSourceListModel).where(BudgetSourceListModel.budget_id == budget_id)
+        ).all()
+        for source_row in existing:
+            self._session.delete(source_row)
+        self._session.flush()
+        for list_id in source_list_ids:
+            self._session.add(BudgetSourceListModel(budget_id=budget_id, list_id=list_id))
+        self._session.flush()
+        return _budget_record(row, source_list_ids)
+
+    def delete_budget(self, budget_id: UUID) -> None:
+        # FK cascades handle budget_rules/budget_source_lists (CASCADE) and
+        # ledger_entries.budget_id (SET NULL) — no manual cascade here.
+        row = self._session.get(BudgetModel, budget_id)
+        if row is not None:
+            self._session.delete(row)
+            self._session.flush()
 
     def list_ledger_entries(self, list_id: UUID) -> list[LedgerEntryRecord]:
         # Delegates to SqlAlchemyListRepository's exact query rather than

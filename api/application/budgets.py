@@ -28,12 +28,14 @@ from domain.budgets import (
 from domain.errors import (
     BudgetNotFoundError,
     BudgetRuleNotFoundError,
+    DuplicateBudgetNameError,
     LedgerEntryNotFoundError,
     NotListMemberError,
 )
 
-from application.expenses import LedgerEntryRecord
+from application.expenses import LedgerEntryRecord, resolve_viewer_lens_for_entry
 from application.list_access import ListAccessLookup
+from application.splits import SplitRepository
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,6 +72,18 @@ class BudgetRepository(Protocol):
     def list_budgets_for_owner(self, owner_user_id: UUID) -> list[BudgetRecord]: ...
 
     def get_budget(self, budget_id: UUID, owner_user_id: UUID) -> BudgetRecord | None: ...
+
+    def update_budget(
+        self,
+        *,
+        budget_id: UUID,
+        name: str,
+        cap_amount: Decimal,
+        currency: str,
+        source_list_ids: tuple[UUID, ...],
+    ) -> BudgetRecord: ...
+
+    def delete_budget(self, budget_id: UUID) -> None: ...
 
     def list_ledger_entries(self, list_id: UUID) -> list[LedgerEntryRecord]: ...
 
@@ -144,12 +158,80 @@ class CreateBudgetService:
 
 
 @dataclass(frozen=True, slots=True)
+class UpdateBudgetCommand:
+    actor_user_id: UUID
+    budget_id: UUID
+    name: str
+    cap: str
+    currency: str
+    source_list_ids: list[UUID]
+
+
+class UpdateBudgetService:
+    """Full-replace PATCH mirroring CreateBudgetService's validation, plus a
+    404-on-deny ownership check (AD-30 — no 403 path, see `_get_owned_budget`)
+    and a same-owner name-uniqueness guard (excluding the budget being
+    updated)."""
+
+    def __init__(self, repo: BudgetRepository, list_lookup: ListAccessLookup) -> None:
+        self._repo = repo
+        self._list_lookup = list_lookup
+
+    def execute(self, command: UpdateBudgetCommand) -> BudgetRecord:
+        budget = _get_owned_budget(self._repo, command.budget_id, command.actor_user_id)
+
+        name = validate_budget_name(command.name)
+        cap = validate_budget_cap(command.cap, currency_exponent=2)
+        currency = validate_budget_currency(command.currency)
+        source_list_ids = validate_budget_source_list_ids(command.source_list_ids)
+
+        for list_id in source_list_ids:
+            membership = self._list_lookup.get_membership(list_id, command.actor_user_id)
+            if membership is None:
+                raise NotListMemberError()
+
+        siblings = self._repo.list_budgets_for_owner(command.actor_user_id)
+        for sibling in siblings:
+            if sibling.id != budget.id and sibling.name == name:
+                raise DuplicateBudgetNameError()
+
+        return self._repo.update_budget(
+            budget_id=budget.id,
+            name=name,
+            cap_amount=cap,
+            currency=currency,
+            source_list_ids=source_list_ids,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class DeleteBudgetCommand:
+    actor_user_id: UUID
+    budget_id: UUID
+
+
+class DeleteBudgetService:
+    """Owner-only, 404-on-deny (AD-30). Relies entirely on existing FK
+    cascades/SET NULLs (`budget_rules` CASCADE, `budget_source_lists`
+    CASCADE, `ledger_entries.budget_id` SET NULL) — no manual cascade code."""
+
+    def __init__(self, repo: BudgetRepository) -> None:
+        self._repo = repo
+
+    def execute(self, command: DeleteBudgetCommand) -> None:
+        budget = _get_owned_budget(self._repo, command.budget_id, command.actor_user_id)
+        self._repo.delete_budget(budget.id)
+
+
+@dataclass(frozen=True, slots=True)
 class BudgetHistoryLine:
     id: UUID
     normalized_description: str
     posted_date: date
     amount_crc: Decimal
     attributed_via: Literal["manual", "rule"]
+    viewer_share_crc: Decimal
+    payer_id: UUID
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,6 +246,8 @@ def _compute_spent_and_history(
     repo: BudgetRepository,
     *,
     entries: list[LedgerEntryRecord] | None = None,
+    list_repo: SplitRepository | None = None,
+    actor_user_id: UUID | None = None,
 ) -> tuple[Decimal, tuple[BudgetHistoryLine, ...], tuple[BudgetRuleView, ...]]:
     """Shared CRC-only spend/history/rules computation for a single budget
     (Story 6.5, adapted to multi-source-list budgets by Story 7.1). `spent`/
@@ -173,7 +257,13 @@ def _compute_spent_and_history(
     the spend computation is).
 
     `entries` lets a caller iterating multiple budgets fetch ledger entries
-    once and reuse them, when possible."""
+    once and reuse them, when possible.
+
+    `list_repo`/`actor_user_id` (Story 7.3) enable per-entry viewer-share
+    resolution — each entry's own `list_id` supplies its members/default
+    split/overrides via `SqlAlchemyListRepository`. When omitted (e.g. the
+    budgets-list view, which discards history entirely), each line's
+    `viewer_share_crc` falls back to the full `amount_crc`."""
     rules = repo.list_rules_for_budget(record.id)
     rule_views = tuple(
         BudgetRuleView(id=r.id, match_text=r.match_text, created_at=r.created_at) for r in rules
@@ -188,17 +278,44 @@ def _compute_spent_and_history(
         entries, budget_id=record.id, rule_texts=[r.match_text for r in rules]
     )
     spent = compute_budget_spent(attributed)
-    history = tuple(
-        BudgetHistoryLine(
-            id=e.id,
-            normalized_description=e.normalized_description,
-            posted_date=e.posted_date,
-            amount_crc=e.amount_crc,
-            attributed_via="manual" if e.budget_id == record.id else "rule",
+
+    history_lines: list[BudgetHistoryLine] = []
+    for e in attributed:
+        if list_repo is not None and actor_user_id is not None:
+            members = list_repo.list_member_ids(e.list_id)
+            stored_default = list_repo.get_stored_default_split(e.list_id)
+            default_mode = stored_default.mode if stored_default is not None else "even"
+            default_shares = stored_default.shares if stored_default is not None else None
+            list_record = list_repo.get_list(e.list_id)
+            creator_user_id = list_record.owner_id if list_record is not None else e.payer_id
+            resolution = resolve_viewer_lens_for_entry(
+                list_repo,  # type: ignore[arg-type]
+                list_id=e.list_id,
+                subject_id=e.id,
+                receipt_id=e.receipt_id,
+                amount_crc=e.amount_crc,
+                payer_id=e.payer_id,
+                viewer_id=actor_user_id,
+                members=members,
+                creator_user_id=creator_user_id,
+                default_mode=default_mode,
+                default_shares=default_shares,
+            )
+            viewer_share_crc = resolution.viewer_share_crc
+        else:
+            viewer_share_crc = e.amount_crc
+        history_lines.append(
+            BudgetHistoryLine(
+                id=e.id,
+                normalized_description=e.normalized_description,
+                posted_date=e.posted_date,
+                amount_crc=e.amount_crc,
+                attributed_via="manual" if e.budget_id == record.id else "rule",
+                viewer_share_crc=viewer_share_crc,
+                payer_id=e.payer_id,
+            )
         )
-        for e in attributed
-    )
-    return spent, history, rule_views
+    return spent, tuple(history_lines), rule_views
 
 
 @dataclass(frozen=True, slots=True)
@@ -269,13 +386,19 @@ def _get_owned_budget(repo: BudgetRepository, budget_id: UUID, actor_user_id: UU
 
 
 class GetBudgetDetailService:
-    def __init__(self, repo: BudgetRepository) -> None:
+    def __init__(self, repo: BudgetRepository, list_repo: SplitRepository) -> None:
         self._repo = repo
+        self._list_repo = list_repo
 
     def execute(self, command: GetBudgetDetailCommand) -> BudgetDetailView:
         record = _get_owned_budget(self._repo, command.budget_id, command.actor_user_id)
 
-        spent, history, rules = _compute_spent_and_history(record, self._repo)
+        spent, history, rules = _compute_spent_and_history(
+            record,
+            self._repo,
+            list_repo=self._list_repo,
+            actor_user_id=command.actor_user_id,
+        )
         state = classify_budget_state(spent, record.cap_amount)
         return BudgetDetailView(
             id=record.id,

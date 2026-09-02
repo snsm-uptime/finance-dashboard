@@ -11,7 +11,14 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
-from adapters.persistence.models import BudgetSourceListModel, LedgerEntryModel
+from adapters.persistence.models import (
+    BudgetModel,
+    BudgetRuleModel,
+    BudgetSourceListModel,
+    LedgerEntryModel,
+    ListMembershipModel,
+    UserModel,
+)
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 from tests.integration_db import claim_alias, database_url
@@ -594,6 +601,17 @@ def test_non_owner_is_404_on_every_budget_scoped_route(client: TestClient) -> No
     assert delete_rule.status_code == 404
     assert delete_rule.json()["code"] == "budget_not_found"
 
+    update = client.patch(
+        f"/budgets/{budget_id}",
+        json={"name": "Renamed", "cap": "500.00", "currency": "CRC", "source_list_ids": [list_id]},
+    )
+    assert update.status_code == 404
+    assert update.json()["code"] == "budget_not_found"
+
+    delete_budget_response = client.delete(f"/budgets/{budget_id}")
+    assert delete_budget_response.status_code == 404
+    assert delete_budget_response.json()["code"] == "budget_not_found"
+
 
 def _seed_non_included_line_entry(
     db_session: Session, *, list_id: uuid.UUID, payer_id: uuid.UUID
@@ -681,3 +699,182 @@ def test_delete_rule_removes_previously_rule_attributed_line_from_spent_and_hist
     assert [
         c["id"] for c in client.get(f"/budgets/{budget_id}/candidates").json()["candidates"]
     ] == [entry_id]
+
+
+# --- Spec: budget-detail-crud-and-viewer-share -------------------------------
+
+
+def test_update_budget_rename_to_unique_name(client: TestClient) -> None:
+    _register(client, "budgetupdateunique@example.com")
+    list_id = _own_list_id(client)
+    budget_id = _create_budget(client, [list_id])
+
+    updated = client.patch(
+        f"/budgets/{budget_id}",
+        json={"name": "New name", "cap": "600.00", "currency": "CRC", "source_list_ids": [list_id]},
+    )
+    assert updated.status_code == 200, updated.text
+    body = updated.json()
+    assert body["name"] == "New name"
+    assert body["cap"] == "600.00"
+
+    fetched = client.get(f"/budgets/{budget_id}")
+    assert fetched.json()["name"] == "New name"
+
+
+def test_update_budget_rename_collision_rejected_with_no_write(client: TestClient) -> None:
+    _register(client, "budgetupdatecollide@example.com")
+    list_id = _own_list_id(client)
+    _create_budget(client, [list_id], name="Rent")
+    budget_id = _create_budget(client, [list_id], name="Groceries")
+
+    updated = client.patch(
+        f"/budgets/{budget_id}",
+        json={"name": "Rent", "cap": "600.00", "currency": "CRC", "source_list_ids": [list_id]},
+    )
+    assert updated.status_code == 422, updated.text
+    assert updated.json()["code"] == "budget_name_taken"
+
+    unchanged = client.get(f"/budgets/{budget_id}")
+    assert unchanged.json()["name"] == "Groceries"
+    assert unchanged.json()["cap"] == "500.00"
+
+
+def test_update_budget_naming_non_member_list_rejected(client: TestClient) -> None:
+    _register(client, "budgetupdatenonmember@example.com")
+    list_id = _own_list_id(client)
+    budget_id = _create_budget(client, [list_id])
+
+    client.post("/auth/sign-out")
+    _register(client, "budgetupdatenonmemberother@example.com")
+    other_list_id = _own_list_id(client)
+
+    client.post("/auth/sign-out")
+    client.post(
+        "/auth/sign-in",
+        json={"email": "budgetupdatenonmember@example.com", "password": "password1"},
+    )
+
+    updated = client.patch(
+        f"/budgets/{budget_id}",
+        json={
+            "name": "New name",
+            "cap": "600.00",
+            "currency": "CRC",
+            "source_list_ids": [other_list_id],
+        },
+    )
+    assert updated.status_code == 403, updated.text
+    assert updated.json()["code"] == "not_list_member"
+
+
+def test_delete_budget_with_rules_and_assigned_entries_cascades(
+    client: TestClient, db_session: Session
+) -> None:
+    owner_id = _register(client, "budgetdeletecascade@example.com")
+    list_id = _own_list_id(client)
+    budget_id = _create_budget(client, [list_id])
+    entry_id = _create_expense(client, list_id, owner_id, "Automercado")
+
+    assigned = client.post(f"/budgets/{budget_id}/assignments", json={"ledger_entry_id": entry_id})
+    assert assigned.status_code == 204, assigned.text
+
+    rule = client.post(f"/budgets/{budget_id}/rules", json={"match_text": "walmart"})
+    assert rule.status_code == 201, rule.text
+    rule_id = rule.json()["id"]
+
+    deleted = client.delete(f"/budgets/{budget_id}")
+    assert deleted.status_code == 204, deleted.text
+
+    assert db_session.get(BudgetModel, uuid.UUID(budget_id)) is None
+    assert db_session.get(BudgetRuleModel, uuid.UUID(rule_id)) is None
+
+    entry_row = db_session.get(LedgerEntryModel, uuid.UUID(entry_id))
+    assert entry_row is not None
+    assert entry_row.budget_id is None
+
+    still_gone = client.get(f"/budgets/{budget_id}")
+    assert still_gone.status_code == 404
+    assert still_gone.json()["code"] == "budget_not_found"
+
+
+def _add_second_member(db_session: Session, *, list_id: str, email: str) -> uuid.UUID:
+    member = UserModel(id=uuid.uuid4(), email=email, password_hash="x")
+    db_session.add(member)
+    db_session.flush()
+    db_session.add(
+        ListMembershipModel(
+            id=uuid.uuid4(),
+            list_id=uuid.UUID(list_id),
+            user_id=member.id,
+            role="member",
+        )
+    )
+    db_session.flush()
+    return member.id
+
+
+def test_shared_list_history_line_viewer_share_not_full_amount(
+    client: TestClient, db_session: Session
+) -> None:
+    owner_id = _register(client, "budgetviewershare@example.com")
+    list_id = _own_list_id(client)
+    _add_second_member(db_session, list_id=list_id, email="budgetviewersharemember@example.com")
+
+    budget_id = _create_budget(client, [list_id])
+    entry_id = _create_expense(client, list_id, owner_id, "Automercado")
+    assigned = client.post(f"/budgets/{budget_id}/assignments", json={"ledger_entry_id": entry_id})
+    assert assigned.status_code == 204, assigned.text
+
+    detail = client.get(f"/budgets/{budget_id}")
+    assert detail.status_code == 200, detail.text
+    lines = detail.json()["history"]
+    assert len(lines) == 1
+    line = lines[0]
+    assert line["amount_crc"] == "10.00"
+    # Even default split across 2 members — viewer's allocated share is half
+    # the full entry amount, not the whole receipt.
+    assert line["viewer_share_crc"] == "5.00"
+    assert line["viewer_share_crc"] != line["amount_crc"]
+    assert line["payer_id"] == owner_id
+
+
+def test_solo_list_history_line_viewer_share_equals_full_amount(client: TestClient) -> None:
+    owner_id = _register(client, "budgetviewersolo@example.com")
+    list_id = _own_list_id(client)
+    budget_id = _create_budget(client, [list_id])
+    entry_id = _create_expense(client, list_id, owner_id, "Automercado")
+    assigned = client.post(f"/budgets/{budget_id}/assignments", json={"ledger_entry_id": entry_id})
+    assert assigned.status_code == 204, assigned.text
+
+    detail = client.get(f"/budgets/{budget_id}")
+    line = detail.json()["history"][0]
+    assert line["viewer_share_crc"] == line["amount_crc"] == "10.00"
+    assert line["payer_id"] == owner_id
+
+
+def test_update_budget_raises_not_found_when_row_vanishes_mid_request(
+    client: TestClient, db_session: Session
+) -> None:
+    """Regression: SqlAlchemyBudgetRepository.update_budget must 404, not
+    AttributeError, if the row is gone by the time it fetches (e.g. a
+    concurrent delete between the service's ownership check and the write)."""
+    from adapters.persistence.budgets import SqlAlchemyBudgetRepository
+    from domain.errors import BudgetNotFoundError
+
+    _register(client, "budgetupdatevanished@example.com")
+    list_id = _own_list_id(client)
+    budget_id = _create_budget(client, [list_id])
+
+    db_session.execute(BudgetModel.__table__.delete().where(BudgetModel.id == uuid.UUID(budget_id)))
+    db_session.flush()
+
+    repo = SqlAlchemyBudgetRepository(db_session)
+    with pytest.raises(BudgetNotFoundError):
+        repo.update_budget(
+            budget_id=uuid.UUID(budget_id),
+            name="New name",
+            cap_amount=Decimal("600.00"),
+            currency="CRC",
+            source_list_ids=(uuid.UUID(list_id),),
+        )

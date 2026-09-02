@@ -681,6 +681,17 @@ class BudgetNotFoundError(DomainError):
         super().__init__(self.MESSAGE)
 
 
+class DuplicateBudgetNameError(DomainError):
+    """Raised when renaming/updating a budget to a name already used by
+    another budget owned by the same actor (case-sensitive exact match)."""
+
+    MESSAGE = "You already have a budget with this name."
+    CODE = "budget_name_taken"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
 class InvalidBudgetRuleMatchTextError(DomainError):
     """Raised when a budget rule's match text is empty, whitespace-only, or too long."""
 
