@@ -1,5 +1,5 @@
 # generated: 2026-08-03T22:46:31
-# last_updated: 2026-09-02 (code-review: story 7-2 → done)
+# last_updated: 2026-09-02 (code-review: story 7-3 → done)
 
 # project: finance-dashboard
 # project_key: NOKEY
@@ -42,7 +42,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-03T22:46:31
-last_updated: 2026-09-02 (code-review: story 7-2 → done)
+last_updated: 2026-09-02 (code-review: story 7-3 → done)
 
 project: finance-dashboard
 project_key: NOKEY
@@ -153,7 +153,7 @@ development_status:
   epic-7: in-progress
   7-1-standalone-budget-list-create: review
   7-2-cross-list-budget-detail: done
-  7-3-cross-list-attribution-rule-badge: backlog
+  7-3-cross-list-attribution-rule-badge: done
   epic-7-retrospective: optional
 
 action_items:

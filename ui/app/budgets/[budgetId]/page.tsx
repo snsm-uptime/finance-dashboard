@@ -10,6 +10,9 @@ import { listsMessages } from "@/lib/i18n/lists";
 import type { Locale } from "@/lib/i18n/locale";
 import { fetchSession } from "@/lib/session";
 import { budgetStateLabel, type BudgetItem } from "../budgetsClient";
+import { BudgetAssignPanel } from "./BudgetAssignPanel";
+import { BudgetRulesPanel } from "./BudgetRulesPanel";
+import { UnassignButton } from "./UnassignButton";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +37,16 @@ export type BudgetHistoryLine = {
   attributed_via: "manual" | "rule";
 };
 
-export type BudgetDetail = BudgetItem & { history: BudgetHistoryLine[] };
+export type BudgetRuleRow = {
+  id: string;
+  match_text: string;
+  created_at: string;
+};
+
+export type BudgetDetail = BudgetItem & {
+  history: BudgetHistoryLine[];
+  rules: BudgetRuleRow[];
+};
 
 function asHistoryLine(data: unknown): BudgetHistoryLine | null {
   if (!data || typeof data !== "object") return null;
@@ -57,10 +69,43 @@ function asHistoryLine(data: unknown): BudgetHistoryLine | null {
   };
 }
 
+/**
+ * Row-rendering decision for a history line, extracted as a pure function so
+ * it can be unit-tested without rendering the async server component (see
+ * project-context.md's "never rendered directly in tests" precedent).
+ */
+export function historyRowAttribution(line: BudgetHistoryLine): {
+  viaLabelKey: "budgetsHistoryViaManual" | "budgetsHistoryViaRule";
+  showUnassign: boolean;
+} {
+  const isManual = line.attributed_via === "manual";
+  return {
+    viaLabelKey: isManual ? "budgetsHistoryViaManual" : "budgetsHistoryViaRule",
+    showUnassign: isManual,
+  };
+}
+
+function asRuleRow(data: unknown): BudgetRuleRow | null {
+  if (!data || typeof data !== "object") return null;
+  const row = data as Partial<BudgetRuleRow>;
+  if (
+    typeof row.id !== "string" ||
+    typeof row.match_text !== "string" ||
+    typeof row.created_at !== "string"
+  ) {
+    return null;
+  }
+  return { id: row.id, match_text: row.match_text, created_at: row.created_at };
+}
+
 /** Defensive-parse the budget detail response — drops/defaults malformed fields, never fabricates. */
 export function asBudgetDetail(data: unknown): BudgetDetail | null {
   if (!data || typeof data !== "object") return null;
-  const row = data as Partial<BudgetItem> & { source_lists?: unknown; history?: unknown };
+  const row = data as Partial<BudgetItem> & {
+    source_lists?: unknown;
+    history?: unknown;
+    rules?: unknown;
+  };
   if (
     typeof row.id !== "string" ||
     typeof row.name !== "string" ||
@@ -78,6 +123,8 @@ export function asBudgetDetail(data: unknown): BudgetDetail | null {
   const history = historyRows
     .map(asHistoryLine)
     .filter((line): line is BudgetHistoryLine => line !== null);
+  const ruleRows = Array.isArray(row.rules) ? row.rules : [];
+  const rules = ruleRows.map(asRuleRow).filter((rule): rule is BudgetRuleRow => rule !== null);
   return {
     id: row.id,
     name: row.name,
@@ -88,6 +135,7 @@ export function asBudgetDetail(data: unknown): BudgetDetail | null {
     source_list_ids: row.source_lists,
     created_at: row.created_at,
     history,
+    rules,
   };
 }
 
@@ -176,6 +224,10 @@ export default async function BudgetDetailPage({
 
           <section className="flex flex-col gap-[var(--space-3)] mx-strip-inset">
             <SectionLabel>{t.budgetsHistoryTitle}</SectionLabel>
+            <BudgetAssignPanel
+              budgetId={budgetId}
+              messages={{ ...t, cancelLabel: t.receiptMoveCancel }}
+            />
             {budget.history.length === 0 ? (
               <div
                 className="px-[var(--space-4)] py-[var(--space-5)] bg-surface border border-border rounded-md"
@@ -185,23 +237,38 @@ export default async function BudgetDetailPage({
               </div>
             ) : (
               <ul className="m-0 list-none p-0 flex flex-col gap-[var(--space-2)]">
-                {budget.history.map((line) => (
-                  <li
-                    key={line.id}
-                    className="flex items-center justify-between gap-[var(--space-3)] px-[var(--space-3)] py-[var(--space-2)] bg-surface border border-border rounded-sm"
-                  >
-                    <span className="flex flex-col">
-                      <span className="text-foreground">{line.description}</span>
-                      <span className="text-muted">{line.posted_date}</span>
-                    </span>
-                    <span className="tabular-nums text-foreground">
-                      {formatMoneyAmount(line.amount_crc, "CRC")}
-                    </span>
-                  </li>
-                ))}
+                {budget.history.map((line) => {
+                  const { viaLabelKey, showUnassign } = historyRowAttribution(line);
+                  return (
+                    <li
+                      key={line.id}
+                      className="flex items-center justify-between gap-[var(--space-3)] px-[var(--space-3)] py-[var(--space-2)] bg-surface border border-border rounded-sm"
+                    >
+                      <span className="flex flex-col">
+                        <span className="text-foreground">{line.description}</span>
+                        <span className="text-muted">{t[viaLabelKey]}</span>
+                      </span>
+                      <span className="flex items-center gap-[var(--space-2)]">
+                        <span className="tabular-nums text-foreground">
+                          {formatMoneyAmount(line.amount_crc, "CRC")}
+                        </span>
+                        {showUnassign ? (
+                          <UnassignButton
+                            budgetId={budgetId}
+                            entryId={line.id}
+                            label={t.budgetsUnassign}
+                            messages={t}
+                          />
+                        ) : null}
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </section>
+
+          <BudgetRulesPanel budgetId={budgetId} rules={budget.rules} messages={t} />
         </>
       )}
     </main>

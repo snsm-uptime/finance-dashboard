@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { asBudgetDetail } from "./page";
+import { asBudgetDetail, historyRowAttribution } from "./page";
 
 describe("asBudgetDetail", () => {
-  it("parses a well-formed response with empty history", () => {
+  it("parses a well-formed response with empty history and rules", () => {
     expect(
       asBudgetDetail({
         id: "b1",
@@ -27,10 +27,11 @@ describe("asBudgetDetail", () => {
       source_list_ids: ["l1"],
       created_at: "2026-08-01T00:00:00Z",
       history: [],
+      rules: [],
     });
   });
 
-  it("parses a well-formed response with structured history, ignoring rules", () => {
+  it("parses a well-formed response with structured history and rules", () => {
     const parsed = asBudgetDetail({
       id: "b1",
       name: "Groceries",
@@ -61,7 +62,59 @@ describe("asBudgetDetail", () => {
         attributed_via: "manual",
       },
     ]);
+    expect(parsed?.rules).toEqual([
+      { id: "r1", match_text: "automercado", created_at: "2026-08-01T00:00:00Z" },
+    ]);
     expect(parsed?.source_list_ids).toEqual(["l1", "l2"]);
+  });
+
+  it("defaults a missing/malformed rules array to empty rather than fabricating rows", () => {
+    const withoutRules = asBudgetDetail({
+      id: "b1",
+      name: "Groceries",
+      cap: "500.00",
+      currency: "CRC",
+      spent: "0",
+      state: "ok",
+      source_lists: ["l1"],
+      created_at: "2026-08-01T00:00:00Z",
+    });
+    expect(withoutRules?.rules).toEqual([]);
+
+    const malformedRules = asBudgetDetail({
+      id: "b1",
+      name: "Groceries",
+      cap: "500.00",
+      currency: "CRC",
+      spent: "0",
+      state: "ok",
+      source_lists: ["l1"],
+      created_at: "2026-08-01T00:00:00Z",
+      rules: "not-an-array",
+    });
+    expect(malformedRules?.rules).toEqual([]);
+  });
+
+  it("drops a malformed individual rule row rather than fabricating fields", () => {
+    const parsed = asBudgetDetail({
+      id: "b1",
+      name: "Groceries",
+      cap: "500.00",
+      currency: "CRC",
+      spent: "0",
+      state: "ok",
+      source_lists: ["l1"],
+      created_at: "2026-08-01T00:00:00Z",
+      rules: [
+        { id: "r1", match_text: "automercado", created_at: "2026-08-01T00:00:00Z" },
+        // Missing created_at — dropped, not defaulted to a fabricated value.
+        { id: "r2", match_text: "uber" },
+      ],
+    });
+
+    expect(parsed?.rules).toEqual([
+      { id: "r1", match_text: "automercado", created_at: "2026-08-01T00:00:00Z" },
+    ]);
   });
 
   it("drops/defaults missing or malformed fields, never fabricates data", () => {
@@ -169,5 +222,31 @@ describe("asBudgetDetail", () => {
         attributed_via: "manual",
       },
     ]);
+  });
+});
+
+describe("historyRowAttribution", () => {
+  it("a rule-attributed line renders the rule label and no unassign control", () => {
+    expect(
+      historyRowAttribution({
+        id: "e1",
+        description: "Automercado",
+        posted_date: "2026-08-10",
+        amount_crc: "10.00",
+        attributed_via: "rule",
+      }),
+    ).toEqual({ viaLabelKey: "budgetsHistoryViaRule", showUnassign: false });
+  });
+
+  it("a manually-attributed line renders the manual label and does show an unassign control", () => {
+    expect(
+      historyRowAttribution({
+        id: "e1",
+        description: "Automercado",
+        posted_date: "2026-08-10",
+        amount_crc: "10.00",
+        attributed_via: "manual",
+      }),
+    ).toEqual({ viaLabelKey: "budgetsHistoryViaManual", showUnassign: true });
   });
 });

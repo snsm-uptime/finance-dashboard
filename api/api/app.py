@@ -5,8 +5,10 @@ from __future__ import annotations
 import logging
 
 from application.rate_limit import SlidingWindowRateLimiter
-from domain.errors import AliasRequiredError
+from domain.errors import AliasRequiredError, InvalidPhotoError
 from fastapi import Depends, FastAPI, Request, status
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from api.deps import require_user_alias
@@ -38,6 +40,22 @@ def create_app() -> FastAPI:
             status_code=status.HTTP_403_FORBIDDEN,
             content={"detail": str(exc), "code": AliasRequiredError.CODE},
         )
+
+    @application.exception_handler(RequestValidationError)
+    async def _validation_error_handler(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        # PatchMeBody.photo_base64 has a wire-level max_length guard so a
+        # grossly oversized payload fails fast, before domain.validate_photo()
+        # would decode it — but callers still expect the same invalid_photo
+        # contract regardless of which layer rejected it.
+        for error in exc.errors():
+            if error.get("loc", ())[-1:] == ("photo_base64",):
+                return JSONResponse(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    content={"detail": InvalidPhotoError.MESSAGE, "code": InvalidPhotoError.CODE},
+                )
+        return await request_validation_exception_handler(request, exc)
 
     application.include_router(health_router)
     application.include_router(auth_router)
