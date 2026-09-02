@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
-import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
+import { FormIconSubmit } from "@/components/FormIconSubmit";
 import { formatMoneyAmount } from "@/lib/currency";
 
 import { Sheet } from "@/app/lists/Sheet";
@@ -29,15 +29,17 @@ type Props = {
 
 export function BudgetAssignPanel({ budgetId, messages }: Props) {
   const router = useRouter();
+  const formId = useId();
   const [open, setOpen] = useState(false);
   const [candidates, setCandidates] = useState<BudgetCandidate[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const firstCandidateRef = useRef<HTMLInputElement>(null);
 
   async function openPicker() {
     setError(null);
-    setSelectedId(null);
+    setSelectedIds(new Set());
     const result = await fetchCandidates(budgetId, messages);
     if (!result.ok) {
       setCandidates([]);
@@ -49,16 +51,29 @@ export function BudgetAssignPanel({ budgetId, messages }: Props) {
     setOpen(true);
   }
 
-  async function confirmAssign() {
-    if (!selectedId) return;
+  function toggleSelected(id: string, selected: boolean) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (selected) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  async function confirmAssign(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (selectedIds.size === 0) return;
     setBusy(true);
     setError(null);
-    const result = await assignEntry(budgetId, selectedId, messages);
-    setBusy(false);
-    if (!result.ok) {
-      setError(result.error);
-      return;
+    for (const id of selectedIds) {
+      const result = await assignEntry(budgetId, id, messages);
+      if (!result.ok) {
+        setBusy(false);
+        setError(result.error);
+        return;
+      }
     }
+    setBusy(false);
     setOpen(false);
     router.refresh();
   }
@@ -77,27 +92,64 @@ export function BudgetAssignPanel({ budgetId, messages }: Props) {
         onClose={() => setOpen(false)}
         closeLabel={messages.cancelLabel}
         title={messages.budgetsAssignTitle}
+        initialFocusRef={firstCandidateRef}
+        cornerAction={
+          <FormIconSubmit
+            type="submit"
+            form={formId}
+            tabIndex={0}
+            variant="save"
+            label={
+              busy
+                ? messages.budgetsAssigning
+                : selectedIds.size > 0
+                  ? `${messages.budgetsAssignSubmit} (${selectedIds.size})`
+                  : messages.budgetsAssignSubmit
+            }
+            disabled={selectedIds.size === 0 || busy}
+          />
+        }
         body={
-          <div className="flex flex-col gap-[var(--space-3)]">
+          <form
+            id={formId}
+            className="flex flex-col gap-[var(--space-3)]"
+            onSubmit={confirmAssign}
+          >
             <ul className="m-0 list-none p-0">
               {candidates.length === 0 ? (
                 <li className="py-[var(--space-3)] text-muted">{messages.budgetsAssignEmpty}</li>
               ) : (
-                candidates.map((item) => (
-                  <li key={item.id} className="border-b border-border">
-                    <button
-                      type="button"
-                      className="w-full cursor-pointer border-none bg-transparent px-0 py-[var(--space-3)] text-left text-foreground flex justify-between gap-[var(--space-2)]"
-                      aria-pressed={selectedId === item.id}
-                      onClick={() => setSelectedId(item.id)}
-                    >
-                      <span>{item.description}</span>
-                      <span className="tabular-nums text-muted">
-                        {formatMoneyAmount(item.amount_crc, "CRC")}
-                      </span>
-                    </button>
-                  </li>
-                ))
+                candidates.map((item, index) => {
+                  const selected = selectedIds.has(item.id);
+                  return (
+                    <li key={item.id} className="border-b border-border">
+                      <label
+                        className={`flex w-full cursor-pointer items-center justify-between gap-[var(--space-2)] px-0 py-[var(--space-3)] text-foreground ${
+                          selected ? "bg-accent/10" : "hover:bg-accent/10"
+                        } ${busy ? "cursor-not-allowed opacity-55" : ""}`}
+                      >
+                        <span className="flex min-w-0 items-center gap-[var(--space-2)]">
+                          <input
+                            ref={index === 0 ? firstCandidateRef : undefined}
+                            type="checkbox"
+                            className="peer sr-only"
+                            checked={selected}
+                            disabled={busy}
+                            onChange={(event) => toggleSelected(item.id, event.target.checked)}
+                          />
+                          <span
+                            aria-hidden="true"
+                            className="box-border h-[1.125rem] w-[1.125rem] flex-shrink-0 rounded-[4px] border-[3px] border-accent bg-transparent transition-colors duration-[120ms] peer-checked:bg-accent peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent"
+                          />
+                          <span className="min-w-0 truncate text-left">{item.description}</span>
+                        </span>
+                        <span className="shrink-0 tabular-nums text-muted">
+                          {formatMoneyAmount(item.amount_crc, "CRC")}
+                        </span>
+                      </label>
+                    </li>
+                  );
+                })
               )}
             </ul>
             {error ? (
@@ -105,21 +157,7 @@ export function BudgetAssignPanel({ budgetId, messages }: Props) {
                 {error}
               </p>
             ) : null}
-          </div>
-        }
-        footer={
-          <div className="flex justify-end gap-[var(--space-2)]">
-            <button
-              type="button"
-              className="cursor-pointer border-none bg-transparent text-muted"
-              onClick={() => setOpen(false)}
-            >
-              {messages.cancelLabel}
-            </button>
-            <PrimaryButton onClick={confirmAssign} disabled={!selectedId || busy}>
-              {busy ? messages.budgetsAssigning : messages.budgetsAssignSubmit}
-            </PrimaryButton>
-          </div>
+          </form>
         }
       />
     </>

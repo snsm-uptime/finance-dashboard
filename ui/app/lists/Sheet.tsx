@@ -43,6 +43,12 @@ type Props = {
   footer?: ReactNode;
   /** Optional ref to focus when sheet closes (typically the button that opened it) */
   returnFocusRef?: React.RefObject<HTMLElement | null>;
+  /**
+   * Overrides which element gets focus when the sheet opens. Defaults to the
+   * close button — pass this when Enter-to-close on open would be surprising
+   * (e.g. a picker whose primary action is a corner Save, not the close X).
+   */
+  initialFocusRef?: React.RefObject<HTMLElement | null>;
   /** Maximum height of sheet content (default: min(72vh, 36rem)) */
   maxHeight?: string;
   /**
@@ -106,6 +112,7 @@ export function Sheet({
   body,
   footer,
   returnFocusRef,
+  initialFocusRef,
   maxHeight = "min(72vh, 36rem)",
   fillBelowChrome = false,
 }: Props) {
@@ -117,6 +124,7 @@ export function Sheet({
 
   // Use default close ref if no custom close button, otherwise undefined
   const closeRef = closeButton ? undefined : defaultCloseRef;
+  const focusRef = initialFocusRef ?? closeRef;
 
   // Return focus when closing phase completes
   useEffect(() => {
@@ -132,7 +140,7 @@ export function Sheet({
   useFocusTrap({
     isActive: phase === "open",
     containerRef: panelRef,
-    defaultFocusRef: closeRef,
+    defaultFocusRef: focusRef,
     onEscapePress: onClose,
   });
 

@@ -38,8 +38,8 @@ function AppShellFrame({ children }: { children: ReactNode }) {
 
   const tabs: TabBarItem[] = [
     { key: "home", href: "/home", label: t.tabList, Icon: HomeIcon },
-    { key: "cards", href: "/cards", label: cards.title, Icon: WalletIcon },
     { key: "budgets", href: "/budgets", label: t.budgetsEntryLabel, Icon: FolderIcon },
+    { key: "cards", href: "/cards", label: cards.title, Icon: WalletIcon },
     { key: "account", href: "/account", label: account.navAccount, Icon: UserIcon },
   ];
 

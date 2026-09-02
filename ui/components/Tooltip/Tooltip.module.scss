@@ -16,7 +16,10 @@
   font-weight: 550;
   padding: 0.25rem 0.5rem; /* px-2 py-1 */
   pointer-events: none;
-  z-index: 10;
+  /* Must clear Sheet.module.scss's backdrop/panel z-index (40/41) so a
+     tooltip triggered from inside a Sheet (e.g. a cornerAction button)
+     isn't rendered behind it. */
+  z-index: 50;
   opacity: 1;
   animation: tooltip-fade-in 150ms ease;
 }

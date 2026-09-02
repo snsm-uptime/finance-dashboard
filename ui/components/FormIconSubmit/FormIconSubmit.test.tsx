@@ -111,12 +111,12 @@ describe("FormIconSubmit", () => {
     expect(button.getAttribute("title")).toBe("Custom tooltip");
   });
 
-  it("falls back to label for title when title is omitted", async () => {
+  it("omits the title attribute when not provided, leaving IconButton's Tooltip as the only hover label", async () => {
     await act(async () => {
       root.render(<FormIconSubmit label="Save expense" />);
     });
     const button = container.querySelector("button") as HTMLButtonElement;
-    expect(button.getAttribute("title")).toBe("Save expense");
+    expect(button.getAttribute("title")).toBeNull();
   });
 
   it("fires onClick when clicked while enabled", async () => {

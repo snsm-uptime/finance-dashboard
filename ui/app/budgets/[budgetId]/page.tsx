@@ -1,5 +1,4 @@
 import { cookies } from "next/headers";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { SectionLabel } from "@/components/soft-ledger/SectionLabel";
@@ -11,6 +10,7 @@ import type { Locale } from "@/lib/i18n/locale";
 import { fetchSession } from "@/lib/session";
 import { budgetStateLabel, type BudgetItem } from "../budgetsClient";
 import { BudgetAssignPanel } from "./BudgetAssignPanel";
+import { BudgetDetailChrome } from "./BudgetDetailChrome";
 import { BudgetRulesPanel } from "./BudgetRulesPanel";
 import { UnassignButton } from "./UnassignButton";
 
@@ -197,18 +197,13 @@ export default async function BudgetDetailPage({
 
   return (
     <main className="flex flex-col gap-[var(--space-4)] px-[var(--page-gutter)] py-[var(--space-4)]">
-      <p className="m-0">
-        <Link className="text-muted" href="/budgets">
-          {t.budgetsBackToList}
-        </Link>
-      </p>
-
       {budgetNotFound ? (
         <p role="alert">{t.budgetNotFound}</p>
       ) : loadError || !budget ? (
         <p role="alert">{t.loadError}</p>
       ) : (
         <>
+          <BudgetDetailChrome title={budget.name} />
           <section className="flex flex-col gap-[var(--space-2)] mx-strip-inset">
             <SectionLabel>{budget.name}</SectionLabel>
             <p
