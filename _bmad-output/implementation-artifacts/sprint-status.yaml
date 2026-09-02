@@ -87,7 +87,7 @@ development_status:
   3-4-settle-up-from-shares-payer-and-line-types: done
   3-5-materialize-fx-to-crc-bccr-for-non-crc-lines: done
   3-6-incomplete-disclosure-pattern-slot-only: done
-  3-7-percentage-split-avatar-centering-and-reference-bar: backlog
+  3-7-percentage-split-avatar-centering-and-reference-bar: done
   epic-3-retrospective: done
 
   # Epic 3.5 — Tailwind + SCSS styling stack (before Epic 4; product 3.5–3.6 may still be open)
@@ -155,7 +155,7 @@ development_status:
   7-1-standalone-budget-list-create: review
   7-2-cross-list-budget-detail: done
   7-3-cross-list-attribution-rule-badge: done
-  7-4-budget-progress-bar-visualization: backlog
+  7-4-budget-progress-bar-visualization: done
   7-5-budget-period-range: backlog
   7-6-archive-budgets: backlog
   epic-7-retrospective: optional

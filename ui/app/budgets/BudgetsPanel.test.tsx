@@ -12,7 +12,8 @@ vi.mock("@/components/PreferencesProvider", () => ({
 
 const fetchBudgetsMock = vi.fn();
 vi.mock("./budgetsClient", async () => {
-  const actual = await vi.importActual<typeof import("./budgetsClient")>("./budgetsClient");
+  const actual =
+    await vi.importActual<typeof import("./budgetsClient")>("./budgetsClient");
   return {
     ...actual,
     fetchBudgets: (...args: unknown[]) => fetchBudgetsMock(...args),
@@ -20,10 +21,13 @@ vi.mock("./budgetsClient", async () => {
 });
 
 vi.mock("@/app/lists/listsClient", async () => {
-  const actual = await vi.importActual<typeof import("@/app/lists/listsClient")>(
-    "@/app/lists/listsClient",
-  );
-  return { ...actual, fetchLists: vi.fn().mockResolvedValue({ ok: true, lists: [] }) };
+  const actual = await vi.importActual<
+    typeof import("@/app/lists/listsClient")
+  >("@/app/lists/listsClient");
+  return {
+    ...actual,
+    fetchLists: vi.fn().mockResolvedValue({ ok: true, lists: [] }),
+  };
 });
 
 import { BudgetsPanel } from "./BudgetsPanel";
@@ -84,4 +88,38 @@ describe("BudgetsPanel tile link", () => {
     expect(link).not.toBeNull();
     expect(link?.textContent).toContain("Groceries");
   });
+
+  it.each([
+    { state: "ok" as const, spent: "10.00", cap: "500.00", label: "Under cap" },
+    {
+      state: "near" as const,
+      spent: "400.00",
+      cap: "500.00",
+      label: "Near cap",
+    },
+    {
+      state: "over" as const,
+      spent: "600.00",
+      cap: "500.00",
+      label: "Over cap",
+    },
+  ])(
+    "renders a TopProgressBar with the $state severity aria-label",
+    async ({ state, spent, cap, label }) => {
+      fetchBudgetsMock.mockResolvedValue({
+        ok: true,
+        budgets: [{ ...budget, state, spent, cap }],
+      });
+      await act(async () => {
+        root.render(<BudgetsPanel />);
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      const bar = container.querySelector('[role="progressbar"]');
+      expect(bar).not.toBeNull();
+      expect(bar?.getAttribute("aria-label")).toBe(label);
+    },
+  );
 });

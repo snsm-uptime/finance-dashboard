@@ -7,6 +7,7 @@ import { Chip } from "@/components/Chip";
 import { SectionLabel } from "@/components/soft-ledger/SectionLabel";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { StackedListPanel } from "@/components/StackedListPanel";
+import { TopProgressBar } from "@/components/TopProgressBar";
 import { formatMoneyAmount } from "@/lib/currency";
 import { listsMessages } from "@/lib/i18n/lists";
 import { fetchLists } from "@/app/lists/listsClient";
@@ -17,6 +18,7 @@ import {
 } from "@/app/lists/membershipListsStore";
 import { BudgetsCreateForm } from "./BudgetsCreateForm";
 import {
+  budgetSeverityColorClass,
   budgetStateLabel,
   budgetUsageRatio,
   fetchBudgets,
@@ -35,10 +37,7 @@ function distributeRoundRobin(
   items: BudgetItem[],
   columnCount: number,
 ): BudgetItem[][] {
-  const columns: BudgetItem[][] = Array.from(
-    { length: columnCount },
-    () => [],
-  );
+  const columns: BudgetItem[][] = Array.from({ length: columnCount }, () => []);
   items.forEach((item, i) => columns[i % columnCount].push(item));
   return columns;
 }
@@ -54,10 +53,7 @@ function distributeByHeight(
   heights: number[],
   columnCount: number,
 ): BudgetItem[][] {
-  const columns: BudgetItem[][] = Array.from(
-    { length: columnCount },
-    () => [],
-  );
+  const columns: BudgetItem[][] = Array.from({ length: columnCount }, () => []);
   const totals = new Array(columnCount).fill(0);
   items.forEach((item, i) => {
     let shortest = 0;
@@ -104,10 +100,14 @@ function useMasonryColumns(items: BudgetItem[], columnCount: number) {
   useLayoutEffect(() => {
     if (items.length === 0) return;
     const heights = items.map(
-      (item) => cardRefs.current.get(item.id)?.getBoundingClientRect().height ?? 0,
+      (item) =>
+        cardRefs.current.get(item.id)?.getBoundingClientRect().height ?? 0,
     );
     if (heights.some((height) => height === 0)) return;
-    setMeasured({ key, columns: distributeByHeight(items, heights, columnCount) });
+    setMeasured({
+      key,
+      columns: distributeByHeight(items, heights, columnCount),
+    });
   }, [key, items, columnCount]);
 
   function registerCard(budgetId: string) {
@@ -231,32 +231,26 @@ export function BudgetsPanel() {
           <>
             {column.budgets.map((budget) => {
               const ratio = budgetUsageRatio(budget);
-              const usageDotClass =
-                ratio === null
-                  ? "bg-muted"
-                  : ratio < 70
-                    ? "bg-owed"
-                    : ratio <= 90
-                      ? "bg-warn"
-                      : "bg-owe";
+              const usageColorClass = budgetSeverityColorClass(ratio);
               return (
                 <Link
                   key={budget.id}
                   ref={registerCard(budget.id)}
                   href={`/budgets/${budget.id}`}
-                  className="block py-[0.6rem] px-[0.85rem] rounded-[8px] border border-border bg-surface no-underline text-inherit"
+                  className="relative block py-[0.6rem] px-[0.85rem] rounded-[8px] border border-border bg-surface no-underline text-inherit"
                 >
+                  <div className="absolute top-0 left-0 right-0 rounded-t-[8px] overflow-hidden">
+                    <TopProgressBar
+                      ratio={ratio}
+                      colorClassName={usageColorClass}
+                      tooltipLabel={`${formatMoneyAmount(budget.spent, budget.currency)} / ${formatMoneyAmount(budget.cap, budget.currency)}`}
+                      ariaLabel={budgetStateLabel(budget.state, t)}
+                    />
+                  </div>
                   <div className="flex flex-col gap-1.5">
-                    <div className="flex items-center justify-between gap-[var(--space-2)]">
-                      <p className="m-0 min-w-0 flex-1 truncate text-foreground">
-                        {budget.name}
-                      </p>
-                      <span
-                        className={`h-[10px] w-[10px] shrink-0 rounded-full ${usageDotClass}`}
-                        role="img"
-                        aria-label={budgetStateLabel(budget.state, t)}
-                      />
-                    </div>
+                    <p className="m-0 min-w-0 flex-1 truncate text-foreground">
+                      {budget.name}
+                    </p>
                     <p className="m-0 tabular-nums text-foreground">
                       {formatMoneyAmount(budget.spent, budget.currency)} /{" "}
                       {formatMoneyAmount(budget.cap, budget.currency)}
