@@ -676,13 +676,14 @@ export async function fetchListMembers(
     if (!row || typeof row !== "object") {
       return { ok: false, error: messages.errorGeneric };
     }
-    const m = row as { user_id?: unknown; alias?: unknown };
+    const m = row as { user_id?: unknown; alias?: unknown; photo_base64?: unknown };
     if (typeof m.user_id !== "string") {
       return { ok: false, error: messages.errorGeneric };
     }
     members.push({
       user_id: m.user_id,
       alias: typeof m.alias === "string" && m.alias ? m.alias : null,
+      photo_base64: typeof m.photo_base64 === "string" ? m.photo_base64 : null,
     });
   }
   return { ok: true, members };

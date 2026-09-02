@@ -255,12 +255,11 @@ export function PercentageSplitTrack({
         {orderedUserIds.map((userId) => (
           <div key={`label-${userId}`} className={`${styles.sliderLabel} flex items-center gap-1`}>
             <Avatar
-              alias={memberMap.get(userId) ?? null}
+              alias={memberMap.get(userId) || userId.slice(0, 8)}
               seed={userId}
               photoBase64={photoMap.get(userId)}
               size="xs"
             />
-            {memberMap.get(userId) || userId.slice(0, 8)}
           </div>
         ))}
       </div>

@@ -65,10 +65,8 @@ export function SimplifyPanel({ transfers, messages }: Props) {
               style={{ fontFamily: "var(--type-meta-face)" }}
             >
               <Avatar alias={t.fromLabel} seed={t.fromMemberId} photoBase64={t.fromPhoto} size="xs" />
-              <span className="truncate">{t.fromLabel}</span>
               {" → "}
               <Avatar alias={t.toLabel} seed={t.toMemberId} photoBase64={t.toPhoto} size="xs" />
-              <span className="truncate">{t.toLabel}</span>
             </span>
             <span className="tabular-nums text-foreground" style={{ fontFamily: "var(--type-meta-face)" }}>
               {t.amountCrc}

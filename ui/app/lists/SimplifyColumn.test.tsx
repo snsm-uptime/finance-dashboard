@@ -66,8 +66,12 @@ describe("SimplifyColumn", () => {
       (b) => b.getAttribute("aria-label") !== messages.copyLabel && !b.textContent?.includes(messages.title),
     );
     expect(loadTriggerButtons).toHaveLength(0);
-    expect(container.textContent).toContain("Alice");
-    expect(container.textContent).toContain("Bob");
+    // Alias text is replaced by an Avatar (alias surfaces as its tooltip).
+    const titles = Array.from(container.querySelectorAll("[title]")).map((el) =>
+      el.getAttribute("title"),
+    );
+    expect(titles).toContain("Alice");
+    expect(titles).toContain("Bob");
   });
 
   it("shows the blocked message without fetching when unavailable (AC #5)", async () => {

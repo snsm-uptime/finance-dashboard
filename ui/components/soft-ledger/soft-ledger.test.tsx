@@ -322,8 +322,12 @@ describe("Soft-Ledger primitives", () => {
         />,
       );
     });
-    expect(host.textContent).toContain("Alice");
-    expect(host.textContent).toContain("Bob");
+    // Alias text is replaced by an Avatar (alias surfaces as its tooltip).
+    const titles = Array.from(host.querySelectorAll("[title]")).map((el) =>
+      el.getAttribute("title"),
+    );
+    expect(titles).toContain("Alice");
+    expect(titles).toContain("Bob");
     expect(host.textContent).toContain("₡500.00");
     const copyButton = Array.from(host.querySelectorAll("button")).find(
       (b) => b.getAttribute("aria-label") === "Copy plan",

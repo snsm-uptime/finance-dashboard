@@ -429,11 +429,12 @@ function asMembers(data: unknown): ListMember[] {
   const out: ListMember[] = [];
   for (const row of rows) {
     if (!row || typeof row !== "object") continue;
-    const m = row as { user_id?: unknown; alias?: unknown };
+    const m = row as { user_id?: unknown; alias?: unknown; photo_base64?: unknown };
     if (typeof m.user_id !== "string") continue;
     out.push({
       user_id: m.user_id,
       alias: typeof m.alias === "string" && m.alias ? m.alias : null,
+      photo_base64: typeof m.photo_base64 === "string" ? m.photo_base64 : null,
     });
   }
   return out;

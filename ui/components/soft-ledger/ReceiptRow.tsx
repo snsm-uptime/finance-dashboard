@@ -84,12 +84,15 @@ export function OriginPayerAlias({
   seed?: string;
   photo?: string | null;
 }) {
+  // Avatar replaces the "@alias:" text — the alias is still available as
+  // the avatar's native hover tooltip. Falls back to text only when there's
+  // no stable seed to render an avatar for (no member id available).
+  if (seed) {
+    return <Avatar alias={alias} seed={seed} photoBase64={photo} size="xs" />;
+  }
   return (
-    <span className="inline-flex items-center gap-1">
-      {seed ? <Avatar alias={alias} seed={seed} photoBase64={photo} size="xs" /> : null}
-      <span style={typeStyle.meta} className="truncate text-accent">
-        @{alias}:&nbsp;
-      </span>
+    <span style={typeStyle.meta} className="truncate text-accent">
+      @{alias}:&nbsp;
     </span>
   );
 }
@@ -115,10 +118,12 @@ function OriginMeta({
   if (!originChip) return null;
   return (
     <Chip tone={originChipTone} disabled={originDisabled}>
-      {payerAlias ? (
-        <OriginPayerAlias alias={payerAlias} seed={payerSeed} photo={payerPhoto} />
-      ) : null}
-      <span className={originDisabled ? "text-muted" : undefined}>{originChip}</span>
+      <span className="inline-flex items-center gap-1">
+        {payerAlias ? (
+          <OriginPayerAlias alias={payerAlias} seed={payerSeed} photo={payerPhoto} />
+        ) : null}
+        <span className={originDisabled ? "text-muted" : undefined}>{originChip}</span>
+      </span>
     </Chip>
   );
 }
