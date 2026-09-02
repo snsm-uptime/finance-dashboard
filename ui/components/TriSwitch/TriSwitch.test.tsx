@@ -57,7 +57,7 @@ describe("TriSwitch", () => {
     const radios = container.querySelectorAll('[role="radio"]');
     expect(radios).toHaveLength(3);
     expect(radios[0]?.getAttribute("aria-label")).toBe("Left");
-    expect(radios[0]?.getAttribute("title")).toBe("Left");
+    expect(radios[0]?.hasAttribute("title")).toBe(false);
     expect(radios[1]?.getAttribute("aria-checked")).toBe("true");
     expect(radios[1]?.getAttribute("tabindex")).toBe("0");
     expect(radios[0]?.getAttribute("tabindex")).toBe("-1");
@@ -119,5 +119,41 @@ describe("TriSwitch", () => {
       right.click();
     });
     expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("keeps radio roles and roving tabIndex intact once each option is wrapped in Tooltip", async () => {
+    await act(async () => {
+      root.render(
+        <TriSwitch value="right" options={options} onChange={() => undefined} />,
+      );
+    });
+
+    const radios = container.querySelectorAll('[role="radio"]');
+    expect(radios).toHaveLength(3);
+    radios.forEach((radio) => {
+      // Every option is still a real <button role="radio">, not swallowed by
+      // the Tooltip wrapper it's now nested inside.
+      expect(radio.tagName).toBe("BUTTON");
+    });
+    expect(radios[0]?.getAttribute("tabindex")).toBe("-1");
+    expect(radios[1]?.getAttribute("tabindex")).toBe("-1");
+    expect(radios[2]?.getAttribute("tabindex")).toBe("0");
+    expect(radios[2]?.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("suppresses the option tooltip when the switch is disabled", async () => {
+    await act(async () => {
+      root.render(
+        <TriSwitch
+          value="mid"
+          options={options}
+          onChange={() => undefined}
+          disabled
+        />,
+      );
+    });
+
+    // Tooltip renders no bubble node at all when suppressed.
+    expect(container.querySelectorAll('[data-testid="tooltip-bubble"]')).toHaveLength(0);
   });
 });

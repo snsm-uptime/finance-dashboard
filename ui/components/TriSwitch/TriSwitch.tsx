@@ -2,6 +2,7 @@
 
 import type { KeyboardEvent, ReactNode } from "react";
 
+import { Tooltip } from "@/components/Tooltip";
 import styles from "./TriSwitch.module.scss";
 
 export type TriSwitchOption<T extends string = string> = {
@@ -88,20 +89,20 @@ export function TriSwitch<T extends string>({
       {options.map((option, index) => {
         const checked = option.value === value;
         return (
-          <button
-            key={option.value}
-            type="button"
-            className={styles.option}
-            role="radio"
-            aria-checked={checked}
-            aria-label={option.label}
-            title={option.label}
-            disabled={disabled}
-            tabIndex={checked ? 0 : -1}
-            onClick={() => selectIndex(index)}
-          >
-            <span className={styles.optionIcon}>{option.icon}</span>
-          </button>
+          <Tooltip key={option.value} label={option.label} disabled={disabled}>
+            <button
+              type="button"
+              className={styles.option}
+              role="radio"
+              aria-checked={checked}
+              aria-label={option.label}
+              disabled={disabled}
+              tabIndex={checked ? 0 : -1}
+              onClick={() => selectIndex(index)}
+            >
+              <span className={styles.optionIcon}>{option.icon}</span>
+            </button>
+          </Tooltip>
         );
       })}
     </div>

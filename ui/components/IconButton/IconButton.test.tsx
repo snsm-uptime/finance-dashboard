@@ -155,6 +155,72 @@ describe("IconButton", () => {
     });
     expect(clicked).toBe(false);
   });
+
+  it("does not render a native title attribute (styled Tooltip replaces it)", async () => {
+    await act(async () => {
+      root.render(<IconButton icon={<span />} label="Close" />);
+    });
+    const button = container.querySelector("button") as HTMLButtonElement;
+    expect(button.hasAttribute("title")).toBe(false);
+    expect(button.getAttribute("aria-label")).toBe("Close");
+  });
+
+  it("renders the tooltip bubble for a plain icon-only button", async () => {
+    await act(async () => {
+      root.render(<IconButton icon={<span />} label="Close" />);
+    });
+    expect(
+      container.querySelector('[data-testid="tooltip-bubble"]')?.textContent,
+    ).toBe("Close");
+  });
+
+  it("suppresses the tooltip when disabled", async () => {
+    await act(async () => {
+      root.render(<IconButton icon={<span />} label="Close" disabled />);
+    });
+    expect(container.querySelector('[data-testid="tooltip-bubble"]')).toBeNull();
+  });
+
+  it("suppresses the tooltip when caption is set", async () => {
+    await act(async () => {
+      root.render(
+        <IconButton icon={<span />} label="Add to Personal" caption="Personal" />,
+      );
+    });
+    expect(container.querySelector('[data-testid="tooltip-bubble"]')).toBeNull();
+  });
+
+  it("suppresses the tooltip when aria-expanded is true", async () => {
+    await act(async () => {
+      root.render(
+        <IconButton icon={<span />} label="Menu" aria-expanded={true} />,
+      );
+    });
+    expect(container.querySelector('[data-testid="tooltip-bubble"]')).toBeNull();
+  });
+
+  it("keeps the tooltip when aria-expanded is false", async () => {
+    await act(async () => {
+      root.render(
+        <IconButton icon={<span />} label="Menu" aria-expanded={false} />,
+      );
+    });
+    expect(
+      container.querySelector('[data-testid="tooltip-bubble"]'),
+    ).not.toBeNull();
+  });
+
+  it("forwards flex-shrink-0 and fill's width classes onto the Tooltip wrapper, not just the button", async () => {
+    await act(async () => {
+      root.render(<IconButton icon={<span />} label="Save" fill />);
+    });
+    const button = container.querySelector("button") as HTMLButtonElement;
+    const wrapper = button.parentElement as HTMLElement;
+    const wrapperClasses = wrapper.className.split(/\s+/);
+    expect(wrapperClasses).toContain("flex-shrink-0");
+    expect(wrapperClasses).toContain("!w-full");
+    expect(wrapperClasses).toContain("min-w-0");
+  });
 });
 
 describe("IconButton.module.scss ghost variant", () => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { Tooltip } from "@/components/Tooltip";
 import styles from "./IconButton.module.scss";
 
 type Props = Omit<
@@ -67,29 +68,47 @@ export const IconButton = forwardRef<HTMLButtonElement, Props>(
     const classes = [baseClasses, layoutClass, fill ? fillClasses : "", variantClass, styles.button, className]
       .filter(Boolean)
       .join(" ");
+    // The Tooltip wrapper becomes the flex/grid item IconButton's parents
+    // actually see, so the layout classes that used to matter on the button
+    // itself have to be forwarded onto it too (`flex-shrink-0` is
+    // load-bearing across ~24 consumer files; fill's width classes make the
+    // wrapper — not just the inner button — stretch).
+    const tooltipWrapperClasses = ["flex-shrink-0", fill ? fillClasses : ""]
+      .filter(Boolean)
+      .join(" ");
+    const tooltipDisabled =
+      Boolean(disabled) ||
+      Boolean(caption) ||
+      rest["aria-expanded"] === true ||
+      !label;
 
     return (
-      <button
-        ref={ref}
-        type="button"
-        className={classes}
-        disabled={disabled}
-        aria-label={label}
-        title={label}
-        onClick={onClick}
-        data-active={active || undefined}
-        {...rest}
+      <Tooltip
+        label={label}
+        disabled={tooltipDisabled}
+        wrapperClassName={tooltipWrapperClasses}
       >
-        {icon}
-        {caption ? (
-          <span
-            aria-hidden
-            className="max-w-full text-center font-[550] text-[0.7rem] leading-tight"
-          >
-            {caption}
-          </span>
-        ) : null}
-      </button>
+        <button
+          ref={ref}
+          type="button"
+          className={classes}
+          disabled={disabled}
+          aria-label={label}
+          onClick={onClick}
+          data-active={active || undefined}
+          {...rest}
+        >
+          {icon}
+          {caption ? (
+            <span
+              aria-hidden
+              className="max-w-full text-center font-[550] text-[0.7rem] leading-tight"
+            >
+              {caption}
+            </span>
+          ) : null}
+        </button>
+      </Tooltip>
     );
   }
 );

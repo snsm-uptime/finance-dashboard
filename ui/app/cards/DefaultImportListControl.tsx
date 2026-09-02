@@ -78,7 +78,7 @@ export function DefaultImportListControl({ lists, messages, onChanged }: Props) 
       >
         {messages.defaultListTitle}
       </h2>
-      <p className="m-0 mb-[0.5rem] text-muted text-[0.85rem]">{messages.defaultListHint}</p>
+      {/* <p className="m-0 mb-[0.5rem] text-muted text-[0.85rem]">{messages.defaultListHint}</p> */}
       <SoftLedgerSelect
         aria-label={messages.defaultListTitle}
         value={activeListId}

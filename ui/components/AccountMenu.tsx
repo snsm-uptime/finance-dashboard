@@ -4,7 +4,7 @@ import { useEffect, useState, type ChangeEvent } from "react";
 
 import { CardsPanel } from "@/app/cards/CardsPanel";
 import { DefaultImportListControl } from "@/app/cards/DefaultImportListControl";
-import { MoonIcon, SunIcon, SystemIcon } from "@/app/icons";
+import { MoonIcon, PencilIcon, SunIcon, SystemIcon, TrashIcon } from "@/app/icons";
 import { fetchLists, type ListItem } from "@/app/lists/listsClient";
 import { resetMembershipListsStore } from "@/app/lists/membershipListsStore";
 import { Avatar } from "@/components/Avatar";
@@ -18,6 +18,7 @@ import { encodeAvatarPhoto } from "@/lib/imageEncode";
 import type { Locale, ThemePreference } from "@/lib/i18n/locale";
 
 import styles from "./AccountMenu.module.scss";
+import { Tooltip } from "./Tooltip";
 
 export function AccountMenu() {
   // NOTE: SSR hydration mismatch — server renders with default theme; client may hydrate with different theme.
@@ -150,6 +151,8 @@ export function AccountMenu() {
   const choiceButtonActiveClass = `font-inherit text-[0.85rem] font-semibold py-[0.5rem] px-[0.85rem] rounded-[8px] border border-accent bg-accent text-on-accent cursor-pointer ${styles.choiceActive}`;
   const ghostClass = `font-inherit text-[0.9rem] font-semibold py-[0.55rem] px-[1rem] rounded-[8px] border-0 bg-transparent text-muted cursor-pointer ${styles.ghost}`;
   const signOutClass = `font-inherit text-[0.9rem] font-semibold py-[0.55rem] px-[1rem] rounded-[8px] border border-border bg-surface text-foreground cursor-pointer ${styles.signOut}`;
+  const avatarActionClass =
+    "absolute inline-flex items-center justify-center w-8 h-8 rounded-full border border-border bg-surface text-foreground cursor-pointer shadow-sm disabled:opacity-45 disabled:cursor-not-allowed";
 
   return (
     <main className="py-[2.5rem] px-[1.5rem]" style={{ fontFamily: "var(--font-ui), Manrope, system-ui, sans-serif" }}>
@@ -164,133 +167,134 @@ export function AccountMenu() {
         <p className="text-muted text-[0.85rem]">{t.loading}</p>
       ) : null}
 
-      <section className="mb-6" aria-labelledby="account-photo">
-        <h2 id="account-photo" className="m-0 mb-[0.6rem] text-[0.72rem] font-[550] text-muted tracking-[0.02rem]">
-          {t.photo}
-        </h2>
-        <div className="flex items-center gap-3">
-          <Avatar
-            alias={me?.alias ?? null}
-            seed={me?.user_id ?? "account"}
-            photoBase64={me?.photo_base64 ?? null}
-            size="md"
-          />
-          <label className={choiceButtonClass}>
-            {t.photoUpload}
-            <input
-              type="file"
-              accept="image/png,image/jpeg"
-              className="hidden"
-              disabled={controlsDisabled || photoPending}
-              onChange={(e) => void onPhotoChange(e)}
-            />
-          </label>
-          {me?.photo_base64 ? (
-            <button
-              type="button"
-              className={ghostClass}
-              disabled={controlsDisabled || photoPending}
-              onClick={() => void savePhoto(null)}
-            >
-              {t.photoRemove}
-            </button>
-          ) : null}
-        </div>
-        {photoError ? <p className="text-owe text-[0.85rem]">{photoError}</p> : null}
-      </section>
-
       <div className="mb-6 flex flex-row flex-wrap items-start gap-x-8 gap-y-6">
-        <section aria-labelledby="account-language">
-          <h2 id="account-language" className="m-0 mb-[0.6rem] text-[0.72rem] font-[550] text-muted tracking-[0.02rem]">
-            {t.language}
+        <section aria-labelledby="account-photo" style={{ width: "8rem" }}>
+          <h2 id="account-photo" className="m-0 mb-[0.6rem] text-[0.72rem] font-[550] text-muted tracking-[0.02rem]">
+            {t.photo}
           </h2>
-          {/* TODO: Add RTL-aware layout (dir attribute on parent or logical CSS properties) */}
-          <div className="flex flex-wrap gap-2" role="group" aria-label={t.language}>
-            <button
-              type="button"
-              className={locale === "en" ? choiceButtonActiveClass : choiceButtonClass}
-              aria-pressed={locale === "en"}
-              disabled={controlsDisabled}
-              onClick={() => void onLanguage("en")}
+          <div className="relative" style={{ width: "8rem", height: "8rem" }}>
+            <Avatar
+              alias={me?.alias ?? null}
+              seed={me?.user_id ?? "account"}
+              photoBase64={me?.photo_base64 ?? null}
+              size="lg"
+            />
+            <label
+              className={`${avatarActionClass} -bottom-2 -left-2`}
             >
-              {t.en}
-            </button>
-            <button
-              type="button"
-              className={locale === "es" ? choiceButtonActiveClass : choiceButtonClass}
-              aria-pressed={locale === "es"}
-              disabled={controlsDisabled}
-              onClick={() => void onLanguage("es")}
-            >
-              {t.es}
-            </button>
+              <Tooltip label={t.photoUpload} children={<PencilIcon className="w-4 h-4" />} />
+              <input
+                type="file"
+                accept="image/png,image/jpeg"
+                className="hidden"
+                disabled={controlsDisabled || photoPending}
+                onChange={(e) => void onPhotoChange(e)}
+              />
+            </label>
+            {me?.photo_base64 ? (
+              <button
+                type="button"
+                className={`${avatarActionClass} -top-2 -right-2 text-owe`}
+                disabled={controlsDisabled || photoPending}
+                onClick={() => void savePhoto(null)}
+              >
+                <Tooltip
+                  label={t.photoRemove}
+                  children={<TrashIcon className="w-4 h-4" />}>
+                </Tooltip>
+              </button>
+            ) : null}
           </div>
+          {photoError ? <p className="text-owe text-[0.85rem]">{photoError}</p> : null}
         </section>
 
-        <section aria-labelledby="account-theme">
-          <h2 id="account-theme" className="m-0 mb-[0.6rem] text-[0.72rem] font-[550] text-muted tracking-[0.02rem]">
-            {t.theme}
-          </h2>
-          <TriSwitch
-            aria-label={t.theme}
-            value={theme}
-            disabled={controlsDisabled}
-            onChange={(next) => void onTheme(next)}
-            options={[
-              { value: "light", label: t.light, icon: <SunIcon /> },
-              { value: "system", label: t.system, icon: <SystemIcon /> },
-              { value: "dark", label: t.dark, icon: <MoonIcon /> },
-            ]}
-          />
-        </section>
+        <div className="flex flex-col gap-6">
+          <section aria-labelledby="account-language">
+            <h2 id="account-language" className="m-0 mb-[0.6rem] text-[0.72rem] font-[550] text-muted tracking-[0.02rem]">
+              {t.language}
+            </h2>
+            {/* TODO: Add RTL-aware layout (dir attribute on parent or logical CSS properties) */}
+            <div className="flex flex-wrap gap-2" role="group" aria-label={t.language}>
+              <button
+                type="button"
+                className={locale === "en" ? choiceButtonActiveClass : choiceButtonClass}
+                aria-pressed={locale === "en"}
+                disabled={controlsDisabled}
+                onClick={() => void onLanguage("en")}
+              >
+                {t.en}
+              </button>
+              <button
+                type="button"
+                className={locale === "es" ? choiceButtonActiveClass : choiceButtonClass}
+                aria-pressed={locale === "es"}
+                disabled={controlsDisabled}
+                onClick={() => void onLanguage("es")}
+              >
+                {t.es}
+              </button>
+            </div>
+          </section>
+
+          <section aria-labelledby="account-theme">
+            <h2 id="account-theme" className="m-0 mb-[0.6rem] text-[0.72rem] font-[550] text-muted tracking-[0.02rem]">
+              {t.theme}
+            </h2>
+            <TriSwitch
+              aria-label={t.theme}
+              value={theme}
+              disabled={controlsDisabled}
+              onChange={(next) => void onTheme(next)}
+              options={[
+                { value: "light", label: t.light, icon: <SunIcon /> },
+                { value: "system", label: t.system, icon: <SystemIcon /> },
+                { value: "dark", label: t.dark, icon: <MoonIcon /> },
+              ]}
+            />
+          </section>
+
+          <section aria-labelledby="account-default-destination">
+            {lists.length > 0 ? (
+              <DefaultImportListControl
+                lists={lists}
+                messages={{
+                  defaultListTitle: t.defaultListTitle,
+                  defaultListHint: t.defaultListHint,
+                  errorGeneric: t.errorGeneric,
+                  errorUnauthorized: t.errorUnauthorized,
+                  errorForbidden: t.errorForbidden,
+                }}
+                onChanged={() => {
+                  void refresh();
+                  setCardsRefreshToken((n) => n + 1);
+                }}
+              />
+            ) : null}
+          </section>
+
+          <section aria-labelledby="account-session">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className={ghostClass}
+                disabled={signingOut}
+                onClick={() => void onPasswordReset()}
+              >
+                {t.passwordReset}
+              </button>
+              <button
+                type="button"
+                className={signOutClass}
+                disabled={signingOut}
+                onClick={() => void onSignOut()}
+              >
+                {signingOut ? t.signingOut : t.signOut}
+              </button>
+            </div>
+          </section>
+
+        </div>
       </div>
-
-      {lists.length > 0 ? (
-        <div className="mb-6">
-          <DefaultImportListControl
-            lists={lists}
-            messages={{
-              defaultListTitle: t.defaultListTitle,
-              defaultListHint: t.defaultListHint,
-              errorGeneric: t.errorGeneric,
-              errorUnauthorized: t.errorUnauthorized,
-              errorForbidden: t.errorForbidden,
-            }}
-            onChanged={() => {
-              void refresh();
-              setCardsRefreshToken((n) => n + 1);
-            }}
-          />
-        </div>
-      ) : null}
-
-      <section className="mb-6" aria-labelledby="account-cards">
-        <h2 id="account-cards" className="m-0 mb-[0.6rem] text-[0.72rem] font-[550] text-muted tracking-[0.02rem]">
-          {t.manageCards}
-        </h2>
-        <CardsPanel refreshToken={cardsRefreshToken} />
-      </section>
-
-      <section className="mb-6">
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            className={ghostClass}
-            disabled={signingOut}
-            onClick={() => void onPasswordReset()}
-          >
-            {t.passwordReset}
-          </button>
-          <button
-            type="button"
-            className={signOutClass}
-            disabled={signingOut}
-            onClick={() => void onSignOut()}
-          >
-            {signingOut ? t.signingOut : t.signOut}
-          </button>
-        </div>
-      </section>
 
       {error ? (
         <p className="text-owe text-[0.9rem]">{error}</p>

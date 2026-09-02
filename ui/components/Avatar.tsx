@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { pickAvatarColor, pickTextColor } from "@/lib/avatarColor";
 
-export type AvatarSize = "xs" | "sm" | "md";
+export type AvatarSize = "xs" | "sm" | "md" | "lg";
 
 export type AvatarProps = {
   /** Person label — used for the initial + always set as the native hover tooltip. */
@@ -22,6 +22,7 @@ const sizePx: Record<AvatarSize, number> = {
   xs: 20,
   sm: 28,
   md: 40,
+  lg: 128,
 };
 
 /** First alias character, uppercased; short-id fallback has no letter to show. */
