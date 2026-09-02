@@ -1,7 +1,7 @@
 """Alembic revision: budgets become a standalone owner-scoped entity (Story 7.1).
 
-Revision ID: 0034_budgets_standalone_entity
-Revises: 0033_budget_attribution
+Revision ID: 0035_budgets_standalone_entity
+Revises: 0034_user_photo
 Create Date: 2026-09-01
 
 AD-30: budgets stop being list-scoped (single `list_id`) and become owned by
@@ -23,8 +23,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0034_budgets_standalone_entity"
-down_revision: str | None = "0033_budget_attribution"
+revision: str = "0035_budgets_standalone_entity"
+down_revision: str | None = "0034_user_photo"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
