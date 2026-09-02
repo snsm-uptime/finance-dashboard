@@ -242,7 +242,13 @@ flowchart LR
 
 - **Binds:** FR-46–50; Epic 6; list detail read model
 - **Prevents:** A `list_kind` column; treating solo spend totals as issuer statement balance; pulling individual-list into v1 settle stories
-- **Rule:** Mode is **live membership count**, not a list type. `member_count ≥ 2` → settle read model (AD-21). `member_count == 1` → **spend-by-origin** for the selected statement cycle (period spend by card / Cash / blank; FR-45-like included lines). **Not** current balance or minimum due. **Budgets** are list-scoped (name, cap, currency); UI is **solo-only** in Epic 6. Attribution (manual + rules) is later in the epic. Second membership **flips** chrome to settle; budget rows may remain persisted. **Loans out.** Shared-list budgets later than Epic 6. **v1 does not implement this AD.** Stack unchanged (AD-2, AD-5).
+- **Rule:** Mode is **live membership count**, not a list type. `member_count ≥ 2` → settle read model (AD-21). `member_count == 1` → **spend-by-origin** for the selected statement cycle (period spend by card / Cash / blank; FR-45-like included lines). **Not** current balance or minimum due. Second membership **flips** chrome to settle. **Loans out.** Budget ownership/scope model: see **AD-30**. **v1 does not implement this AD.** Stack unchanged (AD-2, AD-5).
+
+### AD-30 — budgets as a standalone owner-scoped entity (post-v1) [ADOPTED]
+
+- **Binds:** FR-48–50 (amended 2026-09-01); Epic 7; supersedes the budget-ownership clause of AD-29 (Epic 6 shipped budgets as `list_id`-owned; Epic 7 replaces that shape)
+- **Prevents:** ACL for a budget falling back to list-membership; a budget assuming a single source list; UI reintroducing an unbadged/ambiguous rule-vs-manual distinction
+- **Rule:** A budget is **not list-scoped**. `budgets.owner_user_id` (FK → users, replacing `budgets.list_id`) is the **sole** read/write principal — not list membership. A new `budget_source_lists` join table (`budget_id`, `list_id`, composite PK) selects **1..N source lists** from any list the owner belongs to (solo or shared). `budget_rules.list_id` is **dropped** — a rule applies across all of its budget's source lists. Attribution/read scans the **union** of `ledger_entries` across source lists (was: single list). `budget_id` on `ledger_entries` is unchanged (nullable FK, ON DELETE SET NULL). `attributed_via` (`manual` | `rule`, already computed in `application/budgets.py`) is surfaced in the UI as a **"Rule" badge** — manual assignment shows no badge and always wins over a rule match (existing precedence, unchanged). **v1 does not implement this AD.**
 
 ### AD-22 — Operational envelope [ADOPTED]
 

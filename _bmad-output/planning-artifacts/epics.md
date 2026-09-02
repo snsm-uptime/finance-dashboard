@@ -1927,6 +1927,10 @@ So that I can see which envelopes are near their cap.
 **And** near-cap state is visible
 **And** this tab is not the primary UI when `member_count ≥ 2`
 
+**Superseded (2026-09-01):** Budget list/create is replaced by Epic 7 — budgets
+move from list-scoped to a standalone, owner-only entity with multi-list
+sourcing. See Epic 7 / sprint-change-proposal-2026-09-01.md.
+
 ### Story 6.4: Budget detail
 
 As the only member of a list,
@@ -1939,6 +1943,9 @@ So that I can see what counted toward a cap.
 **When** I open its detail
 **Then** I see the cap and a history of related transactions (FR-48)
 **And** history may be empty until Story 6.5 attributes lines
+
+**Superseded (2026-09-01):** Budget detail's single-list history is replaced by
+Epic 7's cross-source-list history. See Epic 7.
 
 ### Story 6.5: Budget attribution — manual and rules
 
@@ -1959,4 +1966,96 @@ So that budget history and near-cap are based on real spend.
 **Given** this story
 **When** scope is considered
 **Then** loans and shared-list budgets are out
+
+**Superseded (2026-09-01):** Attribution scope ("shared-list budgets... out")
+is replaced by Epic 7 — shared-list budgets are now in scope, and rule-matched
+lines carry a "Rule" badge. See Epic 7.
+
+## Epic 7: budgets as a standalone entity (post-v1)
+
+Budgets stop being list-scoped (superseding Epic 6 Stories 6.3-6.5's
+list_id-owned shape). A budget is a personal, owner-only entity: the owner
+names it, sets a cap/currency, and picks one or more source lists (any list
+they belong to, solo or shared) to pull spend from. Regex-style rules and
+manual assignment both attribute lines to a budget across all its source
+lists; rule-matched history lines carry a "Rule" badge, manual assignment
+does not (and always wins over a rule match).
+
+**FRs covered:** FR-48, FR-49 (amended 2026-09-01), FR-50 (amended
+2026-09-01)  
+**Demo gate:** a budget sourcing two different lists (one solo, one shared)
+shows combined near-cap state and history; a rule-matched line shows "Rule",
+a manually-assigned line does not; a non-owner with access to a source list
+cannot see the budget  
+**Sequencing:** After Epic 6. Supersedes Epic 6 Stories 6.3-6.5's
+budget-specific ACs (6.1/6.2 individual-list chrome is unaffected). Out of
+this epic: loans; recording payments.
+
+### Story 7.1: Standalone budget list + create
+
+As a user,
+I want a Budgets area independent of any single list, where I create a
+budget and pick its source lists,
+So that I can track spend across whichever lists I choose.
+
+**Acceptance Criteria:**
+
+**Given** I am signed in
+**When** I open /budgets
+**Then** I can create/list budgets with name, cap, currency, and one or more
+source lists selected from lists I belong to (FR-48)
+**And** near-cap state is visible per budget
+
+**Given** a budget I did not create
+**When** another user who shares one of its source lists views that list
+**Then** they cannot see or discover the budget (owner-only, FR-48)
+
+**Given** an existing budget from Epic 6 (has a single list_id)
+**When** this story's migration runs
+**Then** it is preserved with that one list as its sole source list, no
+data loss
+
+### Story 7.2: Cross-list budget detail
+
+As a budget owner,
+I want a budget detail page with related transactions pulled from all its
+source lists,
+So that I can see what counted toward a cap.
+
+**Acceptance Criteria:**
+
+**Given** a budget with two or more source lists
+**When** I open its detail
+**Then** I see the cap and a single newest-first history merged across all
+source lists (FR-48)
+
+**Given** a budget's source-list selection changes (list added/removed)
+**When** I reopen its detail
+**Then** history and spend reflect the current source-list set only
+
+### Story 7.3: Cross-list attribution — manual, rules, and the Rule badge
+
+As a budget owner,
+I want to assign transactions to budgets by hand and by rules across all
+source lists, with rule-matched lines visibly marked,
+So that budget history is trustworthy and I can tell what was automatic.
+
+**Acceptance Criteria:**
+
+**Given** a budget and committed lines in any of its source lists
+**When** I assign manually
+**Then** those lines appear on budget detail history with no badge (FR-49)
+
+**Given** a matching rule on a budget
+**When** new or existing lines in any source list match
+**Then** they are attributed without a second manual step and show a "Rule"
+badge on budget detail history (FR-49)
+
+**Given** a line matches a rule and was also manually assigned
+**When** budget detail renders it
+**Then** manual assignment wins — no "Rule" badge
+
+**Given** this story
+**When** scope is considered
+**Then** loans are out; shared-list budgets are in scope
 

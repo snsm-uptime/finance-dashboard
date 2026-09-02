@@ -26,7 +26,7 @@ Appearance: Light / Dark / System (both token sets in scope; default System). Pr
 |---|---|---|
 | First paint | App open (signed in) | Remembered last-opened list; if none → Lists homepage |
 | Lists homepage | First paint fallback; navigate away from a list | All lists the user belongs to |
-| Shared-expenses (list detail) | First paint (remembered), Lists homepage row, post-import landing | **v1 / `member_count ≥ 2`:** settle-up balances first; receipt/items newest-first below. **Post-v1 / solo:** individual-list (Epic 6) — origin spend first; Budgets tab; no settle chrome |
+| Shared-expenses (list detail) | First paint (remembered), Lists homepage row, post-import landing | **v1 / `member_count ≥ 2`:** settle-up balances first; receipt/items newest-first below. **Post-v1 / solo:** individual-list (Epic 6) — origin spend first; no settle chrome. Budgets moved to a standalone `/budgets` surface (Epic 7) |
 | Upload | Global Upload; also from inside a list | Pick PDF → Individual or Bulk review mode → ingest |
 | Individual review | Upload (mode = Individual); Resume from Upload | One transaction at a time; assign / default / delete / undo; then ImportReviewSheet (grouped by list, per-row discard, one Save) *(amended 2026-08-21)* |
 | Bulk review | Upload (mode = Bulk) | Assign/commit statements; list-context upload may pre-select destination for Bulk only |
@@ -38,7 +38,7 @@ Appearance: Light / Dark / System (both token sets in scope; default System). Pr
 | Invitee signup | Invite email link | Email + password; lands on inviting list |
 | Account menu | Chrome (minimal) | Sign out + password reset + **Language (EN/ES)** + **Theme (Light / Dark / System)** — **no** profile/settings surface |
 
-**Not v1:** Distribution dashboard tab (desired post-v1). **individual-list** origin cards + budget list/detail (Epic 6, solo only; shared-list budgets later).
+**Not v1:** Distribution dashboard tab (desired post-v1). **individual-list** origin cards (Epic 6, solo only). Standalone budget list/detail (Epic 7, owner-only across any of the owner's lists).
 
 List-scoped upload pre-selects destination **only for Bulk** — does not change Individual default destination.
 
@@ -75,7 +75,7 @@ Behavioral. Visual specs live in `DESIGN.md.Components`.
 |---|---|---|
 | Settle-up strip | Shared-expenses top (`member_count ≥ 2`) | Three columns: You are owed · You owe · Balance (viewer net), CRC. Simplify → group plan; CopyButton → plain text. Settle clears the viewer’s payables (already paid). Incomplete-period disclosure below the island. Not a bank-settlement recording control. **Hidden on solo lists (Epic 6).** |
 | Origin cards | Solo list detail top (Epic 6) | Period spend per origin (card / Cash / blank) for the statement-cycle period. Not issuer current balance. |
-| Budgets tab / detail | Solo list (Epic 6) | List of budgets with caps; detail = cap + related transaction history. Attribution later in epic. Hide as primary UI when a second member joins. |
+| Budgets tab / detail | Standalone `/budgets` surface, owner-only (Epic 7) | List of budgets with caps and chosen source lists (any list the owner belongs to); detail = cap + merged history across source lists. Rule-matched history lines carry a "Rule" badge; manual assignment shows no badge. Independent of any single list's member count. |
 | Receipt row | Shared-expenses below strip | Newest-first. Tap → item detail / edit when those exist. FX: show enough original + converted CRC to audit. |
 | List row | Lists homepage | Opens shared-expenses for that list. |
 | Upload entry | Global + list chrome | Global reaches ingest always. From list: Bulk may pre-select that list as destination; Individual default destination unchanged. |

@@ -895,9 +895,9 @@ Specified so v1 stories do not invent a personal dashboard. **Not In for v1.** S
 
 - **FR-46:** List-detail chrome follows **live member count**. `1` → individual-list; `≥ 2` → shared-expenses settle (FR-38–45). Same list entity; no `list_kind`.
 - **FR-47:** Solo default hero is **spend by origin** (registered card / Cash / blank) for the selected **statement-cycle** period (FR-39). Totals are **period spend** (purchase-like lines, FR-45 spirit), not issuer current balance or minimum due. Hide split, simplify, copy settle plan, Settle CTA, and the You are owed / You owe / Balance grid.
-- **FR-48:** Solo **Budgets** tab: named budgets with caps and near-cap treatment. Budget **detail** shows cap and **related transaction history**.
-- **FR-49:** Budget attribution is **manual assign and rules** (both later in Epic 6). Shared-list budgets/dashboards are **later than Epic 6**. **Loans** are out of Epic 6.
-- **FR-50:** When a second member joins, chrome **switches** to shared settle. Budget rows may remain stored; they are not the primary shared UI in Epic 6.
+- **FR-48:** **Budgets** tab: named budgets with caps and near-cap treatment, **independent of any single list**. Each budget selects one or more lists (from any list the user belongs to) as its **spend sources**. Budget **detail** shows cap and **related transaction history** pulled from all source lists. *(Amended 2026-09-01 — see Sprint Change Proposal 2026-09-01.)*
+- **FR-49:** Budget attribution is **manual assign and rules**, scanned across a budget's selected source lists. History lines attributed by a matching rule show a **"Rule"** badge; manually assigned lines show no badge. **Loans** are out of Epic 6/7. *(Amended 2026-09-01.)*
+- **FR-50:** When a second member joins **a list**, that list's chrome **switches** to shared settle. Budgets are **independent of list membership count** and unaffected — a budget sourcing that list keeps pulling its lines regardless of the list's member count. *(Amended 2026-09-01.)*
 
 ## Constraints and commitments
 
