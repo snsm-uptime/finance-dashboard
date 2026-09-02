@@ -216,6 +216,7 @@ export function BudgetsPanel() {
               }}
               onCreated={onCreated}
             />
+            <SectionLabel>{t.budgetsHistoryTitle}</SectionLabel>
           </>
         }
         items={masonryColumns}
