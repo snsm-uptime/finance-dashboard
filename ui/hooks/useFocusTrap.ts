@@ -35,21 +35,30 @@ export function useFocusTrap({
 
       if (event.key !== "Tab" || !containerRef.current) return;
 
-      const focusable = containerRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
+      const focusable = Array.from(
+        containerRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+      );
       if (focusable.length === 0) return;
 
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        event.stopPropagation();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        event.stopPropagation();
-        first.focus();
-      }
+      // Advance the whole sequence ourselves rather than only guarding the
+      // first/last boundary and otherwise trusting native Tab traversal:
+      // Safari's default Tab order (Full Keyboard Access off, the macOS
+      // default) skips checkboxes and buttons entirely, so a native
+      // mid-sequence Tab press can jump straight out of the page to browser
+      // chrome (e.g. the address bar) instead of landing on our next
+      // element. Owning every Tab press keeps behavior identical across
+      // browsers.
+      event.preventDefault();
+      event.stopPropagation();
+      const currentIndex = focusable.indexOf(document.activeElement as HTMLElement);
+      const step = event.shiftKey ? -1 : 1;
+      const nextIndex =
+        currentIndex === -1
+          ? event.shiftKey
+            ? focusable.length - 1
+            : 0
+          : (currentIndex + step + focusable.length) % focusable.length;
+      focusable[nextIndex].focus();
     }
 
     document.addEventListener("keydown", onKeyDown);

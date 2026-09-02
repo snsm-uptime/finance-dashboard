@@ -26,7 +26,7 @@ type FormIconSubmitProps = Omit<
 > & {
   /** Visual glyph — save for persist actions, send for invite. */
   variant?: FormIconVariant;
-  /** Accessible name (also used as tooltip via title). */
+  /** Accessible name (also shown as IconButton's hover/focus Tooltip). */
   label: string;
   /** Opt-in: stretch to fill the parent's width. Height stays ~2.5rem. */
   fill?: boolean;
@@ -67,7 +67,7 @@ export function FormIconSubmit({
       fill={fill}
       className={classes}
       icon={<IconGlyph variant={variant} />}
-      title={title ?? label}
+      title={title}
       {...rest}
     />
   );

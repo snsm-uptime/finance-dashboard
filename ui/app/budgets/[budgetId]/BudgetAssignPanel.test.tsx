@@ -118,15 +118,15 @@ describe("BudgetAssignPanel", () => {
       open.click();
     });
 
-    const candidate = Array.from(document.querySelectorAll("button")).find((el) =>
-      el.textContent?.includes("Automercado"),
-    ) as HTMLButtonElement;
+    const candidateCheckbox = Array.from(
+      document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
+    ).find((el) => el.closest("li")?.textContent?.includes("Automercado")) as HTMLInputElement;
     await act(async () => {
-      candidate.click();
+      candidateCheckbox.click();
     });
 
-    const confirm = Array.from(document.querySelectorAll("button")).find(
-      (el) => el.textContent === messages.budgetsAssignSubmit,
+    const confirm = Array.from(document.querySelectorAll("button")).find((el) =>
+      el.getAttribute("aria-label")?.startsWith(messages.budgetsAssignSubmit),
     ) as HTMLButtonElement;
     await act(async () => {
       confirm.click();
