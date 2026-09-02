@@ -8,6 +8,7 @@ from uuid import UUID
 
 from domain.alias import validate_alias
 from domain.errors import PrincipalNotFoundError
+from domain.photo import validate_photo
 from domain.preferences import (
     coerce_stored_language,
     coerce_stored_theme,
@@ -47,6 +48,7 @@ class MePreferencesResult:
     last_opened_list_id: UUID | None
     default_import_list_id: UUID | None = None
     alias: str | None = None
+    photo_base64: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,11 +61,13 @@ class SetAliasCommand:
 
 @dataclass(frozen=True, slots=True)
 class UpdatePreferencesCommand:
-    """Language/theme only — last_opened goes through SetLastOpenedListService (ACL)."""
+    """Language/theme/photo only — last_opened goes through SetLastOpenedListService (ACL)."""
 
     user_id: UUID
     language: str | None = None
     theme: str | None = None
+    photo_base64: str | None = None
+    clear_photo: bool = False
 
 
 def _coerce_language(stored: str | None) -> str | None:
@@ -89,6 +93,7 @@ def _to_result(row: UserPreferencesRecord) -> MePreferencesResult:
         last_opened_list_id=row.last_opened_list_id,
         default_import_list_id=row.default_import_list_id,
         alias=row.alias,
+        photo_base64=row.photo_base64,
     )
 
 
@@ -120,7 +125,12 @@ class UpdatePreferencesService:
         self._repo = repo
 
     def execute(self, command: UpdatePreferencesCommand) -> MePreferencesResult:
-        if command.language is None and command.theme is None:
+        if (
+            command.language is None
+            and command.theme is None
+            and command.photo_base64 is None
+            and not command.clear_photo
+        ):
             return GetMePreferencesService(self._repo).execute(
                 GetMePreferencesCommand(user_id=command.user_id)
             )
@@ -131,10 +141,13 @@ class UpdatePreferencesService:
             language = validate_language(command.language)
         if command.theme is not None:
             theme = validate_theme(command.theme)
+        photo_base64 = validate_photo(command.photo_base64) if not command.clear_photo else None
 
         row = self._repo.update_preferences(
             command.user_id,
             language=language,
             theme=theme,
+            photo_base64=photo_base64,
+            clear_photo=command.clear_photo,
         )
         return _to_result(row)

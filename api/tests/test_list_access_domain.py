@@ -104,7 +104,11 @@ class FakeListRepo:
 
     def list_members_with_alias(self, list_id: UUID) -> list:
         return [
-            type("ListMemberView", (), {"user_id": m.user_id, "alias": None})()
+            type(
+                "ListMemberView",
+                (),
+                {"user_id": m.user_id, "alias": None, "photo_base64": None},
+            )()
             for m in self.memberships
             if m.list_id == list_id
         ]

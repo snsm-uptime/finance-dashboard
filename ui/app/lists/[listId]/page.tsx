@@ -304,6 +304,11 @@ export function payerAliasFrom(payerId: string, members: ListMember[]): string {
   return `${payerId.slice(0, 8)}…`;
 }
 
+/** Roster photo for a receipt row's payer avatar, when one is set. */
+export function payerPhotoFrom(payerId: string, members: ListMember[]): string | null {
+  return members.find((m) => m.user_id === payerId)?.photo_base64 ?? null;
+}
+
 type ExpenseFxMessages = {
   expenseFxOriginalTemplate: string;
   expenseFxFallbackSuffix: string;
@@ -880,6 +885,8 @@ export default async function ListDetailPage({
                         const rowShared = {
                           title: rowProps.title,
                           payerAlias: payerAliasFrom(e.payer_id, members),
+                          payerSeed: e.payer_id,
+                          payerPhoto: payerPhotoFrom(e.payer_id, members),
                           when: e.posted_date,
                           amount: rowProps.amount,
                           directionLabel: directionLabelFrom(e.viewer_net_polarity, t, {

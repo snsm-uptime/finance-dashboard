@@ -62,6 +62,7 @@ describe("alias gate", () => {
       user_id: "u1",
       email: "alice@example.com",
       alias: "alice",
+      photo_base64: null,
     });
   });
 

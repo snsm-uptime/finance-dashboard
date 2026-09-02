@@ -7,6 +7,7 @@ import { cardsCopy } from "@/lib/i18n/cards";
 import { listsMessages } from "@/lib/i18n/lists";
 import type { Locale } from "@/lib/i18n/locale";
 import { fetchSession } from "@/lib/session";
+import { Avatar } from "@/components/Avatar";
 import { CardsPanel } from "@/app/cards/CardsPanel";
 import { ListsPanel } from "@/app/lists/ListsPanel";
 import type { ListItem } from "@/app/lists/listsClient";
@@ -56,7 +57,7 @@ export default async function Home() {
     redirect("/sign-in?returnTo=/home");
   }
   // No list chrome without an alias — redirects to setup on first signed-in visit.
-  await requireAlias("/home");
+  const me = await requireAlias("/home");
 
   const jar = await cookies();
   const locale = resolvePageLocale(jar.get("fh_lang_cache")?.value);
@@ -67,7 +68,10 @@ export default async function Home() {
   return (
     <main className={`${listsStyles.main} ${styles.page}`}>
       <div className={styles.head}>
-        <h1 className={listsStyles.title}>{t.title}</h1>
+        <h1 className={`${listsStyles.title} flex items-center gap-3`}>
+          <Avatar alias={me.alias} seed={me.user_id} photoBase64={me.photo_base64} size="md" />
+          {t.title}
+        </h1>
         <p className={listsStyles.copy}>{t.subtitle}</p>
       </div>
 

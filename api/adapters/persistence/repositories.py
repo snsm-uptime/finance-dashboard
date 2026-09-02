@@ -100,6 +100,7 @@ def _preferences_record(row: UserModel) -> UserPreferencesRecord:
         last_opened_list_id=row.last_opened_list_id,
         default_import_list_id=row.default_import_list_id,
         alias=row.alias,
+        photo_base64=row.photo_base64,
     )
 
 
@@ -200,6 +201,8 @@ class SqlAlchemyAuthUserRepository:
         clear_last_opened_list_id: bool = False,
         default_import_list_id: UUID | None = None,
         clear_default_import_list_id: bool = False,
+        photo_base64: str | None = None,
+        clear_photo: bool = False,
     ) -> UserPreferencesRecord:
         row = self._session.get(UserModel, user_id)
         if row is None:
@@ -216,6 +219,10 @@ class SqlAlchemyAuthUserRepository:
             row.default_import_list_id = None
         elif default_import_list_id is not None:
             row.default_import_list_id = default_import_list_id
+        if clear_photo:
+            row.photo_base64 = None
+        elif photo_base64 is not None:
+            row.photo_base64 = photo_base64
         try:
             self._session.flush()
         except IntegrityError as exc:
@@ -338,13 +345,18 @@ class SqlAlchemyListRepository:
                     ListMembershipModel.list_id,
                     ListMembershipModel.user_id,
                     UserModel.alias,
+                    UserModel.photo_base64,
                 )
                 .join(UserModel, UserModel.id == ListMembershipModel.user_id)
                 .where(ListMembershipModel.list_id.in_(list_ids))
                 .order_by(ListMembershipModel.created_at.asc())
             )
-            for list_id, member_id, alias in self._session.execute(member_stmt).all():
-                members_by_list[list_id].append(ListMemberLabel(user_id=member_id, alias=alias))
+            for list_id, member_id, alias, photo_base64 in self._session.execute(
+                member_stmt
+            ).all():
+                members_by_list[list_id].append(
+                    ListMemberLabel(user_id=member_id, alias=alias, photo_base64=photo_base64)
+                )
         return [
             ListMembershipSummary(
                 id=lst.id,
@@ -594,14 +606,14 @@ class SqlAlchemyListRepository:
         from application.expenses import ListMemberView
 
         stmt = (
-            select(ListMembershipModel.user_id, UserModel.alias)
+            select(ListMembershipModel.user_id, UserModel.alias, UserModel.photo_base64)
             .join(UserModel, UserModel.id == ListMembershipModel.user_id)
             .where(ListMembershipModel.list_id == list_id)
             .order_by(ListMembershipModel.created_at.asc())
         )
         return [
-            ListMemberView(user_id=user_id, alias=alias)
-            for user_id, alias in self._session.execute(stmt).all()
+            ListMemberView(user_id=user_id, alias=alias, photo_base64=photo_base64)
+            for user_id, alias, photo_base64 in self._session.execute(stmt).all()
         ]
 
     def get_receipt(self, list_id: UUID, receipt_id: UUID) -> AllocatableSubject | None:

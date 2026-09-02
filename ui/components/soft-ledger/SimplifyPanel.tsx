@@ -1,11 +1,14 @@
+import { Avatar } from "@/components/Avatar";
 import { CopyButton } from "@/components/CopyButton/CopyButton";
 import { Disclosure } from "@/components/Disclosure";
 
 export type SimplifyTransfer = {
   fromMemberId: string;
   fromLabel: string;
+  fromPhoto?: string | null;
   toMemberId: string;
   toLabel: string;
+  toPhoto?: string | null;
   amountCrc: string;
 };
 
@@ -57,8 +60,15 @@ export function SimplifyPanel({ transfers, messages }: Props) {
             key={`${t.fromMemberId}-${t.toMemberId}-${index}`}
             className="flex items-baseline justify-between gap-[var(--space-2)]"
           >
-            <span className="min-w-0 truncate text-foreground" style={{ fontFamily: "var(--type-meta-face)" }}>
-              {t.fromLabel} → {t.toLabel}
+            <span
+              className="flex min-w-0 items-center gap-1 truncate text-foreground"
+              style={{ fontFamily: "var(--type-meta-face)" }}
+            >
+              <Avatar alias={t.fromLabel} seed={t.fromMemberId} photoBase64={t.fromPhoto} size="xs" />
+              <span className="truncate">{t.fromLabel}</span>
+              {" → "}
+              <Avatar alias={t.toLabel} seed={t.toMemberId} photoBase64={t.toPhoto} size="xs" />
+              <span className="truncate">{t.toLabel}</span>
             </span>
             <span className="tabular-nums text-foreground" style={{ fontFamily: "var(--type-meta-face)" }}>
               {t.amountCrc}

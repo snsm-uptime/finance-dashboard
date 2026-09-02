@@ -33,6 +33,7 @@ class ListMemberItem(BaseModel):
 
     user_id: UUID
     alias: str | None = None
+    photo_base64: str | None = None
 
 
 class ListMembershipItem(BaseModel):
@@ -141,6 +142,7 @@ class BalanceStatusResponse(BaseModel):
 class PairwiseEdgeResponse(BaseModel):
     member_id: UUID
     alias: str | None = None
+    photo_base64: str | None = None
     amount_crc: str
 
 
@@ -183,8 +185,10 @@ class ListOriginSpendResponse(BaseModel):
 class TransferResponse(BaseModel):
     from_member_id: UUID
     from_alias: str | None = None
+    from_photo_base64: str | None = None
     to_member_id: UUID
     to_alias: str | None = None
+    to_photo_base64: str | None = None
     amount_crc: str
 
 

@@ -2,12 +2,15 @@
 
 import { useMemo, useRef, useState } from "react";
 
+import { Avatar } from "@/components/Avatar";
+
 import { orderPercentageSplitUserIds } from "./orderPercentageSplitUserIds";
 import styles from "./PercentageSplitTrack.module.scss";
 
 export type PercentageSplitMember = {
   user_id: string;
   alias: string | null;
+  photo_base64?: string | null;
 };
 
 type Props = {
@@ -39,6 +42,13 @@ export function PercentageSplitTrack({
     const map = new Map<string, string>();
     for (const member of members) {
       map.set(member.user_id, member.alias || member.user_id);
+    }
+    return map;
+  }, [members]);
+  const photoMap = useMemo(() => {
+    const map = new Map<string, string | null>();
+    for (const member of members) {
+      map.set(member.user_id, member.photo_base64 ?? null);
     }
     return map;
   }, [members]);
@@ -243,7 +253,13 @@ export function PercentageSplitTrack({
 
       <div className={styles.sliderLabels}>
         {orderedUserIds.map((userId) => (
-          <div key={`label-${userId}`} className={styles.sliderLabel}>
+          <div key={`label-${userId}`} className={`${styles.sliderLabel} flex items-center gap-1`}>
+            <Avatar
+              alias={memberMap.get(userId) ?? null}
+              seed={userId}
+              photoBase64={photoMap.get(userId)}
+              size="xs"
+            />
             {memberMap.get(userId) || userId.slice(0, 8)}
           </div>
         ))}

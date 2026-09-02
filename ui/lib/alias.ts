@@ -7,6 +7,7 @@ export type MeAccount = {
   user_id: string;
   email: string;
   alias: string | null;
+  photo_base64: string | null;
 };
 
 /**
@@ -34,12 +35,14 @@ export async function fetchMe(): Promise<MeAccount | null> {
       user_id?: string;
       email?: string;
       alias?: string | null;
+      photo_base64?: string | null;
     };
     if (!data.user_id) return null;
     return {
       user_id: data.user_id,
       email: data.email ?? "",
       alias: typeof data.alias === "string" && data.alias ? data.alias : null,
+      photo_base64: typeof data.photo_base64 === "string" && data.photo_base64 ? data.photo_base64 : null,
     };
   } catch {
     return null;

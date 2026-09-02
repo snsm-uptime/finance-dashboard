@@ -77,6 +77,7 @@ class ListMemberLabel:
 
     user_id: UUID
     alias: str | None = None
+    photo_base64: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -230,6 +231,7 @@ class PairwiseEdge:
     member_id: UUID
     alias: str | None
     amount_crc: str
+    photo_base64: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -268,6 +270,8 @@ class SuggestedTransferView:
     to_member_id: UUID
     to_alias: str | None
     amount_crc: str
+    from_photo_base64: str | None = None
+    to_photo_base64: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -517,6 +521,7 @@ def compute_viewer_pairwise_edges(
     )
     members = list_members(list_id)
     alias_by_id = {m.user_id: m.alias for m in members}
+    photo_by_id = {m.user_id: m.photo_base64 for m in members}
     stored_default_split = repo.get_stored_default_split(list_id)  # type: ignore[attr-defined]
     default_mode = stored_default_split.mode if stored_default_split else MODE_EVEN
     default_shares = stored_default_split.shares if stored_default_split else None
@@ -538,7 +543,12 @@ def compute_viewer_pairwise_edges(
         return net_pairwise_edges(edges)
 
     def edge(other: UUID, amount: Decimal) -> PairwiseEdge:
-        return PairwiseEdge(member_id=other, alias=alias_by_id.get(other), amount_crc=str(amount))
+        return PairwiseEdge(
+            member_id=other,
+            alias=alias_by_id.get(other),
+            photo_base64=photo_by_id.get(other),
+            amount_crc=str(amount),
+        )
 
     def viewer_split(
         net: dict[tuple[UUID, UUID], Decimal],
@@ -964,6 +974,7 @@ class SimplifyGroupPlanService:
         ledger_entries = list_ledger(command.list_id)
         members = list_members(command.list_id)
         alias_by_id = {m.user_id: m.alias for m in members}
+        photo_by_id = {m.user_id: m.photo_base64 for m in members}
         stored_default_split = self._repo.get_stored_default_split(command.list_id)
         default_mode = stored_default_split.mode if stored_default_split else MODE_EVEN
         default_shares = stored_default_split.shares if stored_default_split else None
@@ -986,8 +997,10 @@ class SimplifyGroupPlanService:
             SuggestedTransferView(
                 from_member_id=t.from_member_id,
                 from_alias=alias_by_id.get(t.from_member_id),
+                from_photo_base64=photo_by_id.get(t.from_member_id),
                 to_member_id=t.to_member_id,
                 to_alias=alias_by_id.get(t.to_member_id),
+                to_photo_base64=photo_by_id.get(t.to_member_id),
                 amount_crc=str(t.amount_crc),
             )
             for t in transfers

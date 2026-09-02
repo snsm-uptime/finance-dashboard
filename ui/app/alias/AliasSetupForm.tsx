@@ -1,11 +1,13 @@
 "use client";
 
-import { FormEvent, useId, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { Avatar } from "@/components/Avatar";
+import { encodeAvatarPhoto } from "@/lib/imageEncode";
 import type { AliasMessages } from "@/lib/i18n/alias";
 
-import { normalizeAliasInput, setAlias } from "./aliasClient";
+import { normalizeAliasInput, setAlias, setPhoto } from "./aliasClient";
 import styles from "../signup/signup.module.scss";
 
 const ALIAS_PATTERN = /^[a-z0-9_]{3,32}$/;
@@ -31,23 +33,53 @@ export function AliasSetupForm({ messages, continueHref }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const pendingRef = useRef(false);
+  const [aliasClaimed, setAliasClaimed] = useState(false);
+  const [photoBase64, setPhotoBase64] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const photoInputId = `${baseId}-photo`;
+
+  async function onPhotoChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setPhotoError(null);
+    try {
+      setPhotoBase64(await encodeAvatarPhoto(file));
+    } catch {
+      setPhotoError(messages.errorPhotoInvalid);
+    }
+  }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pendingRef.current) return;
     pendingRef.current = true;
     setError(null);
+    setPhotoError(null);
     setPending(true);
     try {
-      const normalized = normalizeAliasInput(alias);
-      if (!ALIAS_PATTERN.test(normalized)) {
-        setError(messages.errorInvalid);
-        return;
+      if (!aliasClaimed) {
+        const normalized = normalizeAliasInput(alias);
+        if (!ALIAS_PATTERN.test(normalized)) {
+          setError(messages.errorInvalid);
+          return;
+        }
+        const result = await setAlias(normalized, messages);
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        setAliasClaimed(true);
       }
-      const result = await setAlias(normalized, messages);
-      if (!result.ok) {
-        setError(result.error);
-        return;
+      if (photoBase64) {
+        // The alias claim (the required step) already succeeded — a photo
+        // failure here does not lose that. Surface it and let the user
+        // retry, pick another photo, or remove it and resubmit to continue.
+        const photoResult = await setPhoto(photoBase64, messages);
+        if (!photoResult.ok) {
+          setPhotoError(photoResult.error);
+          return;
+        }
       }
       router.replace(continueHref);
       router.refresh();
@@ -87,6 +119,35 @@ export function AliasSetupForm({ messages, continueHref }: Props) {
       {error ? (
         <p id={errorId} className={styles.error} role="alert">
           {error}
+        </p>
+      ) : null}
+      <label className={styles.label} htmlFor={photoInputId}>
+        {messages.photoLabel}
+        <div className="flex items-center gap-3">
+          <Avatar alias={alias || null} seed={alias || "preview"} photoBase64={photoBase64} size="md" />
+          <input
+            id={photoInputId}
+            type="file"
+            accept="image/png,image/jpeg"
+            disabled={pending}
+            onChange={(e) => void onPhotoChange(e)}
+          />
+          {photoBase64 ? (
+            <button
+              type="button"
+              className={styles.hint}
+              disabled={pending}
+              onClick={() => setPhotoBase64(null)}
+            >
+              {messages.photoRemove}
+            </button>
+          ) : null}
+        </div>
+        <span className={styles.hint}>{messages.photoHint}</span>
+      </label>
+      {photoError ? (
+        <p className={styles.error} role="alert">
+          {photoError}
         </p>
       ) : null}
       <button className={styles.submit} type="submit" disabled={pending}>

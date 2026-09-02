@@ -23,8 +23,10 @@ type Props = {
 type RawTransfer = {
   from_member_id?: unknown;
   from_alias?: unknown;
+  from_photo_base64?: unknown;
   to_member_id?: unknown;
   to_alias?: unknown;
+  to_photo_base64?: unknown;
   amount_crc?: unknown;
 };
 
@@ -46,8 +48,10 @@ function asTransfers(data: unknown): SimplifyTransfer[] | null {
     out.push({
       fromMemberId: r.from_member_id,
       fromLabel: typeof r.from_alias === "string" && r.from_alias ? r.from_alias : memberFallback(r.from_member_id),
+      fromPhoto: typeof r.from_photo_base64 === "string" ? r.from_photo_base64 : null,
       toMemberId: r.to_member_id,
       toLabel: typeof r.to_alias === "string" && r.to_alias ? r.to_alias : memberFallback(r.to_member_id),
+      toPhoto: typeof r.to_photo_base64 === "string" ? r.to_photo_base64 : null,
       amountCrc: formatCrcAmount(r.amount_crc),
     });
   }

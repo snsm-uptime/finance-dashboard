@@ -49,9 +49,15 @@ describe("PercentageSplitTrack", () => {
       );
     });
 
+    // Each label now leads with an initials-circle Avatar (same first letter
+    // as the alias), so assert the alias text is present rather than an
+    // exact match — the avatar's own initial would otherwise double up.
     const labels = Array.from(container.querySelectorAll(".sliderLabel")).map(
       (el) => el.textContent,
     );
-    expect(labels).toEqual(["Bob", "Owner", "Alice"]);
+    expect(labels).toHaveLength(3);
+    expect(labels[0]).toContain("Bob");
+    expect(labels[1]).toContain("Owner");
+    expect(labels[2]).toContain("Alice");
   });
 });

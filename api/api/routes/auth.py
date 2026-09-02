@@ -59,6 +59,7 @@ from domain.errors import (
     InvalidAliasError,
     InvalidCredentialsError,
     InvalidInviteTokenError,
+    InvalidPhotoError,
     InvalidPreferencesError,
     InvalidResetPasswordError,
     InvalidResetTokenError,
@@ -148,6 +149,7 @@ def _me_response(result) -> MeResponse:
         user_id=result.user_id,
         email=result.email,
         alias=result.alias,
+        photo_base64=result.photo_base64,
         language=result.language,
         theme=result.theme,
         last_opened_list_id=result.last_opened_list_id,
@@ -248,8 +250,13 @@ def patch_current_user(
     user_id: uuid.UUID = Depends(require_authenticated_user),
     db: Session = Depends(get_db),
 ) -> MeResponse | JSONResponse:
-    """Persist language/theme/last-opened/initial alias on the account (server SoT)."""
-    wrote_prefs = body.language is not None or body.theme is not None
+    """Persist language/theme/last-opened/initial alias/photo on the account (server SoT)."""
+    # `photo_base64` distinguishes "not sent" (untouched) from an explicit
+    # `null` (clear the column) — both parse to None on the model, so the
+    # wire-set membership is the only signal for "clear".
+    photo_field_set = "photo_base64" in body.model_fields_set
+    clear_photo = photo_field_set and body.photo_base64 is None
+    wrote_prefs = body.language is not None or body.theme is not None or photo_field_set
     try:
         # Prefs / last-opened first; claim alias last so a later failure cannot
         # leave a set-once alias under an error JSON response (get_db commits on
@@ -280,6 +287,8 @@ def patch_current_user(
                 user_id=user_id,
                 language=body.language,
                 theme=body.theme,
+                photo_base64=body.photo_base64,
+                clear_photo=clear_photo,
             )
         )
         if body.alias is not None:
@@ -296,6 +305,11 @@ def patch_current_user(
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             content={"detail": str(exc), "code": InvalidAliasError.CODE},
+        )
+    except InvalidPhotoError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            content={"detail": str(exc), "code": InvalidPhotoError.CODE},
         )
     except AliasTakenError as exc:
         return JSONResponse(

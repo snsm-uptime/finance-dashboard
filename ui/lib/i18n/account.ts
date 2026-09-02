@@ -4,7 +4,11 @@ import type { Locale } from "@/lib/i18n/locale";
 export const accountMessages = {
   en: {
     title: "Account",
-    subtitle: "Language, appearance, default review list, and sign out — no profile settings.",
+    subtitle: "Language, appearance, photo, default review list, and sign out.",
+    photo: "Photo",
+    photoUpload: "Upload photo",
+    photoRemove: "Remove photo",
+    photoError: "That photo couldn't be used. Try a different image.",
     language: "Language",
     theme: "Theme",
     en: "English",
@@ -28,7 +32,11 @@ export const accountMessages = {
   },
   es: {
     title: "Cuenta",
-    subtitle: "Idioma, apariencia, lista de revisión por defecto y cerrar sesión — sin ajustes de perfil.",
+    subtitle: "Idioma, apariencia, foto, lista de revisión por defecto y cerrar sesión.",
+    photo: "Foto",
+    photoUpload: "Subir foto",
+    photoRemove: "Quitar foto",
+    photoError: "No se pudo usar esa foto. Prueba con otra imagen.",
     language: "Idioma",
     theme: "Tema",
     en: "English",

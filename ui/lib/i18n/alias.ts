@@ -15,6 +15,10 @@ export const aliasMessages = {
     errorAlreadySet: "Your alias is already set.",
     errorUnauthorized: "Sign in again to continue.",
     errorGeneric: "Something went wrong. Try again.",
+    photoLabel: "Photo (optional)",
+    photoHint: "Shown wherever your alias appears. Skip to use a colored initial instead.",
+    photoRemove: "Remove photo",
+    errorPhotoInvalid: "That photo couldn't be used. Try a different image.",
   },
   es: {
     title: "Elige tu alias",
@@ -30,6 +34,10 @@ export const aliasMessages = {
     errorAlreadySet: "Tu alias ya está definido.",
     errorUnauthorized: "Vuelve a iniciar sesión para continuar.",
     errorGeneric: "Algo salió mal. Inténtalo de nuevo.",
+    photoLabel: "Foto (opcional)",
+    photoHint: "Se muestra donde aparece tu alias. Omite para usar una inicial de color.",
+    photoRemove: "Quitar foto",
+    errorPhotoInvalid: "No se pudo usar esa foto. Prueba con otra imagen.",
   },
 } as const;
 

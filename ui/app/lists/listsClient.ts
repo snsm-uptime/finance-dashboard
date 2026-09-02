@@ -9,6 +9,7 @@ export type ListMember = {
   user_id: string;
   /** Null only while a member has not passed the alias gate yet. */
   alias: string | null;
+  photo_base64?: string | null;
 };
 
 /**

@@ -42,6 +42,7 @@ class MeResponse(BaseModel):
     user_id: UUID
     email: str
     alias: str | None = None
+    photo_base64: str | None = None
     language: str | None = None
     theme: str | None = None
     last_opened_list_id: UUID | None = None
@@ -56,6 +57,10 @@ class PatchMeBody(BaseModel):
     # Wide wire bound so length/charset failures answer with `invalid_alias`
     # from the domain instead of an unlabelled pydantic 422.
     alias: str | None = Field(default=None, max_length=255)
+    # Wide wire bound (well above the 300KB decoded cap incl. base64 expansion
+    # + prefix) so oversized payloads fail fast here rather than deep in
+    # domain validation. domain.validate_photo() still enforces the real cap.
+    photo_base64: str | None = Field(default=None, max_length=450_000)
 
 
 class PasswordResetRequestBody(BaseModel):

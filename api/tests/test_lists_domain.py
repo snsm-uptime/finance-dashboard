@@ -189,7 +189,10 @@ def test_membership_summary_total_crc_sums_all_entries_on_a_shared_list() -> Non
         membership=NewMembershipRecord(id=uuid4(), list_id=list_id, user_id=owner, role="owner"),
     )
     repo.memberships.append(MembershipRecord(list_id=list_id, user_id=member, role="member"))
-    entries = [SimpleNamespace(amount_crc=Decimal("30.00")), SimpleNamespace(amount_crc=Decimal("15.50"))]
+    entries = [
+        SimpleNamespace(amount_crc=Decimal("30.00")),
+        SimpleNamespace(amount_crc=Decimal("15.50")),
+    ]
     repo.list_ledger_entries = lambda lid: entries if lid == list_id else []  # type: ignore[method-assign]
 
     summaries = ListMembershipsService(repo).execute(ListMembershipsCommand(actor_user_id=owner))

@@ -327,7 +327,11 @@ def list_memberships(
                 balance_crc=item.balance_crc,
                 total_crc=item.total_crc,
                 members=[
-                    ListMemberItem(user_id=member.user_id, alias=member.alias)
+                    ListMemberItem(
+                        user_id=member.user_id,
+                        alias=member.alias,
+                        photo_base64=member.photo_base64,
+                    )
                     for member in item.members
                 ],
             )
@@ -635,7 +639,10 @@ def get_list_members(
     except ListNotFoundError:
         return _list_not_found()
     return ListMembersResponse(
-        members=[ListMemberItem(user_id=m.user_id, alias=m.alias) for m in result.members]
+        members=[
+            ListMemberItem(user_id=m.user_id, alias=m.alias, photo_base64=m.photo_base64)
+            for m in result.members
+        ]
     )
 
 
@@ -670,11 +677,21 @@ def get_list_balances_stub(
         balance_crc=result.balance_crc,
         balance_status=BalanceStatusResponse(is_incomplete=result.is_incomplete),
         you_are_owed=[
-            PairwiseEdgeResponse(member_id=e.member_id, alias=e.alias, amount_crc=e.amount_crc)
+            PairwiseEdgeResponse(
+                member_id=e.member_id,
+                alias=e.alias,
+                photo_base64=e.photo_base64,
+                amount_crc=e.amount_crc,
+            )
             for e in result.you_are_owed
         ],
         you_owe=[
-            PairwiseEdgeResponse(member_id=e.member_id, alias=e.alias, amount_crc=e.amount_crc)
+            PairwiseEdgeResponse(
+                member_id=e.member_id,
+                alias=e.alias,
+                photo_base64=e.photo_base64,
+                amount_crc=e.amount_crc,
+            )
             for e in result.you_owe
         ],
     )
@@ -777,8 +794,10 @@ def get_settle_simplify_plan(
             TransferResponse(
                 from_member_id=t.from_member_id,
                 from_alias=t.from_alias,
+                from_photo_base64=t.from_photo_base64,
                 to_member_id=t.to_member_id,
                 to_alias=t.to_alias,
+                to_photo_base64=t.to_photo_base64,
                 amount_crc=t.amount_crc,
             )
             for t in result.transfers

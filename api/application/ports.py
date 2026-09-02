@@ -45,6 +45,7 @@ class UserPreferencesRecord:
     last_opened_list_id: UUID | None = None
     default_import_list_id: UUID | None = None
     alias: str | None = None
+    photo_base64: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,6 +97,8 @@ class PreferencesRepository(Protocol):
         clear_last_opened_list_id: bool = False,
         default_import_list_id: UUID | None = None,
         clear_default_import_list_id: bool = False,
+        photo_base64: str | None = None,
+        clear_photo: bool = False,
     ) -> UserPreferencesRecord: ...
 
     def claim_alias(self, user_id: UUID, alias: str) -> UserPreferencesRecord:

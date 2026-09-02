@@ -3,6 +3,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { useLayoutEffect, useRef } from "react";
 
+import { Avatar } from "@/components/Avatar";
 import { Chip, type ChipTone } from "@/components/Chip";
 
 import { ReceiptRowMenu, type ReceiptRowMenuMessages, type ReceiptRowRollback } from "./ReceiptRowMenu";
@@ -15,6 +16,10 @@ export type ReceiptRowProps = {
   when?: string;
   /** Payer alias without `@`; rendered as accent `@alias:` inside the origin chip. */
   payerAlias?: string;
+  /** Stable id for the payer's deterministic avatar color (usually `payer_id`). */
+  payerSeed?: string;
+  /** Payer's base64 photo, when set — falls back to the initials circle. */
+  payerPhoto?: string | null;
   amount?: string;
   originChip?: string;
   originChipTone?: ChipTone;
@@ -70,22 +75,37 @@ const typeStyle = {
   }
 } as const satisfies Record<string, CSSProperties>;
 
-export function OriginPayerAlias({ alias }: { alias: string }) {
+export function OriginPayerAlias({
+  alias,
+  seed,
+  photo,
+}: {
+  alias: string;
+  seed?: string;
+  photo?: string | null;
+}) {
   return (
-    <span style={typeStyle.meta} className="truncate text-accent">
-      @{alias}:&nbsp;
+    <span className="inline-flex items-center gap-1">
+      {seed ? <Avatar alias={alias} seed={seed} photoBase64={photo} size="xs" /> : null}
+      <span style={typeStyle.meta} className="truncate text-accent">
+        @{alias}:&nbsp;
+      </span>
     </span>
   );
 }
 
 function OriginMeta({
   payerAlias,
+  payerSeed,
+  payerPhoto,
   originChip,
   originChipTone,
   originDisabled,
   originAction,
 }: {
   payerAlias?: string;
+  payerSeed?: string;
+  payerPhoto?: string | null;
   originChip?: string;
   originChipTone: ChipTone;
   originDisabled?: boolean;
@@ -95,7 +115,9 @@ function OriginMeta({
   if (!originChip) return null;
   return (
     <Chip tone={originChipTone} disabled={originDisabled}>
-      {payerAlias ? <OriginPayerAlias alias={payerAlias} /> : null}
+      {payerAlias ? (
+        <OriginPayerAlias alias={payerAlias} seed={payerSeed} photo={payerPhoto} />
+      ) : null}
       <span className={originDisabled ? "text-muted" : undefined}>{originChip}</span>
     </Chip>
   );
@@ -105,6 +127,8 @@ export function ReceiptRow({
   title,
   when,
   payerAlias,
+  payerSeed,
+  payerPhoto,
   amount,
   originChip,
   originChipTone = "muted",
@@ -170,6 +194,8 @@ export function ReceiptRow({
     title,
     when,
     payerAlias,
+    payerSeed,
+    payerPhoto,
     amount,
     originChip,
     originAction,
@@ -255,6 +281,8 @@ export function ReceiptRow({
           ) : null}
           <OriginMeta
             payerAlias={payerAlias}
+            payerSeed={payerSeed}
+            payerPhoto={payerPhoto}
             originChip={originChip}
             originChipTone={originChipTone}
             originDisabled={originDisabled}

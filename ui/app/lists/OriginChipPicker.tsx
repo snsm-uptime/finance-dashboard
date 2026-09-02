@@ -184,7 +184,9 @@ export function OriginChipPicker({
     ? `${messages.expenseOriginLabel}: @${payerAlias}: ${label}`
     : `${messages.expenseOriginLabel}: ${label}`;
 
-  const alias = payerAlias ? <OriginPayerAlias alias={payerAlias} /> : null;
+  const alias = payerAlias ? (
+    <OriginPayerAlias alias={payerAlias} seed={row.payerSeed} photo={row.payerPhoto} />
+  ) : null;
 
   const originAction = (
     <ChipTrigger

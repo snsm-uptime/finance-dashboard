@@ -53,3 +53,32 @@ export async function setAlias(
   }
   return { ok: true, alias: body.alias };
 }
+
+export type SetPhotoResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Photo save alongside the alias claim. The alias claim above is the
+ * required step and is never undone by a photo failure — callers should
+ * surface `ok: false` to the user rather than silently discarding it.
+ */
+export async function setPhoto(
+  photoBase64: string | null,
+  messages: AliasMessages,
+  fetchImpl: typeof fetch = fetch,
+): Promise<SetPhotoResult> {
+  let response: Response;
+  try {
+    response = await fetchImpl("/api/auth/me", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ photo_base64: photoBase64 }),
+    });
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  if (!response.ok) {
+    return { ok: false, error: messages.errorPhotoInvalid };
+  }
+  return { ok: true };
+}

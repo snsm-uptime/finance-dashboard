@@ -1,18 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 
 import { CardsPanel } from "@/app/cards/CardsPanel";
 import { DefaultImportListControl } from "@/app/cards/DefaultImportListControl";
 import { MoonIcon, SunIcon, SystemIcon } from "@/app/icons";
 import { fetchLists, type ListItem } from "@/app/lists/listsClient";
 import { resetMembershipListsStore } from "@/app/lists/membershipListsStore";
+import { Avatar } from "@/components/Avatar";
 import {
   clearPrefsCache,
   usePreferences,
 } from "@/components/PreferencesProvider";
 import { TriSwitch } from "@/components/TriSwitch";
 import { accountCopy } from "@/lib/i18n/account";
+import { encodeAvatarPhoto } from "@/lib/imageEncode";
 import type { Locale, ThemePreference } from "@/lib/i18n/locale";
 
 import styles from "./AccountMenu.module.scss";
@@ -20,12 +22,14 @@ import styles from "./AccountMenu.module.scss";
 export function AccountMenu() {
   // NOTE: SSR hydration mismatch — server renders with default theme; client may hydrate with different theme.
   // This can cause brief light→dark flicker on page load. Mitigation: ensure initial HTML theme matches system preference.
-  const { locale, theme, setLanguage, setTheme, ready } = usePreferences();
+  const { locale, theme, setLanguage, setTheme, ready, me, refresh } = usePreferences();
   const t = accountCopy(locale);
   const [pending, setPending] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lists, setLists] = useState<ListItem[]>([]);
+  const [photoPending, setPhotoPending] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -66,6 +70,43 @@ export function AccountMenu() {
     } finally {
       setPending(false);
     }
+  }
+
+  async function savePhoto(photoBase64: string | null) {
+    setPhotoPending(true);
+    setPhotoError(null);
+    try {
+      const response = await fetch("/api/auth/me", {
+        method: "PATCH",
+        credentials: "same-origin",
+        cache: "no-store",
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify({ photo_base64: photoBase64 }),
+      });
+      if (!response.ok) {
+        setPhotoError(t.photoError);
+        return;
+      }
+      await refresh();
+    } catch {
+      setPhotoError(t.photoError);
+    } finally {
+      setPhotoPending(false);
+    }
+  }
+
+  async function onPhotoChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    let encoded: string;
+    try {
+      encoded = await encodeAvatarPhoto(file);
+    } catch {
+      setPhotoError(t.photoError);
+      return;
+    }
+    await savePhoto(encoded);
   }
 
   async function onSignOut() {
@@ -121,6 +162,41 @@ export function AccountMenu() {
       {!ready ? (
         <p className="text-muted text-[0.85rem]">{t.loading}</p>
       ) : null}
+
+      <section className="mb-6" aria-labelledby="account-photo">
+        <h2 id="account-photo" className="m-0 mb-[0.6rem] text-[0.72rem] font-[550] text-muted tracking-[0.02rem]">
+          {t.photo}
+        </h2>
+        <div className="flex items-center gap-3">
+          <Avatar
+            alias={me?.alias ?? null}
+            seed={me?.user_id ?? "account"}
+            photoBase64={me?.photo_base64 ?? null}
+            size="md"
+          />
+          <label className={choiceButtonClass}>
+            {t.photoUpload}
+            <input
+              type="file"
+              accept="image/png,image/jpeg"
+              className="hidden"
+              disabled={controlsDisabled || photoPending}
+              onChange={(e) => void onPhotoChange(e)}
+            />
+          </label>
+          {me?.photo_base64 ? (
+            <button
+              type="button"
+              className={ghostClass}
+              disabled={controlsDisabled || photoPending}
+              onClick={() => void savePhoto(null)}
+            >
+              {t.photoRemove}
+            </button>
+          ) : null}
+        </div>
+        {photoError ? <p className="text-owe text-[0.85rem]">{photoError}</p> : null}
+      </section>
 
       <div className="mb-6 flex flex-row flex-wrap items-start gap-x-8 gap-y-6">
         <section aria-labelledby="account-language">

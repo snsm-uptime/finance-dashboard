@@ -148,6 +148,16 @@ class AliasAlreadySetError(DomainError):
         super().__init__(self.MESSAGE)
 
 
+class InvalidPhotoError(DomainError):
+    """Raised when a profile photo payload fails prefix/size validation."""
+
+    MESSAGE = "Photo must be a data:image/png or data:image/jpeg base64 string under 300KB."
+    CODE = "invalid_photo"
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(detail or self.MESSAGE)
+
+
 class AliasRequiredError(DomainError):
     """Raised when an authenticated user without an alias touches list surfaces."""
 

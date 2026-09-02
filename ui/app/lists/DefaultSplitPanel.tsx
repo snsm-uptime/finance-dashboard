@@ -30,6 +30,7 @@ export type DefaultSplitMessages = ListsClientMessages & {
 type ListMember = {
   user_id: string;
   alias: string | null;
+  photo_base64?: string | null;
 };
 
 type Props = {

@@ -70,6 +70,7 @@ class ListMemberView:
     user_id: UUID
     # Null only for accounts that have not passed the alias gate yet.
     alias: str | None
+    photo_base64: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
