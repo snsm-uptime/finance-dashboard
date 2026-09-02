@@ -95,8 +95,14 @@ export function BudgetsPanel({ listId }: Props) {
           loadingLabel={t.budgetsLoading}
           error={loadError}
           emptyLabel={t.budgetsEmpty}
-          listClassName="list-none m-0 p-0 grid grid-cols-2 gap-[var(--space-3)] sm:grid-cols-3"
-          itemClassName="aspect-square py-[0.6rem] px-[0.85rem] rounded-[8px] border border-border bg-surface"
+          listClassName={`list-none m-0 p-0 grid gap-[var(--space-3)] ${
+            budgets.length === 1
+              ? "grid-cols-1"
+              : budgets.length === 2
+                ? "grid-cols-2"
+                : "grid-cols-2 sm:grid-cols-3"
+          }`}
+          itemClassName="py-[0.6rem] px-[0.85rem] rounded-[8px] border border-border bg-surface"
           renderItem={(budget) => {
             const ratio = budgetUsageRatio(budget);
             const usageDotClass =
