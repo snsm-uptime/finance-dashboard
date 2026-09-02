@@ -14,8 +14,29 @@ from domain.errors import (
     InvalidBudgetCurrencyError,
     InvalidBudgetNameError,
 )
+from domain.line_types import (
+    LINE_TYPE_CLASSIFIED_PURCHASE_REVERSAL,
+    LINE_TYPE_INTEREST,
+    LINE_TYPE_OTHER,
+    LINE_TYPE_PAYMENT,
+    LINE_TYPE_PURCHASE,
+)
 
 BUDGET_NAME_MAX_LENGTH = 100
+
+# Line types a ledger entry may be manually attributed to a budget under —
+# broader than settle.INCLUDED_LINE_TYPES (which stays purchase-only for
+# member-to-member split math). Budgets track spend, not just shared
+# purchases, so interest/other/payment lines are also assignable.
+BUDGET_ASSIGNABLE_LINE_TYPES = frozenset(
+    {
+        LINE_TYPE_PURCHASE,
+        LINE_TYPE_CLASSIFIED_PURCHASE_REVERSAL,
+        LINE_TYPE_INTEREST,
+        LINE_TYPE_OTHER,
+        LINE_TYPE_PAYMENT,
+    }
+)
 
 # v1 FX scope is USD+CRC only (project-context) — a budget in any other
 # currency would have no FX story if 6.5 ever needs to reconcile it against

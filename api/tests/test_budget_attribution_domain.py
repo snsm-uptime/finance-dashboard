@@ -95,13 +95,22 @@ class TestComputeAttributedEntries:
 
     def test_non_included_line_type_excluded_even_with_budget_id_set(self):
         budget_id = uuid4()
-        entry = FakeEntry(
-            uuid4(), "SUPER 24", "payment", date(2026, 1, 1), Decimal("10"), budget_id
-        )
+        entry = FakeEntry(uuid4(), "SUPER 24", "fee", date(2026, 1, 1), Decimal("10"), budget_id)
 
         result = compute_attributed_entries([entry], budget_id=budget_id, rule_texts=["super"])
 
         assert result == ()
+
+    @pytest.mark.parametrize("line_type", ["payment", "interest", "other"])
+    def test_assignable_line_types_beyond_purchase_included(self, line_type):
+        budget_id = uuid4()
+        entry = FakeEntry(
+            uuid4(), "SUPER 24", line_type, date(2026, 1, 1), Decimal("10"), budget_id
+        )
+
+        result = compute_attributed_entries([entry], budget_id=budget_id, rule_texts=[])
+
+        assert result == (entry,)
 
     def test_non_included_line_type_excluded_from_rule_match(self):
         budget_id = uuid4()

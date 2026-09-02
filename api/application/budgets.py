@@ -16,6 +16,7 @@ from domain.budget_attribution import (
     validate_rule_match_text,
 )
 from domain.budgets import (
+    BUDGET_ASSIGNABLE_LINE_TYPES,
     BudgetState,
     classify_budget_state,
     validate_budget_cap,
@@ -27,7 +28,6 @@ from domain.errors import (
     BudgetRuleNotFoundError,
     LedgerEntryNotFoundError,
 )
-from domain.settle import INCLUDED_LINE_TYPES
 
 from application.expenses import LedgerEntryRecord
 from application.list_access import (
@@ -321,7 +321,7 @@ class AssignEntryToBudgetService:
         entry = self._repo.get_ledger_entry(command.ledger_entry_id, command.list_id)
         if entry is None:
             raise LedgerEntryNotFoundError()
-        if entry.line_type not in INCLUDED_LINE_TYPES:
+        if entry.line_type not in BUDGET_ASSIGNABLE_LINE_TYPES:
             # A non-spend line is not a valid attribution target — looks
             # identical to "doesn't exist" from the caller's perspective
             # (no distinct error code; nothing leaks about which ids exist).
@@ -406,7 +406,7 @@ class ListBudgetCandidatesService:
         candidates = [
             e
             for e in entries
-            if e.line_type in INCLUDED_LINE_TYPES
+            if e.line_type in BUDGET_ASSIGNABLE_LINE_TYPES
             and e.budget_id is None
             and not any(matches_rule(e.normalized_description, rt) for rt in rule_texts)
         ]

@@ -3,9 +3,10 @@
 Pure domain logic: no FastAPI / SQLAlchemy (AD-1). Money uses Decimal only.
 Attribution is computed at read time: `compute_attributed_entries` scans a
 list's ledger entries against a budget's rule texts on every call — there is
-no write-path/commit-pipeline change (see story Dev Notes). Reuses
-`INCLUDED_LINE_TYPES` from `domain.settle`, the same purchase/reversal
-line-type filter `domain.spend_by_origin` already reuses.
+no write-path/commit-pipeline change (see story Dev Notes). Filters on
+`BUDGET_ASSIGNABLE_LINE_TYPES` from `domain.budgets` — broader than the
+purchase/reversal-only filter `domain.settle`/`domain.spend_by_origin` use for
+member-to-member split math, since budgets also track interest/other/payment.
 """
 
 from __future__ import annotations
@@ -15,8 +16,8 @@ from decimal import Decimal
 from typing import Protocol
 from uuid import UUID
 
+from domain.budgets import BUDGET_ASSIGNABLE_LINE_TYPES
 from domain.errors import InvalidBudgetRuleMatchTextError
-from domain.settle import INCLUDED_LINE_TYPES
 
 BUDGET_RULE_MATCH_TEXT_MAX_LENGTH = 100
 
@@ -72,13 +73,13 @@ def compute_attributed_entries(
     Manual assignment always wins over a rule match: only entries whose
     `budget_id is None` are eligible for rule matching, so a line manually
     assigned elsewhere is never re-captured (AC #6). Filters to
-    `line_type in INCLUDED_LINE_TYPES` first (AC #9). Sorted newest-first by
-    `(posted_date, id)`.
+    `line_type in BUDGET_ASSIGNABLE_LINE_TYPES` first (AC #9). Sorted
+    newest-first by `(posted_date, id)`.
     """
     attributed = [
         entry
         for entry in entries
-        if entry.line_type in INCLUDED_LINE_TYPES
+        if entry.line_type in BUDGET_ASSIGNABLE_LINE_TYPES
         and (
             entry.budget_id == budget_id
             or (
