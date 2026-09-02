@@ -1093,6 +1093,75 @@ describe("IndividualReviewPanel", () => {
     expect(push).toHaveBeenCalledWith("/upload/conflicts?landingListId=list-1");
   });
 
+  it("chrome title is Go to <list> after finalize for a solo upload", async () => {
+    fetchImportSession.mockResolvedValue({
+      ok: true,
+      session: makeSession({
+        statements: [makeStatement({ rows: [] })],
+        finalized_at: "2026-08-24T01:00:00Z",
+        landing_list_id: "list-1",
+        imported_new_count: 2,
+        deleted_count: 1,
+      }),
+    });
+    fetchLists.mockResolvedValue({
+      ok: true,
+      lists: [{ id: "list-1", name: "Groceries", owner_id: "u1", role: "owner" }],
+    });
+    stubAuthMeFetch(null);
+
+    await act(async () => {
+      root.render(
+        <AppShell>
+          <IndividualReviewPanel sessionId="s1" />
+        </AppShell>,
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const heading = container.querySelector("header h1");
+    expect(heading?.textContent).toBe("Go to Groceries");
+  });
+
+  it("chrome title stays Return Home for the last file of a multi-file batch, even with a resolvable landing list", async () => {
+    const finalized = makeSession({
+      statements: [makeStatement({ rows: [] })],
+      finalized_at: "2026-08-24T01:00:00Z",
+      landing_list_id: "list-1",
+    });
+    // Both files queued together (peak concurrent size 2)...
+    writeUploadQueue([
+      { id: "s1", state: "staged", session: finalized, displayName: "done.pdf" },
+      { id: "s2", state: "staged", session: makeSession({ id: "s2" }), displayName: "other.pdf" },
+    ]);
+    // ...then the sibling finishes first and is pruned, leaving only s1 by
+    // the time it's reviewed — the batch's peak size must still be honored.
+    writeUploadQueue([{ id: "s1", state: "staged", session: finalized, displayName: "done.pdf" }]);
+    fetchImportSession.mockResolvedValue({ ok: true, session: finalized });
+    fetchLists.mockResolvedValue({
+      ok: true,
+      lists: [{ id: "list-1", name: "Groceries", owner_id: "u1", role: "owner" }],
+    });
+    stubAuthMeFetch(null);
+
+    await act(async () => {
+      root.render(
+        <AppShell>
+          <IndividualReviewPanel sessionId="s1" />
+        </AppShell>,
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector("header h1")?.textContent).toBe("Return Home");
+  });
+
   it("chrome title is Review another file when other uploads remain", async () => {
     const finalized = makeSession({
       statements: [makeStatement({ rows: [] })],

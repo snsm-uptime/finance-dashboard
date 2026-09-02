@@ -49,6 +49,7 @@ import { nextReviewStep } from "../../reviewSequence";
 import {
   hasRemainingUploadWork,
   removeUploadQueueSession,
+  wasSoloUpload,
 } from "../../uploadQueueStore";
 import {
   clearLastCardStagedDiscard,
@@ -445,10 +446,14 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
       ? t.individualReviewProgress.replace("{count}", String(remainingCount))
       : "";
   const moreUploadsRemain = Boolean(session && hasRemainingUploadWork(session.id));
+  const landingListName =
+    (lists ?? []).find((l) => l.id === session?.landing_list_id)?.name ?? "";
   const chromeTitle = session?.finalized_at
     ? moreUploadsRemain
       ? t.completionReviewAnotherFile
-      : t.completionReturnHome
+      : wasSoloUpload() && landingListName
+        ? t.completionGoToList.replace("{list}", landingListName)
+        : t.completionReturnHome
     : t.individualReviewTitle;
   const leavingRef = useRef(false);
   const onBack = useCallback(() => {
