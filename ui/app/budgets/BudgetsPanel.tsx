@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 import { Chip } from "@/components/Chip";
 import { SectionLabel } from "@/components/soft-ledger/SectionLabel";
@@ -128,9 +129,10 @@ export function BudgetsPanel() {
                   ? "bg-warn"
                   : "bg-owe";
           return (
-            // Static tile, not a link (Story 7.1): the detail route at
-            // /budgets/{id} doesn't exist until Story 7.2 builds it.
-            <div className="flex h-full flex-col justify-between">
+            <Link
+              href={`/budgets/${budget.id}`}
+              className="flex h-full flex-col justify-between no-underline text-inherit"
+            >
               <div className="flex items-center justify-between gap-[var(--space-2)]">
                 <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
                   <p className="m-0 truncate text-foreground">{budget.name}</p>
@@ -154,7 +156,7 @@ export function BudgetsPanel() {
                 {formatMoneyAmount(budget.spent, budget.currency)} /{" "}
                 {formatMoneyAmount(budget.cap, budget.currency)}
               </p>
-            </div>
+            </Link>
           );
         }}
       />
