@@ -49,6 +49,17 @@ describe("BudgetsPanel tile link", () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
+    // BudgetsPanel's masonry layout reads window.matchMedia (jsdom does not
+    // implement it) to pick a column count.
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn().mockImplementation((query: string) => ({
+        matches: false,
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      })),
+    );
   });
 
   afterEach(() => {
@@ -57,6 +68,7 @@ describe("BudgetsPanel tile link", () => {
     });
     container.remove();
     resetMembershipListsStore();
+    vi.unstubAllGlobals();
   });
 
   it("renders each budget tile as a link to /budgets/{id}", async () => {

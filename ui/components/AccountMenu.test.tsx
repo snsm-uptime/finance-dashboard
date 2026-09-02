@@ -321,7 +321,7 @@ describe("AccountMenu", () => {
 
     const { host, unmount } = renderAccount();
     await waitForDom(() => host.textContent?.includes("Default review destination"));
-    expect(host.textContent).toContain("Low-effort review accepts land here.");
+    expect(host.textContent).toContain("Household");
     unmount();
   });
 });
