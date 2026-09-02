@@ -141,7 +141,7 @@ describe("TriSwitch", () => {
     expect(radios[2]?.getAttribute("aria-checked")).toBe("true");
   });
 
-  it("suppresses the option tooltip when the switch is disabled", async () => {
+  it("suppresses the option tooltip when the switch is disabled, even on hover", async () => {
     await act(async () => {
       root.render(
         <TriSwitch
@@ -152,8 +152,43 @@ describe("TriSwitch", () => {
         />,
       );
     });
+    const left = container.querySelector('[aria-label="Left"]') as HTMLButtonElement;
+    await act(async () => {
+      left.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+    });
 
     // Tooltip renders no bubble node at all when suppressed.
-    expect(container.querySelectorAll('[data-testid="tooltip-bubble"]')).toHaveLength(0);
+    expect(document.querySelectorAll('[data-testid="tooltip-bubble"]')).toHaveLength(0);
+  });
+
+  it("shows an option's tooltip on hover, portaled to document.body", async () => {
+    await act(async () => {
+      root.render(
+        <TriSwitch value="mid" options={options} onChange={() => undefined} />,
+      );
+    });
+    const left = container.querySelector('[aria-label="Left"]') as HTMLButtonElement;
+    await act(async () => {
+      left.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+    });
+
+    const bubble = document.querySelector('[data-testid="tooltip-bubble"]');
+    expect(bubble?.textContent).toBe("Left");
+    expect(container.querySelector('[data-testid="tooltip-bubble"]')).toBeNull();
+  });
+
+  it("keeps each option button the direct grid-column child of root once wrapped in Tooltip", async () => {
+    await act(async () => {
+      root.render(
+        <TriSwitch value="mid" options={options} onChange={() => undefined} />,
+      );
+    });
+    const group = container.querySelector('[role="radiogroup"]') as HTMLElement;
+    const radios = container.querySelectorAll('[role="radio"]');
+    radios.forEach((radio) => {
+      // No wrapper element between the radiogroup and each option button —
+      // each stays a direct child so the grid's 1fr columns apply to it.
+      expect(radio.parentElement).toBe(group);
+    });
   });
 });

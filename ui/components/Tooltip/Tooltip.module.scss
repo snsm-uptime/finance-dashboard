@@ -1,14 +1,13 @@
-/* Generic hover/focus tooltip bubble, mirrors CopyButton's "Copied!" bubble. */
-
-.wrapper {
-  position: relative;
-  display: inline-flex;
-}
+/* Generic hover/focus tooltip bubble, mirrors CopyButton's "Copied!" bubble.
+   Portaled into document.body, so positioning (top/left) is computed in JS
+   and passed as inline styles per-instance; only visual chrome lives here. */
 
 .bubble {
-  position: absolute;
-  top: -1.75rem; /* -top-7 */
-  right: 0;
+  position: fixed;
+  /* JS sets top/left to the trigger's top edge (minus a small gap) and
+     horizontal center; this shifts the bubble up by its own height and
+     centers it horizontally on that point. */
+  transform: translate(-50%, -100%);
   white-space: nowrap;
   border-radius: 6px;
   background: var(--foreground);
@@ -18,14 +17,15 @@
   padding: 0.25rem 0.5rem; /* px-2 py-1 */
   pointer-events: none;
   z-index: 10;
-  opacity: 0;
-  transition: opacity 150ms ease;
+  opacity: 1;
+  animation: tooltip-fade-in 150ms ease;
 }
 
-/* CSS-only visibility: real pointer hover, or keyboard focus (not mouse-down
-   focus) on the wrapped trigger. `:has()` is already an accepted pattern in
-   this codebase (see app/lists/lists.module.scss). */
-.wrapper:hover .bubble,
-.wrapper:has(:focus-visible) .bubble {
-  opacity: 1;
+@keyframes tooltip-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }

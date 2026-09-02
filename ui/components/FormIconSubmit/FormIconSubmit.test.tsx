@@ -22,7 +22,7 @@ vi.mock("@/components/IconButton/IconButton.module.scss", () => ({
   ),
 }));
 
-import { FormIconSubmit } from "./FormIconSubmit";
+import { FormIconField, FormIconSubmit } from "./FormIconSubmit";
 
 describe("FormIconSubmit", () => {
   let container: HTMLDivElement;
@@ -157,5 +157,52 @@ describe("FormIconSubmit", () => {
     expect(classList).toContain("custom-caller-class");
     expect(classList).toContain("!bg-surface");
     expect(classList).toContain("border-border");
+  });
+});
+
+describe("FormIconField", () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it("lands the suffix className/width classes on the actual rendered <button>, not a wrapper", async () => {
+    await act(async () => {
+      root.render(
+        <FormIconField
+          id="iban"
+          submitLabel="Add"
+          value=""
+          onChange={() => {}}
+        />,
+      );
+    });
+
+    const buttons = container.querySelectorAll("button");
+    expect(buttons).toHaveLength(1);
+    const button = buttons[0] as HTMLButtonElement;
+    const classList = button.className.split(/\s+/);
+
+    // Suffix-specific classes from FormIconField's `suffixClasses` land
+    // directly on the <button> itself — no wrapper <span> in between, so
+    // removing the old wrapper-based Tooltip approach keeps this correct.
+    expect(classList).toContain("w-[2.75rem]");
+    expect(classList).toContain("!p-0");
+    expect(classList).toContain("!border-l");
+    expect(classList).toContain("!border-l-border");
+    expect(classList).toContain("!bg-surface");
+    expect(classList).toContain("!text-accent");
+    expect(button.getAttribute("type")).toBe("submit");
   });
 });
