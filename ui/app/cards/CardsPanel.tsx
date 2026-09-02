@@ -30,7 +30,8 @@ export function CardsPanel({ refreshToken = 0 }: Props = {}) {
   const { locale, me } = usePreferences();
   const t = cardsCopy(locale);
   const [cards, setCards] = useState<CardItem[]>([]);
-  const lists = useMemo(() => useMembershipLists() ?? [], []);
+  const membershipLists = useMembershipLists();
+  const lists = useMemo(() => membershipLists ?? [], [membershipLists]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [registeredStatus, setRegisteredStatus] = useState("");
