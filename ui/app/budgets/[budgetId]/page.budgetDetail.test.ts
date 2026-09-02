@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { asBudgetDetail, historyRowAttribution } from "./page";
+import { asBudgetDetail, historyRowAttribution, resolveSourceListChips } from "./page";
 
 describe("asBudgetDetail", () => {
   it("parses a well-formed response with empty history and rules", () => {
@@ -248,5 +248,35 @@ describe("historyRowAttribution", () => {
         attributed_via: "manual",
       }),
     ).toEqual({ viaLabelKey: "budgetsHistoryViaManual", showUnassign: true });
+  });
+});
+
+describe("resolveSourceListChips", () => {
+  it("matches source-list ids against the caller's lists in order", () => {
+    expect(
+      resolveSourceListChips(
+        ["l1", "l2"],
+        [
+          { id: "l1", name: "Groceries" },
+          { id: "l2", name: "Trips" },
+        ],
+      ),
+    ).toEqual([
+      { id: "l1", name: "Groceries" },
+      { id: "l2", name: "Trips" },
+    ]);
+  });
+
+  it("silently skips a stale/deleted source list id rather than crashing", () => {
+    expect(
+      resolveSourceListChips(
+        ["l1", "l-deleted"],
+        [{ id: "l1", name: "Groceries" }],
+      ),
+    ).toEqual([{ id: "l1", name: "Groceries" }]);
+  });
+
+  it("returns an empty array when no source lists match", () => {
+    expect(resolveSourceListChips(["l-deleted"], [])).toEqual([]);
   });
 });

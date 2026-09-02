@@ -16,6 +16,12 @@ export type ChromeHeaderConfig = {
   title?: string | null;
   details?: string | null;
   trailing?: ReactNode;
+  /**
+   * Optional full-width strip rendered edge-to-edge above the header row,
+   * outside the scrollable content area — stays visible while the page
+   * scrolls (e.g. a `TopProgressBar`).
+   */
+  progressBar?: ReactNode | null;
 };
 
 const emptyHeader: ChromeHeaderConfig = {};
@@ -51,12 +57,12 @@ export function chromeHeaderIsActive(header: ChromeHeaderConfig): boolean {
  */
 export function useChromeHeader(config: ChromeHeaderConfig) {
   const setHeader = useContext(ChromeHeaderSetContext);
-  const { backHref, onBack, title, details, trailing } = config;
+  const { backHref, onBack, title, details, trailing, progressBar } = config;
   useEffect(() => {
     if (!setHeader) return;
-    setHeader({ backHref, onBack, title, details, trailing });
+    setHeader({ backHref, onBack, title, details, trailing, progressBar });
     return () => setHeader(emptyHeader);
-  }, [setHeader, backHref, onBack, title, details, trailing]);
+  }, [setHeader, backHref, onBack, title, details, trailing, progressBar]);
 }
 
 export function useChromeBackHref(): string | null {

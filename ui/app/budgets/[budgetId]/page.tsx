@@ -1,14 +1,21 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { Chip } from "@/components/Chip";
 import { SectionLabel } from "@/components/soft-ledger/SectionLabel";
+import { TopProgressBar } from "@/components/TopProgressBar";
 import { requireAlias } from "@/lib/alias";
 import { getApiInternalUrl } from "@/lib/api";
 import { formatMoneyAmount } from "@/lib/currency";
 import { listsMessages } from "@/lib/i18n/lists";
 import type { Locale } from "@/lib/i18n/locale";
 import { fetchSession } from "@/lib/session";
-import { budgetStateLabel, type BudgetItem } from "../budgetsClient";
+import {
+  budgetSeverityColorClass,
+  budgetStateLabel,
+  budgetUsageRatio,
+  type BudgetItem,
+} from "../budgetsClient";
 import { BudgetAssignPanel } from "./BudgetAssignPanel";
 import { BudgetDetailChrome } from "./BudgetDetailChrome";
 import { BudgetRulesPanel } from "./BudgetRulesPanel";
@@ -85,6 +92,23 @@ export function historyRowAttribution(line: BudgetHistoryLine): {
   };
 }
 
+/**
+ * Matches a budget's source-list ids against the caller's lists, dropping
+ * any id with no match (a list the user left, or that was deleted) rather
+ * than crashing — mirrors BudgetsPanel's `if (!list) return null;`.
+ * Extracted as a pure function so it's testable without rendering the async
+ * server component (see project-context.md's "never rendered directly in
+ * tests" precedent).
+ */
+export function resolveSourceListChips(
+  sourceListIds: string[],
+  lists: { id: string; name: string }[],
+): { id: string; name: string }[] {
+  return sourceListIds
+    .map((listId) => lists.find((l) => l.id === listId))
+    .filter((list): list is { id: string; name: string } => list !== undefined);
+}
+
 function asRuleRow(data: unknown): BudgetRuleRow | null {
   if (!data || typeof data !== "object") return null;
   const row = data as Partial<BudgetRuleRow>;
@@ -124,7 +148,9 @@ export function asBudgetDetail(data: unknown): BudgetDetail | null {
     .map(asHistoryLine)
     .filter((line): line is BudgetHistoryLine => line !== null);
   const ruleRows = Array.isArray(row.rules) ? row.rules : [];
-  const rules = ruleRows.map(asRuleRow).filter((rule): rule is BudgetRuleRow => rule !== null);
+  const rules = ruleRows
+    .map(asRuleRow)
+    .filter((rule): rule is BudgetRuleRow => rule !== null);
   return {
     id: row.id,
     name: row.name,
@@ -195,75 +221,143 @@ export default async function BudgetDetailPage({
     loadError = true;
   }
 
+  let sourceLists: { id: string; name: string }[] = [];
+  if (budget) {
+    try {
+      const listsResponse = await fetch(`${getApiInternalUrl()}/lists`, {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          ...(header ? { Cookie: header } : {}),
+        },
+        cache: "no-store",
+      });
+      if (listsResponse.ok) {
+        const data: unknown = await listsResponse.json().catch(() => null);
+        const rows =
+          data &&
+          typeof data === "object" &&
+          Array.isArray((data as { lists?: unknown }).lists)
+            ? (data as { lists: unknown[] }).lists
+            : [];
+        sourceLists = rows.filter(
+          (row): row is { id: string; name: string } =>
+            !!row &&
+            typeof row === "object" &&
+            typeof (row as { id?: unknown }).id === "string" &&
+            typeof (row as { name?: unknown }).name === "string",
+        );
+      }
+    } catch {
+      // Chips are supplementary — a lists-fetch failure silently renders none.
+    }
+  }
+
+  const ratio = budget ? budgetUsageRatio(budget) : null;
+
   return (
-    <main className="flex flex-col gap-[var(--space-4)] px-[var(--page-gutter)] py-[var(--space-4)]">
+    <main className="flex flex-col gap-[var(--space-4)] py-[var(--space-4)]">
       {budgetNotFound ? (
-        <p role="alert">{t.budgetNotFound}</p>
+        <p role="alert" className="px-[var(--page-gutter)]">
+          {t.budgetNotFound}
+        </p>
       ) : loadError || !budget ? (
-        <p role="alert">{t.loadError}</p>
+        <p role="alert" className="px-[var(--page-gutter)]">
+          {t.loadError}
+        </p>
       ) : (
         <>
-          <BudgetDetailChrome title={budget.name} />
-          <section className="flex flex-col gap-[var(--space-2)] mx-strip-inset">
-            <SectionLabel>{budget.name}</SectionLabel>
-            <p
-              className={`m-0 ${budget.state === "ok" ? "text-muted" : "text-owe font-semibold"}`}
-            >
-              {budgetStateLabel(budget.state, t)}
-            </p>
-            <p className="m-0 tabular-nums text-foreground">
-              {formatMoneyAmount(budget.spent, budget.currency)} /{" "}
-              {formatMoneyAmount(budget.cap, budget.currency)}
-            </p>
-          </section>
-
-          <section className="flex flex-col gap-[var(--space-3)] mx-strip-inset">
-            <SectionLabel>{t.budgetsHistoryTitle}</SectionLabel>
-            <BudgetAssignPanel
-              budgetId={budgetId}
-              messages={{ ...t, cancelLabel: t.receiptMoveCancel }}
+          <div className="flex flex-col gap-[var(--space-4)] px-[var(--page-gutter)]">
+            <BudgetDetailChrome
+              title={budget.name}
+              progressBar={
+                <TopProgressBar
+                  ratio={ratio}
+                  colorClassName={budgetSeverityColorClass(ratio)}
+                  tooltipLabel={`${formatMoneyAmount(budget.spent, budget.currency)} / ${formatMoneyAmount(budget.cap, budget.currency)}`}
+                  ariaLabel={budgetStateLabel(budget.state, t)}
+                />
+              }
             />
-            {budget.history.length === 0 ? (
-              <div
-                className="px-[var(--space-4)] py-[var(--space-5)] bg-surface border border-border rounded-md"
-                role="status"
+            <section className="flex flex-col gap-[var(--space-2)] mx-strip-inset">
+              <SectionLabel>{budget.name}</SectionLabel>
+              <p
+                className={`m-0 ${budget.state === "ok" ? "text-muted" : "text-owe font-semibold"}`}
               >
-                <p className="m-0 text-muted">{t.budgetsHistoryEmpty}</p>
-              </div>
-            ) : (
-              <ul className="m-0 list-none p-0 flex flex-col gap-[var(--space-2)]">
-                {budget.history.map((line) => {
-                  const { viaLabelKey, showUnassign } = historyRowAttribution(line);
-                  return (
-                    <li
-                      key={line.id}
-                      className="flex items-center justify-between gap-[var(--space-3)] px-[var(--space-3)] py-[var(--space-2)] bg-surface border border-border rounded-sm"
-                    >
-                      <span className="flex flex-col">
-                        <span className="text-foreground">{line.description}</span>
-                        <span className="text-muted">{t[viaLabelKey]}</span>
-                      </span>
-                      <span className="flex items-center gap-[var(--space-2)]">
-                        <span className="tabular-nums text-foreground">
-                          {formatMoneyAmount(line.amount_crc, "CRC")}
-                        </span>
-                        {showUnassign ? (
-                          <UnassignButton
-                            budgetId={budgetId}
-                            entryId={line.id}
-                            label={t.budgetsUnassign}
-                            messages={t}
-                          />
-                        ) : null}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
+                {budgetStateLabel(budget.state, t)}
+              </p>
+              <p className="m-0 tabular-nums text-foreground">
+                {formatMoneyAmount(budget.spent, budget.currency)} /{" "}
+                {formatMoneyAmount(budget.cap, budget.currency)}
+              </p>
+              {budget.source_list_ids.length > 0 ? (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {resolveSourceListChips(budget.source_list_ids, sourceLists).map(
+                    (list) => (
+                      <Chip key={list.id} tone="muted">
+                        {list.name}
+                      </Chip>
+                    ),
+                  )}
+                </div>
+              ) : null}
+            </section>
 
-          <BudgetRulesPanel budgetId={budgetId} rules={budget.rules} messages={t} />
+            <section className="flex flex-col gap-[var(--space-3)] mx-strip-inset">
+              <SectionLabel>{t.budgetsHistoryTitle}</SectionLabel>
+              <BudgetAssignPanel
+                budgetId={budgetId}
+                messages={{ ...t, cancelLabel: t.receiptMoveCancel }}
+              />
+              {budget.history.length === 0 ? (
+                <div
+                  className="px-[var(--space-4)] py-[var(--space-5)] bg-surface border border-border rounded-md"
+                  role="status"
+                >
+                  <p className="m-0 text-muted">{t.budgetsHistoryEmpty}</p>
+                </div>
+              ) : (
+                <ul className="m-0 list-none p-0 flex flex-col gap-[var(--space-2)]">
+                  {budget.history.map((line) => {
+                    const { viaLabelKey, showUnassign } =
+                      historyRowAttribution(line);
+                    return (
+                      <li
+                        key={line.id}
+                        className="flex items-center justify-between gap-[var(--space-3)] px-[var(--space-3)] py-[var(--space-2)] bg-surface border border-border rounded-sm"
+                      >
+                        <span className="flex flex-col">
+                          <span className="text-foreground">
+                            {line.description}
+                          </span>
+                          <span className="text-muted">{t[viaLabelKey]}</span>
+                        </span>
+                        <span className="flex items-center gap-[var(--space-2)]">
+                          <span className="tabular-nums text-foreground">
+                            {formatMoneyAmount(line.amount_crc, "CRC")}
+                          </span>
+                          {showUnassign ? (
+                            <UnassignButton
+                              budgetId={budgetId}
+                              entryId={line.id}
+                              label={t.budgetsUnassign}
+                              messages={t}
+                            />
+                          ) : null}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+
+            <BudgetRulesPanel
+              budgetId={budgetId}
+              rules={budget.rules}
+              messages={t}
+            />
+          </div>
         </>
       )}
     </main>

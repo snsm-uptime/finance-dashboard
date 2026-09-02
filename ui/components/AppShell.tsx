@@ -50,6 +50,7 @@ function AppShellFrame({ children }: { children: ReactNode }) {
   return (
     <div className="fixed inset-0 flex flex-col overflow-hidden">
       <div className="relative flex flex-col flex-1 min-h-0">
+        {header.progressBar ? <div className="shrink-0">{header.progressBar}</div> : null}
         {showHeader ? (
           <header
             data-app-chrome="header"
