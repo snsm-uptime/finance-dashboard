@@ -13,7 +13,6 @@ import { formatCrcAmount, formatCrcNumber } from "@/lib/currency";
 import { listsMessages } from "@/lib/i18n/lists";
 import type { Locale } from "@/lib/i18n/locale";
 import { fetchSession } from "@/lib/session";
-import { BudgetsPanel } from "./budgets/BudgetsPanel";
 import { ListReceiptMenu } from "../ListReceiptMenu";
 import { ListDetailChrome } from "../ListDetailChrome";
 import { ListDetailMobileActions } from "../ListDetailMobileActions";
@@ -840,7 +839,6 @@ export default async function ListDetailPage({
                     })}
                   action={mobileActions}
                 />
-                {members.length === 1 ? <BudgetsPanel listId={listId} /> : null}
                 <IncompleteDisclosure
                   isIncomplete={balances?.balance_status.is_incomplete === true}
                   label={t.incompleteDisclosureLabel}

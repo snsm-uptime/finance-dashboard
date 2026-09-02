@@ -7,6 +7,8 @@ describe("showsAppChrome", () => {
     expect(showsAppChrome("/home")).toBe(true);
     expect(showsAppChrome("/lists/abc")).toBe(true);
     expect(showsAppChrome("/upload")).toBe(true);
+    expect(showsAppChrome("/cards")).toBe(true);
+    expect(showsAppChrome("/budgets")).toBe(true);
     expect(showsAppChrome("/account")).toBe(true);
   });
 
@@ -17,7 +19,6 @@ describe("showsAppChrome", () => {
     expect(showsAppChrome("/alias")).toBe(false);
     expect(showsAppChrome("/invites/accept")).toBe(false);
     expect(showsAppChrome("/forgot-password")).toBe(false);
-    expect(showsAppChrome("/cards")).toBe(false);
   });
 });
 
@@ -27,8 +28,12 @@ describe("tabKeyFromPath", () => {
     expect(tabKeyFromPath("/lists/abc")).toBe("home");
   });
 
-  it("marks Upload and Account from their routes", () => {
+  it("marks Upload, Cards, Budgets, and Account from their routes", () => {
     expect(tabKeyFromPath("/upload")).toBe("upload");
+    expect(tabKeyFromPath("/cards")).toBe("cards");
+    expect(tabKeyFromPath("/cards/abc")).toBe("cards");
+    expect(tabKeyFromPath("/budgets")).toBe("budgets");
+    expect(tabKeyFromPath("/budgets/abc")).toBe("budgets");
     expect(tabKeyFromPath("/account")).toBe("account");
   });
 });

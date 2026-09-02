@@ -439,6 +439,8 @@ describe("lists i18n budgets keys (Story 6.3)", () => {
       "errorInvalidBudgetName",
       "errorInvalidBudgetCap",
       "errorInvalidBudgetCurrency",
+      "budgetsSourceListsLabel",
+      "errorInvalidBudgetSourceLists",
     ] as const) {
       expect(listsMessages.en[key].length).toBeGreaterThan(0);
       expect(listsMessages.es[key].length).toBeGreaterThan(0);

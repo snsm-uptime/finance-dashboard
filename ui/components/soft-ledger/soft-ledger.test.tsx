@@ -619,16 +619,19 @@ describe("Soft-Ledger primitives", () => {
     expect(host.textContent).not.toContain("Cash");
   });
 
-  it("TabBar exposes icon links + aria-current on active Home tab", () => {
+  it("TabBar renders one link per item + aria-current on the active tab", () => {
+    function DummyIcon(props: { className?: string }) {
+      return <svg {...props} />;
+    }
     act(() => {
       root.render(
         <TabBar
-          homeHref="/home"
-          uploadHref="/upload"
-          accountHref="/account"
-          homeLabel="Home"
-          uploadLabel="Upload"
-          accountLabel="Account"
+          items={[
+            { key: "home", href: "/home", label: "Home", Icon: DummyIcon },
+            { key: "upload", href: "/upload", label: "Upload", Icon: DummyIcon },
+            { key: "budgets", href: "/budgets", label: "Budgets", Icon: DummyIcon },
+            { key: "account", href: "/account", label: "Account", Icon: DummyIcon },
+          ]}
           ariaLabel="Primary"
           active="home"
         />,
@@ -638,7 +641,7 @@ describe("Soft-Ledger primitives", () => {
     expect(nav?.getAttribute("aria-label")).toBe("Primary");
     expect(nav?.className).toContain("justify-evenly");
     const links = Array.from(host.querySelectorAll("a"));
-    expect(links).toHaveLength(3);
+    expect(links).toHaveLength(4);
     expect(links[0]?.getAttribute("href")).toBe("/home");
     expect(links[0]?.getAttribute("aria-label")).toBe("Home");
     expect(links[0]?.getAttribute("aria-current")).toBe("page");
@@ -647,11 +650,12 @@ describe("Soft-Ledger primitives", () => {
     expect(links[1]?.getAttribute("href")).toBe("/upload");
     expect(links[1]?.getAttribute("aria-label")).toBe("Upload");
     expect(links[1]?.getAttribute("aria-current")).toBeNull();
-    expect(links[2]?.getAttribute("href")).toBe("/account");
-    expect(links[2]?.getAttribute("aria-label")).toBe("Account");
-    expect(links[0]?.querySelector("svg")).not.toBeNull();
-    expect(links[1]?.querySelector("svg")).not.toBeNull();
-    expect(links[2]?.querySelector("svg")).not.toBeNull();
+    expect(links[2]?.getAttribute("href")).toBe("/budgets");
+    expect(links[2]?.getAttribute("aria-label")).toBe("Budgets");
+    expect(links[2]?.getAttribute("aria-current")).toBeNull();
+    expect(links[3]?.getAttribute("href")).toBe("/account");
+    expect(links[3]?.getAttribute("aria-label")).toBe("Account");
+    expect(links.every((link) => link.querySelector("svg") !== null)).toBe(true);
   });
 
   it("PrimaryButton mounts and uses rounded-sm (not pill)", () => {

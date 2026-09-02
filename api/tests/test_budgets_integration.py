@@ -1,4 +1,5 @@
-"""Postgres integration tests for budget create/list (Story 6.3, FR-48).
+"""Postgres integration tests for standalone, owner-scoped budgets (Story 7.1,
+FR-48, AD-30).
 
 Requires DATABASE_URL (Compose db or CI Postgres 16). Skips when unset.
 """
@@ -39,10 +40,26 @@ def _own_list_id(client: TestClient) -> str:
     return listed.json()["lists"][0]["id"]
 
 
-def _create_budget(client: TestClient, list_id: str, name: str, currency: str = "CRC") -> str:
+def _create_second_list(client: TestClient, name: str = "Second list") -> str:
+    created = client.post("/lists", json={"name": name})
+    assert created.status_code == 201, created.text
+    return created.json()["id"]
+
+
+def _create_budget(
+    client: TestClient,
+    source_list_ids: list[str],
+    name: str = "Groceries",
+    currency: str = "CRC",
+) -> str:
     created = client.post(
-        f"/lists/{list_id}/budgets",
-        json={"name": name, "cap": "500.00", "currency": currency},
+        "/budgets",
+        json={
+            "name": name,
+            "cap": "500.00",
+            "currency": currency,
+            "source_list_ids": source_list_ids,
+        },
     )
     assert created.status_code == 201, created.text
     return created.json()["id"]
@@ -62,13 +79,18 @@ def _create_expense(client: TestClient, list_id: str, payer_id: str, description
     return created.json()["id"]
 
 
-def test_create_budget_valid(client: TestClient) -> None:
+def test_create_budget_with_one_source_list(client: TestClient) -> None:
     _register(client, "budgetcreate@example.com")
     list_id = _own_list_id(client)
 
     created = client.post(
-        f"/lists/{list_id}/budgets",
-        json={"name": "Groceries", "cap": "500.00", "currency": "CRC"},
+        "/budgets",
+        json={
+            "name": "Groceries",
+            "cap": "500.00",
+            "currency": "CRC",
+            "source_list_ids": [list_id],
+        },
     )
     assert created.status_code == 201, created.text
     body = created.json()
@@ -77,7 +99,56 @@ def test_create_budget_valid(client: TestClient) -> None:
     assert body["currency"] == "CRC"
     assert body["spent"] == "0"
     assert body["state"] == "ok"
-    assert body["list_id"] == list_id
+    assert body["source_lists"] == [list_id]
+
+
+def test_create_budget_with_n_source_lists(client: TestClient) -> None:
+    _register(client, "budgetcreaten@example.com")
+    list_a = _own_list_id(client)
+    list_b = _create_second_list(client)
+
+    created = client.post(
+        "/budgets",
+        json={
+            "name": "Groceries",
+            "cap": "500.00",
+            "currency": "CRC",
+            "source_list_ids": [list_a, list_b],
+        },
+    )
+    assert created.status_code == 201, created.text
+    assert sorted(created.json()["source_lists"]) == sorted([list_a, list_b])
+
+
+def test_create_budget_zero_source_lists_rejected(client: TestClient) -> None:
+    _register(client, "budgetzerosource@example.com")
+
+    response = client.post(
+        "/budgets",
+        json={"name": "Groceries", "cap": "500.00", "currency": "CRC", "source_list_ids": []},
+    )
+    assert response.status_code == 422
+    assert response.json()["code"] == "invalid_budget_source_lists"
+
+
+def test_create_budget_naming_non_member_list_rejected(client: TestClient) -> None:
+    _register(client, "budgetownera@example.com")
+    other_list_id = _own_list_id(client)
+
+    client.post("/auth/sign-out")
+    _register(client, "budgetownerb@example.com")
+
+    response = client.post(
+        "/budgets",
+        json={
+            "name": "Groceries",
+            "cap": "500.00",
+            "currency": "CRC",
+            "source_list_ids": [other_list_id],
+        },
+    )
+    assert response.status_code == 403
+    assert response.json()["code"] == "not_list_member"
 
 
 def test_create_budget_blank_name_rejected(client: TestClient) -> None:
@@ -85,8 +156,8 @@ def test_create_budget_blank_name_rejected(client: TestClient) -> None:
     list_id = _own_list_id(client)
 
     response = client.post(
-        f"/lists/{list_id}/budgets",
-        json={"name": "   ", "cap": "500.00", "currency": "CRC"},
+        "/budgets",
+        json={"name": "   ", "cap": "500.00", "currency": "CRC", "source_list_ids": [list_id]},
     )
     assert response.status_code == 422
     assert response.json()["code"] == "invalid_budget_name"
@@ -97,8 +168,8 @@ def test_create_budget_zero_cap_rejected(client: TestClient) -> None:
     list_id = _own_list_id(client)
 
     response = client.post(
-        f"/lists/{list_id}/budgets",
-        json={"name": "Groceries", "cap": "0", "currency": "CRC"},
+        "/budgets",
+        json={"name": "Groceries", "cap": "0", "currency": "CRC", "source_list_ids": [list_id]},
     )
     assert response.status_code == 422
     assert response.json()["code"] == "invalid_budget_cap"
@@ -109,8 +180,13 @@ def test_create_budget_too_many_decimals_rejected(client: TestClient) -> None:
     list_id = _own_list_id(client)
 
     response = client.post(
-        f"/lists/{list_id}/budgets",
-        json={"name": "Groceries", "cap": "10.999", "currency": "CRC"},
+        "/budgets",
+        json={
+            "name": "Groceries",
+            "cap": "10.999",
+            "currency": "CRC",
+            "source_list_ids": [list_id],
+        },
     )
     assert response.status_code == 422
     assert response.json()["code"] == "invalid_budget_cap"
@@ -121,128 +197,94 @@ def test_create_budget_unsupported_currency_rejected(client: TestClient) -> None
     list_id = _own_list_id(client)
 
     response = client.post(
-        f"/lists/{list_id}/budgets",
-        json={"name": "Groceries", "cap": "500.00", "currency": "EUR"},
+        "/budgets",
+        json={
+            "name": "Groceries",
+            "cap": "500.00",
+            "currency": "EUR",
+            "source_list_ids": [list_id],
+        },
     )
     assert response.status_code == 422
     assert response.json()["code"] == "invalid_budget_currency"
 
 
-def test_list_budgets_returns_all_with_zero_spent(client: TestClient) -> None:
+def test_list_budgets_returns_only_callers_own_with_zero_spent(client: TestClient) -> None:
     _register(client, "budgetlist@example.com")
     list_id = _own_list_id(client)
 
     for name in ("Groceries", "Transport", "Entertainment"):
-        created = client.post(
-            f"/lists/{list_id}/budgets",
-            json={"name": name, "cap": "100.00", "currency": "CRC"},
-        )
-        assert created.status_code == 201, created.text
-
-    listed = client.get(f"/lists/{list_id}/budgets")
-    assert listed.status_code == 200, listed.text
-    budgets = listed.json()["budgets"]
-    assert len(budgets) == 3
-    for budget in budgets:
-        assert budget["spent"] == "0"
-        assert budget["state"] == "ok"
-
-
-def test_non_member_get_budgets_returns_404(client: TestClient) -> None:
-    _register(client, "budgetownera@example.com")
-    list_id = _own_list_id(client)
+        _create_budget(client, [list_id], name=name)
 
     client.post("/auth/sign-out")
-    _register(client, "budgetownerb@example.com")
+    _register(client, "budgetlistother@example.com")
+    other_list_id = _own_list_id(client)
+    _create_budget(client, [other_list_id], name="Other owner's budget")
 
-    response = client.get(f"/lists/{list_id}/budgets")
-    assert response.status_code == 404
-    assert response.json()["code"] == "list_not_found"
+    listed = client.get("/budgets")
+    assert listed.status_code == 200, listed.text
+    budgets = listed.json()["budgets"]
+    assert len(budgets) == 1
+    assert budgets[0]["name"] == "Other owner's budget"
 
 
-def test_non_member_post_budgets_returns_403(client: TestClient) -> None:
+def test_list_budgets_aggregates_near_cap_state_across_source_lists(client: TestClient) -> None:
+    owner_id = _register(client, "budgetaggregate@example.com")
+    list_a = _own_list_id(client)
+    list_b = _create_second_list(client)
+    budget_id = _create_budget(client, [list_a, list_b], name="Groceries")
+
+    entry_a = _create_expense(client, list_a, owner_id, "Automercado")
+    assigned_a = client.post(f"/budgets/{budget_id}/assignments", json={"ledger_entry_id": entry_a})
+    assert assigned_a.status_code == 204, assigned_a.text
+
+    entry_b = _create_expense(client, list_b, owner_id, "Walmart")
+    assigned_b = client.post(f"/budgets/{budget_id}/assignments", json={"ledger_entry_id": entry_b})
+    assert assigned_b.status_code == 204, assigned_b.text
+
+    listed = client.get("/budgets")
+    assert listed.status_code == 200, listed.text
+    budget = listed.json()["budgets"][0]
+    assert budget["spent"] == "20.00"
+
+
+def test_non_owner_get_budget_detail_returns_404(client: TestClient) -> None:
     _register(client, "budgetownerc@example.com")
     list_id = _own_list_id(client)
+    budget_id = _create_budget(client, [list_id])
 
     client.post("/auth/sign-out")
     _register(client, "budgetownerd@example.com")
 
-    response = client.post(
-        f"/lists/{list_id}/budgets",
-        json={"name": "Groceries", "cap": "500.00", "currency": "CRC"},
-    )
-    assert response.status_code == 403
-    assert response.json()["code"] == "not_list_member"
+    response = client.get(f"/budgets/{budget_id}")
+    assert response.status_code == 404
+    assert response.json()["code"] == "budget_not_found"
 
 
 def test_get_budget_detail_happy_path(client: TestClient) -> None:
     _register(client, "budgetdetailok@example.com")
     list_id = _own_list_id(client)
+    budget_id = _create_budget(client, [list_id])
 
-    created = client.post(
-        f"/lists/{list_id}/budgets",
-        json={"name": "Groceries", "cap": "500.00", "currency": "CRC"},
-    )
-    assert created.status_code == 201, created.text
-    budget_id = created.json()["id"]
-
-    detail = client.get(f"/lists/{list_id}/budgets/{budget_id}")
+    detail = client.get(f"/budgets/{budget_id}")
     assert detail.status_code == 200, detail.text
     body = detail.json()
     assert body["id"] == budget_id
-    assert body["list_id"] == list_id
     assert body["name"] == "Groceries"
     assert body["cap"] == "500.00"
     assert body["currency"] == "CRC"
     assert body["spent"] == "0"
     assert body["state"] == "ok"
+    assert body["source_lists"] == [list_id]
     assert body["history"] == []
-
-
-def test_get_budget_detail_returns_404_for_budget_on_other_list(client: TestClient) -> None:
-    _register(client, "budgetdetailownera@example.com")
-    list_a_id = _own_list_id(client)
-    created = client.post(
-        f"/lists/{list_a_id}/budgets",
-        json={"name": "Groceries", "cap": "500.00", "currency": "CRC"},
-    )
-    assert created.status_code == 201, created.text
-    budget_on_a_id = created.json()["id"]
-
-    create_response = client.post("/lists", json={"name": "Second list"})
-    assert create_response.status_code == 201, create_response.text
-    list_b_id = create_response.json()["id"]
-
-    response = client.get(f"/lists/{list_b_id}/budgets/{budget_on_a_id}")
-    assert response.status_code == 404
-    assert response.json()["code"] == "budget_not_found"
 
 
 def test_get_budget_detail_returns_404_for_nonexistent_budget(client: TestClient) -> None:
     _register(client, "budgetdetailmissing@example.com")
-    list_id = _own_list_id(client)
 
-    response = client.get(f"/lists/{list_id}/budgets/{uuid.uuid4()}")
+    response = client.get(f"/budgets/{uuid.uuid4()}")
     assert response.status_code == 404
     assert response.json()["code"] == "budget_not_found"
-
-
-def test_get_budget_detail_non_member_returns_404(client: TestClient) -> None:
-    _register(client, "budgetdetailownerc@example.com")
-    list_id = _own_list_id(client)
-    created = client.post(
-        f"/lists/{list_id}/budgets",
-        json={"name": "Groceries", "cap": "500.00", "currency": "CRC"},
-    )
-    assert created.status_code == 201, created.text
-    budget_id = created.json()["id"]
-
-    client.post("/auth/sign-out")
-    _register(client, "budgetdetailownerd@example.com")
-
-    response = client.get(f"/lists/{list_id}/budgets/{budget_id}")
-    assert response.status_code == 404
-    assert response.json()["code"] == "list_not_found"
 
 
 # --- Story 6.5: attribution (manual assign, rules, candidates) ---
@@ -251,16 +293,13 @@ def test_get_budget_detail_non_member_returns_404(client: TestClient) -> None:
 def test_manual_assign_appears_in_history_and_spent(client: TestClient) -> None:
     owner_id = _register(client, "attrmanual@example.com")
     list_id = _own_list_id(client)
-    budget_id = _create_budget(client, list_id, "Groceries")
+    budget_id = _create_budget(client, [list_id])
     entry_id = _create_expense(client, list_id, owner_id, "Automercado")
 
-    assigned = client.post(
-        f"/lists/{list_id}/budgets/{budget_id}/assignments",
-        json={"ledger_entry_id": entry_id},
-    )
+    assigned = client.post(f"/budgets/{budget_id}/assignments", json={"ledger_entry_id": entry_id})
     assert assigned.status_code == 204, assigned.text
 
-    detail = client.get(f"/lists/{list_id}/budgets/{budget_id}")
+    detail = client.get(f"/budgets/{budget_id}")
     assert detail.status_code == 200, detail.text
     body = detail.json()
     assert body["spent"] == "10.00"
@@ -274,27 +313,21 @@ def test_manual_assign_appears_in_history_and_spent(client: TestClient) -> None:
 def test_reassign_to_second_budget_moves_it(client: TestClient) -> None:
     owner_id = _register(client, "attrmove@example.com")
     list_id = _own_list_id(client)
-    budget_a = _create_budget(client, list_id, "Groceries")
-    budget_b = _create_budget(client, list_id, "Transport")
+    budget_a = _create_budget(client, [list_id], name="Groceries")
+    budget_b = _create_budget(client, [list_id], name="Transport")
     entry_id = _create_expense(client, list_id, owner_id, "Automercado")
 
-    first = client.post(
-        f"/lists/{list_id}/budgets/{budget_a}/assignments",
-        json={"ledger_entry_id": entry_id},
-    )
+    first = client.post(f"/budgets/{budget_a}/assignments", json={"ledger_entry_id": entry_id})
     assert first.status_code == 204, first.text
 
-    second = client.post(
-        f"/lists/{list_id}/budgets/{budget_b}/assignments",
-        json={"ledger_entry_id": entry_id},
-    )
+    second = client.post(f"/budgets/{budget_b}/assignments", json={"ledger_entry_id": entry_id})
     assert second.status_code == 204, second.text
 
-    detail_a = client.get(f"/lists/{list_id}/budgets/{budget_a}")
+    detail_a = client.get(f"/budgets/{budget_a}")
     assert detail_a.json()["spent"] == "0"
     assert detail_a.json()["history"] == []
 
-    detail_b = client.get(f"/lists/{list_id}/budgets/{budget_b}")
+    detail_b = client.get(f"/budgets/{budget_b}")
     assert detail_b.json()["spent"] == "10.00"
     assert len(detail_b.json()["history"]) == 1
 
@@ -302,23 +335,20 @@ def test_reassign_to_second_budget_moves_it(client: TestClient) -> None:
 def test_unassign_removes_from_history_and_reappears_as_candidate(client: TestClient) -> None:
     owner_id = _register(client, "attrunassign@example.com")
     list_id = _own_list_id(client)
-    budget_id = _create_budget(client, list_id, "Groceries")
+    budget_id = _create_budget(client, [list_id])
     entry_id = _create_expense(client, list_id, owner_id, "Automercado")
 
-    assigned = client.post(
-        f"/lists/{list_id}/budgets/{budget_id}/assignments",
-        json={"ledger_entry_id": entry_id},
-    )
+    assigned = client.post(f"/budgets/{budget_id}/assignments", json={"ledger_entry_id": entry_id})
     assert assigned.status_code == 204, assigned.text
 
-    unassigned = client.delete(f"/lists/{list_id}/budgets/{budget_id}/assignments/{entry_id}")
+    unassigned = client.delete(f"/budgets/{budget_id}/assignments/{entry_id}")
     assert unassigned.status_code == 204, unassigned.text
 
-    detail = client.get(f"/lists/{list_id}/budgets/{budget_id}")
+    detail = client.get(f"/budgets/{budget_id}")
     assert detail.json()["spent"] == "0"
     assert detail.json()["history"] == []
 
-    candidates = client.get(f"/lists/{list_id}/budgets/{budget_id}/candidates")
+    candidates = client.get(f"/budgets/{budget_id}/candidates")
     assert candidates.status_code == 200, candidates.text
     assert [c["id"] for c in candidates.json()["candidates"]] == [entry_id]
 
@@ -326,16 +356,13 @@ def test_unassign_removes_from_history_and_reappears_as_candidate(client: TestCl
 def test_rule_matches_existing_line_retroactively(client: TestClient) -> None:
     owner_id = _register(client, "attrruleexisting@example.com")
     list_id = _own_list_id(client)
-    budget_id = _create_budget(client, list_id, "Groceries")
+    budget_id = _create_budget(client, [list_id])
     entry_id = _create_expense(client, list_id, owner_id, "Automercado Santa Ana")
 
-    rule = client.post(
-        f"/lists/{list_id}/budgets/{budget_id}/rules",
-        json={"match_text": "automercado"},
-    )
+    rule = client.post(f"/budgets/{budget_id}/rules", json={"match_text": "automercado"})
     assert rule.status_code == 201, rule.text
 
-    detail = client.get(f"/lists/{list_id}/budgets/{budget_id}")
+    detail = client.get(f"/budgets/{budget_id}")
     assert detail.status_code == 200, detail.text
     body = detail.json()
     assert body["spent"] == "10.00"
@@ -347,17 +374,14 @@ def test_rule_matches_existing_line_retroactively(client: TestClient) -> None:
 def test_rule_matches_line_committed_after_rule_created(client: TestClient) -> None:
     owner_id = _register(client, "attrrulelater@example.com")
     list_id = _own_list_id(client)
-    budget_id = _create_budget(client, list_id, "Groceries")
+    budget_id = _create_budget(client, [list_id])
 
-    rule = client.post(
-        f"/lists/{list_id}/budgets/{budget_id}/rules",
-        json={"match_text": "automercado"},
-    )
+    rule = client.post(f"/budgets/{budget_id}/rules", json={"match_text": "automercado"})
     assert rule.status_code == 201, rule.text
 
     entry_id = _create_expense(client, list_id, owner_id, "Automercado Escazu")
 
-    detail = client.get(f"/lists/{list_id}/budgets/{budget_id}")
+    detail = client.get(f"/budgets/{budget_id}")
     assert detail.status_code == 200, detail.text
     body = detail.json()
     assert body["spent"] == "10.00"
@@ -369,27 +393,21 @@ def test_rule_matches_line_committed_after_rule_created(client: TestClient) -> N
 def test_manual_assignment_wins_over_rule_match(client: TestClient) -> None:
     owner_id = _register(client, "attrmanualwins@example.com")
     list_id = _own_list_id(client)
-    budget_a = _create_budget(client, list_id, "Groceries A")
-    budget_b = _create_budget(client, list_id, "Groceries B")
+    budget_a = _create_budget(client, [list_id], name="Groceries A")
+    budget_b = _create_budget(client, [list_id], name="Groceries B")
     entry_id = _create_expense(client, list_id, owner_id, "Automercado")
 
-    assigned = client.post(
-        f"/lists/{list_id}/budgets/{budget_a}/assignments",
-        json={"ledger_entry_id": entry_id},
-    )
+    assigned = client.post(f"/budgets/{budget_a}/assignments", json={"ledger_entry_id": entry_id})
     assert assigned.status_code == 204, assigned.text
 
-    rule = client.post(
-        f"/lists/{list_id}/budgets/{budget_b}/rules",
-        json={"match_text": "automercado"},
-    )
+    rule = client.post(f"/budgets/{budget_b}/rules", json={"match_text": "automercado"})
     assert rule.status_code == 201, rule.text
 
-    detail_a = client.get(f"/lists/{list_id}/budgets/{budget_a}")
+    detail_a = client.get(f"/budgets/{budget_a}")
     assert len(detail_a.json()["history"]) == 1
     assert detail_a.json()["history"][0]["attributed_via"] == "manual"
 
-    detail_b = client.get(f"/lists/{list_id}/budgets/{budget_b}")
+    detail_b = client.get(f"/budgets/{budget_b}")
     assert detail_b.json()["history"] == []
     assert detail_b.json()["spent"] == "0"
 
@@ -397,22 +415,16 @@ def test_manual_assignment_wins_over_rule_match(client: TestClient) -> None:
 def test_usd_budget_stays_zero_regardless_of_assignments_and_rules(client: TestClient) -> None:
     owner_id = _register(client, "attrusd@example.com")
     list_id = _own_list_id(client)
-    budget_id = _create_budget(client, list_id, "USD Budget", currency="USD")
+    budget_id = _create_budget(client, [list_id], name="USD Budget", currency="USD")
     entry_id = _create_expense(client, list_id, owner_id, "Automercado")
 
-    assigned = client.post(
-        f"/lists/{list_id}/budgets/{budget_id}/assignments",
-        json={"ledger_entry_id": entry_id},
-    )
+    assigned = client.post(f"/budgets/{budget_id}/assignments", json={"ledger_entry_id": entry_id})
     assert assigned.status_code == 204, assigned.text
 
-    rule = client.post(
-        f"/lists/{list_id}/budgets/{budget_id}/rules",
-        json={"match_text": "automercado"},
-    )
+    rule = client.post(f"/budgets/{budget_id}/rules", json={"match_text": "automercado"})
     assert rule.status_code == 201, rule.text
 
-    detail = client.get(f"/lists/{list_id}/budgets/{budget_id}")
+    detail = client.get(f"/budgets/{budget_id}")
     assert detail.status_code == 200, detail.text
     body = detail.json()
     assert body["spent"] == "0"
@@ -421,21 +433,18 @@ def test_usd_budget_stays_zero_regardless_of_assignments_and_rules(client: TestC
     assert len(body["rules"]) == 1
 
 
-def test_assign_returns_404_ledger_entry_not_found_for_entry_on_other_list(
+def test_assign_returns_404_ledger_entry_not_found_for_entry_outside_source_lists(
     client: TestClient,
 ) -> None:
     owner_id = _register(client, "attrentryothera@example.com")
     list_a_id = _own_list_id(client)
-    budget_id = _create_budget(client, list_a_id, "Groceries")
+    budget_id = _create_budget(client, [list_a_id])
 
-    create_response = client.post("/lists", json={"name": "Second list"})
-    assert create_response.status_code == 201, create_response.text
-    list_b_id = create_response.json()["id"]
+    list_b_id = _create_second_list(client)
     entry_on_b = _create_expense(client, list_b_id, owner_id, "Elsewhere")
 
     response = client.post(
-        f"/lists/{list_a_id}/budgets/{budget_id}/assignments",
-        json={"ledger_entry_id": entry_on_b},
+        f"/budgets/{budget_id}/assignments", json={"ledger_entry_id": entry_on_b}
     )
     assert response.status_code == 404
     assert response.json()["code"] == "ledger_entry_not_found"
@@ -446,11 +455,10 @@ def test_assign_returns_404_ledger_entry_not_found_for_nonexistent_entry(
 ) -> None:
     _register(client, "attrentrymissing@example.com")
     list_id = _own_list_id(client)
-    budget_id = _create_budget(client, list_id, "Groceries")
+    budget_id = _create_budget(client, [list_id])
 
     response = client.post(
-        f"/lists/{list_id}/budgets/{budget_id}/assignments",
-        json={"ledger_entry_id": str(uuid.uuid4())},
+        f"/budgets/{budget_id}/assignments", json={"ledger_entry_id": str(uuid.uuid4())}
     )
     assert response.status_code == 404
     assert response.json()["code"] == "ledger_entry_not_found"
@@ -459,17 +467,14 @@ def test_assign_returns_404_ledger_entry_not_found_for_nonexistent_entry(
 def test_delete_rule_returns_404_for_rule_on_other_budget(client: TestClient) -> None:
     _register(client, "attrruleotherbudget@example.com")
     list_id = _own_list_id(client)
-    budget_a = _create_budget(client, list_id, "Groceries A")
-    budget_b = _create_budget(client, list_id, "Groceries B")
+    budget_a = _create_budget(client, [list_id], name="Groceries A")
+    budget_b = _create_budget(client, [list_id], name="Groceries B")
 
-    rule = client.post(
-        f"/lists/{list_id}/budgets/{budget_a}/rules",
-        json={"match_text": "automercado"},
-    )
+    rule = client.post(f"/budgets/{budget_a}/rules", json={"match_text": "automercado"})
     assert rule.status_code == 201, rule.text
     rule_id = rule.json()["id"]
 
-    response = client.delete(f"/lists/{list_id}/budgets/{budget_b}/rules/{rule_id}")
+    response = client.delete(f"/budgets/{budget_b}/rules/{rule_id}")
     assert response.status_code == 404
     assert response.json()["code"] == "budget_rule_not_found"
 
@@ -477,89 +482,49 @@ def test_delete_rule_returns_404_for_rule_on_other_budget(client: TestClient) ->
 def test_delete_rule_returns_404_for_nonexistent_rule(client: TestClient) -> None:
     _register(client, "attrrulemissing@example.com")
     list_id = _own_list_id(client)
-    budget_id = _create_budget(client, list_id, "Groceries")
+    budget_id = _create_budget(client, [list_id])
 
-    response = client.delete(f"/lists/{list_id}/budgets/{budget_id}/rules/{uuid.uuid4()}")
+    response = client.delete(f"/budgets/{budget_id}/rules/{uuid.uuid4()}")
     assert response.status_code == 404
     assert response.json()["code"] == "budget_rule_not_found"
 
 
-def test_create_rule_blank_match_text_rejected(client: TestClient) -> None:
-    _register(client, "attrruleblank@example.com")
+def test_non_owner_is_404_on_every_budget_scoped_route(client: TestClient) -> None:
+    owner_id = _register(client, "attrnonownera@example.com")
     list_id = _own_list_id(client)
-    budget_id = _create_budget(client, list_id, "Groceries")
-
-    response = client.post(
-        f"/lists/{list_id}/budgets/{budget_id}/rules",
-        json={"match_text": "   "},
-    )
-    assert response.status_code == 422
-    assert response.json()["code"] == "invalid_budget_rule_match_text"
-
-
-def test_create_rule_over_length_match_text_rejected(client: TestClient) -> None:
-    _register(client, "attrruletoolong@example.com")
-    list_id = _own_list_id(client)
-    budget_id = _create_budget(client, list_id, "Groceries")
-
-    response = client.post(
-        f"/lists/{list_id}/budgets/{budget_id}/rules",
-        json={"match_text": "x" * 101},
-    )
-    assert response.status_code == 422
-    assert response.json()["code"] == "invalid_budget_rule_match_text"
-
-
-def test_attribution_reads_are_404_for_non_member(client: TestClient) -> None:
-    _register(client, "attrnonmembera@example.com")
-    list_id = _own_list_id(client)
-    budget_id = _create_budget(client, list_id, "Groceries")
-
-    client.post("/auth/sign-out")
-    _register(client, "attrnonmemberb@example.com")
-
-    candidates = client.get(f"/lists/{list_id}/budgets/{budget_id}/candidates")
-    assert candidates.status_code == 404
-    assert candidates.json()["code"] == "list_not_found"
-
-
-def test_attribution_mutations_are_403_for_non_member(client: TestClient) -> None:
-    owner_id = _register(client, "attrnonmemberc@example.com")
-    list_id = _own_list_id(client)
-    budget_id = _create_budget(client, list_id, "Groceries")
+    budget_id = _create_budget(client, [list_id])
     entry_id = _create_expense(client, list_id, owner_id, "Automercado")
 
-    rule = client.post(
-        f"/lists/{list_id}/budgets/{budget_id}/rules",
-        json={"match_text": "automercado"},
-    )
+    rule = client.post(f"/budgets/{budget_id}/rules", json={"match_text": "automercado"})
     assert rule.status_code == 201, rule.text
     rule_id = rule.json()["id"]
 
     client.post("/auth/sign-out")
-    _register(client, "attrnonmemberd@example.com")
+    _register(client, "attrnonownerb@example.com")
 
-    assign = client.post(
-        f"/lists/{list_id}/budgets/{budget_id}/assignments",
-        json={"ledger_entry_id": entry_id},
-    )
-    assert assign.status_code == 403
-    assert assign.json()["code"] == "not_list_member"
+    get_detail = client.get(f"/budgets/{budget_id}")
+    assert get_detail.status_code == 404
+    assert get_detail.json()["code"] == "budget_not_found"
 
-    unassign = client.delete(f"/lists/{list_id}/budgets/{budget_id}/assignments/{entry_id}")
-    assert unassign.status_code == 403
-    assert unassign.json()["code"] == "not_list_member"
+    candidates = client.get(f"/budgets/{budget_id}/candidates")
+    assert candidates.status_code == 404
+    assert candidates.json()["code"] == "budget_not_found"
 
-    create_rule = client.post(
-        f"/lists/{list_id}/budgets/{budget_id}/rules",
-        json={"match_text": "walmart"},
-    )
-    assert create_rule.status_code == 403
-    assert create_rule.json()["code"] == "not_list_member"
+    assign = client.post(f"/budgets/{budget_id}/assignments", json={"ledger_entry_id": entry_id})
+    assert assign.status_code == 404
+    assert assign.json()["code"] == "budget_not_found"
 
-    delete_rule = client.delete(f"/lists/{list_id}/budgets/{budget_id}/rules/{rule_id}")
-    assert delete_rule.status_code == 403
-    assert delete_rule.json()["code"] == "not_list_member"
+    unassign = client.delete(f"/budgets/{budget_id}/assignments/{entry_id}")
+    assert unassign.status_code == 404
+    assert unassign.json()["code"] == "budget_not_found"
+
+    create_rule = client.post(f"/budgets/{budget_id}/rules", json={"match_text": "walmart"})
+    assert create_rule.status_code == 404
+    assert create_rule.json()["code"] == "budget_not_found"
+
+    delete_rule = client.delete(f"/budgets/{budget_id}/rules/{rule_id}")
+    assert delete_rule.status_code == 404
+    assert delete_rule.json()["code"] == "budget_not_found"
 
 
 def _seed_non_included_line_entry(
@@ -575,7 +540,10 @@ def _seed_non_included_line_entry(
             normalized_description="Card payment",
             payer_id=payer_id,
             provenance="hand",
-            line_type="payment",
+            # "fee" is not in BUDGET_ASSIGNABLE_LINE_TYPES ("payment" is —
+            # Story 7.1 baseline commit f704a3a widened that set to include
+            # payment/interest/other alongside purchase/reversal).
+            line_type="fee",
             posted_date=date(2026, 8, 10),
             amount_crc=Decimal("10.00"),
             fx_rate=Decimal("1"),
@@ -591,17 +559,14 @@ def test_unassign_returns_404_ledger_entry_not_found_when_not_assigned_to_this_b
 ) -> None:
     owner_id = _register(client, "attrunassignwrongbudget@example.com")
     list_id = _own_list_id(client)
-    budget_a = _create_budget(client, list_id, "Groceries A")
-    budget_b = _create_budget(client, list_id, "Groceries B")
+    budget_a = _create_budget(client, [list_id], name="Groceries A")
+    budget_b = _create_budget(client, [list_id], name="Groceries B")
     entry_id = _create_expense(client, list_id, owner_id, "Automercado")
 
-    assigned = client.post(
-        f"/lists/{list_id}/budgets/{budget_a}/assignments",
-        json={"ledger_entry_id": entry_id},
-    )
+    assigned = client.post(f"/budgets/{budget_a}/assignments", json={"ledger_entry_id": entry_id})
     assert assigned.status_code == 204, assigned.text
 
-    response = client.delete(f"/lists/{list_id}/budgets/{budget_b}/assignments/{entry_id}")
+    response = client.delete(f"/budgets/{budget_b}/assignments/{entry_id}")
     assert response.status_code == 404
     assert response.json()["code"] == "ledger_entry_not_found"
 
@@ -611,14 +576,13 @@ def test_assign_returns_404_ledger_entry_not_found_for_non_included_line_type(
 ) -> None:
     owner_id = _register(client, "attrnonincluded@example.com")
     list_id = _own_list_id(client)
-    budget_id = _create_budget(client, list_id, "Groceries")
+    budget_id = _create_budget(client, [list_id])
     entry_id = _seed_non_included_line_entry(
         db_session, list_id=uuid.UUID(list_id), payer_id=uuid.UUID(owner_id)
     )
 
     response = client.post(
-        f"/lists/{list_id}/budgets/{budget_id}/assignments",
-        json={"ledger_entry_id": str(entry_id)},
+        f"/budgets/{budget_id}/assignments", json={"ledger_entry_id": str(entry_id)}
     )
     assert response.status_code == 404
     assert response.json()["code"] == "ledger_entry_not_found"
@@ -629,27 +593,23 @@ def test_delete_rule_removes_previously_rule_attributed_line_from_spent_and_hist
 ) -> None:
     owner_id = _register(client, "attrruledeleteeffect@example.com")
     list_id = _own_list_id(client)
-    budget_id = _create_budget(client, list_id, "Groceries")
+    budget_id = _create_budget(client, [list_id])
     entry_id = _create_expense(client, list_id, owner_id, "Automercado")
 
-    rule = client.post(
-        f"/lists/{list_id}/budgets/{budget_id}/rules",
-        json={"match_text": "automercado"},
-    )
+    rule = client.post(f"/budgets/{budget_id}/rules", json={"match_text": "automercado"})
     assert rule.status_code == 201, rule.text
     rule_id = rule.json()["id"]
 
-    before = client.get(f"/lists/{list_id}/budgets/{budget_id}")
+    before = client.get(f"/budgets/{budget_id}")
     assert before.json()["spent"] == "10.00"
     assert len(before.json()["history"]) == 1
 
-    deleted = client.delete(f"/lists/{list_id}/budgets/{budget_id}/rules/{rule_id}")
+    deleted = client.delete(f"/budgets/{budget_id}/rules/{rule_id}")
     assert deleted.status_code == 204, deleted.text
 
-    after = client.get(f"/lists/{list_id}/budgets/{budget_id}")
+    after = client.get(f"/budgets/{budget_id}")
     assert after.json()["spent"] == "0"
     assert after.json()["history"] == []
     assert [
-        c["id"]
-        for c in client.get(f"/lists/{list_id}/budgets/{budget_id}/candidates").json()["candidates"]
+        c["id"] for c in client.get(f"/budgets/{budget_id}/candidates").json()["candidates"]
     ] == [entry_id]

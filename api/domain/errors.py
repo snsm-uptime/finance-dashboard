@@ -660,6 +660,17 @@ class InvalidBudgetCurrencyError(DomainError):
         super().__init__(detail or self.MESSAGE)
 
 
+class InvalidBudgetSourceListsError(DomainError):
+    """Raised when a create-budget submission names zero source lists after
+    dedup — a budget must always have at least one (Story 7.1, AD-30)."""
+
+    MESSAGE = "Select at least one source list."
+    CODE = "invalid_budget_source_lists"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
 class BudgetNotFoundError(DomainError):
     """Raised when a budget id does not exist for the acting user's list."""
 
