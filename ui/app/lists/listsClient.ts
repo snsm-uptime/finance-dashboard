@@ -25,7 +25,7 @@ export type ListItem = {
   owner_id: string;
   role: string;
   balance_crc?: string;
-  /** Running total for solo (1-member) lists — balance_crc is always "0" there. */
+  /** Running total of all entries on the list — shown alongside balance_crc. */
   total_crc?: string;
   members?: ListMember[];
 };

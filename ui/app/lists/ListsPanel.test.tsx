@@ -126,11 +126,11 @@ describe("ListsPanel roster chips", () => {
     expect(chipTexts(card)).not.toContain("alex");
   });
 
-  it("places a nonzero balance in the card middle", () => {
+  it("places a nonzero balance in the card middle, alongside the total", () => {
     act(() => {
       root.render(
         <ListsPanel
-          initialLists={[{ ...shared, balance_crc: "-12.50" }]}
+          initialLists={[{ ...shared, balance_crc: "-12.50", total_crc: "88.00" }]}
           currentUserId="owner-1"
         />,
       );
@@ -139,5 +139,24 @@ describe("ListsPanel roster chips", () => {
     const balanceCol = card?.querySelector(".cardBalanceCol");
     expect(balanceCol?.textContent).toContain(t.balanceOwe);
     expect(balanceCol?.textContent).toContain("₡12.5");
+    expect(balanceCol?.textContent).toContain(t.balanceTotal);
+    expect(balanceCol?.textContent).toContain("₡88");
+  });
+
+  it("shows only the total, with no owe/owed block, when a shared list is settled", () => {
+    act(() => {
+      root.render(
+        <ListsPanel
+          initialLists={[{ ...shared, balance_crc: "0", total_crc: "88.00" }]}
+          currentUserId="owner-1"
+        />,
+      );
+    });
+    const card = container.querySelector('[aria-label="Open list: Home"]');
+    const balanceCol = card?.querySelector(".cardBalanceCol");
+    expect(balanceCol?.textContent).not.toContain(t.balanceOwe);
+    expect(balanceCol?.textContent).not.toContain(t.balanceOwed);
+    expect(balanceCol?.textContent).toContain(t.balanceTotal);
+    expect(balanceCol?.textContent).toContain("₡88");
   });
 });

@@ -428,6 +428,12 @@
   line-height: 0 !important;
 }
 
+.balanceGroup {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+
 .balance {
   display: flex;
   flex-direction: column;

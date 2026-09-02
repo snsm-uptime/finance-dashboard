@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import Decimal
+from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
@@ -176,6 +177,25 @@ def test_owner_rename_updates_name_visible_via_membership_list() -> None:
     summaries = ListMembershipsService(repo).execute(ListMembershipsCommand(actor_user_id=member))
     assert len(summaries) == 1
     assert summaries[0].name == "New Name"
+
+
+def test_membership_summary_total_crc_sums_all_entries_on_a_shared_list() -> None:
+    repo = FakeListRepo()
+    owner = uuid4()
+    member = uuid4()
+    list_id = uuid4()
+    repo.create_owned_list(
+        owned_list=NewListRecord(id=list_id, name="Trip", owner_id=owner),
+        membership=NewMembershipRecord(id=uuid4(), list_id=list_id, user_id=owner, role="owner"),
+    )
+    repo.memberships.append(MembershipRecord(list_id=list_id, user_id=member, role="member"))
+    entries = [SimpleNamespace(amount_crc=Decimal("30.00")), SimpleNamespace(amount_crc=Decimal("15.50"))]
+    repo.list_ledger_entries = lambda lid: entries if lid == list_id else []  # type: ignore[method-assign]
+
+    summaries = ListMembershipsService(repo).execute(ListMembershipsCommand(actor_user_id=owner))
+
+    assert len(summaries) == 1
+    assert summaries[0].total_crc == "45.50"
 
 
 def test_non_member_rename_rejected() -> None:

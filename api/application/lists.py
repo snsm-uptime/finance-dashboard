@@ -594,19 +594,14 @@ class ListMembershipsService:
                     actor_user_id=command.actor_user_id,
                     owner_id=item.owner_id,
                 ),
-                # A solo list (1 member) has nothing to settle, so its net
-                # balance is always zero — the card shows the running total
-                # instead (same rationale as the list-detail solo strip).
-                total_crc=(
-                    self._solo_total_crc(item.id)
-                    if len(item.members) == 1
-                    else PLACEHOLDER_BALANCE_CRC
-                ),
+                # Running total of all entries on the list, shown on every
+                # card alongside the viewer's net balance (Story 5.9).
+                total_crc=self._total_crc(item.id),
             )
             for item in items
         ]
 
-    def _solo_total_crc(self, list_id: UUID) -> str:
+    def _total_crc(self, list_id: UUID) -> str:
         list_ledger = getattr(self._repo, "list_ledger_entries", None)
         if list_ledger is None:
             return PLACEHOLDER_BALANCE_CRC

@@ -341,26 +341,28 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
     const isOwner = list.owner_id === currentUserId;
     const isEditing = editingId === list.id;
     const draft = renameDrafts[list.id] ?? list.name;
-    const isSolo = (list.members?.length ?? 0) <= 1;
     const tone = balanceTone(list.balance_crc);
-    const balance = isSolo ? (
-      <span className={`${styles.balance} ${styles.balanceZero}`}>
-        <span className={styles.balanceToken}>{t.balanceTotal}</span>
-        <span className={styles.balanceAmount}>
-          {formatCardBalance(list.total_crc)}
-        </span>
-      </span>
-    ) : tone === "zero" ? null : (
-      <span
-        className={`${styles.balance} ${
-          tone === "owe" ? styles.balanceOwe : styles.balanceOwed
-        }`}
-      >
-        <span className={styles.balanceToken}>
-          {tone === "owe" ? t.balanceOwe : t.balanceOwed}
-        </span>
-        <span className={styles.balanceAmount}>
-          {formatCardBalance(list.balance_crc)}
+    const balance = (
+      <span className={styles.balanceGroup}>
+        {tone !== "zero" ? (
+          <span
+            className={`${styles.balance} ${
+              tone === "owe" ? styles.balanceOwe : styles.balanceOwed
+            }`}
+          >
+            <span className={styles.balanceToken}>
+              {tone === "owe" ? t.balanceOwe : t.balanceOwed}
+            </span>
+            <span className={styles.balanceAmount}>
+              {formatCardBalance(list.balance_crc)}
+            </span>
+          </span>
+        ) : null}
+        <span className={`${styles.balance} ${styles.balanceZero}`}>
+          <span className={styles.balanceToken}>{t.balanceTotal}</span>
+          <span className={styles.balanceAmount}>
+            {formatCardBalance(list.total_crc)}
+          </span>
         </span>
       </span>
     );
