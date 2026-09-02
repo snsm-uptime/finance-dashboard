@@ -72,9 +72,7 @@ class SqlAlchemyBudgetRepository:
     def _source_list_ids_for(self, budget_ids: list[UUID]) -> dict[UUID, tuple[UUID, ...]]:
         if not budget_ids:
             return {}
-        stmt = select(BudgetSourceListModel).where(
-            BudgetSourceListModel.budget_id.in_(budget_ids)
-        )
+        stmt = select(BudgetSourceListModel).where(BudgetSourceListModel.budget_id.in_(budget_ids))
         grouped: dict[UUID, list[UUID]] = defaultdict(list)
         for row in self._session.scalars(stmt).all():
             grouped[row.budget_id].append(row.list_id)
@@ -88,9 +86,7 @@ class SqlAlchemyBudgetRepository:
         )
         rows = self._session.scalars(stmt).all()
         source_lists_by_budget = self._source_list_ids_for([row.id for row in rows])
-        return [
-            _budget_record(row, source_lists_by_budget.get(row.id, ())) for row in rows
-        ]
+        return [_budget_record(row, source_lists_by_budget.get(row.id, ())) for row in rows]
 
     def get_budget(self, budget_id: UUID, owner_user_id: UUID) -> BudgetRecord | None:
         # Scoping by (id, owner_user_id) together — not id alone, then a

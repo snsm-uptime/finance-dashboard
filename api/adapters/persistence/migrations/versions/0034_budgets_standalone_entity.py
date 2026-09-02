@@ -64,8 +64,7 @@ def upgrade() -> None:
     op.create_index("ix_budget_source_lists_list_id", "budget_source_lists", ["list_id"])
 
     op.execute(
-        "INSERT INTO budget_source_lists (budget_id, list_id) "
-        "SELECT id, list_id FROM budgets"
+        "INSERT INTO budget_source_lists (budget_id, list_id) SELECT id, list_id FROM budgets"
     )
 
     op.drop_index("ix_budgets_list_id", table_name="budgets")
