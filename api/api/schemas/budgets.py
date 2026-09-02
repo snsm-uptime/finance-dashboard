@@ -23,6 +23,16 @@ class CreateBudgetBody(BaseModel):
     source_list_ids: list[UUID]
 
 
+class UpdateBudgetBody(BaseModel):
+    name: str = Field(max_length=BUDGET_NAME_MAX_LENGTH)
+    # cap arrives as a wire-layer string, never a JSON number (money rule).
+    cap: str
+    currency: str
+    # No min_length here — mirrors CreateBudgetBody so an empty list reaches
+    # validate_budget_source_list_ids and surfaces invalid_budget_source_lists.
+    source_list_ids: list[UUID]
+
+
 class BudgetResponse(BaseModel):
     id: UUID
     name: str
@@ -44,6 +54,8 @@ class BudgetHistoryLineResponse(BaseModel):
     posted_date: date
     amount_crc: str
     attributed_via: Literal["manual", "rule"]
+    viewer_share_crc: str
+    payer_id: UUID
 
 
 class BudgetRuleResponse(BaseModel):

@@ -311,6 +311,88 @@ class UpdateExpenseOriginService:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class ViewerLensResolution:
+    """Result of resolving a single ledger entry through the viewer-share lens.
+
+    `viewer_share_crc` is the viewer's allocated CRC share when resolvable,
+    falling back to the entry's full `amount_crc` when the lens itself is
+    unavailable (solo-member list) or resolution fails (same exceptions
+    `_with_viewer_lens` has always swallowed)."""
+
+    lens: ViewerExpenseLens | None
+    viewer_share_crc: Decimal
+    payer_id: UUID
+
+
+def resolve_viewer_lens_for_entry(
+    repo: SplitRepository,
+    *,
+    list_id: UUID,
+    subject_id: UUID,
+    receipt_id: UUID | None,
+    amount_crc: Decimal,
+    payer_id: UUID,
+    viewer_id: UUID,
+    members: list[UUID],
+    creator_user_id: UUID,
+    default_mode: str,
+    default_shares: dict[UUID, Decimal] | None,
+) -> ViewerLensResolution:
+    """Per-entry viewer-share resolution — extracted from
+    `ListExpensesService._with_viewer_lens` (Story 4.x) so budget history
+    lines (Story 7.3) can reuse the exact same split-resolution logic
+    without duplicating it."""
+    try:
+        item_override, receipt_override = load_item_override_specs(
+            repo,
+            list_id=list_id,
+            subject_id=subject_id,
+            receipt_id=receipt_id,
+        )
+        allocation = compute_share_allocations(
+            amount_crc,
+            "CRC",
+            item_override=item_override,
+            receipt_override=receipt_override,
+            list_default_mode=default_mode,
+            list_default_shares=default_shares,
+            member_ids=members,
+            creator_user_id=creator_user_id,
+        )
+        _, winning = resolve_override_source(
+            item_override=item_override,
+            receipt_override=receipt_override,
+        )
+        lens = build_viewer_expense_lens(
+            viewer_id=viewer_id,
+            payer_id=payer_id,
+            amount_crc=amount_crc,
+            allocations=allocation.allocations,
+            override=winning,
+            list_default_mode=default_mode,
+            list_default_shares=default_shares,
+            member_ids=members,
+        )
+        share_crc = next(
+            (row.amount for row in allocation.allocations if row.member_id == viewer_id),
+            None,
+        )
+        if share_crc is None:
+            share_crc = amount_crc
+    except (
+        InvalidSplitOverrideError,
+        InvalidDefaultSplitError,
+        SubjectNotFoundError,
+        ListNotFoundError,
+        KeyError,
+        ValueError,
+    ):
+        lens = None
+        share_crc = amount_crc
+    return ViewerLensResolution(lens=lens, viewer_share_crc=share_crc, payer_id=payer_id)
+
+
 class ListExpensesService:
     """Newest-first expenses for Soft-Ledger — authorize_list_access(read_expenses)."""
 
@@ -370,47 +452,20 @@ class ListExpensesService:
         default_shares: dict[UUID, Decimal] | None,
     ) -> ListedExpense:
         origin_card_label = self._origin_card_label(row, actor_user_id)
-        try:
-            item_override, receipt_override = load_item_override_specs(
-                self._repo,  # type: ignore[arg-type]
-                list_id=row.list_id,
-                subject_id=row.id,
-                receipt_id=row.receipt_id,
-            )
-            allocation = compute_share_allocations(
-                row.amount_crc,
-                "CRC",
-                item_override=item_override,
-                receipt_override=receipt_override,
-                list_default_mode=default_mode,
-                list_default_shares=default_shares,
-                member_ids=members,
-                creator_user_id=creator_user_id,
-            )
-            _, winning = resolve_override_source(
-                item_override=item_override,
-                receipt_override=receipt_override,
-            )
-            lens = build_viewer_expense_lens(
-                viewer_id=actor_user_id,
-                payer_id=row.payer_id,
-                amount_crc=row.amount_crc,
-                allocations=allocation.allocations,
-                override=winning,
-                list_default_mode=default_mode,
-                list_default_shares=default_shares,
-                member_ids=members,
-            )
-        except (
-            InvalidSplitOverrideError,
-            InvalidDefaultSplitError,
-            SubjectNotFoundError,
-            ListNotFoundError,
-            KeyError,
-            ValueError,
-        ):
-            lens = None
-        return ListedExpense(entry=row, lens=lens, origin_card_label=origin_card_label)
+        resolution = resolve_viewer_lens_for_entry(
+            self._repo,  # type: ignore[arg-type]
+            list_id=row.list_id,
+            subject_id=row.id,
+            receipt_id=row.receipt_id,
+            amount_crc=row.amount_crc,
+            payer_id=row.payer_id,
+            viewer_id=actor_user_id,
+            members=members,
+            creator_user_id=creator_user_id,
+            default_mode=default_mode,
+            default_shares=default_shares,
+        )
+        return ListedExpense(entry=row, lens=resolution.lens, origin_card_label=origin_card_label)
 
     def _origin_card_label(self, row: LedgerEntryRecord, actor_user_id: UUID) -> str | None:
         if row.origin_kind != "card" or row.origin_card_id is None:
@@ -461,4 +516,6 @@ __all__ = [
     "ListNotFoundError",
     "UpdateExpenseOriginCommand",
     "UpdateExpenseOriginService",
+    "ViewerLensResolution",
+    "resolve_viewer_lens_for_entry",
 ]
