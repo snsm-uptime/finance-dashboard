@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { act } from "react";
+import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -38,13 +38,15 @@ function EnableHeader({
   title,
   details,
   onBack,
+  progressBar,
 }: {
   href?: string;
   title?: string;
   details?: string;
   onBack?: () => void;
+  progressBar?: ReactNode;
 }) {
-  useChromeHeader({ backHref: href, title, details, onBack });
+  useChromeHeader({ backHref: href, title, details, onBack, progressBar });
   return <p>screen</p>;
 }
 
@@ -146,6 +148,39 @@ describe("AppShell chrome header", () => {
     });
     expect(onBack).toHaveBeenCalledTimes(1);
     expect(push).not.toHaveBeenCalled();
+  });
+
+  it("renders the opted-in progressBar outside the scrollable content area", async () => {
+    await act(async () => {
+      root.render(
+        <AppShell>
+          <EnableHeader
+            href="/budgets/b1"
+            title="Groceries"
+            progressBar={<div data-testid="progress-strip">bar</div>}
+          />
+        </AppShell>,
+      );
+    });
+
+    const strip = container.querySelector('[data-testid="progress-strip"]');
+    expect(strip).toBeTruthy();
+    // Not inside the scrollable children region, which is the sibling after
+    // the (possible) header row — the strip sits before it.
+    const scrollable = container.querySelector(".overflow-y-auto");
+    expect(scrollable?.contains(strip)).toBe(false);
+  });
+
+  it("omits the progressBar strip when not opted in", async () => {
+    await act(async () => {
+      root.render(
+        <AppShell>
+          <EnableHeader href="/budgets/b1" title="Groceries" />
+        </AppShell>,
+      );
+    });
+
+    expect(container.querySelector('[data-testid="progress-strip"]')).toBeNull();
   });
 
   it("shows the header when a screen opts in with title only", async () => {

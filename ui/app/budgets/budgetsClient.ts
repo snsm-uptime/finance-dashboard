@@ -28,18 +28,31 @@ export type BudgetStateMessages = {
 };
 
 /** Near-cap-state to display label mapping (AC #2 — distinct treatment, not a bare percentage). */
-export function budgetStateLabel(state: BudgetItem["state"], t: BudgetStateMessages): string {
+export function budgetStateLabel(
+  state: BudgetItem["state"],
+  t: BudgetStateMessages,
+): string {
   if (state === "over") return t.budgetsStateOver;
   if (state === "near") return t.budgetsStateNear;
   return t.budgetsStateOk;
 }
 
 /** spent / cap as a 0-100+ percentage, or null when cap is missing/zero/non-numeric. */
-export function budgetUsageRatio(budget: Pick<BudgetItem, "spent" | "cap">): number | null {
+export function budgetUsageRatio(
+  budget: Pick<BudgetItem, "spent" | "cap">,
+): number | null {
   const spent = Number.parseFloat(budget.spent);
   const cap = Number.parseFloat(budget.cap);
   if (!Number.isFinite(spent) || !Number.isFinite(cap) || cap <= 0) return null;
   return (spent / cap) * 100;
+}
+
+/** Three-tier ratio → severity color class, shared between the list tile and detail-page top bars. */
+export function budgetSeverityColorClass(ratio: number | null): string {
+  if (ratio === null) return "bg-muted";
+  if (ratio < 70) return "bg-owed";
+  if (ratio <= 90) return "bg-warn";
+  return "bg-owe";
 }
 
 type ErrorResult = { ok: false; error: string };
@@ -53,11 +66,14 @@ function mapError(
 ): string {
   const code = typeof body?.code === "string" ? body.code : "";
   if (status === 401) return messages.errorUnauthorized;
-  if (status === 403 || code === "not_list_member") return messages.errorForbidden;
+  if (status === 403 || code === "not_list_member")
+    return messages.errorForbidden;
   if (code === "invalid_budget_name") return messages.errorInvalidBudgetName;
   if (code === "invalid_budget_cap") return messages.errorInvalidBudgetCap;
-  if (code === "invalid_budget_currency") return messages.errorInvalidBudgetCurrency;
-  if (code === "invalid_budget_source_lists") return messages.errorInvalidBudgetSourceLists;
+  if (code === "invalid_budget_currency")
+    return messages.errorInvalidBudgetCurrency;
+  if (code === "invalid_budget_source_lists")
+    return messages.errorInvalidBudgetSourceLists;
   return messages.errorGeneric;
 }
 
@@ -120,7 +136,10 @@ export async function fetchBudgets(
     return { ok: false, error: messages.errorGeneric };
   }
   if (!response.ok) {
-    const body = (await parseJson(response)) as { detail?: unknown; code?: unknown } | null;
+    const body = (await parseJson(response)) as {
+      detail?: unknown;
+      code?: unknown;
+    } | null;
     return { ok: false, error: mapError(response.status, body, messages) };
   }
   const data = (await parseJson(response)) as { budgets?: unknown } | null;
@@ -136,14 +155,22 @@ export async function fetchBudgets(
 }
 
 export async function createBudget(
-  body: { name: string; cap: string; currency: string; source_list_ids: string[] },
+  body: {
+    name: string;
+    cap: string;
+    currency: string;
+    source_list_ids: string[];
+  },
   messages: BudgetsClientMessages,
 ): Promise<OkBudget | ErrorResult> {
   let response: Response;
   try {
     response = await fetch("/api/budgets", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
       credentials: "same-origin",
       body: JSON.stringify(body),
     });
@@ -151,7 +178,10 @@ export async function createBudget(
     return { ok: false, error: messages.errorGeneric };
   }
   if (!response.ok) {
-    const parsed = (await parseJson(response)) as { detail?: unknown; code?: unknown } | null;
+    const parsed = (await parseJson(response)) as {
+      detail?: unknown;
+      code?: unknown;
+    } | null;
     return { ok: false, error: mapError(response.status, parsed, messages) };
   }
   const budget = asBudgetFromWire(await parseJson(response));
