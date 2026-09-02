@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { BackIcon } from "@/app/icons";
+import { BackIcon, FolderIcon, HomeIcon, UserIcon, WalletIcon } from "@/app/icons";
 import {
   ChromeBackProvider,
   chromeHeaderIsActive,
@@ -11,8 +11,9 @@ import {
 } from "@/components/ChromeBack";
 import { IconButton } from "@/components/IconButton";
 import { usePreferences } from "@/components/PreferencesProvider";
-import { TabBar } from "@/components/soft-ledger/TabBar";
+import { TabBar, type TabBarItem } from "@/components/soft-ledger/TabBar";
 import { accountCopy } from "@/lib/i18n/account";
+import { cardsCopy } from "@/lib/i18n/cards";
 import { showsAppChrome, tabKeyFromPath } from "@/lib/appChrome";
 import { listsMessages } from "@/lib/i18n/lists";
 
@@ -31,8 +32,16 @@ function AppShellFrame({ children }: { children: ReactNode }) {
   const { locale } = usePreferences();
   const t = listsMessages[locale];
   const account = accountCopy(locale);
+  const cards = cardsCopy(locale);
   const header = useChromeHeaderState();
   const showHeader = chromeHeaderIsActive(header);
+
+  const tabs: TabBarItem[] = [
+    { key: "home", href: "/home", label: t.tabList, Icon: HomeIcon },
+    { key: "cards", href: "/cards", label: cards.title, Icon: WalletIcon },
+    { key: "budgets", href: "/budgets", label: t.budgetsEntryLabel, Icon: FolderIcon },
+    { key: "account", href: "/account", label: account.navAccount, Icon: UserIcon },
+  ];
 
   if (!showsAppChrome(pathname)) {
     return <div className="fixed inset-0 overflow-y-auto">{children}</div>;
@@ -79,16 +88,7 @@ function AppShellFrame({ children }: { children: ReactNode }) {
         ) : null}
         <div className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">{children}</div>
       </div>
-      <TabBar
-        homeHref="/home"
-        uploadHref="/upload"
-        accountHref="/account"
-        homeLabel={t.tabList}
-        uploadLabel={t.uploadLink}
-        accountLabel={account.navAccount}
-        ariaLabel={t.tabNavAria}
-        active={tabKeyFromPath(pathname)}
-      />
+      <TabBar items={tabs} ariaLabel={t.tabNavAria} active={tabKeyFromPath(pathname)} />
     </div>
   );
 }

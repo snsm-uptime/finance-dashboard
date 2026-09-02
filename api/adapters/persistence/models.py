@@ -498,15 +498,16 @@ class CardModel(Base):
 
 
 class BudgetModel(Base):
-    """A list-scoped named cap (Story 6.3, FR-48). No uniqueness on
-    (list_id, name) — nothing in FR-48/epics.md requires unique budget names."""
+    """A standalone, owner-scoped named cap spanning one or more source
+    lists (Story 7.1, AD-30). No uniqueness on (owner_user_id, name) —
+    nothing in FR-48/epics.md requires unique budget names."""
 
     __tablename__ = "budgets"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
-    list_id: Mapped[uuid.UUID] = mapped_column(
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("lists.id", ondelete="CASCADE"),
+        ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -515,6 +516,25 @@ class BudgetModel(Base):
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class BudgetSourceListModel(Base):
+    """One (budget, list) pairing a budget draws spend from (Story 7.1,
+    AD-30). Composite PK — a budget cannot name the same source list twice."""
+
+    __tablename__ = "budget_source_lists"
+
+    budget_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("budgets.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    list_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("lists.id", ondelete="CASCADE"),
+        primary_key=True,
+        index=True,
     )
 
 
@@ -529,14 +549,6 @@ class BudgetRuleModel(Base):
     budget_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("budgets.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    # Denormalized alongside budget_id (mirrors SplitOverrideModel.list_id
-    # beside subject_id) so list-scoped queries don't require a join through budgets.
-    list_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("lists.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )

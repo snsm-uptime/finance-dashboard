@@ -1,17 +1,20 @@
 import Link from "next/link";
+import type { ComponentType, SVGProps } from "react";
 
-import { HomeIcon, UploadIcon, UserIcon } from "@/app/icons";
 import iconButtonStyles from "@/components/IconButton/IconButton.module.scss";
 
-export type TabKey = "home" | "upload" | "account";
+/** A tab's identity is caller-defined — new tabs are just new items, no prop added here. */
+export type TabKey = string;
+
+export type TabBarItem = {
+  key: TabKey;
+  href: string;
+  label: string;
+  Icon: ComponentType<SVGProps<SVGSVGElement>>;
+};
 
 type TabBarProps = {
-  homeHref: string;
-  uploadHref: string;
-  accountHref: string;
-  homeLabel: string;
-  uploadLabel: string;
-  accountLabel: string;
+  items: TabBarItem[];
   active?: TabKey;
   /** Localized landmark label (required — do not hardcode English). */
   ariaLabel: string;
@@ -25,45 +28,25 @@ const tabClass = [
 ].join(" ");
 const iconClass = "size-6";
 
-export function TabBar({
-  homeHref,
-  uploadHref,
-  accountHref,
-  homeLabel,
-  uploadLabel,
-  accountLabel,
-  active,
-  ariaLabel,
-}: TabBarProps) {
+/** Bottom nav — dynamic over `items` so a new tab (e.g. Budgets) is one array
+ * entry, not a new prop pair + a new hardcoded <Link>. */
+export function TabBar({ items, active, ariaLabel }: TabBarProps) {
   return (
     <nav
       className="flex justify-evenly items-center mt-auto shrink-0 bg-surface border-t border-border pb-[env(safe-area-inset-bottom)]"
       aria-label={ariaLabel}
     >
-      <Link
-        className={tabClass}
-        href={homeHref}
-        aria-label={homeLabel}
-        aria-current={active === "home" ? "page" : undefined}
-      >
-        <HomeIcon className={iconClass} />
-      </Link>
-      <Link
-        className={tabClass}
-        href={uploadHref}
-        aria-label={uploadLabel}
-        aria-current={active === "upload" ? "page" : undefined}
-      >
-        <UploadIcon className={iconClass} />
-      </Link>
-      <Link
-        className={tabClass}
-        href={accountHref}
-        aria-label={accountLabel}
-        aria-current={active === "account" ? "page" : undefined}
-      >
-        <UserIcon className={iconClass} />
-      </Link>
+      {items.map((item) => (
+        <Link
+          key={item.key}
+          className={tabClass}
+          href={item.href}
+          aria-label={item.label}
+          aria-current={active === item.key ? "page" : undefined}
+        >
+          <item.Icon className={iconClass} />
+        </Link>
+      ))}
     </nav>
   );
 }

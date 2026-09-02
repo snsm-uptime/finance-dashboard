@@ -1,8 +1,5 @@
 /* Home fills the AppShell viewport slot: the page header stays pinned and
-   the Lists / Cards area is the only thing that scrolls.
-   Phone: one stacked column, one scrollbar — the sections flow normally.
-   From md: two side-by-side columns, each with a pinned head and its own scroll
-   port, because there is height to spend on that split. */
+   the Lists area is the only thing that scrolls. */
 .page {
   display: flex;
   flex-direction: column;
@@ -16,71 +13,10 @@
   padding: 1rem 1.5rem;
 }
 
-/* Home split: Lists leads (top on phone, left from md); Cards trails (bottom on phone, right from md). */
-/* Phone: the single scroll region. Sections inside it flow at natural height. */
 .layout {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: var(--space-6);
   padding: 0 1.5rem 1.5rem;
   margin: 0;
-}
-
-.listsColumn,
-.cardsColumn {
-  min-width: 0;
-}
-
-.cardsColumn {
-  padding-top: 1.5rem;
-  border-top: 1px solid var(--border);
-}
-
-/* Breakpoint: 768px matches Tailwind default md: breakpoint (see lists.module.scss). */
-@media (min-width: 768px) {
-  /* Side by side, and the split takes over the scrolling from .layout. */
-  .layout {
-    flex-direction: row;
-    align-items: stretch;
-    overflow: hidden;
-  }
-
-  /* Each column is a pinned head over its own scroll port; the column itself
-     never scrolls. min-width/min-height 0 is what lets a flex item shrink below
-     its content, which is what makes overflow-y engage. */
-  .listsColumn,
-  .cardsColumn {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    overflow: hidden;
-    padding-bottom: 1.5rem;
-  }
-
-  .columnHead {
-    flex: 0 0 auto;
-  }
-
-  .columnBody {
-    flex: 1 1 0;
-    min-height: 0;
-    overflow-y: auto;
-  }
-
-  .listsColumn {
-    flex: 2 1 0;
-  }
-
-  .cardsColumn {
-    flex: 1 1 0;
-    max-width: 24rem;
-    padding-top: 0;
-    padding-left: 1.5rem;
-    border-top: none;
-    border-left: 1px solid var(--border);
-  }
 }

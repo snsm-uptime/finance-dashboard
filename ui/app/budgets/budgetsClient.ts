@@ -1,13 +1,13 @@
-/** Client helpers for budget create via same-origin BFF (Story 6.3). */
+/** Client helpers for standalone budget create/list via same-origin BFF (Story 7.1). */
 
 export type BudgetItem = {
   id: string;
-  list_id: string;
   name: string;
   cap: string;
   currency: string;
   spent: string;
   state: "ok" | "near" | "over";
+  source_list_ids: string[];
   created_at: string;
 };
 
@@ -17,6 +17,8 @@ export type BudgetsClientMessages = {
   errorInvalidBudgetName: string;
   errorInvalidBudgetCap: string;
   errorInvalidBudgetCurrency: string;
+  errorInvalidBudgetSourceLists: string;
+  errorForbidden: string;
 };
 
 export type BudgetStateMessages = {
@@ -51,9 +53,11 @@ function mapError(
 ): string {
   const code = typeof body?.code === "string" ? body.code : "";
   if (status === 401) return messages.errorUnauthorized;
+  if (status === 403 || code === "not_list_member") return messages.errorForbidden;
   if (code === "invalid_budget_name") return messages.errorInvalidBudgetName;
   if (code === "invalid_budget_cap") return messages.errorInvalidBudgetCap;
   if (code === "invalid_budget_currency") return messages.errorInvalidBudgetCurrency;
+  if (code === "invalid_budget_source_lists") return messages.errorInvalidBudgetSourceLists;
   return messages.errorGeneric;
 }
 
@@ -65,40 +69,49 @@ async function parseJson(response: Response): Promise<unknown | null> {
   }
 }
 
+// Defensive parsing of the `source_lists` response shape — an unexpected
+// wire shape drops the row rather than crashing the panel (Story 7.1, AC #6).
 function asBudget(data: unknown): BudgetItem | null {
   if (!data || typeof data !== "object") return null;
   const row = data as Partial<BudgetItem>;
   if (
     typeof row.id !== "string" ||
-    typeof row.list_id !== "string" ||
     typeof row.name !== "string" ||
     typeof row.cap !== "string" ||
     typeof row.currency !== "string" ||
     typeof row.spent !== "string" ||
     (row.state !== "ok" && row.state !== "near" && row.state !== "over") ||
+    !Array.isArray(row.source_list_ids) ||
+    !row.source_list_ids.every((id) => typeof id === "string") ||
     typeof row.created_at !== "string"
   ) {
     return null;
   }
   return {
     id: row.id,
-    list_id: row.list_id,
     name: row.name,
     cap: row.cap,
     currency: row.currency,
     spent: row.spent,
     state: row.state,
+    source_list_ids: row.source_list_ids,
     created_at: row.created_at,
   };
 }
 
+function asBudgetFromWire(data: unknown): BudgetItem | null {
+  if (!data || typeof data !== "object") return null;
+  const row = data as { source_lists?: unknown };
+  if (!Array.isArray(row.source_lists)) return null;
+  return asBudget({ ...(data as object), source_list_ids: row.source_lists });
+}
+
 export async function fetchBudgets(
-  listId: string,
   messages: BudgetsClientMessages,
 ): Promise<OkBudgets | ErrorResult> {
   let response: Response;
   try {
-    response = await fetch(`/api/lists/${encodeURIComponent(listId)}/budgets`, {
+    response = await fetch("/api/budgets", {
       method: "GET",
       headers: { Accept: "application/json" },
       credentials: "same-origin",
@@ -116,20 +129,19 @@ export async function fetchBudgets(
   }
   const budgets: BudgetItem[] = [];
   for (const row of data.budgets) {
-    const parsed = asBudget(row);
+    const parsed = asBudgetFromWire(row);
     if (parsed) budgets.push(parsed);
   }
   return { ok: true, budgets };
 }
 
 export async function createBudget(
-  listId: string,
-  body: { name: string; cap: string; currency: string },
+  body: { name: string; cap: string; currency: string; source_list_ids: string[] },
   messages: BudgetsClientMessages,
 ): Promise<OkBudget | ErrorResult> {
   let response: Response;
   try {
-    response = await fetch(`/api/lists/${encodeURIComponent(listId)}/budgets`, {
+    response = await fetch("/api/budgets", {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       credentials: "same-origin",
@@ -142,7 +154,7 @@ export async function createBudget(
     const parsed = (await parseJson(response)) as { detail?: unknown; code?: unknown } | null;
     return { ok: false, error: mapError(response.status, parsed, messages) };
   }
-  const budget = asBudget(await parseJson(response));
+  const budget = asBudgetFromWire(await parseJson(response));
   if (!budget) return { ok: false, error: messages.errorGeneric };
   return { ok: true, budget };
 }

@@ -1,6 +1,8 @@
-"""Unit tests for budget name/cap/currency validation + near-cap classification (Story 6.3)."""
+"""Unit tests for budget name/cap/currency validation + near-cap classification
+(Story 6.3) and source-list-id validation (Story 7.1)."""
 
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
 from domain.budgets import (
@@ -9,11 +11,13 @@ from domain.budgets import (
     validate_budget_cap,
     validate_budget_currency,
     validate_budget_name,
+    validate_budget_source_list_ids,
 )
 from domain.errors import (
     InvalidBudgetCapError,
     InvalidBudgetCurrencyError,
     InvalidBudgetNameError,
+    InvalidBudgetSourceListsError,
 )
 
 
@@ -100,3 +104,21 @@ class TestClassifyBudgetState:
     def test_over_cap_is_over(self):
         cap = Decimal("100")
         assert classify_budget_state(Decimal("150"), cap) == "over"
+
+
+class TestValidateBudgetSourceListIds:
+    def test_empty_list_rejected(self):
+        with pytest.raises(InvalidBudgetSourceListsError):
+            validate_budget_source_list_ids([])
+
+    def test_single_id_accepted(self):
+        list_id = uuid4()
+        assert validate_budget_source_list_ids([list_id]) == (list_id,)
+
+    def test_duplicate_ids_deduped_to_one(self):
+        list_id = uuid4()
+        assert validate_budget_source_list_ids([list_id, list_id]) == (list_id,)
+
+    def test_order_preserving_dedupe_with_repeat_in_middle(self):
+        a, b, c = uuid4(), uuid4(), uuid4()
+        assert validate_budget_source_list_ids([a, b, a, c]) == (a, b, c)

@@ -20,7 +20,7 @@ function maskIban(iban: string): string {
   return `•••• ${iban.slice(-4)}`;
 }
 
-/** Embeds into another page's layout (e.g. Home, Account) — no standalone page chrome. */
+/** Standalone /cards route content — card registration + per-card routing. */
 export function CardsPanel() {
   const { locale } = usePreferences();
   const t = cardsCopy(locale);

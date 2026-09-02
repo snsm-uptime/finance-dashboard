@@ -2,10 +2,12 @@
 
 import { FormEvent, useId, useState } from "react";
 
+import { chipClassName } from "@/components/Chip";
 import { IconButton } from "@/components/IconButton";
 import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
 import { useFormSubmission } from "@/hooks";
 import { PlusIcon } from "@/app/icons";
+import type { ListItem } from "@/app/lists/listsClient";
 
 import { createBudget, type BudgetItem, type BudgetsClientMessages } from "./budgetsClient";
 
@@ -14,12 +16,13 @@ export type BudgetsCreateFormMessages = BudgetsClientMessages & {
   budgetsNameLabel: string;
   budgetsCapLabel: string;
   budgetsCurrencyLabel: string;
+  budgetsSourceListsLabel: string;
   budgetsCreateSubmit: string;
   budgetsCreating: string;
 };
 
 type Props = {
-  listId: string;
+  lists: ListItem[];
   messages: BudgetsCreateFormMessages;
   onCreated: (budget: BudgetItem) => void;
 };
@@ -32,7 +35,19 @@ const CURRENCY_OPTIONS = [
 const fieldInputClass =
   "min-w-0 flex-1 font-inherit text-[0.9rem] bg-transparent text-foreground placeholder:text-muted outline-none";
 
-export function BudgetsCreateForm({ listId, messages, onCreated }: Props) {
+// Same trigger look as CardRoutingControl's routing chip: accent tone = the
+// active/selected setting, muted = unselected. Hover + selection are both
+// animated (color/border transition plus a small press/lift scale).
+const chipFocusRing =
+  "cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+const chipTransition =
+  "transition-[color,background-color,border-color,transform] duration-150 ease-out motion-reduce:transition-none";
+function sourceListChipClassName(selected: boolean): string {
+  const hover = selected ? "hover:bg-accent/10" : "hover:border-muted";
+  return `${chipClassName[selected ? "accent" : "muted"]} ${chipFocusRing} ${chipTransition} ${hover} hover:scale-[1.04] active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100`;
+}
+
+export function BudgetsCreateForm({ lists, messages, onCreated }: Props) {
   const baseId = useId();
   const currencyId = `${baseId}-currency`;
   const currencyLabelId = `${baseId}-currency-label`;
@@ -41,30 +56,45 @@ export function BudgetsCreateForm({ listId, messages, onCreated }: Props) {
   const [name, setName] = useState("");
   const [cap, setCap] = useState("");
   const [currency, setCurrency] = useState("CRC");
+  const [selectedListIds, setSelectedListIds] = useState<string[]>([]);
 
   const { pending, error, submit, clearError } = useFormSubmission(
-    async (body: { name: string; cap: string; currency: string }) => {
-      const result = await createBudget(listId, body, messages);
+    async (body: { name: string; cap: string; currency: string; source_list_ids: string[] }) => {
+      const result = await createBudget(body, messages);
       if (result.ok) {
         setName("");
         setCap("");
         setCurrency("CRC");
+        setSelectedListIds([]);
         onCreated(result.budget);
       }
       return result;
     },
   );
 
-  const canSubmit = name.trim().length > 0 && cap.trim().length > 0 && !pending;
+  const canSubmit =
+    name.trim().length > 0 && cap.trim().length > 0 && selectedListIds.length > 0 && !pending;
+
+  function toggleListId(listId: string) {
+    setSelectedListIds((prev) =>
+      prev.includes(listId) ? prev.filter((id) => id !== listId) : [...prev, listId],
+    );
+    clearError();
+  }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canSubmit) return;
-    await submit({ name: name.trim(), cap: cap.trim(), currency });
+    await submit({
+      name: name.trim(),
+      cap: cap.trim(),
+      currency,
+      source_list_ids: selectedListIds,
+    });
   }
 
   return (
-    <form className="flex w-full flex-col" onSubmit={onSubmit}>
+    <form className="flex w-full flex-col gap-[var(--space-2)]" onSubmit={onSubmit}>
       <div className="flex items-center gap-2 rounded-[8px] border-2 border-border bg-background px-[0.65rem] py-[0.5rem]">
         <span className="sr-only" id={currencyLabelId}>
           {messages.budgetsCurrencyLabel}
@@ -125,9 +155,26 @@ export function BudgetsCreateForm({ listId, messages, onCreated }: Props) {
           icon={<PlusIcon />}
         />
       </div>
+      <div className="flex flex-wrap gap-2" role="group" aria-label={messages.budgetsSourceListsLabel}>
+        {lists.map((list) => {
+          const selected = selectedListIds.includes(list.id);
+          return (
+            <button
+              key={list.id}
+              type="button"
+              aria-pressed={selected}
+              disabled={pending}
+              onClick={() => toggleListId(list.id)}
+              className={sourceListChipClassName(selected)}
+            >
+              {list.name}
+            </button>
+          );
+        })}
+      </div>
       <div aria-live="polite">
         {error ? (
-          <p className="m-0 mt-1 text-[0.85rem] text-owe" role="alert">
+          <p className="m-0 text-[0.85rem] text-owe" role="alert">
             {error}
           </p>
         ) : null}

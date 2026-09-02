@@ -8,11 +8,13 @@ from __future__ import annotations
 import re
 from decimal import Decimal
 from typing import Literal
+from uuid import UUID
 
 from domain.errors import (
     InvalidBudgetCapError,
     InvalidBudgetCurrencyError,
     InvalidBudgetNameError,
+    InvalidBudgetSourceListsError,
 )
 from domain.line_types import (
     LINE_TYPE_CLASSIFIED_PURCHASE_REVERSAL,
@@ -111,6 +113,23 @@ def validate_budget_currency(raw: str) -> str:
     if raw not in SUPPORTED_BUDGET_CURRENCIES:
         raise InvalidBudgetCurrencyError(f"Currency {raw!r} is not supported.")
     return raw
+
+
+def validate_budget_source_list_ids(raw: list[UUID]) -> tuple[UUID, ...]:
+    """Dedupe (preserve first-seen order), then require at least one id.
+
+    Pure, no repo access — membership checking (whether the caller actually
+    belongs to each list) is an application-layer concern; this only
+    enforces cardinality/shape (Story 7.1, AC #4)."""
+    deduped: list[UUID] = []
+    seen: set[UUID] = set()
+    for list_id in raw:
+        if list_id not in seen:
+            seen.add(list_id)
+            deduped.append(list_id)
+    if not deduped:
+        raise InvalidBudgetSourceListsError()
+    return tuple(deduped)
 
 
 def classify_budget_state(spent: Decimal, cap: Decimal) -> BudgetState:

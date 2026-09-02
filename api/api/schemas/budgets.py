@@ -16,16 +16,21 @@ class CreateBudgetBody(BaseModel):
     # cap arrives as a wire-layer string, never a JSON number (money rule).
     cap: str
     currency: str
+    # No min_length here (unlike a naive shape hint) — an empty list must
+    # reach validate_budget_source_list_ids so the response carries our
+    # invalid_budget_source_lists code (AC #4), not FastAPI's generic
+    # Pydantic-validation-error shape.
+    source_list_ids: list[UUID]
 
 
 class BudgetResponse(BaseModel):
     id: UUID
-    list_id: UUID
     name: str
     cap: str
     currency: str
     spent: str
     state: Literal["ok", "near", "over"]
+    source_lists: list[UUID]
     created_at: datetime
 
 
@@ -49,12 +54,12 @@ class BudgetRuleResponse(BaseModel):
 
 class BudgetDetailResponse(BaseModel):
     id: UUID
-    list_id: UUID
     name: str
     cap: str
     currency: str
     spent: str
     state: Literal["ok", "near", "over"]
+    source_lists: list[UUID]
     created_at: datetime
     history: list[BudgetHistoryLineResponse] = Field(default_factory=list)
     rules: list[BudgetRuleResponse] = Field(default_factory=list)

@@ -1,8 +1,9 @@
-"""SQLAlchemy repository for list-scoped budgets (Story 6.3) and attribution
-(manual assignment, rules, candidates — Story 6.5)."""
+"""SQLAlchemy repository for standalone, owner-scoped budgets (Story 7.1,
+AD-30) and attribution (manual assignment, rules, candidates — Story 6.5)."""
 
 from __future__ import annotations
 
+from collections import defaultdict
 from decimal import Decimal
 from uuid import UUID
 
@@ -11,17 +12,23 @@ from application.expenses import LedgerEntryRecord
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from adapters.persistence.models import BudgetModel, BudgetRuleModel, LedgerEntryModel
+from adapters.persistence.models import (
+    BudgetModel,
+    BudgetRuleModel,
+    BudgetSourceListModel,
+    LedgerEntryModel,
+)
 from adapters.persistence.repositories import _ledger_entry_record
 
 
-def _budget_record(row: BudgetModel) -> BudgetRecord:
+def _budget_record(row: BudgetModel, source_list_ids: tuple[UUID, ...]) -> BudgetRecord:
     return BudgetRecord(
         id=row.id,
-        list_id=row.list_id,
+        owner_user_id=row.owner_user_id,
         name=row.name,
         cap_amount=row.cap_amount,
         currency=row.currency,
+        source_list_ids=source_list_ids,
         created_at=row.created_at,
     )
 
@@ -30,7 +37,6 @@ def _budget_rule_record(row: BudgetRuleModel) -> BudgetRuleRecord:
     return BudgetRuleRecord(
         id=row.id,
         budget_id=row.budget_id,
-        list_id=row.list_id,
         match_text=row.match_text,
         created_at=row.created_at,
     )
@@ -44,40 +50,56 @@ class SqlAlchemyBudgetRepository:
         self,
         *,
         budget_id: UUID,
-        list_id: UUID,
+        owner_user_id: UUID,
         name: str,
         cap_amount: Decimal,
         currency: str,
+        source_list_ids: tuple[UUID, ...],
     ) -> BudgetRecord:
         row = BudgetModel(
             id=budget_id,
-            list_id=list_id,
+            owner_user_id=owner_user_id,
             name=name,
             cap_amount=cap_amount,
             currency=currency,
         )
         self._session.add(row)
+        for list_id in source_list_ids:
+            self._session.add(BudgetSourceListModel(budget_id=budget_id, list_id=list_id))
         self._session.flush()
-        return _budget_record(row)
+        return _budget_record(row, source_list_ids)
 
-    def list_budgets_for_list(self, list_id: UUID) -> list[BudgetRecord]:
+    def _source_list_ids_for(self, budget_ids: list[UUID]) -> dict[UUID, tuple[UUID, ...]]:
+        if not budget_ids:
+            return {}
+        stmt = select(BudgetSourceListModel).where(BudgetSourceListModel.budget_id.in_(budget_ids))
+        grouped: dict[UUID, list[UUID]] = defaultdict(list)
+        for row in self._session.scalars(stmt).all():
+            grouped[row.budget_id].append(row.list_id)
+        return {budget_id: tuple(list_ids) for budget_id, list_ids in grouped.items()}
+
+    def list_budgets_for_owner(self, owner_user_id: UUID) -> list[BudgetRecord]:
         stmt = (
             select(BudgetModel)
-            .where(BudgetModel.list_id == list_id)
+            .where(BudgetModel.owner_user_id == owner_user_id)
             .order_by(BudgetModel.created_at.asc(), BudgetModel.id.asc())
         )
         rows = self._session.scalars(stmt).all()
-        return [_budget_record(row) for row in rows]
+        source_lists_by_budget = self._source_list_ids_for([row.id for row in rows])
+        return [_budget_record(row, source_lists_by_budget.get(row.id, ())) for row in rows]
 
-    def get_budget(self, budget_id: UUID, list_id: UUID) -> BudgetRecord | None:
-        # Scoping by (id, list_id) together — not id alone, then a separate
-        # ownership check — is what makes a budget on a different list 404
-        # exactly like a nonexistent one (Story 6.4 AC #3).
+    def get_budget(self, budget_id: UUID, owner_user_id: UUID) -> BudgetRecord | None:
+        # Scoping by (id, owner_user_id) together — not id alone, then a
+        # separate ownership check — is what makes a budget owned by
+        # another user 404 exactly like a nonexistent one (AC #2).
         stmt = select(BudgetModel).where(
-            BudgetModel.id == budget_id, BudgetModel.list_id == list_id
+            BudgetModel.id == budget_id, BudgetModel.owner_user_id == owner_user_id
         )
         row = self._session.scalars(stmt).one_or_none()
-        return _budget_record(row) if row is not None else None
+        if row is None:
+            return None
+        source_list_ids = self._source_list_ids_for([row.id]).get(row.id, ())
+        return _budget_record(row, source_list_ids)
 
     def list_ledger_entries(self, list_id: UUID) -> list[LedgerEntryRecord]:
         # Delegates to SqlAlchemyListRepository's exact query rather than
@@ -85,6 +107,15 @@ class SqlAlchemyBudgetRepository:
         from adapters.persistence.repositories import SqlAlchemyListRepository
 
         return SqlAlchemyListRepository(self._session).list_ledger_entries(list_id)
+
+    def list_ledger_entries_for_lists(self, list_ids: list[UUID]) -> list[LedgerEntryRecord]:
+        # Read-time convenience helper, not a hot path (Story 7.1) — one
+        # query per source list, concatenated. No new cross-list SQL query
+        # for this story; see Completion Notes for a Story 7.2 candidate.
+        entries: list[LedgerEntryRecord] = []
+        for list_id in list_ids:
+            entries.extend(self.list_ledger_entries(list_id))
+        return entries
 
     def get_ledger_entry(self, entry_id: UUID, list_id: UUID) -> LedgerEntryRecord | None:
         row = self._session.scalars(
@@ -117,13 +148,10 @@ class SqlAlchemyBudgetRepository:
         rows = self._session.scalars(stmt).all()
         return [_budget_rule_record(row) for row in rows]
 
-    def create_rule(
-        self, rule_id: UUID, budget_id: UUID, list_id: UUID, match_text: str
-    ) -> BudgetRuleRecord:
+    def create_rule(self, rule_id: UUID, budget_id: UUID, match_text: str) -> BudgetRuleRecord:
         row = BudgetRuleModel(
             id=rule_id,
             budget_id=budget_id,
-            list_id=list_id,
             match_text=match_text,
         )
         self._session.add(row)

@@ -2,14 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { getApiInternalUrl } from "@/lib/api";
 
-type RouteContext = {
-  params: Promise<{ listId: string }>;
-};
-
 type CreateBudgetBody = {
   name?: unknown;
   cap?: unknown;
   currency?: unknown;
+  source_list_ids?: unknown;
 };
 
 function forwardCookie(request: NextRequest): Headers {
@@ -22,16 +19,17 @@ function forwardCookie(request: NextRequest): Headers {
 }
 
 /**
- * Same-origin BFF: /api/lists/{id}/budgets → api /lists/{id}/budgets.
+ * Same-origin BFF: /api/budgets → api /budgets (Story 7.1 — standalone,
+ * owner-scoped; no listId param).
  */
-export async function GET(request: NextRequest, context: RouteContext) {
-  const { listId } = await context.params;
+export async function GET(request: NextRequest) {
   let upstream: Response;
   try {
-    upstream = await fetch(
-      `${getApiInternalUrl()}/lists/${encodeURIComponent(listId)}/budgets`,
-      { method: "GET", headers: forwardCookie(request), cache: "no-store" },
-    );
+    upstream = await fetch(`${getApiInternalUrl()}/budgets`, {
+      method: "GET",
+      headers: forwardCookie(request),
+      cache: "no-store",
+    });
   } catch {
     return NextResponse.json(
       { detail: "Upstream unavailable.", code: "bad_gateway" },
@@ -48,9 +46,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
   });
 }
 
-export async function POST(request: NextRequest, context: RouteContext) {
-  const { listId } = await context.params;
-
+export async function POST(request: NextRequest) {
   let body: CreateBudgetBody;
   try {
     body = (await request.json()) as CreateBudgetBody;
@@ -64,21 +60,21 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const name = typeof body.name === "string" ? body.name : "";
   const cap = typeof body.cap === "string" ? body.cap : "";
   const currency = typeof body.currency === "string" ? body.currency : "";
+  const sourceListIds = Array.isArray(body.source_list_ids)
+    ? body.source_list_ids.filter((id): id is string => typeof id === "string")
+    : [];
 
   const headers = forwardCookie(request);
   headers.set("Content-Type", "application/json");
 
   let upstream: Response;
   try {
-    upstream = await fetch(
-      `${getApiInternalUrl()}/lists/${encodeURIComponent(listId)}/budgets`,
-      {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ name, cap, currency }),
-        cache: "no-store",
-      },
-    );
+    upstream = await fetch(`${getApiInternalUrl()}/budgets`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ name, cap, currency, source_list_ids: sourceListIds }),
+      cache: "no-store",
+    });
   } catch {
     return NextResponse.json(
       { detail: "Upstream unavailable.", code: "bad_gateway" },

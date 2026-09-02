@@ -1,4 +1,4 @@
-"""Budget create/list routes — Story 6.3 (FR-48)."""
+"""Standalone, owner-scoped budget routes (Story 7.1, AD-30, FR-48)."""
 
 from __future__ import annotations
 
@@ -40,8 +40,8 @@ from domain.errors import (
     InvalidBudgetCurrencyError,
     InvalidBudgetNameError,
     InvalidBudgetRuleMatchTextError,
+    InvalidBudgetSourceListsError,
     LedgerEntryNotFoundError,
-    ListNotFoundError,
     NotListMemberError,
 )
 from fastapi import APIRouter, Depends, Response, status
@@ -64,14 +64,7 @@ from api.schemas.budgets import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/lists", tags=["budgets"])
-
-
-def _list_not_found() -> JSONResponse:
-    return JSONResponse(
-        status_code=status.HTTP_404_NOT_FOUND,
-        content={"detail": ListNotFoundError.MESSAGE, "code": "list_not_found"},
-    )
+router = APIRouter(prefix="/budgets", tags=["budgets"])
 
 
 def _not_list_member() -> JSONResponse:
@@ -125,53 +118,46 @@ def _budget_candidate_response(candidate: BudgetCandidate) -> BudgetCandidateRes
     )
 
 
-def _budget_response(list_id: uuid.UUID, view: BudgetView) -> BudgetResponse:
+def _budget_response(view: BudgetView) -> BudgetResponse:
     return BudgetResponse(
         id=view.id,
-        list_id=list_id,
         name=view.name,
         cap=format(view.cap_amount, "f"),
         currency=view.currency,
         spent=format(view.spent, "f"),
         state=view.state,
+        source_lists=list(view.source_list_ids),
         created_at=view.created_at,
     )
 
 
-def _budget_detail_response(list_id: uuid.UUID, view: BudgetDetailView) -> BudgetDetailResponse:
+def _budget_detail_response(view: BudgetDetailView) -> BudgetDetailResponse:
     return BudgetDetailResponse(
         id=view.id,
-        list_id=list_id,
         name=view.name,
         cap=format(view.cap_amount, "f"),
         currency=view.currency,
         spent=format(view.spent, "f"),
         state=view.state,
+        source_lists=list(view.source_list_ids),
         created_at=view.created_at,
         history=[_budget_history_line_response(line) for line in view.history],
         rules=[_budget_rule_response(rule) for rule in view.rules],
     )
 
 
-@router.get("/{list_id}/budgets", response_model=BudgetsListResponse)
+@router.get("", response_model=BudgetsListResponse)
 def list_budgets(
-    list_id: uuid.UUID,
     user_id: uuid.UUID = Depends(require_authenticated_user),
     db: Session = Depends(get_db),
-) -> BudgetsListResponse | JSONResponse:
-    service = ListBudgetsService(SqlAlchemyBudgetRepository(db), SqlAlchemyListRepository(db))
-    try:
-        views = service.execute(ListBudgetsCommand(actor_user_id=user_id, list_id=list_id))
-    except ListNotFoundError:
-        return _list_not_found()
-    return BudgetsListResponse(budgets=[_budget_response(list_id, v) for v in views])
+) -> BudgetsListResponse:
+    service = ListBudgetsService(SqlAlchemyBudgetRepository(db))
+    views = service.execute(ListBudgetsCommand(actor_user_id=user_id))
+    return BudgetsListResponse(budgets=[_budget_response(v) for v in views])
 
 
-@router.post(
-    "/{list_id}/budgets", response_model=BudgetResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("", response_model=BudgetResponse, status_code=status.HTTP_201_CREATED)
 def create_budget(
-    list_id: uuid.UUID,
     body: CreateBudgetBody,
     user_id: uuid.UUID = Depends(require_authenticated_user),
     db: Session = Depends(get_db),
@@ -181,10 +167,10 @@ def create_budget(
         record = service.execute(
             CreateBudgetCommand(
                 actor_user_id=user_id,
-                list_id=list_id,
                 name=body.name,
                 cap=body.cap,
                 currency=body.currency,
+                source_list_ids=body.source_list_ids,
             )
         )
     except InvalidBudgetNameError as exc:
@@ -202,11 +188,16 @@ def create_budget(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             content={"detail": str(exc), "code": "invalid_budget_currency"},
         )
+    except InvalidBudgetSourceListsError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            content={"detail": str(exc), "code": "invalid_budget_source_lists"},
+        )
     except NotListMemberError:
-        # write_budgets is a mutation action — a deny renders as 403, not 404
-        # (mirrors set_card_routing/put_split_override's NotListMemberError mapping).
+        # The one remaining 403 in this module (AC #5) — a named source list
+        # the caller doesn't belong to.
         return _not_list_member()
-    logger.info("budget_created budget_id=%s list_id=%s", record.id, list_id)
+    logger.info("budget_created budget_id=%s owner_user_id=%s", record.id, user_id)
     spent = Decimal("0")
     view = BudgetView(
         id=record.id,
@@ -215,54 +206,42 @@ def create_budget(
         currency=record.currency,
         spent=spent,
         state=classify_budget_state(spent, record.cap_amount),
+        source_list_ids=record.source_list_ids,
         created_at=record.created_at,
     )
-    return _budget_response(list_id, view)
+    return _budget_response(view)
 
 
-@router.get("/{list_id}/budgets/{budget_id}", response_model=BudgetDetailResponse)
+@router.get("/{budget_id}", response_model=BudgetDetailResponse)
 def get_budget_detail(
-    list_id: uuid.UUID,
     budget_id: uuid.UUID,
     user_id: uuid.UUID = Depends(require_authenticated_user),
     db: Session = Depends(get_db),
 ) -> BudgetDetailResponse | JSONResponse:
-    service = GetBudgetDetailService(SqlAlchemyBudgetRepository(db), SqlAlchemyListRepository(db))
+    service = GetBudgetDetailService(SqlAlchemyBudgetRepository(db))
     try:
-        view = service.execute(
-            GetBudgetDetailCommand(actor_user_id=user_id, list_id=list_id, budget_id=budget_id)
-        )
-    except ListNotFoundError:
-        return _list_not_found()
+        view = service.execute(GetBudgetDetailCommand(actor_user_id=user_id, budget_id=budget_id))
     except BudgetNotFoundError:
         return _budget_not_found()
-    return _budget_detail_response(list_id, view)
+    return _budget_detail_response(view)
 
 
-@router.post("/{list_id}/budgets/{budget_id}/assignments", response_model=None)
+@router.post("/{budget_id}/assignments", response_model=None)
 def assign_budget_entry(
-    list_id: uuid.UUID,
     budget_id: uuid.UUID,
     body: AssignBudgetEntryBody,
     user_id: uuid.UUID = Depends(require_authenticated_user),
     db: Session = Depends(get_db),
 ) -> Response | JSONResponse:
-    service = AssignEntryToBudgetService(
-        SqlAlchemyBudgetRepository(db), SqlAlchemyListRepository(db)
-    )
+    service = AssignEntryToBudgetService(SqlAlchemyBudgetRepository(db))
     try:
         service.execute(
             AssignEntryToBudgetCommand(
                 actor_user_id=user_id,
-                list_id=list_id,
                 budget_id=budget_id,
                 ledger_entry_id=body.ledger_entry_id,
             )
         )
-    except ListNotFoundError:
-        return _list_not_found()
-    except NotListMemberError:
-        return _not_list_member()
     except BudgetNotFoundError:
         return _budget_not_found()
     except LedgerEntryNotFoundError:
@@ -270,33 +249,22 @@ def assign_budget_entry(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.delete(
-    "/{list_id}/budgets/{budget_id}/assignments/{ledger_entry_id}",
-    response_model=None,
-)
+@router.delete("/{budget_id}/assignments/{ledger_entry_id}", response_model=None)
 def unassign_budget_entry(
-    list_id: uuid.UUID,
     budget_id: uuid.UUID,
     ledger_entry_id: uuid.UUID,
     user_id: uuid.UUID = Depends(require_authenticated_user),
     db: Session = Depends(get_db),
 ) -> Response | JSONResponse:
-    service = UnassignEntryFromBudgetService(
-        SqlAlchemyBudgetRepository(db), SqlAlchemyListRepository(db)
-    )
+    service = UnassignEntryFromBudgetService(SqlAlchemyBudgetRepository(db))
     try:
         service.execute(
             UnassignEntryFromBudgetCommand(
                 actor_user_id=user_id,
-                list_id=list_id,
                 budget_id=budget_id,
                 ledger_entry_id=ledger_entry_id,
             )
         )
-    except ListNotFoundError:
-        return _list_not_found()
-    except NotListMemberError:
-        return _not_list_member()
     except BudgetNotFoundError:
         return _budget_not_found()
     except LedgerEntryNotFoundError:
@@ -304,53 +272,42 @@ def unassign_budget_entry(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.get("/{list_id}/budgets/{budget_id}/candidates", response_model=BudgetCandidatesResponse)
+@router.get("/{budget_id}/candidates", response_model=BudgetCandidatesResponse)
 def list_budget_candidates(
-    list_id: uuid.UUID,
     budget_id: uuid.UUID,
     user_id: uuid.UUID = Depends(require_authenticated_user),
     db: Session = Depends(get_db),
 ) -> BudgetCandidatesResponse | JSONResponse:
-    service = ListBudgetCandidatesService(
-        SqlAlchemyBudgetRepository(db), SqlAlchemyListRepository(db)
-    )
+    service = ListBudgetCandidatesService(SqlAlchemyBudgetRepository(db))
     try:
         candidates = service.execute(
-            ListBudgetCandidatesCommand(actor_user_id=user_id, list_id=list_id, budget_id=budget_id)
+            ListBudgetCandidatesCommand(actor_user_id=user_id, budget_id=budget_id)
         )
-    except ListNotFoundError:
-        return _list_not_found()
     except BudgetNotFoundError:
         return _budget_not_found()
     return BudgetCandidatesResponse(candidates=[_budget_candidate_response(c) for c in candidates])
 
 
 @router.post(
-    "/{list_id}/budgets/{budget_id}/rules",
+    "/{budget_id}/rules",
     response_model=BudgetRuleResponse,
     status_code=status.HTTP_201_CREATED,
 )
 def create_budget_rule(
-    list_id: uuid.UUID,
     budget_id: uuid.UUID,
     body: CreateBudgetRuleBody,
     user_id: uuid.UUID = Depends(require_authenticated_user),
     db: Session = Depends(get_db),
 ) -> BudgetRuleResponse | JSONResponse:
-    service = CreateBudgetRuleService(SqlAlchemyBudgetRepository(db), SqlAlchemyListRepository(db))
+    service = CreateBudgetRuleService(SqlAlchemyBudgetRepository(db))
     try:
         rule = service.execute(
             CreateBudgetRuleCommand(
                 actor_user_id=user_id,
-                list_id=list_id,
                 budget_id=budget_id,
                 match_text=body.match_text,
             )
         )
-    except ListNotFoundError:
-        return _list_not_found()
-    except NotListMemberError:
-        return _not_list_member()
     except BudgetNotFoundError:
         return _budget_not_found()
     except InvalidBudgetRuleMatchTextError as exc:
@@ -361,25 +318,18 @@ def create_budget_rule(
     return _budget_rule_response(rule)
 
 
-@router.delete("/{list_id}/budgets/{budget_id}/rules/{rule_id}", response_model=None)
+@router.delete("/{budget_id}/rules/{rule_id}", response_model=None)
 def delete_budget_rule(
-    list_id: uuid.UUID,
     budget_id: uuid.UUID,
     rule_id: uuid.UUID,
     user_id: uuid.UUID = Depends(require_authenticated_user),
     db: Session = Depends(get_db),
 ) -> Response | JSONResponse:
-    service = DeleteBudgetRuleService(SqlAlchemyBudgetRepository(db), SqlAlchemyListRepository(db))
+    service = DeleteBudgetRuleService(SqlAlchemyBudgetRepository(db))
     try:
         service.execute(
-            DeleteBudgetRuleCommand(
-                actor_user_id=user_id, list_id=list_id, budget_id=budget_id, rule_id=rule_id
-            )
+            DeleteBudgetRuleCommand(actor_user_id=user_id, budget_id=budget_id, rule_id=rule_id)
         )
-    except ListNotFoundError:
-        return _list_not_found()
-    except NotListMemberError:
-        return _not_list_member()
     except BudgetNotFoundError:
         return _budget_not_found()
     except BudgetRuleNotFoundError:

@@ -160,6 +160,8 @@ export const listsMessages = {
     errorInvalidBudgetName: "Enter a budget name.",
     errorInvalidBudgetCap: "Enter a valid budget cap.",
     errorInvalidBudgetCurrency: "Choose a supported currency.",
+    budgetsSourceListsLabel: "Source lists",
+    errorInvalidBudgetSourceLists: "Select at least one source list.",
   },
   es: {
     title: "Inicio",
@@ -321,6 +323,8 @@ export const listsMessages = {
     errorInvalidBudgetName: "Escribe un nombre de presupuesto.",
     errorInvalidBudgetCap: "Escribe un límite válido.",
     errorInvalidBudgetCurrency: "Elige una moneda admitida.",
+    budgetsSourceListsLabel: "Listas de origen",
+    errorInvalidBudgetSourceLists: "Selecciona al menos una lista de origen.",
   },
 } as const;
 
