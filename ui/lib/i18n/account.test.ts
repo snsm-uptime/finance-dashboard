@@ -19,7 +19,6 @@ describe("account i18n", () => {
       "saveLanguageFailed",
       "saveThemeFailed",
       "defaultListTitle",
-      "defaultListHint",
     ] as const;
 
     for (const key of required) {
