@@ -12,9 +12,11 @@ import {
   useRef,
   useState,
 } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { Chip } from "@/components/Chip";
+import formIconSubmitStyles from "@/components/FormIconSubmit/FormIconSubmit.module.scss";
 import { IconButton } from "@/components/IconButton";
 import {
   IconButtonPopup,
@@ -23,7 +25,7 @@ import {
 import { usePreferences } from "@/components/PreferencesProvider";
 import { StackedListPanel } from "@/components/StackedListPanel";
 import { listsMessages } from "@/lib/i18n/lists";
-import { DotsIcon, PlusIcon, UsersIcon, WalletIcon } from "@/app/icons";
+import { DotsIcon, PlusIcon, UploadIcon, UsersIcon, WalletIcon } from "@/app/icons";
 import type { InviteFormMessages } from "./InviteForm";
 import { InviteForm } from "./InviteForm";
 import { Sheet } from "./Sheet";
@@ -523,29 +525,43 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
         wrapperClassName={styles.panel}
         input={
           <form className="flex w-full flex-col" onSubmit={onCreate}>
-            <div className="flex items-center gap-2 rounded-[8px] border-2 border-border bg-background px-[0.65rem] py-[0.5rem]">
-              <label htmlFor={createNameId} className="sr-only">
-                {t.createLabel}
-              </label>
-              <input
-                id={createNameId}
-                className="min-w-0 flex-1 font-inherit text-[0.9rem] bg-transparent text-foreground placeholder:text-muted outline-none"
-                type="text"
-                name="name"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                maxLength={200}
-                autoComplete="off"
-                disabled={creating}
-                placeholder={t.createLabel}
-              />
-              <IconButton
-                className="h-7 w-7 shrink-0 !p-0 !rounded-[4px]"
-                type="submit"
-                disabled={!canCreate}
-                label={creating ? t.creating : t.createSubmit}
-                icon={<PlusIcon />}
-              />
+            <div className="flex items-stretch gap-2">
+              <div className="flex flex-1 items-center gap-2 rounded-[8px] border-2 border-border bg-background px-[0.65rem] py-[0.5rem]">
+                <label htmlFor={createNameId} className="sr-only">
+                  {t.createLabel}
+                </label>
+                <input
+                  id={createNameId}
+                  className="min-w-0 flex-1 font-inherit text-[0.9rem] bg-transparent text-foreground placeholder:text-muted outline-none"
+                  type="text"
+                  name="name"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  maxLength={200}
+                  autoComplete="off"
+                  disabled={creating}
+                  placeholder={t.createLabel}
+                />
+                <IconButton
+                  className="h-7 w-7 shrink-0 !p-0 !rounded-[4px]"
+                  type="submit"
+                  disabled={!canCreate}
+                  label={creating ? t.creating : t.createSubmit}
+                  icon={<PlusIcon />}
+                />
+              </div>
+              {/* Same chrome as FormIconSubmit (bordered surface + accent
+                  glyph, shared hover/focus rules), stretched to the input
+                  row's height instead of FormIconSubmit's own fixed 2.5rem —
+                  a Link (not IconButton) since this navigates, it doesn't submit. */}
+              <Link
+                href="/upload"
+                aria-label={t.uploadLink}
+                title={t.uploadLink}
+                className={`inline-flex w-10 shrink-0 items-center justify-center self-stretch rounded-[8px] border border-border bg-surface text-accent no-underline transition-all duration-150 ${formIconSubmitStyles.button}`}
+              >
+                <UploadIcon className="block h-[1.2rem] w-[1.2rem]" />
+              </Link>
             </div>
             {createError ? (
               <p className={styles.error} role="alert">
