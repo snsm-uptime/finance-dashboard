@@ -172,6 +172,26 @@ Writes `tests/fixtures/bank_recon/<bank_id>/mapping.yaml` (structure only) and `
 
 Real statement PDFs for local testing go in `bank_data/` at the repo root (gitignored) — never commit them. `api/scripts/README.md` also covers recovering the ones that were briefly committed early in this project's history and later removed from tracking (still in git history, not on disk).
 
+## 5. Running the API test suite locally (Postgres-backed)
+
+`api/tests/` mostly requires a real Postgres (`DATABASE_URL`) — running bare `pytest` on the host without it just skips almost everything. Use the `docker-compose.test.yml` overlay instead of ad-hoc `docker run`/`uv run pytest` (see `docker-compose.test.yml`'s own header comment):
+
+```bash
+docker compose -p <project-name> \
+  -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.worktree.yml -f docker-compose.test.yml \
+  run --rm api pytest -q
+```
+
+**In a worktree, you must pass the *same* `-f` file list the running stack was started with** (base + `dev` + `worktree` + `test`), and the same `-p <project-name>` (`FH_COMPOSE_NAME`, printed by `worktree-bootstrap`/visible via `docker compose ls`). Passing only `-f docker-compose.yml -f docker-compose.test.yml` — omitting `dev`/`worktree` — starts a `run` that doesn't match the already-running `db`/network for that project name and just **hangs** (no error). Check `docker compose ls` first if unsure which overlays are active, or `docker inspect <api-container> --format '{{.Config.Env}}' | tr ' ' '\n' | grep DATABASE_URL` to confirm you're pointing at the right one.
+
+The `test` overlay rebuilds `api` with `--group dev` (adds `pytest`, `ruff`) — the default prod image is `--no-dev` and doesn't have them. `docker exec` into the already-running dev `api` container will fail with `No module named pytest`; always go through `run` on the test-overlay build instead.
+
+Lint: swap the command — `run --rm api ruff check .`
+
+## 6. Before trusting "pre-existing" CI failures
+
+If CI fails on files your diff didn't touch, don't assume it's flaky and move on — check whether your branch is **behind `origin/main`** first (`git status -sb` / `git log HEAD..origin/main --oneline`). GitHub Actions on a `pull_request` trigger tests the merge of your branch with the target, so a failure can come from commits that landed on `main` after you branched, not from your diff or from test flakiness. Merge `origin/main` in and re-run before concluding a failure is unrelated or order-dependent.
+
 ---
 
 ## Cheat sheet
@@ -185,5 +205,6 @@ Real statement PDFs for local testing go in `bank_data/` at the repo root (gitig
 | Bootstrap       | `cd ../finance-dashboard-wt-<slug>` → `<primary>/scripts/worktree/worktree-bootstrap.sh` |
 | Remove worktree | `./scripts/worktree/worktree-remove.sh <slug>`                                           |
 | Statement → mock + mapping | `cd api && uv run python scripts/statement_recon.py <pdf> --bank <id>`                   |
+| API test suite (Postgres) | `docker compose -p <project-name> -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.worktree.yml -f docker-compose.test.yml run --rm api pytest -q` |
 
 More detail on Cursor’s worktree hook: `scripts/worktree/README.md`.
