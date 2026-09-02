@@ -373,7 +373,7 @@ export function balanceStripPropsFrom(
     return { who: t.loadError, amount: "—", polarity: "neutral" };
   }
   if (!hasExpenses) {
-    return { who: t.detailSettleEmpty, amount: "—", polarity: "neutral" };
+    return { who: t.detailSettleEmpty, amount: formatCrcAmount("0"), polarity: "neutral" };
   }
   const amount = formatCrcAmount(balanceCrc?.trim() || "0");
   const tone = balanceTone(balanceCrc);
@@ -391,7 +391,7 @@ export function soloBalanceStripPropsFrom(
   t: BalanceStripMessages,
 ): BalanceStripState {
   if (expenses.length === 0) {
-    return { who: t.detailSettleEmpty, amount: "—", polarity: "neutral" };
+    return { who: t.detailSettleEmpty, amount: formatCrcAmount("0"), polarity: "neutral" };
   }
   const totalCrc = expenses.reduce((sum, e) => sum + (Number(e.amount_crc) || 0), 0);
   return { who: t.balanceTotal, amount: formatCrcAmount(String(totalCrc)), polarity: "neutral" };
@@ -806,7 +806,6 @@ export default async function ListDetailPage({
                             available={balances?.balance_status.is_incomplete !== true}
                             messages={{
                               title: t.simplifyTitle,
-                              emptyLabel: t.simplifyEmpty,
                               copyLabel: t.copyPlanLabel,
                               copiedLabel: t.copyPlanCopiedLabel,
                               blockedLabel: t.simplifyBlocked,

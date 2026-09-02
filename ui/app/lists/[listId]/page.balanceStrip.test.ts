@@ -12,10 +12,10 @@ const t = {
 };
 
 describe("balanceStripPropsFrom", () => {
-  it("empty list (no expenses yet) is neutral with no amount", () => {
+  it("empty list (no expenses yet) is neutral with a zero amount", () => {
     expect(balanceStripPropsFrom(false, false, undefined, t)).toEqual({
       who: t.detailSettleEmpty,
-      amount: "—",
+      amount: "₡0",
       polarity: "neutral",
     });
   });
@@ -59,10 +59,10 @@ describe("balanceStripPropsFrom", () => {
 });
 
 describe("soloBalanceStripPropsFrom", () => {
-  it("no expenses yet is neutral with no amount", () => {
+  it("no expenses yet is neutral with a zero amount", () => {
     expect(soloBalanceStripPropsFrom([], t)).toEqual({
       who: t.detailSettleEmpty,
-      amount: "—",
+      amount: "₡0",
       polarity: "neutral",
     });
   });

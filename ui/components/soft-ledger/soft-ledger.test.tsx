@@ -290,25 +290,21 @@ describe("Soft-Ledger primitives", () => {
     expect(multi.toLowerCase()).not.toContain("settle");
   });
 
-  it("SimplifyPanel shows the empty label and no CopyButton when there are no transfers", () => {
+  it("SimplifyPanel renders nothing when there are no transfers", () => {
     act(() => {
       root.render(
         <SimplifyPanel
           transfers={[]}
           messages={{
             title: "Group transfer plan",
-            emptyLabel: "Already minimal — no transfers needed.",
             copyLabel: "Copy plan",
             copiedLabel: "Copied",
           }}
         />,
       );
     });
-    expect(host.textContent).toContain("Already minimal");
-    const toggle = host.querySelector("button") as HTMLButtonElement;
-    expect(toggle.textContent).toContain("Group transfer plan");
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
-    expect(host.querySelectorAll("button")).toHaveLength(1);
+    expect(host.textContent).toBe("");
+    expect(host.querySelectorAll("button")).toHaveLength(0);
   });
 
   it("SimplifyPanel renders transfer rows and a CopyButton when transfers exist", () => {
@@ -320,7 +316,6 @@ describe("Soft-Ledger primitives", () => {
           ]}
           messages={{
             title: "Group transfer plan",
-            emptyLabel: "Already minimal — no transfers needed.",
             copyLabel: "Copy plan",
             copiedLabel: "Copied",
           }}

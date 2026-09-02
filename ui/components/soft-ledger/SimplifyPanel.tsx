@@ -11,7 +11,6 @@ export type SimplifyTransfer = {
 
 export type SimplifyPanelMessages = {
   title: string;
-  emptyLabel: string;
   copyLabel: string;
   copiedLabel: string;
 };
@@ -36,43 +35,37 @@ type Props = {
  * Presentational — literal `transfers` prop only, no fetching (Story 5.8).
  * The title is the disclosure toggle (closed by default); Copy stays in the
  * header, outside the toggle, so it stays reachable without expanding.
+ * Already-minimal lists (no transfers) render nothing — there's no plan to disclose.
  */
 export function SimplifyPanel({ transfers, messages }: Props) {
+  if (transfers.length === 0) return null;
   return (
     <Disclosure
       title={messages.title}
       className="min-w-0"
       headerExtra={
-        transfers.length > 0 ? (
-          <CopyButton
-            value={simplifyPlanTextFrom(transfers)}
-            label={messages.copyLabel}
-            copiedLabel={messages.copiedLabel}
-          />
-        ) : null
+        <CopyButton
+          value={simplifyPlanTextFrom(transfers)}
+          label={messages.copyLabel}
+          copiedLabel={messages.copiedLabel}
+        />
       }
     >
-      {transfers.length === 0 ? (
-        <p className="m-0 text-muted" style={{ fontFamily: "var(--type-meta-face)" }}>
-          {messages.emptyLabel}
-        </p>
-      ) : (
-        <ul className="m-0 flex list-none flex-col gap-[var(--space-2)] p-0">
-          {transfers.map((t, index) => (
-            <li
-              key={`${t.fromMemberId}-${t.toMemberId}-${index}`}
-              className="flex items-baseline justify-between gap-[var(--space-2)]"
-            >
-              <span className="min-w-0 truncate text-foreground" style={{ fontFamily: "var(--type-meta-face)" }}>
-                {t.fromLabel} → {t.toLabel}
-              </span>
-              <span className="tabular-nums text-foreground" style={{ fontFamily: "var(--type-meta-face)" }}>
-                {t.amountCrc}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
+      <ul className="m-0 flex list-none flex-col gap-[var(--space-2)] p-0">
+        {transfers.map((t, index) => (
+          <li
+            key={`${t.fromMemberId}-${t.toMemberId}-${index}`}
+            className="flex items-baseline justify-between gap-[var(--space-2)]"
+          >
+            <span className="min-w-0 truncate text-foreground" style={{ fontFamily: "var(--type-meta-face)" }}>
+              {t.fromLabel} → {t.toLabel}
+            </span>
+            <span className="tabular-nums text-foreground" style={{ fontFamily: "var(--type-meta-face)" }}>
+              {t.amountCrc}
+            </span>
+          </li>
+        ))}
+      </ul>
     </Disclosure>
   );
 }

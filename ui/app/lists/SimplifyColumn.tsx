@@ -7,7 +7,6 @@ import { formatCrcAmount } from "@/lib/currency";
 
 export type SimplifyColumnMessages = {
   title: string;
-  emptyLabel: string;
   copyLabel: string;
   copiedLabel: string;
   blockedLabel: string;
@@ -147,7 +146,6 @@ export function SimplifyColumn({ listId, available, messages }: Props) {
       transfers={state.transfers}
       messages={{
         title: messages.title,
-        emptyLabel: messages.emptyLabel,
         copyLabel: messages.copyLabel,
         copiedLabel: messages.copiedLabel,
       }}

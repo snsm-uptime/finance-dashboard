@@ -8,7 +8,6 @@ import { SimplifyColumn } from "./SimplifyColumn";
 
 const messages = {
   title: "Group transfer plan",
-  emptyLabel: "Already minimal — no transfers needed.",
   copyLabel: "Copy plan",
   copiedLabel: "Copied",
   blockedLabel: "Simplify is unavailable until unresolved items are settled.",
