@@ -69,7 +69,7 @@ export function CyclePeriodSelector({ listId, cycles, selectedStatementId, messa
   }
 
   return (
-    <div onKeyDown={onRootKeyDown}>
+    <div className="contents" onKeyDown={onRootKeyDown}>
       <ChipTrigger
         ref={chipRef}
         id={chipId}
@@ -80,14 +80,17 @@ export function CyclePeriodSelector({ listId, cycles, selectedStatementId, messa
       >
         {selected.label}
       </ChipTrigger>
-      <ChipOptionsPanel
-        open={open}
-        id={panelId}
-        labelledBy={chipId}
-        options={options}
-        selectedValue={value}
-        onSelect={onSelect}
-      />
+      <div className="w-full">
+        <ChipOptionsPanel
+          open={open}
+          id={panelId}
+          labelledBy={chipId}
+          options={options}
+          selectedValue={value}
+          onSelect={onSelect}
+          contentClassName="flex flex-wrap items-center gap-2 rounded-[8px] p-2"
+        />
+      </div>
     </div>
   );
 }

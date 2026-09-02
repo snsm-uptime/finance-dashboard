@@ -847,7 +847,7 @@ export default async function ListDetailPage({
                 ) : null}
                 <div className={styles.softReceipts}>
                   <div className={styles.softReceiptsChrome}>
-                    <div className="flex items-center justify-between gap-[var(--space-2)]">
+                    <div className="flex flex-wrap items-center justify-between gap-[var(--space-2)]">
                       <SectionLabel>{t.detailReceiptsTitle}</SectionLabel>
                       <CyclePeriodSelector
                         listId={listId}
