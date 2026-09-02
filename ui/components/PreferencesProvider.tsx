@@ -42,6 +42,7 @@ export type MePreferences = {
   theme: ThemePreference | null;
   alias: string | null;
   photo_base64: string | null;
+  default_import_list_id: string | null;
 };
 
 type PreferencesContextValue = {
@@ -129,6 +130,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
         theme?: string | null;
         alias?: string | null;
         photo_base64?: string | null;
+        default_import_list_id?: string | null;
       };
       if (gen !== refreshGen.current || epoch !== prefsSessionEpoch) return;
       const nextLocale = resolveLocale(data.language);
@@ -148,6 +150,8 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
         alias: typeof data.alias === "string" && data.alias ? data.alias : null,
         photo_base64:
           typeof data.photo_base64 === "string" && data.photo_base64 ? data.photo_base64 : null,
+        default_import_list_id:
+          typeof data.default_import_list_id === "string" ? data.default_import_list_id : null,
       });
       setLocale(nextLocale);
       setThemeState(nextTheme);
@@ -207,6 +211,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       email?: string;
       alias?: string | null;
       photo_base64?: string | null;
+      default_import_list_id?: string | null;
     };
     const nextLocale = resolveLocale(data.language);
     const nextTheme = resolveTheme(data.theme);
@@ -226,6 +231,8 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       alias: typeof data.alias === "string" && data.alias ? data.alias : null,
       photo_base64:
         typeof data.photo_base64 === "string" && data.photo_base64 ? data.photo_base64 : null,
+      default_import_list_id:
+        typeof data.default_import_list_id === "string" ? data.default_import_list_id : null,
     });
     applyDom(nextLocale, nextTheme);
   }, []);
@@ -252,6 +259,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       email?: string;
       alias?: string | null;
       photo_base64?: string | null;
+      default_import_list_id?: string | null;
     };
     const nextLocale = resolveLocale(data.language);
     const nextTheme = resolveTheme(data.theme);
@@ -271,6 +279,8 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       alias: typeof data.alias === "string" && data.alias ? data.alias : null,
       photo_base64:
         typeof data.photo_base64 === "string" && data.photo_base64 ? data.photo_base64 : null,
+      default_import_list_id:
+        typeof data.default_import_list_id === "string" ? data.default_import_list_id : null,
     });
     applyDom(nextLocale, nextTheme);
   }, []);

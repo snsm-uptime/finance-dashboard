@@ -6,6 +6,7 @@ import logging
 import uuid
 
 from adapters.email import SmtpEmailSender, load_smtp_settings
+from adapters.persistence.cards import SqlAlchemyCardRepository
 from adapters.persistence.email_verification import SqlAlchemyEmailVerificationRepository
 from adapters.persistence.list_invite import SqlAlchemyListInviteTokenRepository
 from adapters.persistence.password_reset import SqlAlchemyPasswordResetTokenRepository
@@ -276,6 +277,7 @@ def patch_current_user(
             SetDefaultImportListService(
                 SqlAlchemyListRepository(db),
                 prefs,
+                SqlAlchemyCardRepository(db),
             ).execute(
                 SetDefaultImportListCommand(
                     actor_user_id=user_id,

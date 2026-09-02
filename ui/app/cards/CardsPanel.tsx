@@ -20,15 +20,28 @@ function maskIban(iban: string): string {
   return `•••• ${iban.slice(-4)}`;
 }
 
+type Props = {
+  /** Bump to force a refetch of cards + default list — e.g. after the default changes elsewhere on the page. */
+  refreshToken?: number;
+};
+
 /** Standalone /cards route content — card registration + per-card routing. */
-export function CardsPanel() {
-  const { locale } = usePreferences();
+export function CardsPanel({ refreshToken = 0 }: Props = {}) {
+  const { locale, me } = usePreferences();
   const t = cardsCopy(locale);
   const [cards, setCards] = useState<CardItem[]>([]);
   const lists = useMembershipLists() ?? [];
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [registeredStatus, setRegisteredStatus] = useState("");
+  const defaultListId = me?.default_import_list_id ?? "";
+
+  // Low-effort review accepts already land on the default list, so offering
+  // it as a fixed-routing target too would just be a redundant option.
+  const routingLists = useMemo(
+    () => lists.filter((list) => list.id !== defaultListId),
+    [lists, defaultListId],
+  );
 
   const messages: CardsClientMessages = useMemo(
     () => ({
@@ -70,9 +83,10 @@ export function CardsPanel() {
     return () => {
       cancelled = true;
     };
-    // Card/list data does not depend on locale; fetch once on mount.
+    // Card/list data does not depend on locale; refetch on mount and whenever
+    // refreshToken bumps (e.g. the default import list changed elsewhere).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [refreshToken]);
 
   function onRegistered(card: CardItem) {
     setCards((prev) => [card, ...prev]);
@@ -109,6 +123,7 @@ export function CardsPanel() {
         <CardRoutingControl
           card={card}
           lists={lists}
+          routingLists={routingLists}
           trailing={
             <CopyButton value={card.iban} label={t.copyIban} copiedLabel={t.ibanCopied}>
               <span className="text-muted text-[0.85rem] tracking-[0.02rem]">

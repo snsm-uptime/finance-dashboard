@@ -121,6 +121,14 @@ class FakeListRepo:
 
 
 @dataclass
+class FakeCardRepo:
+    reset_calls: list[UUID] = field(default_factory=list)
+
+    def reset_routing_to_review_for_user(self, user_id: UUID) -> None:
+        self.reset_calls.append(user_id)
+
+
+@dataclass
 class FakePrefsRepo:
     prefs: dict[UUID, UserPreferencesRecord] = field(default_factory=dict)
 
@@ -356,6 +364,44 @@ def test_set_default_import_list_member_persists() -> None:
         SetDefaultImportListCommand(actor_user_id=owner, list_id=list_id)
     )
     assert prefs.prefs[owner].default_import_list_id == list_id
+
+
+def test_set_default_import_list_change_resets_cards_to_review() -> None:
+    repo = FakeListRepo()
+    owner = uuid4()
+    list_id = _seed_owned(repo, owner=owner)
+    prefs = FakePrefsRepo()
+    prefs.prefs[owner] = UserPreferencesRecord(
+        id=owner, email="owner@example.com", language=None, theme=None
+    )
+    cards = FakeCardRepo()
+
+    SetDefaultImportListService(repo, prefs, cards).execute(
+        SetDefaultImportListCommand(actor_user_id=owner, list_id=list_id)
+    )
+
+    assert cards.reset_calls == [owner]
+
+
+def test_set_default_import_list_unchanged_does_not_reset_cards() -> None:
+    repo = FakeListRepo()
+    owner = uuid4()
+    list_id = _seed_owned(repo, owner=owner)
+    prefs = FakePrefsRepo()
+    prefs.prefs[owner] = UserPreferencesRecord(
+        id=owner,
+        email="owner@example.com",
+        language=None,
+        theme=None,
+        default_import_list_id=list_id,
+    )
+    cards = FakeCardRepo()
+
+    SetDefaultImportListService(repo, prefs, cards).execute(
+        SetDefaultImportListCommand(actor_user_id=owner, list_id=list_id)
+    )
+
+    assert cards.reset_calls == []
 
 
 def test_detail_and_stubs_use_acl() -> None:

@@ -17,10 +17,12 @@ export type DefaultImportListMessages = {
 type Props = {
   lists: ListItem[];
   messages: DefaultImportListMessages;
+  /** Fires after the destination is saved — the API resets all cards to review, so callers refresh routing UI. */
+  onChanged?: (listId: string) => void;
 };
 
 /** Configurable review-routing default destination list (Story 4.3, FR-12). */
-export function DefaultImportListControl({ lists, messages }: Props) {
+export function DefaultImportListControl({ lists, messages, onChanged }: Props) {
   const baseId = useId();
   const titleId = `${baseId}-default-list-title`;
   const [listId, setListId] = useState("");
@@ -61,7 +63,11 @@ export function DefaultImportListControl({ lists, messages }: Props) {
       errorUnauthorized: messages.errorUnauthorized,
     });
     setPending(false);
-    if (!result.ok) setError(result.error);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    onChanged?.(nextListId);
   }
 
   return (

@@ -28,6 +28,7 @@ export function AccountMenu() {
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lists, setLists] = useState<ListItem[]>([]);
+  const [cardsRefreshToken, setCardsRefreshToken] = useState(0);
   const [photoPending, setPhotoPending] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
 
@@ -255,6 +256,10 @@ export function AccountMenu() {
               errorUnauthorized: t.errorUnauthorized,
               errorForbidden: t.errorForbidden,
             }}
+            onChanged={() => {
+              void refresh();
+              setCardsRefreshToken((n) => n + 1);
+            }}
           />
         </div>
       ) : null}
@@ -263,7 +268,7 @@ export function AccountMenu() {
         <h2 id="account-cards" className="m-0 mb-[0.6rem] text-[0.72rem] font-[550] text-muted tracking-[0.02rem]">
           {t.manageCards}
         </h2>
-        <CardsPanel />
+        <CardsPanel refreshToken={cardsRefreshToken} />
       </section>
 
       <section className="mb-6">

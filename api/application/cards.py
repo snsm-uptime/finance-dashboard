@@ -41,6 +41,8 @@ class CardRepository(Protocol):
         self, *, card_id: UUID, user_id: UUID, routing_mode: str, fixed_list_id: UUID | None
     ) -> CardRecord: ...
 
+    def reset_routing_to_review_for_user(self, user_id: UUID) -> None: ...
+
 
 @dataclass(frozen=True, slots=True)
 class RegisterCardCommand:

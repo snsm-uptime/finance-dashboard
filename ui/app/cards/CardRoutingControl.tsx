@@ -21,6 +21,8 @@ export type CardRoutingMessages = CardsClientMessages & {
 type Props = {
   card: CardItem;
   lists: ListItem[];
+  /** Lists offered as fixed-routing targets — omits the default review-routing list. */
+  routingLists?: ListItem[];
   messages: CardRoutingMessages;
   onUpdated: (card: CardItem) => void;
   /** Right-side of the compact row — typically the masked IBAN + copy control. */
@@ -37,7 +39,14 @@ const panelContentClassName = "mt-2 flex flex-wrap items-center gap-2 pt-2 borde
  * per list. Picking a chip applies and saves it immediately. The chip
  * always reflects the last saved setting, not in-progress edits.
  */
-export function CardRoutingControl({ card, lists, messages, onUpdated, trailing }: Props) {
+export function CardRoutingControl({
+  card,
+  lists,
+  routingLists = lists,
+  messages,
+  onUpdated,
+  trailing,
+}: Props) {
   const { pending, error, submit, clearError } = useFormSubmission(
     async (selection: RoutingSelection) => {
       const result = await setCardRouting(
@@ -78,7 +87,7 @@ export function CardRoutingControl({ card, lists, messages, onUpdated, trailing 
   const options: ChipOption[] = [
     { value: "review", label: messages.routingChipReview, ariaLabel: messages.routingModeReview },
   ];
-  for (const list of lists) {
+  for (const list of routingLists) {
     selections.set(list.id, { mode: "fixed", fixedListId: list.id });
     options.push({ value: list.id, label: list.name, ariaLabel: `${messages.routingModeFixed}: ${list.name}` });
   }

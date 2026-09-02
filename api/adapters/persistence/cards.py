@@ -6,7 +6,7 @@ from uuid import UUID
 
 from application.cards import CardRecord
 from domain.errors import CardIbanAlreadyRegisteredError, CardNotFoundError
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -81,3 +81,11 @@ class SqlAlchemyCardRepository:
         row.fixed_list_id = fixed_list_id
         self._session.flush()
         return _card_record(row)
+
+    def reset_routing_to_review_for_user(self, user_id: UUID) -> None:
+        self._session.execute(
+            update(CardModel)
+            .where(CardModel.user_id == user_id)
+            .values(routing_mode="review", fixed_list_id=None)
+        )
+        self._session.flush()

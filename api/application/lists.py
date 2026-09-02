@@ -37,6 +37,7 @@ from domain.statement_cycles import (
     resolve_period_bounds,
 )
 
+from application.cards import CardRepository
 from application.list_access import (
     AuthorizeListAccessCommand,
     AuthorizeListAccessService,
@@ -1065,9 +1066,15 @@ class SetDefaultImportListService:
     SetLastOpenedListService — membership, not ownership.
     """
 
-    def __init__(self, list_repo: ListRepository, prefs_repo: PreferencesRepository) -> None:
+    def __init__(
+        self,
+        list_repo: ListRepository,
+        prefs_repo: PreferencesRepository,
+        card_repo: CardRepository | None = None,
+    ) -> None:
         self._list_repo = list_repo
         self._prefs_repo = prefs_repo
+        self._card_repo = card_repo
 
     def execute(self, command: SetDefaultImportListCommand) -> UUID:
         AuthorizeListAccessService(self._list_repo).execute(
@@ -1077,10 +1084,17 @@ class SetDefaultImportListService:
                 action="set_default_import_list",
             )
         )
+        previous = self._prefs_repo.get_preferences(command.actor_user_id)
+        changed = previous is None or previous.default_import_list_id != command.list_id
         self._prefs_repo.update_preferences(
             command.actor_user_id,
             default_import_list_id=command.list_id,
         )
+        # Changing the default is easy to forget about later, so drop every
+        # card back to review — the user is prompted to confirm routing
+        # instead of imports silently landing on a list they didn't expect.
+        if changed and self._card_repo is not None:
+            self._card_repo.reset_routing_to_review_for_user(command.actor_user_id)
         return command.list_id
 
 
