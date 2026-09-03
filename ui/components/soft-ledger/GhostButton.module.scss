@@ -1,0 +1,54 @@
+/* Outlined button that elevates on hover like UploadButton's chrome (see
+   app/upload/UploadButton.module.scss) — same M3 two-light shadow recipe —
+   but the fill goes accent while the label itself fades to transparent
+   instead of swapping to a readable foreground color. */
+
+.button {
+  /* M3 elevation: a tight dark key light plus a soft wide ambient light.
+     Alphas assume black on white, so the ink is pulled toward black; dark
+     mode goes fully black below since --foreground is cream and would halo. */
+  --lift-ink: color-mix(in srgb, var(--foreground) 45%, #000);
+  --lift-key: color-mix(in srgb, var(--lift-ink) 0%, transparent);
+  --lift-ambient: color-mix(in srgb, var(--lift-ink) 50%, transparent);
+
+  box-shadow: none;
+  transform: translateY(0);
+}
+
+:global(html.dark) .button {
+  --lift-ink: #000;
+}
+
+@media (prefers-color-scheme: dark) {
+  :global(html:not(.light):not(.dark)) .button {
+    --lift-ink: #000;
+  }
+}
+
+.button:not(:disabled):hover,
+.button:not(:disabled):focus-visible {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  color: transparent !important;
+  /* M3 elevation level 3 */
+  box-shadow:
+    0 1px 3px 0 var(--lift-key),
+    0 4px 8px 3px var(--lift-ambient);
+  transform: translateY(-4px);
+}
+
+/* Pressing pushes the paper back toward the page: M3 elevation level 1. */
+.button:not(:disabled):active {
+  box-shadow:
+    0 1px 2px 0 var(--lift-key),
+    0 1px 3px 1px var(--lift-ambient);
+  transform: translateY(-1px);
+}
+
+/* Reset hover state on touch to prevent sticky appearance after tap */
+@media (hover: none) and (pointer: coarse) {
+  .button:not(:disabled):hover:not(:active):not(:focus-visible) {
+    box-shadow: none;
+    transform: translateY(0);
+  }
+}

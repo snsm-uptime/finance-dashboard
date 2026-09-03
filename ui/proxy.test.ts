@@ -47,6 +47,16 @@ describe("proxy auth gate", () => {
     expect(proxy(makeRequest("/sign-up?invite=abc")).status).toBe(200);
   });
 
+  it("allows public /docs without cookie", () => {
+    expect(proxy(makeRequest("/docs")).status).toBe(200);
+  });
+
+  it("allows /docs when fh_session cookie is present", () => {
+    expect(proxy(makeRequest("/docs", "fh_session=opaque-token")).status).toBe(
+      200,
+    );
+  });
+
   it("redirects unauthenticated /upload to /sign-in", () => {
     const response = proxy(makeRequest("/upload"));
     expect(response.status).toBe(307);

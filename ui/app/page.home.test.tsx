@@ -47,6 +47,7 @@ describe("Home page", () => {
     expect(markup).toMatch(/import/i);
     expect(markup).toContain('href="/signup"');
     expect(markup).toContain('href="/sign-in"');
+    expect(markup).toContain('href="/docs"');
     expect(redirect).not.toHaveBeenCalled();
   });
 

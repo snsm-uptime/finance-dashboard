@@ -1,5 +1,5 @@
 # generated: 2026-08-03T22:46:31
-# last_updated: 2026-09-02 (dev-story: story 8-1 → review)
+# last_updated: 2026-09-02 (code-review: story 8-2 → done)
 
 # project: finance-dashboard
 # project_key: NOKEY
@@ -42,7 +42,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-03T22:46:31
-last_updated: 2026-09-02 (dev-story: story 8-1 → review)
+last_updated: 2026-09-02 (code-review: story 8-2 → done)
 
 project: finance-dashboard
 project_key: NOKEY
@@ -164,7 +164,7 @@ development_status:
   # Sprint Change Proposal 2026-09-02.md
   epic-8: in-progress
   8-1-landing-page-introduction: review
-  8-2-documentation-index-page: backlog
+  8-2-documentation-index-page: done
   epic-8-retrospective: optional
 
 action_items:

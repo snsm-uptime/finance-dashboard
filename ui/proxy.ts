@@ -5,6 +5,7 @@ const SESSION_COOKIE =
   process.env.SESSION_COOKIE_NAME?.trim() || "fh_session";
 
 const PUBLIC_PREFIXES = [
+  "/docs",
   "/sign-in",
   "/signup",
   "/sign-up",
