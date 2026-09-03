@@ -60,10 +60,9 @@ export function SettleControls({ listId, messages }: Props) {
   return (
     <>
       <PrimaryButton
-        className="flex w-full items-center justify-center gap-[var(--space-2)]"
         onClick={() => setSettleOpen(true)}
+        iconLeft={<CreditCardIcon className="size-4 shrink-0" />}
       >
-        <CreditCardIcon className="size-4 shrink-0" />
         {messages.settleAction}
       </PrimaryButton>
 

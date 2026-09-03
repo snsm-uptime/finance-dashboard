@@ -54,6 +54,7 @@ export function CopyButton({ value, label, copiedLabel, children, className }: P
         icon={<CopyIcon style={{ width: "16px", height: "16px" }} />}
         label={copied ? copiedLabel : label}
         onClick={handleClick}
+        tooltipDisabled={copied}
       />
       {copied ? (
         <span

@@ -2,7 +2,7 @@
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Tooltip } from "./Tooltip";
 
@@ -22,11 +22,15 @@ function stubFocusVisible(element: HTMLElement, value: boolean) {
     selector === ":focus-visible" ? value : original(selector)) as typeof element.matches;
 }
 
+/** Matches Tooltip's own SHOW_DELAY_MS; advance fake timers past this after a show-triggering event. */
+const SHOW_DELAY_MS = 300;
+
 describe("Tooltip", () => {
   let container: HTMLDivElement;
   let root: Root;
 
   beforeEach(() => {
+    vi.useFakeTimers();
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -37,6 +41,7 @@ describe("Tooltip", () => {
       root.unmount();
     });
     container.remove();
+    vi.useRealTimers();
   });
 
   it("does not render a bubble until hovered or focused", async () => {
@@ -63,6 +68,7 @@ describe("Tooltip", () => {
 
     await act(async () => {
       button.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+      vi.advanceTimersByTime(SHOW_DELAY_MS);
     });
     const bubble = document.querySelector('[data-testid="tooltip-bubble"]');
     expect(bubble).not.toBeNull();
@@ -87,6 +93,7 @@ describe("Tooltip", () => {
 
     await act(async () => {
       button.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+      vi.advanceTimersByTime(SHOW_DELAY_MS);
     });
     expect(document.querySelector('[data-testid="tooltip-bubble"]')).not.toBeNull();
 
@@ -131,6 +138,7 @@ describe("Tooltip", () => {
 
     await act(async () => {
       button.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+      vi.advanceTimersByTime(SHOW_DELAY_MS);
     });
     expect(document.querySelector('[data-testid="tooltip-bubble"]')).not.toBeNull();
   });
@@ -151,6 +159,7 @@ describe("Tooltip", () => {
     });
     await act(async () => {
       button.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+      vi.advanceTimersByTime(SHOW_DELAY_MS);
     });
     expect(document.querySelector('[data-testid="tooltip-bubble"]')).not.toBeNull();
 
@@ -183,6 +192,7 @@ describe("Tooltip", () => {
     });
     await act(async () => {
       button.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+      vi.advanceTimersByTime(SHOW_DELAY_MS);
     });
     expect(document.querySelector('[data-testid="tooltip-bubble"]')).not.toBeNull();
 
@@ -225,6 +235,7 @@ describe("Tooltip", () => {
 
     await act(async () => {
       button.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+      vi.advanceTimersByTime(SHOW_DELAY_MS);
     });
 
     const bubble = document.querySelector(
@@ -294,6 +305,7 @@ describe("Tooltip", () => {
 
     await act(async () => {
       button.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+      vi.advanceTimersByTime(SHOW_DELAY_MS);
     });
 
     // Bubble exists in the document, but not inside the trigger's container.

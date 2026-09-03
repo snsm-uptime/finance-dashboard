@@ -35,6 +35,11 @@ type Props = Omit<
    * to reach the identical look, not a separate state.
    */
   active?: boolean;
+  /**
+   * Force-suppress the hover tooltip, e.g. when the caller is showing its
+   * own status tooltip in the same spot (see CopyButton's "Copied" bubble).
+   */
+  tooltipDisabled?: boolean;
 };
 
 const baseClasses =
@@ -53,6 +58,7 @@ export const IconButton = forwardRef<HTMLButtonElement, Props>(
       variant = "default",
       fill = false,
       active = false,
+      tooltipDisabled: tooltipDisabledProp = false,
       className,
       ...rest
     },
@@ -72,7 +78,8 @@ export const IconButton = forwardRef<HTMLButtonElement, Props>(
       Boolean(disabled) ||
       Boolean(caption) ||
       rest["aria-expanded"] === true ||
-      !label;
+      !label ||
+      tooltipDisabledProp;
 
     return (
       <Tooltip label={label} disabled={tooltipDisabled}>

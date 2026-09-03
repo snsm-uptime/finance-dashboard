@@ -44,6 +44,9 @@ const GAP_PX = 4;
  */
 const TOP_FLIP_THRESHOLD_PX = 48;
 
+/** Standard hover/focus delay before the bubble appears; hiding is always instant. */
+const SHOW_DELAY_MS = 500;
+
 export function Tooltip({ label, disabled = false, children }: Props) {
   const suppressed = disabled || !label;
   const triggerRef = useRef<HTMLElement | null>(null);
@@ -59,6 +62,7 @@ export function Tooltip({ label, disabled = false, children }: Props) {
   // synchronously without routing through an effect.
   const hoveredRef = useRef(false);
   const focusVisibleRef = useRef(false);
+  const showTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Mirrors the "adjusting state when a prop changes" pattern (see
   // https://react.dev/learn/you-might-not-need-an-effect) rather than a
   // `useEffect`: if `suppressed` flips to `true` while the tooltip is
@@ -79,6 +83,11 @@ export function Tooltip({ label, disabled = false, children }: Props) {
       hoveredRef.current = false;
       /* eslint-disable-next-line react-hooks/refs */
       focusVisibleRef.current = false;
+      if (showTimeoutRef.current !== null) {
+        clearTimeout(showTimeoutRef.current);
+        /* eslint-disable-next-line react-hooks/refs */
+        showTimeoutRef.current = null;
+      }
       if (coords !== null) {
         setCoords(null);
       }
@@ -139,12 +148,29 @@ export function Tooltip({ label, disabled = false, children }: Props) {
   // above) — called imperatively from the handlers below on every
   // hover/focus transition, so it stays in sync without an effect.
   const syncVisibility = useCallback(() => {
+    if (showTimeoutRef.current !== null) {
+      clearTimeout(showTimeoutRef.current);
+      showTimeoutRef.current = null;
+    }
     if (hoveredRef.current || focusVisibleRef.current) {
-      updatePosition();
+      showTimeoutRef.current = setTimeout(() => {
+        showTimeoutRef.current = null;
+        if (hoveredRef.current || focusVisibleRef.current) {
+          updatePosition();
+        }
+      }, SHOW_DELAY_MS);
     } else {
       setCoords(null);
     }
   }, [updatePosition]);
+
+  useEffect(() => {
+    return () => {
+      if (showTimeoutRef.current !== null) {
+        clearTimeout(showTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Recompute while visible so the bubble tracks the trigger through
   // scrolling/resizing mid-hover; listener is only live while shown.
@@ -171,61 +197,61 @@ export function Tooltip({ label, disabled = false, children }: Props) {
   const trigger = suppressed
     ? single
     : // mergedRef is a stable callback ref (see above); cloneElement only
-      // forwards it as a prop here, it doesn't read `.current`.
-      /* eslint-disable-next-line react-hooks/refs */
-      cloneElement(single, {
-        ref: mergedRef,
-        onMouseEnter: (event: MouseEvent) => {
-          childProps.onMouseEnter?.(event);
-          hoveredRef.current = true;
+    // forwards it as a prop here, it doesn't read `.current`.
+    /* eslint-disable-next-line react-hooks/refs */
+    cloneElement(single, {
+      ref: mergedRef,
+      onMouseEnter: (event: MouseEvent) => {
+        childProps.onMouseEnter?.(event);
+        hoveredRef.current = true;
+        syncVisibility();
+      },
+      onMouseLeave: (event: MouseEvent) => {
+        childProps.onMouseLeave?.(event);
+        hoveredRef.current = false;
+        syncVisibility();
+      },
+      onFocus: (event: FocusEvent) => {
+        childProps.onFocus?.(event);
+        // Only show for keyboard (focus-visible) focus, not mouse-click
+        // focus — clicking any icon button would otherwise pop the
+        // tooltip up right after the click. jsdom's `:focus-visible`
+        // support is limited (see Tooltip.test.tsx), but this is the
+        // standard DOM way to distinguish the two in real browsers.
+        const target = event.target as HTMLElement;
+        if (target.matches(":focus-visible")) {
+          focusVisibleRef.current = true;
           syncVisibility();
-        },
-        onMouseLeave: (event: MouseEvent) => {
-          childProps.onMouseLeave?.(event);
-          hoveredRef.current = false;
-          syncVisibility();
-        },
-        onFocus: (event: FocusEvent) => {
-          childProps.onFocus?.(event);
-          // Only show for keyboard (focus-visible) focus, not mouse-click
-          // focus — clicking any icon button would otherwise pop the
-          // tooltip up right after the click. jsdom's `:focus-visible`
-          // support is limited (see Tooltip.test.tsx), but this is the
-          // standard DOM way to distinguish the two in real browsers.
-          const target = event.target as HTMLElement;
-          if (target.matches(":focus-visible")) {
-            focusVisibleRef.current = true;
-            syncVisibility();
-          }
-        },
-        onBlur: (event: FocusEvent) => {
-          childProps.onBlur?.(event);
-          focusVisibleRef.current = false;
-          syncVisibility();
-        },
-      });
+        }
+      },
+      onBlur: (event: FocusEvent) => {
+        childProps.onBlur?.(event);
+        focusVisibleRef.current = false;
+        syncVisibility();
+      },
+    });
 
   return (
     <>
       {trigger}
       {!suppressed && coords && typeof document !== "undefined"
         ? createPortal(
-            <span
-              className={styles.bubble}
-              data-testid="tooltip-bubble"
-              style={{
-                top: coords.top,
-                left: coords.left,
-                transform:
-                  coords.placement === "below"
-                    ? "translate(-50%, 0)"
-                    : undefined,
-              }}
-            >
-              {label}
-            </span>,
-            document.body,
-          )
+          <span
+            className={styles.bubble}
+            data-testid="tooltip-bubble"
+            style={{
+              top: coords.top,
+              left: coords.left,
+              transform:
+                coords.placement === "below"
+                  ? "translate(-50%, 0)"
+                  : undefined,
+            }}
+          >
+            {label}
+          </span>,
+          document.body,
+        )
         : null}
     </>
   );

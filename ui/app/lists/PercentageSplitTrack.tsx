@@ -3,7 +3,6 @@
 import { useMemo, useRef, useState } from "react";
 
 import { Avatar } from "@/components/Avatar";
-import { Tooltip } from "@/components/Tooltip";
 
 import { orderPercentageSplitUserIds } from "./orderPercentageSplitUserIds";
 import styles from "./PercentageSplitTrack.module.scss";
@@ -289,16 +288,12 @@ export function PercentageSplitTrack({
               width: `${Math.max(percentValues[i], 1)}%`,
             }}
           >
-            <Tooltip label={memberMap.get(userId) || userId.slice(0, 8)}>
-              <span className="inline-flex">
-                <Avatar
-                  alias={memberMap.get(userId) || userId.slice(0, 8)}
-                  seed={userId}
-                  photoBase64={photoMap.get(userId)}
-                  size="xs"
-                />
-              </span>
-            </Tooltip>
+            <Avatar
+              alias={memberMap.get(userId) || userId.slice(0, 8)}
+              seed={userId}
+              photoBase64={photoMap.get(userId)}
+              size="xs"
+            />
           </div>
         ))}
       </div>
