@@ -3,9 +3,11 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { RedirectIfAuthenticated } from "@/components/RedirectIfAuthenticated";
+import { GhostButton } from "@/components/soft-ledger/GhostButton";
 import { requireAlias } from "@/lib/alias";
 import { resolveServerAuthenticatedLanding } from "@/lib/serverLanding";
 import { fetchSession } from "@/lib/session";
+import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 
 export const dynamic = "force-dynamic";
 
@@ -30,12 +32,12 @@ export default async function Home() {
           className="pointer-events-none absolute inset-0 -z-10 h-full w-full"
         >
           <path
-            d="M0,120 C240,200 480,40 720,110 C960,180 1200,60 1440,130 L1440,0 L0,0 Z"
-            className="fill-accent/10"
+            d="M0,260 C240,330 480,200 720,260 C960,320 1200,220 1440,280 L1440,340 C1200,270 960,370 720,310 C480,250 240,350 0,300 Z"
+            className="fill-accent/[0.06]"
           />
           <path
-            d="M0,260 C240,330 480,200 720,260 C960,320 1200,220 1440,280 L1440,400 L0,400 Z"
-            className="fill-accent/[0.06]"
+            d="M0,300 C240,350 480,250 720,310 C960,370 1200,270 1440,340 C1200,396.67 960,283.33 720,330 C480,376.67 240,263.33 0,300 Z"
+            className="fill-accent/10"
           />
         </svg>
         <div className="mx-auto flex max-w-2xl flex-col items-center gap-4 px-6 py-20 text-center">
@@ -48,28 +50,8 @@ export default async function Home() {
             transaction by hand.
           </p>
           <div className="mt-2 flex flex-wrap items-center justify-center gap-3">
-            <Link
-              href="/signup"
-              className="rounded-sm bg-accent px-4 py-[9px] text-background no-underline hover:brightness-105"
-              style={{
-                fontFamily: "var(--type-button-face)",
-                fontSize: "var(--type-button-size)",
-                fontWeight: "var(--type-button-weight)",
-              }}
-            >
-              Create an account
-            </Link>
-            <Link
-              href="/sign-in"
-              className="rounded-sm border border-muted px-4 py-[9px] text-muted no-underline hover:border-accent hover:bg-accent hover:text-background"
-              style={{
-                fontFamily: "var(--type-button-face)",
-                fontSize: "var(--type-button-size)",
-                fontWeight: "var(--type-button-weight)",
-              }}
-            >
-              Sign in
-            </Link>
+            <PrimaryButton href="/signup">Create an account</PrimaryButton>
+            <GhostButton href="/sign-in">Sign in</GhostButton>
           </div>
         </div>
       </section>
@@ -101,6 +83,15 @@ export default async function Home() {
           title="Budgets"
           description="Set spending limits by category, assign transactions, and see progress at a glance before you overspend."
         />
+      </section>
+
+      <section className="mx-auto max-w-4xl px-6 pb-14 text-center">
+        <Link
+          href="/docs"
+          className="text-accent no-underline hover:underline"
+        >
+          Tutorials &amp; accessibility guide
+        </Link>
       </section>
     </main>
   );

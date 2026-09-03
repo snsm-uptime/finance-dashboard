@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { GhostButton } from "@/components/soft-ledger/GhostButton";
 import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 import { ReceiptRowMenu, type ReceiptRowRollback } from "@/components/soft-ledger/ReceiptRowMenu";
 
@@ -119,14 +120,10 @@ export function ListReceiptMenu({ listId, statementId, messages, rollback }: Pro
         }
         footer={
           <div className="flex justify-end gap-[var(--space-2)]">
-            <button
-              type="button"
-              className="cursor-pointer border-none bg-transparent text-muted"
-              onClick={() => setOpen(false)}
-            >
+            <GhostButton onClick={() => setOpen(false)}>
               {messages.cancelLabel}
-            </button>
-            <PrimaryButton onClick={confirmMove} disabled={!selectedId || busy}>
+            </GhostButton>
+            <PrimaryButton onClick={confirmMove} disabled={!selectedId || busy} loading={busy}>
               {messages.confirmAction}
             </PrimaryButton>
           </div>

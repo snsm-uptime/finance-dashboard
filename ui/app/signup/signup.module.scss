@@ -135,24 +135,3 @@
   color: #8b3a2a;
 }
 
-.submit {
-  margin-top: 0.25rem;
-  font-family: var(--font-ui), system-ui, sans-serif;
-  font-size: 0.95rem;
-  font-weight: 600;
-  padding: 9px 12px;
-  border: none;
-  border-radius: 8px;
-  background: var(--accent);
-  color: var(--on-accent);
-  cursor: pointer;
-}
-
-.submit:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.submit:not(:disabled):hover {
-  filter: brightness(1.05);
-}

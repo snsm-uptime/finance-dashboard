@@ -175,8 +175,7 @@
   cursor: not-allowed;
 }
 
-.primary,
-.secondary {
+.primary {
   font-family: var(--font-ui), system-ui, sans-serif;
   font-weight: 600;
   font-size: 0.95rem;
@@ -186,9 +185,6 @@
   cursor: pointer;
   flex: 0 0 auto;
   white-space: nowrap;
-}
-
-.primary {
   border: none;
   background: var(--accent);
   color: var(--on-accent);
@@ -198,20 +194,9 @@
   filter: brightness(1.05);
 }
 
-.primary:disabled,
-.secondary:disabled {
+.primary:disabled {
   opacity: 0.55;
   cursor: not-allowed;
-}
-
-.secondary {
-  background: transparent;
-  color: var(--accent);
-  border: 1px solid var(--border);
-}
-
-.secondary:not(:disabled):hover {
-  background: color-mix(in srgb, var(--border) 35%, transparent);
 }
 
 .list {

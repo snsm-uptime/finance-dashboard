@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { type Locale, verifyMessages } from "@/lib/i18n/verify";
 import { safeReturnTo } from "../sign-in/signInClient";
+import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 import styles from "../signup/signup.module.scss";
 
 type Props = {
@@ -142,9 +143,9 @@ export function VerifyForm({ locale, token, returnTo }: Props) {
     <div className={styles.form}>
       {token ? (
         <form onSubmit={onConfirm}>
-          <button className={styles.submit} type="submit" disabled={!canConfirm}>
+          <PrimaryButton type="submit" disabled={!canConfirm} loading={pendingConfirm}>
             {pendingConfirm ? t.confirmSubmitting : t.confirmSubmit}
-          </button>
+          </PrimaryButton>
         </form>
       ) : (
         <p className={styles.hint} role="status">
@@ -162,9 +163,9 @@ export function VerifyForm({ locale, token, returnTo }: Props) {
         </p>
       ) : null}
       <form onSubmit={onResend}>
-        <button className={styles.submit} type="submit" disabled={pendingResend}>
+        <PrimaryButton type="submit" disabled={pendingResend} loading={pendingResend}>
           {pendingResend ? t.resending : t.resend}
-        </button>
+        </PrimaryButton>
       </form>
       <p className={styles.hint}>
         <Link href="/sign-in">{t.signInLink}</Link>

@@ -1,12 +1,13 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useId, useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { CloseIcon, SaveIcon, SpinnerIcon } from "@/app/icons";
 import { IconButton } from "@/components/IconButton";
 import { usePreferences } from "@/components/PreferencesProvider";
+import { AccentButton } from "@/components/soft-ledger/AccentButton";
+import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 import { useFormSubmission } from "@/hooks";
 import { uploadCopy } from "@/lib/i18n/upload";
 import { useCardIdentification } from "@/hooks/useCardIdentification";
@@ -68,10 +69,6 @@ type SessionReviewPanelProps = {
 };
 
 const statementCardClass = "relative flex w-full max-w-[26rem] flex-col items-stretch gap-3";
-const assignPrimaryClass =
-  "inline-flex items-center justify-center px-3 py-[9px] rounded-sm border-none bg-accent text-on-accent no-underline font-[550] text-[0.95rem]";
-const reviewSecondaryClass =
-  "inline-flex items-center justify-center px-3 py-[9px] rounded-sm border border-accent bg-transparent text-accent no-underline font-[550] text-[0.95rem]";
 
 export function SessionReviewPanel({
   session,
@@ -240,17 +237,10 @@ export function SessionReviewPanel({
       >
         <div className="flex w-full max-w-[26rem] flex-col items-stretch gap-3">
           <div className="flex flex-wrap justify-center gap-2">
-            <Link href={reviewHref} className={assignPrimaryClass}>
-              {t.resumeReview}
-            </Link>
-            <button
-              type="button"
-              className={reviewSecondaryClass}
-              disabled={discard.pending}
-              onClick={requestDiscard}
-            >
+            <PrimaryButton href={reviewHref}>{t.resumeReview}</PrimaryButton>
+            <AccentButton disabled={discard.pending} onClick={requestDiscard}>
               {discard.pending ? t.closing : t.close}
-            </button>
+            </AccentButton>
           </div>
           {discard.error ? (
             <p className="text-owe text-[0.9rem] m-0" role="alert">
@@ -497,12 +487,8 @@ function StatementCard({
 
       {!needsRegistration ? (
         <div className="flex flex-wrap justify-center gap-2">
-          <Link href={assignHref} className={assignPrimaryClass}>
-            {t.assignToList}
-          </Link>
-          <Link href={reviewHref} className={reviewSecondaryClass}>
-            {t.reviewIndividually}
-          </Link>
+          <PrimaryButton href={assignHref}>{t.assignToList}</PrimaryButton>
+          <AccentButton href={reviewHref}>{t.reviewIndividually}</AccentButton>
         </div>
       ) : null}
     </li>

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Sheet } from "@/app/lists/Sheet";
 import { IconButton } from "@/components/IconButton";
+import { GhostButton } from "@/components/soft-ledger/GhostButton";
 import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 import { SoftLedgerRadio } from "@/components/soft-ledger/Radio";
 import { usePreferences } from "@/components/PreferencesProvider";
@@ -376,20 +377,19 @@ export function ImportReviewSheet({
         >
           {t.importReviewSheetDiscard}
         </button>
-        <button
-          type="button"
+        <GhostButton
+          className="flex-1"
           disabled={busy}
+          loading={changeListAction.pending}
           onClick={() => {
             saveAction.clearError();
             void changeListAction.submit(undefined);
           }}
-          className={`${STICKY_BUTTON_CLASS} border-border text-foreground`}
-          style={STICKY_BUTTON_STYLE}
         >
           {changeListAction.pending
             ? t.importReviewSheetChangingList
             : t.importReviewSheetChangeList}
-        </button>
+        </GhostButton>
       </div>
     ) : null;
 
@@ -529,6 +529,7 @@ export function ImportReviewSheet({
         <PrimaryButton
           className="w-full"
           disabled={busy}
+          loading={saveAction.pending}
           onClick={() => {
             changeListAction.clearError();
             void saveAction.submit(undefined);

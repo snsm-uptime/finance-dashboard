@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 
+import { GhostButton } from "@/components/soft-ledger/GhostButton";
 import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 import { uploadCopy } from "@/lib/i18n/upload";
 import type { Locale } from "@/lib/i18n/locale";
@@ -28,8 +29,6 @@ type ParseComparisonPanelProps = {
   onDismissFile: () => void;
 };
 
-const outlineButtonClass =
-  "m-0 px-3 py-[9px] rounded-sm border border-border bg-transparent text-foreground cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-55 disabled:cursor-not-allowed";
 const destructiveOutlineClass =
   "m-0 px-3 py-[9px] rounded-sm border border-owe bg-transparent text-owe cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-owe disabled:opacity-55 disabled:cursor-not-allowed";
 
@@ -178,20 +177,12 @@ export function ParseComparisonPanel({
           </p>
         ) : null}
         <div className="flex flex-wrap gap-[var(--space-2)]">
-          <button
-            type="button"
-            className={outlineButtonClass}
-            style={{
-              fontFamily: "var(--type-button-face)",
-              fontSize: "var(--type-button-size)",
-              fontWeight: "var(--type-button-weight)",
-              lineHeight: "1.2",
-            }}
+          <GhostButton
             disabled={pending}
             onClick={() => void handleDismissStatement()}
           >
             {t.parseFailureDismissStatement}
-          </button>
+          </GhostButton>
           <button
             type="button"
             className={destructiveOutlineClass}

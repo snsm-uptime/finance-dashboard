@@ -322,8 +322,8 @@ describe("ImportReviewSheet", () => {
     expect(discard.className).toContain("border-owe");
     expect(discard.className).toContain("text-owe");
     expect(changeList).toBeTruthy();
-    expect(changeList.className).toContain("border-border");
     expect(changeList.className).not.toContain("border-owe");
+    expect(changeList.className).not.toContain("text-owe");
     const pin = discard.parentElement?.parentElement;
     expect(pin?.className).toContain("sticky");
     expect(pin?.className).toContain("top-0");

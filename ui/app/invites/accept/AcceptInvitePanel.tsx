@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 
 import { resolveAuthenticatedLanding } from "@/lib/landing";
 import { inviteMessages, type Locale } from "@/lib/i18n/invite";
 import { setLastOpenedList } from "@/app/lists/listsClient";
 import { acceptInvite } from "../inviteClient";
+import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 import styles from "../../signup/signup.module.scss";
 
 type Props = {
@@ -84,9 +84,9 @@ export function AcceptInvitePanel({ locale, token, authenticated }: Props) {
     return (
       <div className={styles.form}>
         <p className={styles.hint}>{t.signInPrompt}</p>
-        <Link className={styles.submit} href={`/sign-in?returnTo=${encodeURIComponent(returnTo)}`}>
+        <PrimaryButton href={`/sign-in?returnTo=${encodeURIComponent(returnTo)}`}>
           {t.signInCta}
-        </Link>
+        </PrimaryButton>
       </div>
     );
   }
@@ -98,9 +98,7 @@ export function AcceptInvitePanel({ locale, token, authenticated }: Props) {
         <p className={styles.error} role="alert">
           {t.errorNotVerified}
         </p>
-        <Link className={styles.submit} href={verifyHref}>
-          {t.verifyCta}
-        </Link>
+        <PrimaryButton href={verifyHref}>{t.verifyCta}</PrimaryButton>
       </div>
     );
   }

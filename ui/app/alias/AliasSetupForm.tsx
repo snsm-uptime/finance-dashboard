@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/Avatar";
 import { encodeAvatarPhoto } from "@/lib/imageEncode";
 import type { AliasMessages } from "@/lib/i18n/alias";
+import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 
 import { normalizeAliasInput, setAlias, setPhoto } from "./aliasClient";
 import styles from "../signup/signup.module.scss";
@@ -150,9 +151,9 @@ export function AliasSetupForm({ messages, continueHref }: Props) {
           {photoError}
         </p>
       ) : null}
-      <button className={styles.submit} type="submit" disabled={pending}>
+      <PrimaryButton type="submit" disabled={pending} loading={pending}>
         {pending ? messages.saving : messages.submit}
-      </button>
+      </PrimaryButton>
     </form>
   );
 }

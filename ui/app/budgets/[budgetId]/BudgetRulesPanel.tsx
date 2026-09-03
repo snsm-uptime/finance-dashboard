@@ -4,6 +4,7 @@ import { FormEvent, useId, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { useFormSubmission } from "@/hooks";
+import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 
 import { createRule, deleteRule, type BudgetDetailClientMessages, type BudgetRule } from "./budgetDetailClient";
 
@@ -116,13 +117,14 @@ export function BudgetRulesPanel({ budgetId, rules, messages }: Props) {
             {error}
           </p>
         ) : null}
-        <button
+        <PrimaryButton
           type="submit"
-          className="self-start px-[var(--space-4)] py-[var(--space-2)] rounded-sm bg-accent text-background font-semibold disabled:opacity-55 disabled:cursor-not-allowed"
+          className="self-start"
           disabled={!matchText.trim() || pending}
+          loading={pending}
         >
           {pending ? messages.budgetsRuleAdding : messages.budgetsRuleAddSubmit}
-        </button>
+        </PrimaryButton>
       </form>
     </section>
   );
