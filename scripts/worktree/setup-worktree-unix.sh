@@ -286,6 +286,17 @@ if [[ "$LITE" == "1" ]]; then
   export ROOT_WORKTREE_PATH
   export PRIMARY_COMPOSE_NAME
   export PRIMARY_NETWORK_NAME="${PRIMARY_COMPOSE_NAME}_internal"
+
+  # A stale ui/.next from a prior full (non-lite) run in this worktree was
+  # built against this worktree's own node_modules. --lite swaps in the
+  # primary's node_modules volume instead, so a leftover .next build/webpack
+  # cache can reference modules/hashes that no longer match, breaking the
+  # lite container. Always start lite mode from a clean .next.
+  if [[ -d "$WT_ROOT/ui/.next" ]]; then
+    rm -rf "$WT_ROOT/ui/.next"
+    log "Cleared stale ui/.next (rebuilding against primary's node_modules)"
+  fi
+
   log "Starting ui-only container (joined to ${PRIMARY_NETWORK_NAME}, node_modules from ${PRIMARY_COMPOSE_NAME}_ui_node_modules)"
   (cd "$WT_ROOT" && docker compose \
     -f docker-compose.yml -f docker-compose.dev.yml \
