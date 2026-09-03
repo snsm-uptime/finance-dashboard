@@ -1,7 +1,7 @@
 "use client";
 
 import { useChromeHeader } from "@/components/ChromeBack";
-import { Avatar } from "@/components/Avatar";
+import { ChromeAvatarLink } from "@/components/ChromeAvatarLink";
 import { DocsHelpButton } from "@/app/docs/DocsHelpButton";
 
 /**
@@ -22,7 +22,7 @@ export function HomeChrome({
   photoBase64: string | null;
 }) {
   useChromeHeader({
-    leading: <Avatar alias={alias} seed={userId} photoBase64={photoBase64} size="md" />,
+    leading: <ChromeAvatarLink alias={alias} userId={userId} photoBase64={photoBase64} />,
     title,
     trailing: <DocsHelpButton pageName="Lists" docsAnchor="/docs#lists" />,
   });

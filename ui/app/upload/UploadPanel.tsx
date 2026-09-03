@@ -5,6 +5,7 @@ import { ChangeEvent, useEffect, useId, useRef, useState } from "react";
 
 import { IconButton } from "@/components/IconButton";
 import { useChromeHeader } from "@/components/ChromeBack";
+import { ChromeAvatarLink } from "@/components/ChromeAvatarLink";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { AlertIcon, CloseIcon, SpinnerIcon } from "@/app/icons";
 import { DocsHelpButton } from "@/app/docs/DocsHelpButton";
@@ -149,7 +150,7 @@ function reconcileWithLiveActive(queue: QueueEntry[], live: ImportSession | null
 }
 
 export function UploadPanel({ initialSession = null }: { initialSession?: ImportSession | null }) {
-  const { locale } = usePreferences();
+  const { locale, me } = usePreferences();
   const t = uploadCopy(locale);
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -161,6 +162,10 @@ export function UploadPanel({ initialSession = null }: { initialSession?: Import
   const pickChainRef = useRef(Promise.resolve());
   const [capMessage, setCapMessage] = useState<string | null>(null);
   useChromeHeader({
+    leading: me ? (
+      <ChromeAvatarLink alias={me.alias} userId={me.user_id} photoBase64={me.photo_base64} />
+    ) : null,
+    title: t.title,
     trailing: (
       <DocsHelpButton pageName="Upload" docsAnchor="/docs#cards-imports" />
     ),

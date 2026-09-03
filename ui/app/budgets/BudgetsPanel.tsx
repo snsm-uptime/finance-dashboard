@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { Chip } from "@/components/Chip";
 import { useChromeHeader } from "@/components/ChromeBack";
+import { ChromeAvatarLink } from "@/components/ChromeAvatarLink";
 import { SectionLabel } from "@/components/soft-ledger/SectionLabel";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { StackedListPanel } from "@/components/StackedListPanel";
@@ -124,9 +125,13 @@ function useMasonryColumns(items: BudgetItem[], columnCount: number) {
 
 /** Standalone /budgets surface (Story 7.1) — no listId, spans the caller's own budgets. */
 export function BudgetsPanel() {
-  const { locale } = usePreferences();
+  const { locale, me } = usePreferences();
   const t = listsMessages[locale];
   useChromeHeader({
+    leading: me ? (
+      <ChromeAvatarLink alias={me.alias} userId={me.user_id} photoBase64={me.photo_base64} />
+    ) : null,
+    title: t.budgetsTitle,
     trailing: <DocsHelpButton pageName="Budgets" docsAnchor="/docs#budgets" />,
   });
   const [budgets, setBudgets] = useState<BudgetItem[]>([]);
@@ -160,6 +165,7 @@ export function BudgetsPanel() {
       errorInvalidBudgetCap: t.errorInvalidBudgetCap,
       errorInvalidBudgetCurrency: t.errorInvalidBudgetCurrency,
       errorInvalidBudgetSourceLists: t.errorInvalidBudgetSourceLists,
+      errorInvalidBudgetPeriod: t.errorInvalidBudgetPeriod,
       errorForbidden: t.errorForbidden,
     }),
     [t],
@@ -218,6 +224,8 @@ export function BudgetsPanel() {
                 budgetsSourceListsLabel: t.budgetsSourceListsLabel,
                 budgetsCreateSubmit: t.budgetsCreateSubmit,
                 budgetsCreating: t.budgetsCreating,
+                budgetsPeriodStartLabel: t.budgetsPeriodStartLabel,
+                budgetsPeriodEndLabel: t.budgetsPeriodEndLabel,
               }}
               onCreated={onCreated}
             />

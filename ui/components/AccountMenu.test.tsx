@@ -7,6 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const fetchLists = vi.fn();
 const fetchCards = vi.fn();
+const routerBack = vi.fn();
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ back: routerBack }),
+  usePathname: () => "/account",
+}));
 
 vi.mock("@/app/lists/listsClient", async () => {
   const actual = await vi.importActual<typeof import("@/app/lists/listsClient")>(
@@ -29,6 +35,7 @@ vi.mock("@/app/cards/cardsClient", async () => {
 });
 
 import { AccountMenu } from "./AccountMenu";
+import { AppShell } from "./AppShell";
 import { PreferencesProvider } from "./PreferencesProvider";
 
 function mePayload(overrides: Record<string, unknown> = {}) {
@@ -323,5 +330,38 @@ describe("AccountMenu", () => {
     await waitForDom(() => host.textContent?.includes("Default review destination"));
     expect(host.textContent).toContain("Household");
     unmount();
+  });
+
+  it("shows a Back button (not the avatar) in the chrome leading slot, and it navigates back", async () => {
+    routerBack.mockClear();
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    let root!: Root;
+    act(() => {
+      root = createRoot(host);
+      root.render(
+        <PreferencesProvider>
+          <AppShell>
+            <AccountMenu />
+          </AppShell>
+        </PreferencesProvider>,
+      );
+    });
+    await waitForDom(() => host.textContent?.includes("Language"));
+
+    const header = host.querySelector('[data-app-chrome="header"]') as HTMLElement;
+    const backButton = header.querySelector('button[aria-label="Back"]') as HTMLButtonElement;
+    expect(backButton).toBeTruthy();
+    expect(header.querySelector('[role="img"]')).toBeNull(); // no Avatar in the chrome
+
+    act(() => {
+      backButton.click();
+    });
+    expect(routerBack).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      root.unmount();
+    });
+    host.remove();
   });
 });
