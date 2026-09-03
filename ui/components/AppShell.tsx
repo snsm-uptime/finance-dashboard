@@ -74,11 +74,13 @@ function AppShellFrame({ children }: { children: ReactNode }) {
                     if (header.backHref) router.push(header.backHref);
                   }}
                 />
+              ) : header.leading ? (
+                header.leading
               ) : null}
             </div>
             <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
               {header.title ? (
-                <h1 className="m-0 truncate text-[1.5rem] font-[550] text-foreground">
+                <h1 className="m-0 min-w-0 truncate text-[1.5rem] font-[550] text-foreground">
                   {header.title}
                 </h1>
               ) : null}
