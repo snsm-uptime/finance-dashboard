@@ -1,0 +1,120 @@
+/* button-system primitive — see
+   _bmad-output/planning-artifacts/ux-designs/ux-finance-dashboard-2026-09-02-buttons/{DESIGN,EXPERIENCE}.md
+   Contained (primary/accent): solid fill idle, lightens on hover, darkens on
+   press, flat gray when disabled. Outlined (ghost): transparent fill idle
+   with variant-color border+text, tints faintly on hover/press. */
+
+.base {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4em;
+  border-style: solid;
+  border-width: 2px;
+  cursor: pointer;
+  background: transparent;
+  box-shadow: none;
+  transform: translateY(0);
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+.base:disabled,
+.base[aria-disabled="true"] {
+  cursor: not-allowed;
+  box-shadow: none !important;
+  transform: translateY(0) !important;
+}
+
+/* Shared M3 lift — same recipe as GhostButton/UploadButton's hover chrome. */
+.base:not(:disabled):not([aria-disabled="true"]):hover,
+.base:not(:disabled):not([aria-disabled="true"]):focus-visible {
+  box-shadow:
+    0 1px 3px 0 var(--lift-key),
+    0 4px 8px 3px var(--lift-ambient);
+  transform: translateY(-1px);
+}
+
+/* Contained variants (Primary/Accent) — solid fill by default. */
+.primary,
+.accent {
+  border-color: transparent;
+}
+
+.primary {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.primary:not(:disabled):not([aria-disabled="true"]):hover,
+.primary:not(:disabled):not([aria-disabled="true"]):focus-visible {
+  background: color-mix(in srgb, var(--accent) 78%, white);
+}
+.primary:not(:disabled):not([aria-disabled="true"]):active {
+  background: color-mix(in srgb, var(--accent) 78%, black);
+  box-shadow: none;
+  transform: translateY(0);
+}
+.primary:disabled,
+.primary[aria-disabled="true"] {
+  background: color-mix(in srgb, var(--muted) 30%, var(--surface));
+  color: color-mix(in srgb, var(--muted) 70%, var(--surface));
+}
+
+.accent {
+  background: var(--accent-2);
+  color: var(--on-accent-2);
+}
+.accent:not(:disabled):not([aria-disabled="true"]):hover,
+.accent:not(:disabled):not([aria-disabled="true"]):focus-visible {
+  background: color-mix(in srgb, var(--accent-2) 78%, white);
+}
+.accent:not(:disabled):not([aria-disabled="true"]):active {
+  background: color-mix(in srgb, var(--accent-2) 78%, black);
+  box-shadow: none;
+  transform: translateY(0);
+}
+.accent:disabled,
+.accent[aria-disabled="true"] {
+  background: color-mix(in srgb, var(--muted) 30%, var(--surface));
+  color: color-mix(in srgb, var(--muted) 70%, var(--surface));
+}
+
+/* Outlined variant (Ghost) — faint tint idle, flips to white on hover. */
+.ghost {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+.ghost:not(:disabled):not([aria-disabled="true"]):hover,
+.ghost:not(:disabled):not([aria-disabled="true"]):focus-visible {
+  background: white;
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--surface));
+  color: color-mix(in srgb, var(--accent) 55%, var(--surface));
+}
+.ghost:not(:disabled):not([aria-disabled="true"]):active {
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: none;
+  transform: translateY(0);
+}
+.ghost:disabled,
+.ghost[aria-disabled="true"] {
+  border-color: color-mix(in srgb, var(--muted) 60%, var(--surface));
+  color: color-mix(in srgb, var(--muted) 60%, var(--surface));
+  background: var(--surface);
+}
+
+.spinner {
+  animation: base-button-spin 0.6s linear infinite;
+}
+
+@keyframes base-button-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

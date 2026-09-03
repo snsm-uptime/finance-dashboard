@@ -3,6 +3,8 @@
 import { useRef } from "react";
 
 import { useFocusTrap } from "@/hooks/useFocusTrap";
+import { GhostButton } from "@/components/soft-ledger/GhostButton";
+import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 
 type DiscardConfirmDialogProps = {
   open: boolean;
@@ -55,23 +57,12 @@ export function DiscardConfirmDialog({
         </h2>
         <p className="mt-3 mb-0 text-[0.9rem] leading-relaxed text-muted">{body}</p>
         <div className="mt-5 flex flex-wrap justify-end gap-2">
-          <button
-            ref={cancelRef}
-            type="button"
-            className="inline-flex items-center justify-center rounded-sm border border-border bg-transparent px-3 py-[9px] text-[0.95rem] font-[550] text-foreground"
-            onClick={onCancel}
-            disabled={pending}
-          >
+          <GhostButton ref={cancelRef} onClick={onCancel} disabled={pending}>
             {cancelLabel}
-          </button>
-          <button
-            type="button"
-            className="inline-flex items-center justify-center rounded-sm border-none bg-accent px-3 py-[9px] text-[0.95rem] font-[550] text-on-accent"
-            onClick={onConfirm}
-            disabled={pending}
-          >
+          </GhostButton>
+          <PrimaryButton onClick={onConfirm} disabled={pending}>
             {confirmLabel}
-          </button>
+          </PrimaryButton>
         </div>
       </div>
     </div>

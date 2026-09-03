@@ -11,6 +11,7 @@ import { signupMessages, type Locale } from "@/lib/i18n/signup";
 import { setLastOpenedList } from "@/app/lists/listsClient";
 import { fetchInvitePreview } from "@/app/invites/inviteClient";
 import { attemptSignup } from "./signupClient";
+import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 import styles from "./signup.module.scss";
 
 type Props = {
@@ -190,9 +191,9 @@ export function SignupForm({ locale, inviteToken }: Props) {
           {error}
         </p>
       ) : null}
-      <button className={styles.submit} type="submit" disabled={!canSubmit}>
+      <PrimaryButton type="submit" disabled={!canSubmit} loading={pending}>
         {pending ? t.submitting : t.submit}
-      </button>
+      </PrimaryButton>
     </form>
   );
 }

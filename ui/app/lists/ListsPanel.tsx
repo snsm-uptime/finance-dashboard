@@ -24,6 +24,7 @@ import {
 } from "@/components/IconButtonPopup";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { StackedListPanel } from "@/components/StackedListPanel";
+import { GhostButton } from "@/components/soft-ledger/GhostButton";
 import { listsMessages } from "@/lib/i18n/lists";
 import { DotsIcon, PlusIcon, UploadIcon, UsersIcon, WalletIcon } from "@/app/icons";
 import type { InviteFormMessages } from "./InviteForm";
@@ -460,14 +461,12 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
                       <>
                         <p className={styles.confirmText}>{t.deleteConfirm}</p>
                         <div className={styles.confirmActions}>
-                          <button
-                            type="button"
-                            className={styles.secondary}
+                          <GhostButton
                             onClick={cancelDeleteConfirm}
                             disabled={deletingId !== null}
                           >
                             {t.deleteCancel}
-                          </button>
+                          </GhostButton>
                           <button
                             type="button"
                             className={`${styles.primary} ${styles.primaryDanger}`}

@@ -1,0 +1,88 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>BaseButton variants — Warm Balance</title>
+<style>
+  :root {
+    --background:#F7F3EC; --surface:#FFFCF7; --text:#2A241C; --muted:#6E6456;
+    --border:#E2D8C8; --primary:#3F6B45; --on-primary:#FFFCF7;
+    --accent:#4356A3; --on-accent:#FFFFFF;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --background:#17140F; --surface:#221E17; --text:#F0E9DC; --muted:#A89B88;
+      --border:#3A342A; --primary:#8FBB8E; --on-primary:#17140F;
+      --accent:#ADBDFF; --on-accent:#17140F;
+    }
+  }
+  body { background:var(--background); color:var(--text); font-family: system-ui, sans-serif; padding:2rem; }
+  h2 { font-size:0.9rem; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-top:2.5rem; }
+  .row { display:flex; gap:1rem; align-items:center; flex-wrap:wrap; margin:0.75rem 0; }
+  .label { width:6rem; font-size:0.75rem; color:var(--muted); }
+  button {
+    font-family:inherit; font-weight:500; line-height:1.2; border-radius:8px; cursor:pointer;
+    display:inline-flex; align-items:center; justify-content:center; gap:0.4em;
+    transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+    box-shadow:none;
+  }
+  .md { padding:9px 16px; font-size:0.85rem; }
+  .sm { padding:6px 12px; font-size:0.75rem; }
+  .lg { padding:12px 20px; font-size:0.95rem; }
+
+  /* Primary and Accent share one mechanic: idle=outline, hover=fills solid. They differ
+     only by color token. (Primary's earlier background-clip:text knockout hover is dropped —
+     persistent webkit repaint flicker, not worth chasing.) */
+  .primary { background:transparent; border:2px solid var(--primary); color:var(--primary); }
+  .primary:hover:not(:disabled) {
+    background:var(--primary); color:var(--on-primary);
+    box-shadow:0 2px 6px rgba(0,0,0,.15); transform:translateY(-1px);
+  }
+
+  .accentv { background:transparent; border:2px solid var(--accent); color:var(--accent); }
+  .accentv:hover:not(:disabled) {
+    background:var(--accent); color:var(--on-accent);
+    box-shadow:0 2px 6px rgba(0,0,0,.15); transform:translateY(-1px);
+  }
+
+  .ghost { background:transparent; border:2px solid var(--muted); color:var(--muted); }
+  .ghost:hover:not(:disabled) {
+    border-color:var(--primary); color:var(--primary);
+    box-shadow:0 2px 6px rgba(0,0,0,.15); transform:translateY(-1px);
+  }
+
+  button:disabled { opacity:0.55; cursor:not-allowed; transform:none; box-shadow:none; }
+  .upper { text-transform:uppercase; }
+</style>
+</head>
+<body>
+  <p style="color:var(--muted); font-size:0.8rem;">Hover the buttons. Resize / toggle OS theme to check dark mode. Static reference only — real border-radius/spacing tokens land in DESIGN.md.</p>
+
+  <h2>Primary (fill=null, border+text=primary → hover: fill=primary, text=knockout)</h2>
+  <div class="row"><span class="label">sm/md/lg</span>
+    <button class="primary sm">Sign in</button>
+    <button class="primary md">Sign in</button>
+    <button class="primary lg">Sign in</button>
+    <button class="primary md" disabled>Sign in</button>
+    <button class="primary md upper">Sign in</button>
+  </div>
+
+  <h2>Accent (border+fill=accent, text=on-accent → hover: fill=transparent, text=accent)</h2>
+  <div class="row"><span class="label">sm/md/lg</span>
+    <button class="accentv sm">Create account</button>
+    <button class="accentv md">Create account</button>
+    <button class="accentv lg">Create account</button>
+    <button class="accentv md" disabled>Create account</button>
+    <button class="accentv md upper">Create account</button>
+  </div>
+
+  <h2>Ghost (border+text=muted, fill=null → hover: border+text=primary)</h2>
+  <div class="row"><span class="label">sm/md/lg</span>
+    <button class="ghost sm">Cancel</button>
+    <button class="ghost md">Cancel</button>
+    <button class="ghost lg">Cancel</button>
+    <button class="ghost md" disabled>Cancel</button>
+    <button class="ghost md upper">Cancel</button>
+  </div>
+</body>
+</html>

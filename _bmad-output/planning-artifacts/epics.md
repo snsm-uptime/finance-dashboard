@@ -2307,3 +2307,37 @@ non-gesture paths, ARIA patterns already shipped)
 **When** it renders
 **Then** it links to `/docs`
 
+### Story 8.3: Docs page UX refactor
+
+As a user (new or existing),
+I want the `/docs` tutorials page to be scannable and let me jump straight
+to help for the screen I'm on,
+So that I don't have to read a wall of text to find the one answer I need.
+
+**Acceptance Criteria:**
+
+**Given** the `/docs` page's three tutorial groups (Lists, Cards & imports,
+Budgets)
+**When** the page loads with no URL hash
+**Then** each group renders as a collapsible section, collapsed by default,
+toggleable via its header (mouse and keyboard)
+
+**Given** a URL hash pointing at a group or entry anchor (e.g.
+`/docs#lists`, `/docs#lists-splitting-an-expense`)
+**When** the page loads
+**Then** the containing section auto-expands, the target entry scrolls
+into view, and receives a persistent non-color-only highlight plus
+programmatic focus (not just a scroll)
+
+**Given** an authenticated page that has matching `/docs` content (Lists,
+Budgets, Cards, Upload/import screens)
+**When** the page renders
+**Then** it shows an icon-only "?" help button (tooltip/accessible name
+"Learn more") that navigates to that page's matching `/docs` section anchor
+
+**Given** the public landing page and the `/home`/`/account` tabs
+**When** they render
+**Then** no contextual help icon is added to them (landing keeps its
+existing `/docs` link unchanged; home/account have no matching docs
+content)
+

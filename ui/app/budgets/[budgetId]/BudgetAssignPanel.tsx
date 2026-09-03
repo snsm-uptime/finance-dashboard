@@ -4,6 +4,7 @@ import { useId, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import { FormIconSubmit } from "@/components/FormIconSubmit";
+import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 import { formatMoneyAmount } from "@/lib/currency";
 
 import { Sheet } from "@/app/lists/Sheet";
@@ -80,13 +81,9 @@ export function BudgetAssignPanel({ budgetId, messages }: Props) {
 
   return (
     <>
-      <button
-        type="button"
-        className="self-start px-[var(--space-4)] py-[var(--space-2)] rounded-sm bg-accent text-background font-semibold"
-        onClick={openPicker}
-      >
+      <PrimaryButton className="self-start" onClick={openPicker}>
         {messages.budgetsAssignTitle}
-      </button>
+      </PrimaryButton>
       <Sheet
         open={open}
         onClose={() => setOpen(false)}

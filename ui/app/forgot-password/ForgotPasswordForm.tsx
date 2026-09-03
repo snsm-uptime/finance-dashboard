@@ -7,6 +7,7 @@ import {
   passwordResetMessages,
   type Locale,
 } from "@/lib/i18n/password-reset";
+import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 import styles from "../signup/signup.module.scss";
 
 type Props = {
@@ -90,9 +91,9 @@ export function ForgotPasswordForm({ locale }: Props) {
           {success}
         </p>
       ) : null}
-      <button className={styles.submit} type="submit" disabled={!canSubmit}>
+      <PrimaryButton type="submit" disabled={!canSubmit} loading={pending}>
         {pending ? t.forgotSubmitting : t.forgotSubmit}
-      </button>
+      </PrimaryButton>
       <p className={styles.hint}>
         <Link href="/sign-in">{t.backToSignIn}</Link>
       </p>

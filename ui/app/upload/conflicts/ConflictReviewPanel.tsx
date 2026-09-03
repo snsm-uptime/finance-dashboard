@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 
 import { useChromeHeader } from "@/components/ChromeBack";
 import { usePreferences } from "@/components/PreferencesProvider";
+import { GhostButton } from "@/components/soft-ledger/GhostButton";
+import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 import { conflictsCopy } from "@/lib/i18n/conflicts";
 import { DiscardConfirmDialog } from "@/app/upload/DiscardConfirmDialog";
 import {
@@ -100,13 +102,9 @@ export function ConflictReviewPanel({ landingListId }: ConflictReviewPanelProps)
     return (
       <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 px-6 text-center">
         <p className="m-0 text-[0.95rem] text-muted">{loadError}</p>
-        <button
-          type="button"
-          className="inline-flex items-center justify-center rounded-sm border border-border bg-transparent px-3 py-[9px] text-[0.95rem] font-[550] text-foreground"
-          onClick={() => setReloadKey((key) => key + 1)}
-        >
+        <GhostButton onClick={() => setReloadKey((key) => key + 1)}>
           {t.doneReturnToList}
-        </button>
+        </GhostButton>
       </div>
     );
   }
@@ -154,14 +152,9 @@ export function ConflictReviewPanel({ landingListId }: ConflictReviewPanelProps)
         disabled={pending}
       />
 
-      <button
-        type="button"
-        className="inline-flex items-center justify-center rounded-sm border border-border bg-transparent px-3 py-[9px] text-[0.85rem] text-muted"
-        onClick={() => setEscapeOpen(true)}
-        disabled={pending}
-      >
+      <GhostButton size="sm" onClick={() => setEscapeOpen(true)} disabled={pending}>
         {t.notSameExpense}
-      </button>
+      </GhostButton>
 
       <DiscardConfirmDialog
         open={escapeOpen}
@@ -202,14 +195,9 @@ function ConflictCard({
       <span className="text-[0.8rem] text-muted">
         {entry.posted_date} · {onListText.replace("{list}", entry.list_name)}
       </span>
-      <button
-        type="button"
-        className="mt-2 inline-flex items-center justify-center rounded-sm border-none bg-accent px-3 py-[9px] text-[0.95rem] font-[550] text-on-accent"
-        onClick={onPick}
-        disabled={disabled}
-      >
+      <PrimaryButton className="mt-2" onClick={onPick} disabled={disabled}>
         {actionLabel}
-      </button>
+      </PrimaryButton>
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { IconButton } from "@/components/IconButton";
 import { resetMembershipListsStore } from "@/app/lists/membershipListsStore";
 import { signInMessages, type Locale } from "@/lib/i18n/signin";
 import { attemptSignIn } from "./signInClient";
+import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 import styles from "../signup/signup.module.scss";
 
 type Props = {
@@ -99,9 +100,9 @@ export function SignInForm({ locale, returnTo }: Props) {
           {error}
         </p>
       ) : null}
-      <button className={styles.submit} type="submit" disabled={!canSubmit}>
+      <PrimaryButton type="submit" disabled={!canSubmit} loading={pending}>
         {pending ? t.submitting : t.submit}
-      </button>
+      </PrimaryButton>
       <p className={styles.hint}>
         <Link href="/forgot-password">{t.forgotPassword}</Link>
       </p>
