@@ -977,6 +977,7 @@ export default async function ListDetailPage({
                             originChip={originChip}
                             originChipTone="muted"
                             originDisabled
+                            originUnknown={originChip === t.expenseOriginUnknown}
                             {...rowShared}
                           />
                         );

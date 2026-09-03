@@ -25,6 +25,8 @@ export type ReceiptRowProps = {
   originChipTone?: ChipTone;
   /** Disabled look for origin chips the viewer cannot assign. */
   originDisabled?: boolean;
+  /** True when `originChip` is the "Unknown" origin label for another member's row — collapses the chip to just the avatar. */
+  originUnknown?: boolean;
   /** Clickable origin control; when set, replaces the display `originChip`. */
   originAction?: ReactNode;
   /** Panel below the row grid (e.g. origin `SlideDown`). */
@@ -113,6 +115,7 @@ function OriginMeta({
   originChip,
   originChipTone,
   originDisabled,
+  originUnknown,
   originAction,
 }: {
   payerAlias?: string;
@@ -121,10 +124,16 @@ function OriginMeta({
   originChip?: string;
   originChipTone: ChipTone;
   originDisabled?: boolean;
+  originUnknown?: boolean;
   originAction?: ReactNode;
 }) {
   if (originAction) return originAction;
   if (!originChip) return null;
+  // Unknown origin on another member's row: the payer avatar alone is
+  // enough context — the "Unknown" text label would just be noise.
+  if (originUnknown && payerSeed) {
+    return <Avatar alias={payerAlias ?? ""} seed={payerSeed} photoBase64={payerPhoto} size="xs" />;
+  }
   return (
     <Chip tone={originChipTone} disabled={originDisabled}>
       <span className="inline-flex items-center gap-1">
@@ -147,6 +156,7 @@ export function ReceiptRow({
   originChip,
   originChipTone = "muted",
   originDisabled = false,
+  originUnknown = false,
   originAction,
   originPanel,
   directionLabel,
@@ -214,6 +224,7 @@ export function ReceiptRow({
     originChip,
     originAction,
     originDisabled,
+    originUnknown,
     originPanel,
     newBadgeLabel,
     netLabel,
@@ -300,6 +311,7 @@ export function ReceiptRow({
             originChip={originChip}
             originChipTone={originChipTone}
             originDisabled={originDisabled}
+            originUnknown={originUnknown}
             originAction={originAction}
           />
           {amount ? (
