@@ -4,6 +4,13 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const push = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push }),
+  usePathname: () => "/upload",
+}));
+
+import { AppShell } from "@/components/AppShell";
 import { UploadPanel } from "./UploadPanel";
 import type { ImportSession } from "./uploadClient";
 import { readUploadQueue, resetUploadQueue, writeUploadQueue } from "./uploadQueueStore";
@@ -689,5 +696,25 @@ describe("UploadPanel", () => {
     expect(readUploadQueue().some((entry) => entry.session?.id === "left")).toBe(true);
 
     root = createRoot(container);
+  });
+
+  it("renders a help icon that navigates to /docs#cards-imports", async () => {
+    await act(async () => {
+      root.render(
+        <AppShell>
+          <UploadPanel />
+        </AppShell>,
+      );
+    });
+
+    const helpButton = container.querySelector(
+      'button[aria-label="Learn more about Upload"]',
+    ) as HTMLButtonElement;
+    expect(helpButton).toBeTruthy();
+
+    await act(async () => {
+      helpButton.click();
+    });
+    expect(push).toHaveBeenCalledWith("/docs?from=%2Fupload#cards-imports");
   });
 });

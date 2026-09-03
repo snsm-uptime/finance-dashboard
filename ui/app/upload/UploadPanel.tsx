@@ -4,8 +4,10 @@ import Link from "next/link";
 import { ChangeEvent, useEffect, useId, useRef, useState } from "react";
 
 import { IconButton } from "@/components/IconButton";
+import { useChromeHeader } from "@/components/ChromeBack";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { AlertIcon, CloseIcon, SpinnerIcon } from "@/app/icons";
+import { DocsHelpButton } from "@/app/docs/DocsHelpButton";
 import { uploadCopy } from "@/lib/i18n/upload";
 import { UploadButton } from "./UploadButton";
 import {
@@ -158,6 +160,11 @@ export function UploadPanel({ initialSession = null }: { initialSession?: Import
   const aliveRef = useRef(true);
   const pickChainRef = useRef(Promise.resolve());
   const [capMessage, setCapMessage] = useState<string | null>(null);
+  useChromeHeader({
+    trailing: (
+      <DocsHelpButton pageName="Upload" docsAnchor="/docs#cards-imports" />
+    ),
+  });
 
   const messages: UploadMessages = {
     errorUnsupportedFileType: t.errorUnsupportedFileType,

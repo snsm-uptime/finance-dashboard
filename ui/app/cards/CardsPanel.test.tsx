@@ -10,6 +10,12 @@ import type { ListItem } from "../lists/listsClient";
 
 const fetchCards = vi.fn();
 const fetchLists = vi.fn();
+const push = vi.fn();
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push }),
+  usePathname: () => "/cards",
+}));
 
 vi.mock("@/components/PreferencesProvider", () => ({
   usePreferences: () => ({ locale: "en" }),
@@ -33,6 +39,7 @@ vi.mock("../lists/listsClient", async () => {
   };
 });
 
+import { AppShell } from "@/components/AppShell";
 import { CardsPanel } from "./CardsPanel";
 import { replaceMembershipLists, resetMembershipListsStore } from "../lists/membershipListsStore";
 
@@ -149,5 +156,31 @@ describe("CardsPanel", () => {
         (btn) => btn.getAttribute("aria-label") === tripOptionLabel,
       ),
     ).toBe(false);
+  });
+
+  it("renders a help icon that navigates to /docs#cards-imports", async () => {
+    fetchCards.mockResolvedValue({ ok: true, cards: [] });
+    fetchLists.mockResolvedValue({ ok: true, lists: [] });
+
+    await act(async () => {
+      root.render(
+        <AppShell>
+          <CardsPanel />
+        </AppShell>,
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const helpButton = container.querySelector(
+      'button[aria-label="Learn more about Cards"]',
+    ) as HTMLButtonElement;
+    expect(helpButton).toBeTruthy();
+
+    await act(async () => {
+      helpButton.click();
+    });
+    expect(push).toHaveBeenCalledWith("/docs?from=%2Fcards#cards-imports");
   });
 });

@@ -4,12 +4,14 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 
 import { Chip } from "@/components/Chip";
+import { useChromeHeader } from "@/components/ChromeBack";
 import { SectionLabel } from "@/components/soft-ledger/SectionLabel";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { StackedListPanel } from "@/components/StackedListPanel";
 import { TopProgressBar } from "@/components/TopProgressBar";
 import { formatMoneyAmount } from "@/lib/currency";
 import { listsMessages } from "@/lib/i18n/lists";
+import { DocsHelpButton } from "@/app/docs/DocsHelpButton";
 import { fetchLists } from "@/app/lists/listsClient";
 import {
   getMembershipListsSnapshot,
@@ -124,6 +126,9 @@ function useMasonryColumns(items: BudgetItem[], columnCount: number) {
 export function BudgetsPanel() {
   const { locale } = usePreferences();
   const t = listsMessages[locale];
+  useChromeHeader({
+    trailing: <DocsHelpButton pageName="Budgets" docsAnchor="/docs#budgets" />,
+  });
   const [budgets, setBudgets] = useState<BudgetItem[]>([]);
   const lists = useMembershipLists() ?? [];
   const [loading, setLoading] = useState(true);

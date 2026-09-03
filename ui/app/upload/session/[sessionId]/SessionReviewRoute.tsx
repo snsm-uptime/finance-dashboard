@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { useChromeHeader } from "@/components/ChromeBack";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { SpinnerIcon } from "@/app/icons";
+import { DocsHelpButton } from "@/app/docs/DocsHelpButton";
 import { uploadCopy } from "@/lib/i18n/upload";
 import { fetchImportSession, type ImportSession } from "../../uploadClient";
 import { SessionReviewPanel } from "../../SessionReviewPanel";
@@ -26,6 +28,11 @@ export function SessionReviewRoute({ sessionId }: SessionReviewRouteProps) {
   const router = useRouter();
   const [session, setSession] = useState<ImportSession | null>(null);
   const [error, setError] = useState<string | null>(null);
+  useChromeHeader({
+    trailing: (
+      <DocsHelpButton pageName="Upload" docsAnchor="/docs#cards-imports" />
+    ),
+  });
 
   useEffect(() => {
     let cancelled = false;

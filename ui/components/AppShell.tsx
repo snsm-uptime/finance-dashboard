@@ -35,6 +35,10 @@ function AppShellFrame({ children }: { children: ReactNode }) {
   const cards = cardsCopy(locale);
   const header = useChromeHeaderState();
   const showHeader = chromeHeaderIsActive(header);
+  // Decoupled from showHeader: public screens (e.g. /docs, /sign-in) opt into
+  // just the header — a way back to "/" — via useChromeHeader, without also
+  // gaining the authenticated TabBar that showsAppChrome gates.
+  const showTabBar = showsAppChrome(pathname);
 
   const tabs: TabBarItem[] = [
     { key: "home", href: "/home", label: t.tabList, Icon: HomeIcon },
@@ -43,7 +47,7 @@ function AppShellFrame({ children }: { children: ReactNode }) {
     { key: "account", href: "/account", label: account.navAccount, Icon: UserIcon },
   ];
 
-  if (!showsAppChrome(pathname)) {
+  if (!showHeader && !showTabBar) {
     return <div className="fixed inset-0 overflow-y-auto">{children}</div>;
   }
 
@@ -89,7 +93,9 @@ function AppShellFrame({ children }: { children: ReactNode }) {
         ) : null}
         <div className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">{children}</div>
       </div>
-      <TabBar items={tabs} ariaLabel={t.tabNavAria} active={tabKeyFromPath(pathname)} />
+      {showTabBar ? (
+        <TabBar items={tabs} ariaLabel={t.tabNavAria} active={tabKeyFromPath(pathname)} />
+      ) : null}
     </div>
   );
 }

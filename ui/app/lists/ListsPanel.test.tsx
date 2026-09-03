@@ -7,8 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { listsMessages } from "@/lib/i18n/lists";
 import type { ListItem } from "./listsClient";
 
+const push = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push }),
+  usePathname: () => "/home",
 }));
 
 vi.mock("@/components/PreferencesProvider", () => ({
@@ -24,6 +26,7 @@ vi.mock("./lists.module.scss", () => ({
   ),
 }));
 
+import { AppShell } from "@/components/AppShell";
 import { ListsPanel } from "./ListsPanel";
 import { resetMembershipListsStore } from "./membershipListsStore";
 
@@ -158,5 +161,24 @@ describe("ListsPanel roster chips", () => {
     expect(balanceCol?.textContent).not.toContain(t.balanceOwed);
     expect(balanceCol?.textContent).toContain(t.balanceTotal);
     expect(balanceCol?.textContent).toContain("₡88");
+  });
+
+  it("renders a help icon (on /home, since ListsPanel is the real Lists surface) that navigates to /docs#lists", () => {
+    act(() => {
+      root.render(
+        <AppShell>
+          <ListsPanel initialLists={[shared]} currentUserId="owner-1" />
+        </AppShell>,
+      );
+    });
+    const helpButton = container.querySelector(
+      'button[aria-label="Learn more about Lists"]',
+    ) as HTMLButtonElement;
+    expect(helpButton).toBeTruthy();
+
+    act(() => {
+      helpButton.click();
+    });
+    expect(push).toHaveBeenCalledWith("/docs?from=%2Fhome#lists");
   });
 });
