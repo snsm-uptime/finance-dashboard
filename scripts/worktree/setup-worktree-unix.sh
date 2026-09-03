@@ -243,65 +243,22 @@ fi
 if [[ "$LITE" == "1" ]]; then
   # --- lite: only the ui container, joined to the primary's Compose network ---
   # No db/api container in this project; ui talks to the primary's already-
-  # running api over its Compose network (api:8000), and mounts the
-  # primary's own populated ui_node_modules volume read-only instead of
-  # installing a fresh one.
-  if [[ -z "$ROOT_WORKTREE_PATH" ]]; then
-    echo "error: --lite requires ROOT_WORKTREE_PATH (primary checkout not found)" >&2
-    exit 1
-  fi
-
-  if [[ ! -f "$WT_ROOT/ui/package-lock.json" || ! -f "$ROOT_WORKTREE_PATH/ui/package-lock.json" ]]; then
-    echo "error: ui/package-lock.json missing (worktree or primary) — cannot verify the shared node_modules volume is safe to reuse" >&2
-    exit 1
-  fi
-  WT_LOCK_SUM="$(cksum <"$WT_ROOT/ui/package-lock.json")"
-  PRIMARY_LOCK_SUM="$(cksum <"$ROOT_WORKTREE_PATH/ui/package-lock.json")"
-  if [[ "$WT_LOCK_SUM" != "$PRIMARY_LOCK_SUM" ]]; then
-    echo "error: ui/package-lock.json differs from primary checkout — the primary's node_modules volume would be missing/mismatched deps for this worktree." >&2
-    echo "       Re-run without --lite (full setup) instead." >&2
-    exit 1
-  fi
-
-  if [[ ! -f "$WT_ROOT/docker-compose.worktree-lite.yml" ]]; then
-    echo "error: docker-compose.worktree-lite.yml missing in $WT_ROOT — pull the branch that adds it, or drop --lite" >&2
-    exit 1
-  fi
-
-  PRIMARY_COMPOSE_NAME="$(grep -E '^FH_COMPOSE_NAME=' "$ROOT_WORKTREE_PATH/.env" 2>/dev/null | tail -1 | cut -d= -f2 || true)"
-  PRIMARY_COMPOSE_NAME="${PRIMARY_COMPOSE_NAME:-finance-helper}"
-  PRIMARY_API_PORT="$(grep -E '^API_HOST_PORT=' "$ROOT_WORKTREE_PATH/.env" 2>/dev/null | tail -1 | cut -d= -f2 || true)"
-  PRIMARY_API_PORT="${PRIMARY_API_PORT:-8000}"
-
+  # running api over its Compose network, and mounts the primary's own
+  # populated ui_node_modules volume read-only instead of installing a fresh
+  # one. Preconditions + the actual compose invocation live in
+  # scripts/compose-lib.sh (compose_require_lite / compose_lite_run), shared
+  # with `./scripts/compose-up.sh --lite`.
   if ! command -v docker >/dev/null 2>&1; then
     echo "error: docker not on PATH — required for --lite" >&2
     exit 1
   fi
-  if ! curl -sf -o /dev/null --max-time 2 "http://127.0.0.1:${PRIMARY_API_PORT}/health"; then
-    echo "error: primary checkout's API not reachable at http://127.0.0.1:${PRIMARY_API_PORT}/health" >&2
-    echo "       Start it first: cd $ROOT_WORKTREE_PATH && ./scripts/compose-up.sh -d" >&2
-    exit 1
-  fi
 
-  export ROOT_WORKTREE_PATH
-  export PRIMARY_COMPOSE_NAME
-  export PRIMARY_NETWORK_NAME="${PRIMARY_COMPOSE_NAME}_internal"
-
-  # A stale ui/.next from a prior full (non-lite) run in this worktree was
-  # built against this worktree's own node_modules. --lite swaps in the
-  # primary's node_modules volume instead, so a leftover .next build/webpack
-  # cache can reference modules/hashes that no longer match, breaking the
-  # lite container. Always start lite mode from a clean .next.
-  if [[ -d "$WT_ROOT/ui/.next" ]]; then
-    rm -rf "$WT_ROOT/ui/.next"
-    log "Cleared stale ui/.next (rebuilding against primary's node_modules)"
-  fi
+  # shellcheck source=../compose-lib.sh
+  source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../compose-lib.sh"
+  compose_require_lite "$WT_ROOT"
 
   log "Starting ui-only container (joined to ${PRIMARY_NETWORK_NAME}, node_modules from ${PRIMARY_COMPOSE_NAME}_ui_node_modules)"
-  (cd "$WT_ROOT" && docker compose \
-    -f docker-compose.yml -f docker-compose.dev.yml \
-    -f docker-compose.worktree.yml -f docker-compose.worktree-lite.yml \
-    up -d --no-deps --build ui)
+  compose_lite_run "$WT_ROOT" up -d --no-deps --build ui
 
   cat <<EOF
 
@@ -310,6 +267,9 @@ Branch:         ${BRANCH}
 Skipped:        db/api containers, npm ci (reusing ${PRIMARY_COMPOSE_NAME}_ui_node_modules read-only)
 UI:             ${PUBLIC_APP_URL}
 API:            http://127.0.0.1:${PRIMARY_API_PORT} (primary checkout's, via ${PRIMARY_NETWORK_NAME})
+
+Re-run this stack later (no bootstrap needed):
+  ./scripts/compose-up.sh --lite
 
 Stop this worktree's ui container only:
   docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.worktree.yml -f docker-compose.worktree-lite.yml down

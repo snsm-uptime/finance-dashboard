@@ -100,6 +100,67 @@ compose_print_urls() {
   echo "Health: curl -sf http://localhost:${api_port}/health && curl -sf http://localhost:${ui_port}/health"
 }
 
+compose_require_lite() {
+  # Verifies preconditions for --lite (ui-only, joined to primary's stack)
+  # and exports ROOT_WORKTREE_PATH / PRIMARY_COMPOSE_NAME / PRIMARY_NETWORK_NAME
+  # / PRIMARY_API_PORT for compose_lite_run. Mirrors the checks in
+  # scripts/worktree/setup-worktree-unix.sh's --lite path.
+  local root="$1"
+
+  if [[ -z "${ROOT_WORKTREE_PATH:-}" ]]; then
+    echo "error: --lite requires ROOT_WORKTREE_PATH (primary checkout not found)" >&2
+    return 1
+  fi
+
+  if [[ ! -f "$root/ui/package-lock.json" || ! -f "$ROOT_WORKTREE_PATH/ui/package-lock.json" ]]; then
+    echo "error: ui/package-lock.json missing (worktree or primary) — cannot verify the shared node_modules volume is safe to reuse" >&2
+    return 1
+  fi
+  if [[ "$(cksum <"$root/ui/package-lock.json")" != "$(cksum <"$ROOT_WORKTREE_PATH/ui/package-lock.json")" ]]; then
+    echo "error: ui/package-lock.json differs from primary checkout — the primary's node_modules volume would be missing/mismatched deps for this worktree." >&2
+    echo "       Re-run without --lite (full setup) instead." >&2
+    return 1
+  fi
+
+  if [[ ! -f "$root/docker-compose.worktree-lite.yml" ]]; then
+    echo "error: docker-compose.worktree-lite.yml missing in $root — pull the branch that adds it, or drop --lite" >&2
+    return 1
+  fi
+
+  PRIMARY_COMPOSE_NAME="$(compose_env_get FH_COMPOSE_NAME "$ROOT_WORKTREE_PATH/.env")"
+  PRIMARY_COMPOSE_NAME="${PRIMARY_COMPOSE_NAME:-finance-helper}"
+  PRIMARY_API_PORT="$(compose_env_get API_HOST_PORT "$ROOT_WORKTREE_PATH/.env")"
+  PRIMARY_API_PORT="${PRIMARY_API_PORT:-8000}"
+
+  if ! curl -sf -o /dev/null --max-time 2 "http://127.0.0.1:${PRIMARY_API_PORT}/health"; then
+    echo "error: primary checkout's API not reachable at http://127.0.0.1:${PRIMARY_API_PORT}/health" >&2
+    echo "       Start it first: cd $ROOT_WORKTREE_PATH && ./scripts/compose-up.sh -d" >&2
+    return 1
+  fi
+
+  export ROOT_WORKTREE_PATH PRIMARY_COMPOSE_NAME
+  export PRIMARY_NETWORK_NAME="${PRIMARY_COMPOSE_NAME}_internal"
+}
+
+compose_lite_run() {
+  local root="$1"
+  shift
+  # A stale ui/.next from a prior full (non-lite) run was built against this
+  # worktree's own node_modules; --lite swaps in the primary's node_modules
+  # volume, so a leftover build cache can reference mismatched module hashes.
+  if [[ -d "$root/ui/.next" ]]; then
+    rm -rf "$root/ui/.next"
+    echo "==> Cleared stale ui/.next (rebuilding against primary's node_modules)"
+  fi
+  (
+    cd "$root"
+    docker compose \
+      -f docker-compose.yml -f docker-compose.dev.yml \
+      -f docker-compose.worktree.yml -f docker-compose.worktree-lite.yml \
+      "$@"
+  )
+}
+
 compose_run() {
   local root="$1"
   shift
