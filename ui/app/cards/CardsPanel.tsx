@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { CopyButton } from "@/components/CopyButton";
+import { useChromeHeader } from "@/components/ChromeBack";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { StackedListPanel } from "@/components/StackedListPanel";
 import { cardsCopy } from "@/lib/i18n/cards";
+import { DocsHelpButton } from "@/app/docs/DocsHelpButton";
 import { fetchLists } from "../lists/listsClient";
 import {
   getMembershipListsSnapshot,
@@ -36,6 +38,11 @@ export function CardsPanel({ refreshToken = 0 }: Props = {}) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [registeredStatus, setRegisteredStatus] = useState("");
   const defaultListId = me?.default_import_list_id ?? "";
+  useChromeHeader({
+    trailing: (
+      <DocsHelpButton pageName="Cards" docsAnchor="/docs#cards-imports" />
+    ),
+  });
 
   // Low-effort review accepts already land on the default list, so offering
   // it as a fixed-routing target too would just be a redundant option.

@@ -6,6 +6,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { BudgetItem } from "./budgetsClient";
 
+const push = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push }),
+  usePathname: () => "/budgets",
+}));
+
 vi.mock("@/components/PreferencesProvider", () => ({
   usePreferences: () => ({ locale: "en" }),
 }));
@@ -30,6 +36,7 @@ vi.mock("@/app/lists/listsClient", async () => {
   };
 });
 
+import { AppShell } from "@/components/AppShell";
 import { BudgetsPanel } from "./BudgetsPanel";
 import { resetMembershipListsStore } from "@/app/lists/membershipListsStore";
 
@@ -122,4 +129,29 @@ describe("BudgetsPanel tile link", () => {
       expect(bar?.getAttribute("aria-label")).toBe(label);
     },
   );
+
+  it("renders a help icon that navigates to /docs#budgets", async () => {
+    fetchBudgetsMock.mockResolvedValue({ ok: true, budgets: [] });
+
+    await act(async () => {
+      root.render(
+        <AppShell>
+          <BudgetsPanel />
+        </AppShell>,
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const helpButton = container.querySelector(
+      'button[aria-label="Learn more about Budgets"]',
+    ) as HTMLButtonElement;
+    expect(helpButton).toBeTruthy();
+
+    await act(async () => {
+      helpButton.click();
+    });
+    expect(push).toHaveBeenCalledWith("/docs?from=%2Fbudgets#budgets");
+  });
 });

@@ -4,6 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { AppShell } from "@/components/AppShell";
 import { BulkReviewPanel } from "./BulkReviewPanel";
 import { resetMembershipListsStore } from "@/app/lists/membershipListsStore";
 import type { ImportSession } from "../../uploadClient";
@@ -12,6 +13,7 @@ const push = vi.fn();
 let searchParamsValue = "";
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push }),
+  usePathname: () => "/upload/bulk/s1",
   useSearchParams: () => new URLSearchParams(searchParamsValue),
 }));
 
@@ -626,5 +628,30 @@ describe("BulkReviewPanel", () => {
 
     expect(bulkCommitSession).toHaveBeenCalledWith("s1", "l1", expect.anything());
     expect(push).toHaveBeenCalledWith("/upload/conflicts?landingListId=l1");
+  });
+
+  it("renders a help icon that navigates to /docs#cards-imports", async () => {
+    fetchLists.mockResolvedValue({ ok: true, lists: [] });
+
+    await act(async () => {
+      root.render(
+        <AppShell>
+          <BulkReviewPanel sessionId="s1" />
+        </AppShell>,
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const helpButton = container.querySelector(
+      'button[aria-label="Learn more about Upload"]',
+    ) as HTMLButtonElement;
+    expect(helpButton).toBeTruthy();
+
+    await act(async () => {
+      helpButton.click();
+    });
+    expect(push).toHaveBeenCalledWith("/docs?from=%2Fupload%2Fbulk%2Fs1#cards-imports");
   });
 });

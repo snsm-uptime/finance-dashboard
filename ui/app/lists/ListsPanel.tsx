@@ -16,6 +16,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { Chip } from "@/components/Chip";
+import { useChromeHeader } from "@/components/ChromeBack";
 import formIconSubmitStyles from "@/components/FormIconSubmit/FormIconSubmit.module.scss";
 import { IconButton } from "@/components/IconButton";
 import {
@@ -27,6 +28,7 @@ import { StackedListPanel } from "@/components/StackedListPanel";
 import { GhostButton } from "@/components/soft-ledger/GhostButton";
 import { listsMessages } from "@/lib/i18n/lists";
 import { DotsIcon, PlusIcon, UploadIcon, UsersIcon, WalletIcon } from "@/app/icons";
+import { DocsHelpButton } from "@/app/docs/DocsHelpButton";
 import type { InviteFormMessages } from "./InviteForm";
 import { InviteForm } from "./InviteForm";
 import { Sheet } from "./Sheet";
@@ -127,6 +129,9 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
   const { locale } = usePreferences();
   const t = listsMessages[locale];
   const router = useRouter();
+  useChromeHeader({
+    trailing: <DocsHelpButton pageName="Lists" docsAnchor="/docs#lists" />,
+  });
   const createNameId = useId();
   const [newName, setNewName] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);

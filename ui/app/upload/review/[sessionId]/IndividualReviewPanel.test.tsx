@@ -975,6 +975,35 @@ describe("IndividualReviewPanel", () => {
     expect(push).toHaveBeenCalledWith("/upload");
   });
 
+  it("chrome header renders a help icon that navigates to /docs#cards-imports", async () => {
+    fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
+    fetchLists.mockResolvedValue({ ok: true, lists: [] });
+    stubAuthMeFetch(null);
+
+    await act(async () => {
+      root.render(
+        <AppShell>
+          <IndividualReviewPanel sessionId="s1" />
+        </AppShell>,
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const header = container.querySelector("header")!;
+    const helpButton = header.querySelector(
+      'button[aria-label="Learn more about Upload"]',
+    ) as HTMLButtonElement;
+    expect(helpButton).toBeTruthy();
+
+    await act(async () => {
+      helpButton.click();
+    });
+    expect(push).toHaveBeenCalledWith("/docs?from=%2Fupload%2Freview%2Fs1#cards-imports");
+  });
+
   it("chrome Back can be used again if navigation throws", async () => {
     fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
     fetchLists.mockResolvedValue({ ok: true, lists: [] });

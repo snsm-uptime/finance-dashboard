@@ -23,6 +23,7 @@ import { useFormSubmission } from "@/hooks";
 import { fetchLists } from "@/app/lists/listsClient";
 import { replaceMembershipLists, useMembershipLists } from "@/app/lists/membershipListsStore";
 import { ArrowIcon, SaveIcon, SpinnerIcon, TrashIcon } from "@/app/icons";
+import { DocsHelpButton } from "@/app/docs/DocsHelpButton";
 import { uploadCopy } from "@/lib/i18n/upload";
 import type { Locale } from "@/lib/i18n/locale";
 import { useCardIdentification } from "@/hooks/useCardIdentification";
@@ -497,6 +498,9 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     onBack,
     title: chromeTitle,
     details: remainingLabel || null,
+    trailing: (
+      <DocsHelpButton pageName="Upload" docsAnchor="/docs#cards-imports" />
+    ),
   });
   const card = useCardIdentification(sessionId, current?.statement ?? null, cardMessages);
 

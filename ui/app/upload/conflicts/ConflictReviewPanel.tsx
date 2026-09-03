@@ -9,6 +9,7 @@ import { GhostButton } from "@/components/soft-ledger/GhostButton";
 import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 import { conflictsCopy } from "@/lib/i18n/conflicts";
 import { DiscardConfirmDialog } from "@/app/upload/DiscardConfirmDialog";
+import { DocsHelpButton } from "@/app/docs/DocsHelpButton";
 import {
   ConflictMessages,
   SamePriceConflict,
@@ -69,7 +70,13 @@ export function ConflictReviewPanel({ landingListId }: ConflictReviewPanelProps)
     router.push(landingListId ? `/lists/${encodeURIComponent(landingListId)}` : "/lists");
   }, [router, landingListId]);
 
-  useChromeHeader({ title: t.title, onBack: goToLanding });
+  useChromeHeader({
+    title: t.title,
+    onBack: goToLanding,
+    trailing: (
+      <DocsHelpButton pageName="Upload" docsAnchor="/docs#cards-imports" />
+    ),
+  });
 
   const current = conflicts?.[0] ?? null;
 

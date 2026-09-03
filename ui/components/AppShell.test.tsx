@@ -101,17 +101,57 @@ describe("AppShell chrome header", () => {
     expect(push).toHaveBeenCalledTimes(1);
   });
 
-  it("does not show back on auth routes even if a child opts in", async () => {
+  it("hides the header on auth routes when no screen opts in", async () => {
     pathname = "/sign-in";
     await act(async () => {
       root.render(
         <AppShell>
-          <EnableBack href="/upload" />
+          <p>screen</p>
         </AppShell>,
       );
     });
 
+    expect(container.querySelector("header")).toBeNull();
     expect(container.querySelector('button[aria-label="Back"]')).toBeNull();
+  });
+
+  it("shows the header (with back) on auth routes like /sign-in when a screen opts in, but never the TabBar there", async () => {
+    pathname = "/sign-in";
+    await act(async () => {
+      root.render(
+        <AppShell>
+          <EnableHeader href="/" title="Finance Helper" />
+        </AppShell>,
+      );
+    });
+
+    const header = container.querySelector("header");
+    expect(header).toBeTruthy();
+    expect(header?.querySelector("h1")?.textContent).toBe("Finance Helper");
+    const back = header?.querySelector('button[aria-label="Back"]') as HTMLButtonElement;
+    expect(back).toBeTruthy();
+
+    await act(async () => {
+      back.click();
+    });
+    expect(push).toHaveBeenCalledWith("/");
+
+    // Auth routes never gain the authenticated TabBar, opted-in header or not.
+    expect(container.querySelector("nav")).toBeNull();
+  });
+
+  it("still shows the TabBar (without a header) on authenticated tab routes when no screen opts in", async () => {
+    pathname = "/upload";
+    await act(async () => {
+      root.render(
+        <AppShell>
+          <p>screen</p>
+        </AppShell>,
+      );
+    });
+
+    expect(container.querySelector("header")).toBeNull();
+    expect(container.querySelector("nav")).toBeTruthy();
   });
 
   it("renders title and details on the same header row as back", async () => {

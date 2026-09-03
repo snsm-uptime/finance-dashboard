@@ -28,3 +28,4 @@ export { TrashIcon } from "./TrashIcon";
 export { CreditCardIcon } from "./CreditCardIcon";
 export { FolderIcon } from "./FolderIcon";
 export { PencilIcon } from "./PencilIcon";
+export { HelpIcon } from "./HelpIcon";

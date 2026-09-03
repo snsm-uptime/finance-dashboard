@@ -7,11 +7,13 @@ import dynamic from "next/dynamic";
 import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
 import { IconButton } from "@/components/IconButton";
+import { useChromeHeader } from "@/components/ChromeBack";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { useFormSubmission } from "@/hooks";
 import { fetchLists } from "@/app/lists/listsClient";
 import { replaceMembershipLists, useMembershipLists } from "@/app/lists/membershipListsStore";
 import { SpinnerIcon, TrashIcon } from "@/app/icons";
+import { DocsHelpButton } from "@/app/docs/DocsHelpButton";
 import { uploadCopy } from "@/lib/i18n/upload";
 import {
   assignRow,
@@ -47,6 +49,11 @@ export function BulkReviewPanel({ sessionId }: BulkReviewPanelProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const selectId = useId();
+  useChromeHeader({
+    trailing: (
+      <DocsHelpButton pageName="Upload" docsAnchor="/docs#cards-imports" />
+    ),
+  });
 
   const [listsError, setListsError] = useState<string | null>(null);
   const lists = useMembershipLists();

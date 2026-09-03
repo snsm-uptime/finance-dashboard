@@ -212,4 +212,29 @@ describe("ConflictReviewPanel", () => {
 
     expect(push).toHaveBeenCalledWith("/lists/l1");
   });
+
+  it("renders a help icon that navigates to /docs#cards-imports", async () => {
+    fetchConflictQueue.mockResolvedValue({ ok: true, conflicts: [makeConflict("c1")] });
+
+    await act(async () => {
+      root.render(
+        <AppShell>
+          <ConflictReviewPanel landingListId="l1" />
+        </AppShell>,
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const helpButton = container.querySelector(
+      'button[aria-label="Learn more about Upload"]',
+    ) as HTMLButtonElement;
+    expect(helpButton).toBeTruthy();
+
+    await act(async () => {
+      helpButton.click();
+    });
+    expect(push).toHaveBeenCalledWith("/docs?from=%2Fupload%2Fconflicts#cards-imports");
+  });
 });

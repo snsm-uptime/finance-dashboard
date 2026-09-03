@@ -6,6 +6,7 @@ import { detectLocale, signInMessages } from "@/lib/i18n/signin";
 import { resolveServerAuthenticatedLanding } from "@/lib/serverLanding";
 import { fetchSession } from "@/lib/session";
 import { safeReturnTo } from "./signInClient";
+import { SignInChrome } from "./SignInChrome";
 import { SignInForm } from "./SignInForm";
 import styles from "../signup/signup.module.scss";
 
@@ -40,6 +41,7 @@ export default async function SignInPage({
   return (
     <main className={styles.shell}>
       <RedirectIfAuthenticated to={hasExplicitReturn ? landing : "/"} />
+      <SignInChrome />
       <div className={styles.card}>
         <h1 className={styles.title}>{t.title}</h1>
         <p className={styles.subtitle}>{t.subtitle}</p>
