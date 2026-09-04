@@ -4,7 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { BudgetsCreateForm, type BudgetsCreateFormMessages } from "./BudgetsCreateForm";
+import { GhostBudgetCard, type GhostBudgetCardMessages } from "./GhostBudgetCard";
 import type { BudgetItem } from "./budgetsClient";
 
 const createBudgetMock = vi.fn();
@@ -16,7 +16,7 @@ vi.mock("./budgetsClient", async () => {
   };
 });
 
-const messages: BudgetsCreateFormMessages = {
+const messages: GhostBudgetCardMessages = {
   errorGeneric: "Something went wrong.",
   errorUnauthorized: "unauthorized",
   errorInvalidBudgetName: "invalid-name",
@@ -25,15 +25,21 @@ const messages: BudgetsCreateFormMessages = {
   errorInvalidBudgetSourceLists: "Select at least one source list.",
   errorInvalidBudgetPeriod: "invalid-period",
   errorForbidden: "forbidden",
-  budgetsCreateTitle: "New budget",
   budgetsNameLabel: "Name",
   budgetsCapLabel: "Cap",
   budgetsCurrencyLabel: "Currency",
   budgetsSourceListsLabel: "Source lists",
+  budgetsAddListTrigger: "+ Add list",
   budgetsCreateSubmit: "Create budget",
   budgetsCreating: "Creating…",
   budgetsPeriodStartLabel: "From (optional)",
   budgetsPeriodEndLabel: "To (optional)",
+  budgetsPeriodTriggerLabel: "Set budget period",
+  budgetsDateFrom: "From",
+  budgetsDateTo: "To (optional)",
+  budgetsDateClear: "Clear",
+  budgetsDaysLeft: "days left",
+  budgetsDaysOverdue: "days overdue",
 };
 
 const lists = [
@@ -41,7 +47,13 @@ const lists = [
   { id: "l2", name: "Roommates List", owner_id: "u1", role: "owner" },
 ];
 
-describe("BudgetsCreateForm", () => {
+function setInputValue(input: HTMLInputElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  setter?.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+describe("GhostBudgetCard", () => {
   let container: HTMLDivElement;
   let root: Root;
 
@@ -61,52 +73,59 @@ describe("BudgetsCreateForm", () => {
 
   async function render(onCreated: (budget: BudgetItem) => void = vi.fn()) {
     await act(async () => {
-      root.render(<BudgetsCreateForm lists={lists} messages={messages} onCreated={onCreated} />);
+      root.render(
+        <GhostBudgetCard lists={lists} messages={messages} locale="en" onCreated={onCreated} />,
+      );
     });
   }
 
-  function chipFor(listName: string): HTMLButtonElement {
-    return Array.from(container.querySelectorAll('button[aria-pressed]')).find((el) =>
-      el.textContent?.includes(listName),
+  function addListChip(listName: string) {
+    const trigger = Array.from(container.querySelectorAll("button")).find((el) =>
+      el.textContent?.includes("+ Add list"),
     ) as HTMLButtonElement;
+    trigger.click();
+    const option = Array.from(container.querySelectorAll("button")).find(
+      (el) => el.textContent === listName,
+    ) as HTMLButtonElement;
+    option.click();
   }
 
-  it("renders one toggle chip per source list from the lists prop", async () => {
+  it("renders a dashed card shell with name/cap placeholders and a disabled submit badge", async () => {
     await render();
-    expect(chipFor("Groceries List")).not.toBeNull();
-    expect(chipFor("Roommates List")).not.toBeNull();
-    expect(chipFor("Groceries List").getAttribute("aria-pressed")).toBe("false");
+    const nameInput = container.querySelector('input[placeholder="Name"]') as HTMLInputElement;
+    const capInput = container.querySelector('input[placeholder="Cap"]') as HTMLInputElement;
+    const submitButton = container.querySelector('button[type="submit"]') as HTMLButtonElement;
+    expect(nameInput).not.toBeNull();
+    expect(capInput).not.toBeNull();
+    expect(submitButton.disabled).toBe(true);
+    expect(container.querySelector("form")?.className).toContain("border-dashed");
   });
 
-  it("toggling a chip flips its pressed state and disables submit until one is selected", async () => {
+  it("shows the calendar-icon trigger before a period is chosen", async () => {
+    await render();
+    expect(container.querySelector('button[aria-label="Set budget period"]')).not.toBeNull();
+    expect(container.textContent).not.toContain("days left");
+  });
+
+  it("enables the submit badge once name, cap, and a source list are set", async () => {
     await render();
     const nameInput = container.querySelector('input[placeholder="Name"]') as HTMLInputElement;
     const capInput = container.querySelector('input[placeholder="Cap"]') as HTMLInputElement;
     const submitButton = container.querySelector('button[type="submit"]') as HTMLButtonElement;
 
     await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-      setter?.call(nameInput, "Groceries");
-      nameInput.dispatchEvent(new Event("input", { bubbles: true }));
-      setter?.call(capInput, "500.00");
-      capInput.dispatchEvent(new Event("input", { bubbles: true }));
+      setInputValue(nameInput, "Groceries");
+      setInputValue(capInput, "500.00");
     });
     expect(submitButton.disabled).toBe(true);
 
     await act(async () => {
-      chipFor("Groceries List").click();
+      addListChip("Groceries List");
     });
     expect(submitButton.disabled).toBe(false);
-    expect(chipFor("Groceries List").getAttribute("aria-pressed")).toBe("true");
-
-    await act(async () => {
-      chipFor("Groceries List").click();
-    });
-    expect(submitButton.disabled).toBe(true);
-    expect(chipFor("Groceries List").getAttribute("aria-pressed")).toBe("false");
   });
 
-  it("submits the checked source list ids and clears the form on success", async () => {
+  it("submits the selected source list ids and resets the card on success", async () => {
     const created: BudgetItem = {
       id: "b1",
       name: "Groceries",
@@ -126,14 +145,9 @@ describe("BudgetsCreateForm", () => {
     const nameInput = container.querySelector('input[placeholder="Name"]') as HTMLInputElement;
     const capInput = container.querySelector('input[placeholder="Cap"]') as HTMLInputElement;
     await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-      setter?.call(nameInput, "Groceries");
-      nameInput.dispatchEvent(new Event("input", { bubbles: true }));
-      setter?.call(capInput, "500.00");
-      capInput.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await act(async () => {
-      chipFor("Groceries List").click();
+      setInputValue(nameInput, "Groceries");
+      setInputValue(capInput, "500.00");
+      addListChip("Groceries List");
     });
 
     const form = container.querySelector("form") as HTMLFormElement;
@@ -153,51 +167,11 @@ describe("BudgetsCreateForm", () => {
       messages,
     );
     expect(onCreated).toHaveBeenCalledWith(created);
+    expect((container.querySelector('input[placeholder="Name"]') as HTMLInputElement).value).toBe("");
   });
 
-  it("omits period fields as null when both date inputs are left empty", async () => {
-    createBudgetMock.mockResolvedValue({
-      ok: true,
-      budget: {
-        id: "b1",
-        name: "Groceries",
-        cap: "500.00",
-        currency: "CRC",
-        spent: "0",
-        state: "ok",
-        source_list_ids: ["l1"],
-        period_start: null,
-        period_end: null,
-        created_at: "2026-08-01T00:00:00Z",
-      },
-    });
-    await render();
-
-    const nameInput = container.querySelector('input[placeholder="Name"]') as HTMLInputElement;
-    const capInput = container.querySelector('input[placeholder="Cap"]') as HTMLInputElement;
-    await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-      setter?.call(nameInput, "Groceries");
-      nameInput.dispatchEvent(new Event("input", { bubbles: true }));
-      setter?.call(capInput, "500.00");
-      capInput.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await act(async () => {
-      chipFor("Groceries List").click();
-    });
-
-    const form = container.querySelector("form") as HTMLFormElement;
-    await act(async () => {
-      form.requestSubmit();
-    });
-
-    expect(createBudgetMock).toHaveBeenCalledWith(
-      expect.objectContaining({ period_start: null, period_end: null }),
-      messages,
-    );
-  });
-
-  it("submits both period fields when both date inputs are set", async () => {
+  it("submits both period fields once a range is picked, and the trigger morphs into a day count", async () => {
+    vi.setSystemTime(new Date("2026-01-15T12:00:00"));
     createBudgetMock.mockResolvedValue({
       ok: true,
       budget: {
@@ -217,26 +191,35 @@ describe("BudgetsCreateForm", () => {
 
     const nameInput = container.querySelector('input[placeholder="Name"]') as HTMLInputElement;
     const capInput = container.querySelector('input[placeholder="Cap"]') as HTMLInputElement;
-    const periodStartInput = container.querySelector(
-      'input[aria-label="From (optional)"]',
-    ) as HTMLInputElement;
-    const periodEndInput = container.querySelector(
-      'input[aria-label="To (optional)"]',
-    ) as HTMLInputElement;
     await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-      setter?.call(nameInput, "Groceries");
-      nameInput.dispatchEvent(new Event("input", { bubbles: true }));
-      setter?.call(capInput, "500.00");
-      capInput.dispatchEvent(new Event("input", { bubbles: true }));
-      setter?.call(periodStartInput, "2026-01-01");
-      periodStartInput.dispatchEvent(new Event("input", { bubbles: true }));
-      setter?.call(periodEndInput, "2026-01-31");
-      periodEndInput.dispatchEvent(new Event("input", { bubbles: true }));
+      setInputValue(nameInput, "Groceries");
+      setInputValue(capInput, "500.00");
+      addListChip("Groceries List");
+    });
+
+    function inMonthDay(day: string): HTMLButtonElement {
+      return Array.from(container.querySelectorAll("button")).find(
+        (el) => el.textContent === day && el.className.includes("text-foreground"),
+      ) as HTMLButtonElement;
+    }
+
+    const calendarTrigger = container.querySelector(
+      'button[aria-label="Set budget period"]',
+    ) as HTMLButtonElement;
+    await act(async () => {
+      calendarTrigger.click();
     });
     await act(async () => {
-      chipFor("Groceries List").click();
+      inMonthDay("1").click();
     });
+    await act(async () => {
+      inMonthDay("31").click();
+    });
+
+    expect(container.textContent).toContain("days left");
+    expect(container.querySelector('button[aria-label="Set budget period"]')?.textContent).toContain(
+      "16",
+    );
 
     const form = container.querySelector("form") as HTMLFormElement;
     await act(async () => {
@@ -247,6 +230,7 @@ describe("BudgetsCreateForm", () => {
       expect.objectContaining({ period_start: "2026-01-01", period_end: "2026-01-31" }),
       messages,
     );
+    vi.useRealTimers();
   });
 
   it("shows the source-lists error message when the submission is rejected", async () => {
@@ -256,14 +240,9 @@ describe("BudgetsCreateForm", () => {
     const nameInput = container.querySelector('input[placeholder="Name"]') as HTMLInputElement;
     const capInput = container.querySelector('input[placeholder="Cap"]') as HTMLInputElement;
     await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-      setter?.call(nameInput, "Groceries");
-      nameInput.dispatchEvent(new Event("input", { bubbles: true }));
-      setter?.call(capInput, "500.00");
-      capInput.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await act(async () => {
-      chipFor("Groceries List").click();
+      setInputValue(nameInput, "Groceries");
+      setInputValue(capInput, "500.00");
+      addListChip("Groceries List");
     });
 
     const form = container.querySelector("form") as HTMLFormElement;

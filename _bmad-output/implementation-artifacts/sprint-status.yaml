@@ -1,5 +1,5 @@
 # generated: 2026-08-03T22:46:31
-# last_updated: 2026-09-03 (7-5-budget-period-range: done)
+# last_updated: 2026-09-04 (7-5-budget-period-range: review — ghost-card form amendment)
 
 # project: finance-dashboard
 # project_key: NOKEY
@@ -42,7 +42,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-03T22:46:31
-last_updated: 2026-09-03
+last_updated: 2026-09-04
 
 project: finance-dashboard
 project_key: NOKEY
@@ -156,7 +156,7 @@ development_status:
   7-2-cross-list-budget-detail: done
   7-3-cross-list-attribution-rule-badge: done
   7-4-budget-progress-bar-visualization: done
-  7-5-budget-period-range: done
+  7-5-budget-period-range: review
   7-6-archive-budgets: backlog
   epic-7-retrospective: optional
 

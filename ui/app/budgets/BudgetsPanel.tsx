@@ -6,10 +6,10 @@ import Link from "next/link";
 import { Chip } from "@/components/Chip";
 import { useChromeHeader } from "@/components/ChromeBack";
 import { ChromeAvatarLink } from "@/components/ChromeAvatarLink";
-import { SectionLabel } from "@/components/soft-ledger/SectionLabel";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { StackedListPanel } from "@/components/StackedListPanel";
 import { TopProgressBar } from "@/components/TopProgressBar";
+import { Tooltip } from "@/components/Tooltip";
 import { formatMoneyAmount } from "@/lib/currency";
 import { listsMessages } from "@/lib/i18n/lists";
 import { DocsHelpButton } from "@/app/docs/DocsHelpButton";
@@ -19,28 +19,32 @@ import {
   replaceMembershipLists,
   useMembershipLists,
 } from "@/app/lists/membershipListsStore";
-import { BudgetsCreateForm } from "./BudgetsCreateForm";
+import { GhostBudgetCard } from "./GhostBudgetCard";
 import {
+  budgetDaysLeft,
   budgetSeverityColorClass,
   budgetStateLabel,
   budgetUsageRatio,
   fetchBudgets,
+  formatPeriodBoundShort,
   type BudgetItem,
   type BudgetsClientMessages,
 } from "./budgetsClient";
+
+/** One synthetic masonry entry — the ghost create card, or a real budget. */
+type MasonryEntry =
+  | { id: "ghost"; kind: "ghost" }
+  | { id: string; kind: "budget"; budget: BudgetItem };
 
 // Matches --space-3 in globals.css — used to account for inter-card spacing
 // when balancing column heights (see distributeByHeight).
 const MASONRY_GAP_PX = 10;
 const MASONRY_SM_BREAKPOINT_PX = 640;
 
-type MasonryColumn = { id: string; budgets: BudgetItem[] };
+type MasonryColumn = { id: string; entries: MasonryEntry[] };
 
-function distributeRoundRobin(
-  items: BudgetItem[],
-  columnCount: number,
-): BudgetItem[][] {
-  const columns: BudgetItem[][] = Array.from({ length: columnCount }, () => []);
+function distributeRoundRobin<T>(items: T[], columnCount: number): T[][] {
+  const columns: T[][] = Array.from({ length: columnCount }, () => []);
   items.forEach((item, i) => columns[i % columnCount].push(item));
   return columns;
 }
@@ -51,12 +55,8 @@ function distributeRoundRobin(
  * heights allow, rather than CSS multi-column's `balance`, which leaves
  * ragged columns once `break-inside: avoid` items are involved.
  */
-function distributeByHeight(
-  items: BudgetItem[],
-  heights: number[],
-  columnCount: number,
-): BudgetItem[][] {
-  const columns: BudgetItem[][] = Array.from({ length: columnCount }, () => []);
+function distributeByHeight<T>(items: T[], heights: number[], columnCount: number): T[][] {
+  const columns: T[][] = Array.from({ length: columnCount }, () => []);
   const totals = new Array(columnCount).fill(0);
   items.forEach((item, i) => {
     let shortest = 0;
@@ -83,7 +83,7 @@ function useIsScreenAtLeast(minWidthPx: number) {
   return matches;
 }
 
-function useMasonryColumns(items: BudgetItem[], columnCount: number) {
+function useMasonryColumns(items: MasonryEntry[], columnCount: number) {
   const key = `${columnCount}|${items.map((item) => item.id).join(",")}`;
   // Naive fallback: renders immediately (including on the server) so the
   // measurement effect below has a same-width, same-order DOM to measure.
@@ -93,7 +93,7 @@ function useMasonryColumns(items: BudgetItem[], columnCount: number) {
   );
   const [measured, setMeasured] = useState<{
     key: string;
-    columns: BudgetItem[][];
+    columns: MasonryEntry[][];
   } | null>(null);
   const cardRefs = useRef(new Map<string, HTMLElement>());
 
@@ -151,10 +151,21 @@ export function BudgetsPanel() {
             ? 3
             : 2;
 
-  const { columns, registerCard } = useMasonryColumns(budgets, columnCount);
-  const masonryColumns: MasonryColumn[] = columns.map((colBudgets, i) => ({
+  // Memoized so this stays referentially stable across renders that don't
+  // change `budgets` — `useMasonryColumns`' remeasure effect depends on this
+  // array's identity, and a new literal every render would re-run it (and
+  // its `setMeasured` state update) every render, an infinite update loop.
+  const masonryEntries: MasonryEntry[] = useMemo(
+    () => [
+      { id: "ghost", kind: "ghost" } as const,
+      ...budgets.map((budget): MasonryEntry => ({ id: budget.id, kind: "budget", budget })),
+    ],
+    [budgets],
+  );
+  const { columns, registerCard } = useMasonryColumns(masonryEntries, columnCount);
+  const masonryColumns: MasonryColumn[] = columns.map((colEntries, i) => ({
     id: `col-${i}`,
-    budgets: colBudgets,
+    entries: colEntries,
   }));
 
   const messages: BudgetsClientMessages = useMemo(
@@ -181,7 +192,7 @@ export function BudgetsPanel() {
       } else {
         setBudgets(result.budgets);
       }
-      // Seed the shared membership store once — BudgetsCreateForm's source-list
+      // Seed the shared membership store once — GhostBudgetCard's source-list
       // picker and this panel's per-tile chips both read from it.
       if (getMembershipListsSnapshot() === null) {
         const listsResult = await fetchLists({
@@ -210,28 +221,7 @@ export function BudgetsPanel() {
       <StackedListPanel
         ariaLabel={t.budgetsTitle}
         wrapperClassName="relative flex flex-col gap-[var(--space-3)]"
-        input={
-          <>
-            <SectionLabel>{t.budgetsCreateTitle}</SectionLabel>
-            <BudgetsCreateForm
-              lists={lists}
-              messages={{
-                ...messages,
-                budgetsCreateTitle: t.budgetsCreateTitle,
-                budgetsNameLabel: t.budgetsNameLabel,
-                budgetsCapLabel: t.budgetsCapLabel,
-                budgetsCurrencyLabel: t.budgetsCurrencyLabel,
-                budgetsSourceListsLabel: t.budgetsSourceListsLabel,
-                budgetsCreateSubmit: t.budgetsCreateSubmit,
-                budgetsCreating: t.budgetsCreating,
-                budgetsPeriodStartLabel: t.budgetsPeriodStartLabel,
-                budgetsPeriodEndLabel: t.budgetsPeriodEndLabel,
-              }}
-              onCreated={onCreated}
-            />
-            <SectionLabel>{t.budgetsHistoryTitle}</SectionLabel>
-          </>
-        }
+        input={null}
         items={masonryColumns}
         itemKey={(column) => column.id}
         loading={loading}
@@ -242,43 +232,101 @@ export function BudgetsPanel() {
         itemClassName="flex-1 min-w-0 flex flex-col gap-[var(--space-3)]"
         renderItem={(column) => (
           <>
-            {column.budgets.map((budget) => {
+            {column.entries.map((entry) => {
+              if (entry.kind === "ghost") {
+                return (
+                  <GhostBudgetCard
+                    key="ghost"
+                    cardRef={registerCard("ghost")}
+                    lists={lists}
+                    messages={{
+                      ...messages,
+                      budgetsNameLabel: t.budgetsNameLabel,
+                      budgetsCapLabel: t.budgetsCapLabel,
+                      budgetsCurrencyLabel: t.budgetsCurrencyLabel,
+                      budgetsSourceListsLabel: t.budgetsSourceListsLabel,
+                      budgetsAddListTrigger: t.budgetsAddListTrigger,
+                      budgetsCreateSubmit: t.budgetsCreateSubmit,
+                      budgetsCreating: t.budgetsCreating,
+                      budgetsPeriodStartLabel: t.budgetsPeriodStartLabel,
+                      budgetsPeriodEndLabel: t.budgetsPeriodEndLabel,
+                      budgetsPeriodTriggerLabel: t.budgetsPeriodTriggerLabel,
+                      budgetsDateFrom: t.budgetsDateFrom,
+                      budgetsDateTo: t.budgetsDateTo,
+                      budgetsDateClear: t.budgetsDateClear,
+                      budgetsDaysLeft: t.budgetsDaysLeft,
+                      budgetsDaysOverdue: t.budgetsDaysOverdue,
+                    }}
+                    locale={locale}
+                    onCreated={onCreated}
+                  />
+                );
+              }
+              const budget = entry.budget;
               const ratio = budgetUsageRatio(budget);
               const usageColorClass = budgetSeverityColorClass(ratio);
+              const daysLeft = budgetDaysLeft(budget.period_end);
+              const overdue = daysLeft !== null && daysLeft <= 0;
               return (
                 <Link
                   key={budget.id}
                   ref={registerCard(budget.id)}
                   href={`/budgets/${budget.id}`}
-                  className="relative block py-[0.6rem] px-[0.85rem] rounded-[8px] border border-border bg-surface no-underline text-inherit"
+                  className="relative flex flex-col gap-[var(--space-3)] overflow-hidden rounded-[10px] border border-border bg-surface pt-[var(--space-4)] px-[var(--space-3)] no-underline text-inherit"
                 >
-                  <div className="absolute top-0 left-0 right-0 rounded-t-[8px] overflow-hidden">
+                  <div className="flex items-center justify-between gap-[var(--space-3)] pb-[var(--space-3)]">
+                    <div className="flex min-w-0 flex-col gap-1.5">
+                      <p className="m-0 min-w-0 flex-1 truncate text-[0.85rem] text-foreground">
+                        {budget.name}
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {budget.source_list_ids.map((listId) => {
+                          const list = lists.find((l) => l.id === listId);
+                          if (!list) return null;
+                          return (
+                            <Chip key={listId} tone="muted">
+                              {list.name}
+                            </Chip>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    {daysLeft === null ? null : (
+                      <Tooltip
+                        label={
+                          budget.period_end
+                            ? (overdue ? t.budgetsWasDueOn : t.budgetsEndsOn).replace(
+                                "{date}",
+                                formatPeriodBoundShort(budget.period_end, locale),
+                              )
+                            : ""
+                        }
+                      >
+                        <div
+                          tabIndex={0}
+                          className="flex shrink-0 flex-col items-center outline-none"
+                        >
+                          <span
+                            className={`font-serif text-[2.3rem] leading-[0.95] tracking-[-0.02em] ${overdue ? "text-owe" : "text-foreground"}`}
+                          >
+                            {daysLeft}
+                          </span>
+                          <span className="whitespace-nowrap text-[0.56rem] font-[550] uppercase tracking-[0.04em] text-muted">
+                            {overdue ? t.budgetsDaysOverdue : t.budgetsDaysLeft}
+                          </span>
+                        </div>
+                      </Tooltip>
+                    )}
+                  </div>
+                  <div className="-mx-[var(--space-3)] -mb-px">
                     <TopProgressBar
+                      variant="thick"
                       ratio={ratio}
                       colorClassName={usageColorClass}
-                      tooltipLabel={`${formatMoneyAmount(budget.spent, budget.currency)} / ${formatMoneyAmount(budget.cap, budget.currency)}`}
+                      startLabel={formatMoneyAmount(budget.spent, budget.currency)}
+                      endLabel={formatMoneyAmount(budget.cap, budget.currency)}
                       ariaLabel={budgetStateLabel(budget.state, t)}
                     />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <p className="m-0 min-w-0 flex-1 truncate text-foreground">
-                      {budget.name}
-                    </p>
-                    <p className="m-0 tabular-nums text-foreground">
-                      {formatMoneyAmount(budget.spent, budget.currency)} /{" "}
-                      {formatMoneyAmount(budget.cap, budget.currency)}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {budget.source_list_ids.map((listId) => {
-                        const list = lists.find((l) => l.id === listId);
-                        if (!list) return null;
-                        return (
-                          <Chip key={listId} tone="muted">
-                            {list.name}
-                          </Chip>
-                        );
-                      })}
-                    </div>
                   </div>
                 </Link>
               );

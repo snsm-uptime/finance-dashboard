@@ -86,7 +86,7 @@ describe("BudgetUpdateForm", () => {
 
   it("opening the editor pre-fills the form from the budget prop", async () => {
     act(() => {
-      root.render(<BudgetUpdateForm budget={budget} lists={lists} messages={messages} />);
+      root.render(<BudgetUpdateForm budget={budget} lists={lists} messages={messages} locale="en" />);
     });
     await openEditor();
 
@@ -99,7 +99,7 @@ describe("BudgetUpdateForm", () => {
   it("submitting without a period conflict updates the budget directly and refreshes", async () => {
     updateBudgetMock.mockResolvedValue({ ok: true, budget: { ...budget, name: "New name" } });
     act(() => {
-      root.render(<BudgetUpdateForm budget={budget} lists={lists} messages={messages} />);
+      root.render(<BudgetUpdateForm budget={budget} lists={lists} messages={messages} locale="en" />);
     });
     await openEditor();
 
@@ -125,7 +125,7 @@ describe("BudgetUpdateForm", () => {
       ],
     });
     act(() => {
-      root.render(<BudgetUpdateForm budget={budget} lists={lists} messages={messages} />);
+      root.render(<BudgetUpdateForm budget={budget} lists={lists} messages={messages} locale="en" />);
     });
     await openEditor();
 
@@ -149,7 +149,7 @@ describe("BudgetUpdateForm", () => {
       })
       .mockResolvedValueOnce({ ok: true, budget });
     act(() => {
-      root.render(<BudgetUpdateForm budget={budget} lists={lists} messages={messages} />);
+      root.render(<BudgetUpdateForm budget={budget} lists={lists} messages={messages} locale="en" />);
     });
     await openEditor();
 

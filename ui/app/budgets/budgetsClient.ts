@@ -60,6 +60,35 @@ export function budgetSeverityColorClass(ratio: number | null): string {
   return "bg-owe";
 }
 
+/**
+ * Calendar days between `now` and `periodEnd` (`YYYY-MM-DD`), positive when
+ * the period is still open, 0/negative once it's due or past due. `null`
+ * when there's no end date (open-ended budget — no countdown to show).
+ */
+export function budgetDaysLeft(
+  periodEnd: string | null,
+  now: Date = new Date(),
+): number | null {
+  if (!periodEnd) return null;
+  const [year, month, day] = periodEnd.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  const end = new Date(year, month - 1, day);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const msPerDay = 24 * 60 * 60 * 1000;
+  return Math.round((end.getTime() - today.getTime()) / msPerDay);
+}
+
+/** `YYYY-MM-DD` → locale-formatted short date (e.g. "Jan 31"), for tooltips/captions. */
+export function formatPeriodBoundShort(dateStr: string, locale: "en" | "es"): string {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  if (!year || !month || !day) return dateStr;
+  const date = new Date(year, month - 1, day);
+  return new Intl.DateTimeFormat(locale === "es" ? "es-CR" : "en-US", {
+    month: "short",
+    day: "numeric",
+  }).format(date);
+}
+
 type ErrorResult = { ok: false; error: string };
 type OkBudgets = { ok: true; budgets: BudgetItem[] };
 type OkBudget = { ok: true; budget: BudgetItem };

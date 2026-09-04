@@ -4,6 +4,7 @@ import { FormEvent, useId, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { chipClassName } from "@/components/Chip";
+import { DateRangeField } from "@/components/DateRangeField";
 import { FormIconSubmit } from "@/components/FormIconSubmit";
 import { IconButton } from "@/components/IconButton";
 import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
@@ -33,6 +34,9 @@ export type BudgetUpdateFormMessages = BudgetsClientMessages & {
   budgetsPeriodChangeConfirmBodyCount: string;
   budgetsPeriodChangeConfirmAction: string;
   budgetsPeriodChangeCancel: string;
+  budgetsDateFrom: string;
+  budgetsDateTo: string;
+  budgetsDateClear: string;
   cancelLabel: string;
 };
 
@@ -40,6 +44,7 @@ type Props = {
   budget: BudgetItem;
   lists: { id: string; name: string }[];
   messages: BudgetUpdateFormMessages;
+  locale: "en" | "es";
 };
 
 const CURRENCY_OPTIONS = [
@@ -69,7 +74,7 @@ function sourceListChipClassName(selected: boolean): string {
  * that response drives the confirmation Sheet directly, no separate preview
  * round-trip needed before the first submit attempt.
  */
-export function BudgetUpdateForm({ budget, lists, messages }: Props) {
+export function BudgetUpdateForm({ budget, lists, messages, locale }: Props) {
   const router = useRouter();
   const baseId = useId();
   const formId = `${baseId}-form`;
@@ -77,8 +82,6 @@ export function BudgetUpdateForm({ budget, lists, messages }: Props) {
   const currencyLabelId = `${baseId}-currency-label`;
   const nameId = `${baseId}-name`;
   const capId = `${baseId}-cap`;
-  const periodStartId = `${baseId}-period-start`;
-  const periodEndId = `${baseId}-period-end`;
 
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(budget.name);
@@ -249,39 +252,20 @@ export function BudgetUpdateForm({ budget, lists, messages }: Props) {
                 }}
               />
             </div>
-            <div className="flex items-center gap-2 rounded-[8px] border-2 border-border bg-background px-[0.65rem] py-[0.5rem]">
-              <label htmlFor={periodStartId} className="sr-only">
-                {messages.budgetsPeriodStartLabel}
-              </label>
-              <input
-                id={periodStartId}
-                className={fieldInputClass}
-                type="date"
-                value={periodStart}
-                aria-label={messages.budgetsPeriodStartLabel}
-                disabled={pending}
-                onChange={(e) => {
-                  setPeriodStart(e.target.value);
-                  setError(null);
-                }}
-              />
-              <span className="h-5 w-px shrink-0 bg-border" aria-hidden="true" />
-              <label htmlFor={periodEndId} className="sr-only">
-                {messages.budgetsPeriodEndLabel}
-              </label>
-              <input
-                id={periodEndId}
-                className={fieldInputClass}
-                type="date"
-                value={periodEnd}
-                aria-label={messages.budgetsPeriodEndLabel}
-                disabled={pending}
-                onChange={(e) => {
-                  setPeriodEnd(e.target.value);
-                  setError(null);
-                }}
-              />
-            </div>
+            <DateRangeField
+              start={periodStart || null}
+              end={periodEnd || null}
+              onChange={(newStart, newEnd) => {
+                setPeriodStart(newStart ?? "");
+                setPeriodEnd(newEnd ?? "");
+                setError(null);
+              }}
+              fromLabel={messages.budgetsPeriodStartLabel}
+              toLabel={messages.budgetsPeriodEndLabel}
+              clearLabel={messages.budgetsDateClear}
+              locale={locale}
+              disabled={pending}
+            />
             <div
               className="flex flex-wrap gap-2"
               role="group"

@@ -1,6 +1,40 @@
 # Story 7.5: Budget period range
 
-Status: done
+Status: review
+
+## Amendment (2026-09-04): budgets ghost-card form redesign
+
+UX design finalized after this story originally shipped:
+`_bmad-output/planning-artifacts/ux-designs/ux-finance-dashboard-2026-09-04-budget-form/` (`DESIGN.md`, `EXPERIENCE.md`). Per user decision, this is tracked as an amendment to Story 7.5 (not a new numbered story), since it redesigns the create/update form this story built and reuses `DateRangeField` (this story's date-range picker).
+
+**Scope**: replace `BudgetsCreateForm`'s standalone input row with a dashed "ghost" budget card — the same shell/slots as a real budget card — rendered as the first item of `/budgets`'s masonry list. New shared primitives: `MinimalInput` (underline text field), a multi-select `SourceListChipPicker` (selected lists as removable accent chips + a trailing "+ Add list" panel trigger), and a `CalendarIcon`. The calendar slot morphs into the real day-count circle once a period is picked (reusing `DateRangeField`'s popover via a new `renderTrigger` prop, so the calendar grid/positioning logic is not duplicated). `BudgetUpdateForm` (detail-page edit) is unaffected — this redesign is create-flow only, per DESIGN.md's scope.
+
+**Scope decisions (documented, not silently narrowed):**
+- `OriginChipPicker` is **not** refactored onto a shared generalized `ChipPicker` (DESIGN.md's stated end-state). `SourceListChipPicker` is a new sibling built on the same existing primitives (`ChipTrigger`/`ChipOptionsPanel`/`useChipPicker`) instead — avoids risk to `OriginChipPicker`'s existing behavior/tests for a cosmetic-only shared-implementation goal.
+- `MinimalInput` is a new component, not a retrofit of `ListsPanel`'s rename input — `ListsPanel.module.scss`'s `.listNameEdit` is left as-is; only the budgets ghost card uses `MinimalInput`. Avoids an unrelated blast radius into the lists surface for a redesign scoped to budgets.
+- Cap control renders as a plain end-aligned `MinimalInput` inline with the currency select at the bottom of the card (not literally inside `TopProgressBar`'s bar-label row) — the ghost card has no real progress fill yet (budget doesn't exist), so there is no bar to embed a label into; DESIGN.md's "end of the progress-bar labels row" position is approximated by the same bottom-right slot without a live bar.
+
+### Amendment Tasks
+
+- [x] `ui/app/icons/CalendarIcon.tsx` — new icon (24x24, strokeWidth 2.1, round caps), exported from `app/icons/index.ts`.
+- [x] `ui/components/MinimalInput/` — new shared underline-input primitive + test.
+- [x] `ui/app/budgets/SourceListChipPicker.tsx` — new multi-select chip picker (selected chips removable inline, "+ Add list" trigger opens a bounded-height slide-down panel of unselected lists) + test.
+- [x] `ui/components/DateRangeField/DateRangeField.tsx` — add an optional `renderTrigger` prop so a caller can swap the default two-button field row for a custom trigger (the ghost card's calendar-icon/day-count slot) while reusing the existing popover/grid/outside-click logic unchanged. Existing callers (this story's create/update forms) are unaffected since the prop is optional.
+- [x] `ui/app/budgets/GhostBudgetCard.tsx` — new component replacing `BudgetsCreateForm`: dashed card shell, `MinimalInput` name field, `SourceListChipPicker` for source lists, `DateRangeField` with a custom `renderTrigger` (calendar icon → day-count circle once `period_end` is set), inline cap/currency control, floating circular submit badge (`+`, spinner while pending). Same submission/validation logic as the old form (unchanged `createBudget` contract).
+- [x] `ui/app/budgets/BudgetsPanel.tsx` — integrate the ghost card as a synthetic first entry in the masonry distribution (`MasonryEntry = {kind:"ghost"} | {kind:"budget", budget}`) instead of a separate `input` slot above the grid, so it participates in the same height-balanced column layout as real cards. Removed `BudgetsCreateForm`/`SectionLabel` "Create"/"History" title wiring (redundant once the form is a card in the grid).
+- [x] Delete `ui/app/budgets/BudgetsCreateForm.tsx` + its test (superseded by `GhostBudgetCard.tsx`/`GhostBudgetCard.test.tsx`).
+- [x] i18n: add `budgetsAddListTrigger`, `budgetsPeriodTriggerLabel` to `ui/lib/i18n/lists.ts` (`en`/`es`).
+- [x] Tests: `GhostBudgetCard.test.tsx` (dashed shell, disabled/enabled submit badge, calendar-icon → day-count morph, submit with/without period, source-list selection, error display), `SourceListChipPicker.test.tsx` (select/remove/panel-filtering), `MinimalInput.test.tsx`, plus two `BudgetsPanel.test.tsx` additions confirming the ghost card renders first and a created budget doesn't replace it.
+
+### Amendment — post-implementation fixes (manual browser verification)
+
+- **Infinite render loop** ("Maximum update depth exceeded"): `BudgetsPanel`'s `masonryEntries` (ghost card + real budgets) was rebuilt as a new array literal every render, which is `useMasonryColumns`' `useLayoutEffect` dependency — its remeasure→`setMeasured`→re-render cycle never stabilized. Fixed by memoizing `masonryEntries` on `[budgets]`. Not caught by unit tests since jsdom's `getBoundingClientRect()` always returns zero height, so the remeasure effect bails out before the loop can manifest there — only visible running the real app in a browser.
+- **Calendar popover cut off at the viewport edge**: `DateRangeField`'s popover always opened flush to its trigger's left edge; the ghost card's calendar-icon trigger sits near the right edge of a masonry column, so the fixed-width popover overflowed off-screen. `DateRangeField` now measures the trigger's position on open and flips the popover to hang from the right edge instead when it would otherwise overflow (`align` state, mirrors `Tooltip.tsx`'s existing top-edge flip pattern).
+
+### Amendment Dev Agent Record
+
+- Verified via `npx tsc --noEmit`, `npx eslint` (changed files), and `npx vitest run` that all budgets/masonry/DateRangeField/icon/MinimalInput tests pass (26 new/updated tests) with zero regressions. The 20 pre-existing Tooltip/Avatar-portal test failures across `Tooltip.test.tsx`, `TopProgressBar.test.tsx`, `TriSwitch.test.tsx`, `IconButton.test.tsx`, `soft-ledger.test.tsx`, and three `app/lists/*.test.tsx` files were confirmed present on this branch **before** this amendment (via `git stash` + re-run) — unrelated environment/jsdom portal issue, not introduced here, matching the same class of failure this story's original Debug Log already flagged.
+- Files touched beyond the Amendment Tasks list above: none.
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -191,6 +225,30 @@ None — no blocking issues; full backend (1010 tests) and budgets-scoped UI (86
 - `ui/app/api/budgets/[budgetId]/route.test.ts`
 - `ui/lib/i18n/lists.ts`
 
+### Amendment File List
+
+**New:**
+- `ui/app/icons/CalendarIcon.tsx`
+- `ui/components/MinimalInput/MinimalInput.tsx`
+- `ui/components/MinimalInput/MinimalInput.test.tsx`
+- `ui/components/MinimalInput/index.ts`
+- `ui/app/budgets/SourceListChipPicker.tsx`
+- `ui/app/budgets/SourceListChipPicker.test.tsx`
+- `ui/app/budgets/GhostBudgetCard.tsx`
+- `ui/app/budgets/GhostBudgetCard.test.tsx`
+
+**Modified:**
+- `ui/app/icons/index.ts`
+- `ui/components/DateRangeField/DateRangeField.tsx`
+- `ui/app/budgets/BudgetsPanel.tsx`
+- `ui/app/budgets/BudgetsPanel.test.tsx`
+- `ui/lib/i18n/lists.ts`
+
+**Deleted:**
+- `ui/app/budgets/BudgetsCreateForm.tsx`
+- `ui/app/budgets/BudgetsCreateForm.test.tsx`
+
 ## Change Log
 
 - Implemented Story 7.5 end-to-end: optional budget period (from/to), period-aware attribution/candidates/assignment, period-change preview + confirm-before-narrow apply-with-unassign, and the budget update form (new) with a period-change confirmation Sheet.
+- Amendment (2026-09-04): redesigned the budgets create flow as a dashed "ghost" budget card integrated into the `/budgets` masonry grid, per the finalized `ux-finance-dashboard-2026-09-04-budget-form` UX design — new `MinimalInput`/`SourceListChipPicker`/`CalendarIcon` primitives, `DateRangeField` gained a `renderTrigger` override, `BudgetsCreateForm` replaced by `GhostBudgetCard`. Update form unaffected.

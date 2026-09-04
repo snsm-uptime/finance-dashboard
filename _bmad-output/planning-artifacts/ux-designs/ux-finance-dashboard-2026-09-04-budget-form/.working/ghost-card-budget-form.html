@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Budgets — ghost-card create form</title>
+<style>
+  :root {
+    --background: #f7f3ec; --surface: #fffcf7; --foreground: #2a241c;
+    --muted: #6e6456; --border: #e2d8c8; --accent: #3f6b45; --owe: #a04936; --owed: #2f6e48;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--background); color: var(--foreground);
+    font-family: -apple-system, "Inter", "Segoe UI", sans-serif;
+    margin: 0; padding: 32px; display: flex; gap: 32px; flex-wrap: wrap; align-items: flex-start;
+  }
+  h1 { width: 100%; font-size: 1rem; font-weight: 600; margin: 0 0 4px; }
+  .caption { width: 100%; font-size: 0.78rem; color: var(--muted); margin: 0 0 18px; max-width: 640px; line-height: 1.5; }
+  .col { display: flex; flex-direction: column; gap: 8px; }
+  .col-label { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+
+  .card {
+    position: relative; width: 280px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--surface); padding: 12px 12px 0; display: flex; flex-direction: column; gap: 10px;
+    overflow: visible;
+  }
+  .card.ghost { border-style: dashed; }
+  .card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding-bottom: 10px; }
+  .name-field {
+    border: none; border-bottom: 1.5px solid var(--border); background: transparent; padding: 0 0 2px;
+    font-size: 0.85rem; color: var(--muted); width: 100%; font-family: inherit;
+  }
+  .real .name { font-size: 0.85rem; margin:0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    border: 1px solid var(--border); border-radius: 999px; padding: 4px 10px; font-size: 0.75rem; color: var(--muted);
+    background: var(--surface); white-space: nowrap;
+  }
+  .chip.selected { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); font-weight: 600; display:flex; align-items:center; gap:4px; }
+  .chip.add-trigger { display: inline-flex; align-items: center; gap: 2px; color: var(--muted); border-style: dashed; }
+
+  .corner-slot { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; }
+  .cal-icon {
+    width: 2.3rem; height: 2.3rem; border-radius: 50%; border: 1.5px dashed var(--border); color: var(--muted);
+    display: flex; align-items: center; justify-content: center; font-size: 1.1rem;
+  }
+  .cal-label { font-size: 0.56rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-top: 2px; }
+  .days-number { font-family: Georgia, serif; font-size: 2.3rem; line-height: 0.95; letter-spacing: -0.02em; color: var(--foreground); }
+  .days-label { font-size: 0.56rem; font-weight: 550; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-top: 2px; }
+
+  .cap-slot {
+    align-self: flex-start; text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
+  }
+  .cap-control {
+    display: flex; align-items: baseline; gap: 4px; border-bottom: 1.5px dashed var(--border); padding-bottom: 2px;
+  }
+  .cap-currency { font-size: 0.68rem; font-weight: 600; color: var(--muted); }
+  .cap-amount { font-size: 0.95rem; color: var(--muted); }
+  .cap-amount.filled { color: var(--foreground); font-weight: 600; }
+
+  .bar-track { height: 5px; background: var(--border); border-radius: 999px; margin: 0 -12px; position: relative; overflow: hidden; }
+  .bar-fill { position: absolute; inset: 0 auto 0 0; width: 0%; background: var(--accent); }
+  .bar-labels { display: flex; justify-content: space-between; font-size: 0.62rem; color: var(--muted); padding: 4px 0 10px; }
+
+  .badge {
+    position: absolute; bottom: -0.6rem; right: -0.6rem; width: 2rem; height: 2rem; border-radius: 50%;
+    border: 1px solid var(--border); background: var(--surface); color: var(--accent); box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+    display: flex; align-items: center; justify-content: center; font-size: 1.1rem; font-weight: 600;
+  }
+
+  .real-card {
+    width: 280px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface);
+    padding: 12px 12px 0; display: flex; flex-direction: column; gap: 10px;
+  }
+  .note { font-size: 0.72rem; color: var(--muted); width: 280px; line-height: 1.45; }
+</style>
+</head>
+<body>
+<h1>Ghost-card create form — first item in the budgets masonry</h1>
+<p class="caption">Same shell, spacing and progress-bar footer as a real budget card. No separate sheet/overlay: the "New budget" entry point IS a card, dashed to read as not-yet-real. Corner badge submits.</p>
+
+<div class="col">
+  <div class="col-label">1 — Ghost card, empty state</div>
+  <div class="card ghost">
+    <div class="card-top">
+      <div style="flex:1; min-width:0;">
+        <input class="name-field" placeholder="Budget name" />
+        <div class="chips" style="margin-top:8px;">
+          <span class="chip add-trigger">+ Add list</span>
+        </div>
+      </div>
+      <div class="corner-slot">
+        <div class="cal-icon">&#128197;</div>
+        <div class="cal-label">Period</div>
+      </div>
+    </div>
+    <div class="cap-slot" style="position:absolute; top:12px; right:12px; display:none;"></div>
+    <div class="bar-track"><div class="bar-fill"></div></div>
+    <div class="bar-labels"><span>0</span><span>Cap</span></div>
+    <div class="badge">+</div>
+  </div>
+  <div class="note">Cap needs its own visible slot too (see version 2) — flagging that laying it over the corner clashes with the calendar icon at rest.</div>
+</div>
+
+<div class="col">
+  <div class="col-label">2 — Ghost card, filled state (cap top-right, dates chosen)</div>
+  <div class="card ghost" style="padding-top:12px;">
+    <div class="card-top" style="align-items:flex-start;">
+      <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:8px;">
+        <div class="cap-control" style="align-self:flex-start;">
+          <span class="cap-currency">CRC</span><span class="cap-amount filled">150,000</span>
+        </div>
+        <input class="name-field" value="Groceries" style="color:var(--foreground);" />
+        <div class="chips">
+          <span class="chip selected">Eco ✕</span>
+          <span class="chip selected">Personal ✕</span>
+          <span class="chip add-trigger">+</span>
+        </div>
+      </div>
+      <div class="corner-slot">
+        <div class="days-number" style="color:var(--foreground);">6</div>
+        <div class="days-label">days left</div>
+      </div>
+    </div>
+    <div class="bar-track"><div class="bar-fill" style="width:0%;"></div></div>
+    <div class="bar-labels"><span>CRC 0</span><span>CRC 150,000</span></div>
+    <div class="badge">+</div>
+  </div>
+  <div class="note">Cap moved to top-left above the name (matches real card's identity-block position); calendar icon has resolved into the real day-count once a range is picked. Selected lists render as their own chips (click ✕ to remove), trailing "+" opens the panel with unpicked lists only.</div>
+</div>
+
+<div class="col">
+  <div class="col-label">Reference — real budget card today</div>
+  <div class="real-card">
+    <div class="card-top">
+      <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:6px;">
+        <p class="name" style="margin:0;">Groceries</p>
+        <div class="chips">
+          <span class="chip">Eco</span>
+        </div>
+      </div>
+      <div class="corner-slot">
+        <div class="days-number">6</div>
+        <div class="days-label">days left</div>
+      </div>
+    </div>
+    <div class="bar-track"><div class="bar-fill" style="width:62%;"></div></div>
+    <div class="bar-labels"><span>CRC 93,000</span><span>CRC 150,000</span></div>
+  </div>
+  <div class="note">For comparison — no cap shown on real cards today (only spent/cap on the bar). Open question: does the ghost card's cap control disappear after creation, or stay visible as a persistent affordance on real cards too?</div>
+</div>
+
+</body>
+</html>

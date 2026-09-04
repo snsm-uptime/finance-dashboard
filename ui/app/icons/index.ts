@@ -18,6 +18,7 @@ export { UserIcon } from "./UserIcon";
 export { UsersIcon } from "./UsersIcon";
 export { WalletIcon } from "./WalletIcon";
 export { SunIcon } from "./SunIcon";
+export { CalendarIcon } from "./CalendarIcon";
 export { MoonIcon } from "./MoonIcon";
 export { SystemIcon } from "./SystemIcon";
 export { HashtagIcon } from "./HashtagIcon";

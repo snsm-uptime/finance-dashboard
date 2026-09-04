@@ -286,6 +286,7 @@ export default async function BudgetDetailPage({
                   budget={budget}
                   lists={sourceLists}
                   messages={{ ...t, cancelLabel: t.receiptMoveCancel }}
+                  locale={locale}
                 />
               }
             />
