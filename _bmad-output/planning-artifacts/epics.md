@@ -337,6 +337,12 @@ Replaces the placeholder landing page with a real product introduction for signe
 **FRs covered:** FR-52, FR-53 (new 2026-09-02)
 **Demo gate:** signed-out visitor lands on an intro page and can reach a docs index listing tutorials and UX-feature call-outs
 
+### Epic 9: List and card archiving
+Extends the archive box-icon toggle pattern (Story 7.6) to lists and cards: an owner can archive a list or a registered card, hiding it from the default view while preserving all data/history, reversible via the same toggle interaction. One backend prep story adds the `archived` flag + endpoints; the remaining stories are pure UI, sized for `--lite` worktrees.
+**FRs covered:** FR-54 (new 2026-09-04)
+**Demo gate:** a list owner archives a list via the Lists homepage toggle and it disappears from the default view but reappears via the archived toggle; same for a card on the Cards panel
+**Sequencing note:** Story 9.1 (backend) is a prerequisite for 9.2/9.3 and is **not** `--lite`-compatible (schema/API change) — run it in a full worktree. Stories 9.2 and 9.3 are independent of each other and both `--lite`-compatible once 9.1's API is available on the primary.
+
 ## Epic 1: Accounts & personal workspace
 
 Users can sign up, sign in, reset password, land with a personal list, and set EN/ES language plus Light / Dark / System theme in the Account menu. Includes greenfield Compose scaffold (`db`/`api`/`ui`).
@@ -2039,6 +2045,7 @@ form.
 alongside Story 7.6's budget archiving) is out of scope for Epic 7. No FR
 or story yet — revisit in a future correct-course once budget archiving
 (7.6) ships and the box-icon toggle pattern is validated.
+**Resolved (2026-09-04):** Picked up as **Epic 9** (FR-54) — see below.
 
 ### Story 7.1: Standalone budget list + create
 
@@ -2340,4 +2347,149 @@ Budgets, Cards, Upload/import screens)
 **Then** no contextual help icon is added to them (landing keeps its
 existing `/docs` link unchanged; home/account have no matching docs
 content)
+
+## Epic 9: List and card archiving
+
+Extends the archive box-icon toggle pattern proven by Story 7.6 (budgets)
+to the two other owner-scoped entities named in the original `ui/todo.md`
+backlog note: lists and cards. An owner archives a list or a registered
+card from its panel; the item is hidden from the default view but no data
+is lost, and the same toggle interaction reveals the archived set.
+
+**FRs covered:** FR-54 (new 2026-09-04)
+**Demo gate:** a list owner archives a list via the Lists homepage toggle
+and it disappears from the default view but reappears via the archived
+toggle; same for a card on the Cards panel
+**Sequencing:** 9.1 (backend flag + endpoints) must land first and runs in
+a full worktree, not `--lite` (schema/API change). 9.2 (lists UI) and 9.3
+(cards UI) are independent of each other, both `--lite`-compatible once
+9.1's API is available on the primary they point at.
+
+### Story 9.1: `archived` flag + endpoints for lists and cards
+
+As a developer,
+I want an `archived` boolean on lists and cards with owner-scoped
+archive/unarchive endpoints and an `archived` list-filter query param,
+So that Stories 9.2 and 9.3 have a stable API to build the `--lite` UI
+against, mirroring the budget-archiving contract from Story 7.6.
+
+**Acceptance Criteria:**
+
+**Given** the lists and cards tables
+**When** this story's migration runs
+**Then** each gains an `archived` boolean defaulting to `false`; existing
+rows are unaffected (no forced backfill, no data loss)
+
+**Given** a list owner
+**When** they call archive/unarchive on a list they own
+**Then** the flag toggles and the action is rejected for non-owners
+(membership ACL / NFR-3, same pattern as Story 7.6's budget-owner check)
+
+**Given** a card's registering user
+**When** they call archive/unarchive on that card
+**Then** the flag toggles and the action is rejected for any other user
+
+**Given** the Lists homepage and Cards panel list endpoints
+**When** an `archived` filter parameter is passed
+**Then** they return only archived (`true`) or only non-archived
+(`false`/omitted, default) rows — same filter shape as the existing
+budgets endpoint from Story 7.6
+
+**Given** a list or card is archived
+**When** its historical data is considered
+**Then** membership, import batches, ledger lines, and balances are
+unaffected — archiving only changes default-view visibility
+
+**Given** this story
+**When** scope is considered
+**Then** no UI ships here — Stories 9.2/9.3 consume this API; this story
+is not `--lite`-compatible (schema + API change) and must run in a full
+`scripts/worktree/worktree-bootstrap.sh` (non-`--lite`) stack
+
+### Story 9.2: Archive toggle on Lists homepage
+
+As a list owner,
+I want to archive a list and toggle a filtered "archived" view via a box
+icon on the Lists homepage, so I can hide lists I no longer use without
+losing their history or membership.
+
+**Acceptance Criteria:**
+
+**Given** the Lists homepage title (`ListsPanel.tsx`)
+**When** the page renders
+**Then** a box icon appears at the opposite end of the title, acting as a
+toggle (closed box = showing active lists, open box = showing archived
+lists) — same anatomy and morph animation as Story 7.6's budgets toggle
+
+**Given** the toggle is OFF (closed box)
+**When** the page renders
+**Then** only non-archived lists are shown, and the create-list input is
+visible as today
+
+**Given** the user clicks the toggle to turn it ON
+**When** it activates
+**Then** the icon morphs to an open box, the list filters to archived
+lists only (via Story 9.1's `archived` query param), and the create-list
+input is hidden
+
+**Given** the toggle is ON
+**When** the user clicks it again, or navigates away from the Lists
+homepage to a different screen
+**Then** it (or the next visit) reverts to OFF, showing non-archived lists
+with the create input visible
+
+**Given** a list I own (from its homepage row or list-detail chrome)
+**When** I archive it
+**Then** it's excluded from the default (non-archived) view, its data,
+membership, and history are preserved, and it can be unarchived from the
+archived view
+
+**Given** a list I do not own
+**When** I view it (as a member) or its row on the homepage
+**Then** no archive control is shown to me — only the owner can archive
+
+### Story 9.3: Archive toggle on Cards panel
+
+As a card owner,
+I want to archive a registered card and toggle a filtered "archived" view
+via a box icon on the Cards panel, so I can hide cards I no longer use
+without losing their import history.
+
+**Acceptance Criteria:**
+
+**Given** the Cards panel title (`CardsPanel.tsx`)
+**When** the page renders
+**Then** a box icon appears at the opposite end of the title, acting as a
+toggle (closed box = showing active cards, open box = showing archived
+cards) — same anatomy and morph animation as Story 7.6/9.2
+
+**Given** the toggle is OFF (closed box)
+**When** the page renders
+**Then** only non-archived cards are shown, and the register-card form is
+visible as today
+
+**Given** the user clicks the toggle to turn it ON
+**When** it activates
+**Then** the icon morphs to an open box, the card list filters to archived
+cards only (via Story 9.1's `archived` query param), and the
+register-card form is hidden
+
+**Given** the toggle is ON
+**When** the user clicks it again, or navigates away from the Cards panel
+to a different screen
+**Then** it (or the next visit) reverts to OFF, showing non-archived cards
+with the register form visible
+
+**Given** a card I registered
+**When** I archive it
+**Then** it's excluded from the default (non-archived) view, its import
+history and past ledger lines are preserved, and it can be unarchived
+from the archived view
+
+**Given** an archived card
+**When** a new statement import for that card's IBAN is attempted
+**Then** the import flow surfaces that the matched card is archived and
+offers unarchiving before continuing (no silent import against a hidden
+card) — exact confirmation UX is this story's to design, consistent with
+Story 7.6/9.2's owner-facing tone (UX-DR17)
 

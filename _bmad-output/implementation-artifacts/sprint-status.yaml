@@ -168,6 +168,14 @@ development_status:
   8-3-docs-page-ux-refactor: review
   epic-8-retrospective: optional
 
+  # Epic 9 — List and card archiving. Extends Story 7.6's box-icon toggle
+  # to lists and cards. 9.1 is backend/non-lite; 9.2/9.3 are --lite UI.
+  epic-9: backlog
+  9-1-archive-flag-endpoints-lists-cards: backlog
+  9-2-archive-toggle-lists-homepage: backlog
+  9-3-archive-toggle-cards-panel: backlog
+  epic-9-retrospective: optional
+
 action_items:
   - epic: 1
     action: "Story-close interaction overview (how/why map) before marking stories done"
