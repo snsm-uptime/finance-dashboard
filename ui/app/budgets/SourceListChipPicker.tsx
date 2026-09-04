@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+
 import { chipClassName } from "@/components/Chip";
 import { ChipOptionsPanel, useChipPicker, type ChipOption } from "@/components/ChipPicker";
 
@@ -36,18 +38,42 @@ export function SourceListChipPicker({
   disabled = false,
 }: Props) {
   const { chipId, panelId, chipRef, open, toggle, close, onRootKeyDown } = useChipPicker();
+  const rootRef = useRef<HTMLDivElement>(null);
   const selected = options.filter((option) => selectedIds.includes(option.id));
   const unselectedChipOptions: ChipOption[] = options
     .filter((option) => !selectedIds.includes(option.id))
     .map((option) => ({ value: option.id, label: option.name }));
 
+  useEffect(() => {
+    if (!open) return;
+
+    function onPointerDown(event: PointerEvent) {
+      if (
+        rootRef.current &&
+        event.target instanceof Node &&
+        rootRef.current.contains(event.target)
+      ) {
+        return;
+      }
+      close();
+    }
+
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [open, close]);
+
   function selectFromPanel(id: string) {
     onToggle(id);
-    close();
   }
 
   return (
-    <div role="group" aria-label={ariaLabel} onKeyDown={onRootKeyDown} className="relative">
+    <div
+      ref={rootRef}
+      role="group"
+      aria-label={ariaLabel}
+      onKeyDown={onRootKeyDown}
+      className="relative"
+    >
       <div className="flex flex-wrap items-center gap-2">
         {selected.map((option) => (
           <button

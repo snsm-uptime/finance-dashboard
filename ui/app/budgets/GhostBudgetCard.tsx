@@ -11,6 +11,7 @@ import type { ListItem } from "@/app/lists/listsClient";
 
 import { SourceListChipPicker } from "./SourceListChipPicker";
 import { budgetDaysLeft, createBudget, type BudgetItem, type BudgetsClientMessages } from "./budgetsClient";
+import { IconButton } from "@/components/IconButton";
 
 export type GhostBudgetCardMessages = BudgetsClientMessages & {
   budgetsNameLabel: string;
@@ -43,8 +44,7 @@ const CURRENCY_OPTIONS = [
   { value: "USD", label: "USD" },
 ];
 
-const calendarSlotClassName =
-  "flex h-[2.1rem] w-[2.1rem] shrink-0 items-center justify-center rounded-full border-[1.5px] border-dashed border-border text-muted outline-none";
+const calendarSlotClassName = "";
 
 const submitBadgeBaseClassName =
   "absolute -top-2 -right-2 inline-flex h-8 w-8 items-center justify-center rounded-full border bg-surface shadow-sm outline-none transition-colors duration-150 disabled:cursor-not-allowed";
@@ -131,11 +131,10 @@ export function GhostBudgetCard({ lists, messages, locale, onCreated, cardRef }:
         type="submit"
         disabled={!canSubmit}
         aria-label={pending ? messages.budgetsCreating : messages.budgetsCreateSubmit}
-        className={`${submitBadgeBaseClassName} ${
-          canSubmit
-            ? "border-accent text-accent hover:bg-accent/10"
-            : "border-border text-muted opacity-60"
-        }`}
+        className={`${submitBadgeBaseClassName} ${canSubmit
+          ? "border-accent text-accent hover:bg-accent/10"
+          : "border-border text-muted opacity-60"
+          }`}
       >
         {pending ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : <PlusIcon className="h-4 w-4" />}
       </button>
@@ -202,16 +201,16 @@ export function GhostBudgetCard({ lists, messages, locale, onCreated, cardRef }:
                 </span>
               </button>
             ) : (
-              <button
-                type="button"
+              <IconButton
+                icon={<CalendarIcon className="h-[1.5rem] w-[1.5rem]" />}
+                label="Date Picker"
                 disabled={triggerDisabled}
                 onClick={open}
                 aria-expanded={popoverOpen}
                 aria-label={messages.budgetsPeriodTriggerLabel}
                 className={calendarSlotClassName}
               >
-                <CalendarIcon className="h-[1.05rem] w-[1.05rem]" />
-              </button>
+              </IconButton>
             )
           }
         />
@@ -228,7 +227,23 @@ export function GhostBudgetCard({ lists, messages, locale, onCreated, cardRef }:
             </p>
           ) : null}
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex min-w-0 flex-1 justify-between gap-1">
+          <label htmlFor={capId} className="sr-only">
+            {messages.budgetsCapLabel}
+          </label>
+          <MinimalInput
+            id={capId}
+            className="text-right text-[0.72rem] font-[550] tabular-nums flex-1"
+            inputMode="decimal"
+            value={cap}
+            placeholder={messages.budgetsCapLabel}
+            required
+            disabled={pending}
+            onChange={(e) => {
+              setCap(e.target.value);
+              clearError();
+            }}
+          />
           <div className="w-fit shrink-0">
             <SoftLedgerSelect
               id={currencyId}
@@ -243,22 +258,6 @@ export function GhostBudgetCard({ lists, messages, locale, onCreated, cardRef }:
               }}
             />
           </div>
-          <label htmlFor={capId} className="sr-only">
-            {messages.budgetsCapLabel}
-          </label>
-          <MinimalInput
-            id={capId}
-            className="w-[5.5rem] text-right text-[0.72rem] font-[550] tabular-nums"
-            inputMode="decimal"
-            value={cap}
-            placeholder={messages.budgetsCapLabel}
-            required
-            disabled={pending}
-            onChange={(e) => {
-              setCap(e.target.value);
-              clearError();
-            }}
-          />
         </div>
       </div>
     </form>
