@@ -10,6 +10,8 @@ from decimal import Decimal
 from adapters.persistence.budgets import SqlAlchemyBudgetRepository
 from adapters.persistence.repositories import SqlAlchemyListRepository
 from application.budgets import (
+    ArchiveBudgetCommand,
+    ArchiveBudgetService,
     AssignEntryToBudgetCommand,
     AssignEntryToBudgetService,
     BudgetCandidate,
@@ -35,6 +37,8 @@ from application.budgets import (
     PeriodChangeRequiresConfirmationError,
     PreviewBudgetPeriodChangeCommand,
     PreviewBudgetPeriodChangeService,
+    UnarchiveBudgetCommand,
+    UnarchiveBudgetService,
     UnassignEntryFromBudgetCommand,
     UnassignEntryFromBudgetService,
     UpdateBudgetCommand,
@@ -188,6 +192,7 @@ def _budget_response(view: BudgetView) -> BudgetResponse:
         period_start=view.period_start,
         period_end=view.period_end,
         created_at=view.created_at,
+        is_archived=view.is_archived,
     )
 
 
@@ -205,16 +210,18 @@ def _budget_detail_response(view: BudgetDetailView) -> BudgetDetailResponse:
         created_at=view.created_at,
         history=[_budget_history_line_response(line) for line in view.history],
         rules=[_budget_rule_response(rule) for rule in view.rules],
+        is_archived=view.is_archived,
     )
 
 
 @router.get("", response_model=BudgetsListResponse)
 def list_budgets(
+    archived: bool = False,
     user_id: uuid.UUID = Depends(require_authenticated_user),
     db: Session = Depends(get_db),
 ) -> BudgetsListResponse:
     service = ListBudgetsService(SqlAlchemyBudgetRepository(db))
-    views = service.execute(ListBudgetsCommand(actor_user_id=user_id))
+    views = service.execute(ListBudgetsCommand(actor_user_id=user_id, archived=archived))
     return BudgetsListResponse(budgets=[_budget_response(v) for v in views])
 
 
@@ -276,6 +283,7 @@ def create_budget(
         period_start=record.period_start,
         period_end=record.period_end,
         created_at=record.created_at,
+        is_archived=record.is_archived,
     )
     return _budget_response(view)
 
@@ -359,6 +367,7 @@ def update_budget(
         period_start=record.period_start,
         period_end=record.period_end,
         created_at=record.created_at,
+        is_archived=record.is_archived,
     )
     return _budget_response(view)
 
@@ -376,6 +385,64 @@ def delete_budget(
         return _budget_not_found()
     logger.info("budget_deleted budget_id=%s", budget_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{budget_id}/archive", response_model=BudgetResponse)
+def archive_budget(
+    budget_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> BudgetResponse | JSONResponse:
+    service = ArchiveBudgetService(SqlAlchemyBudgetRepository(db))
+    try:
+        record = service.execute(ArchiveBudgetCommand(actor_user_id=user_id, budget_id=budget_id))
+    except BudgetNotFoundError:
+        return _budget_not_found()
+    logger.info("budget_archived budget_id=%s owner_user_id=%s", record.id, user_id)
+    spent, _history, _rules = _compute_spent_and_history(record, SqlAlchemyBudgetRepository(db))
+    view = BudgetView(
+        id=record.id,
+        name=record.name,
+        cap_amount=record.cap_amount,
+        currency=record.currency,
+        spent=spent,
+        state=classify_budget_state(spent, record.cap_amount),
+        source_list_ids=record.source_list_ids,
+        period_start=record.period_start,
+        period_end=record.period_end,
+        created_at=record.created_at,
+        is_archived=record.is_archived,
+    )
+    return _budget_response(view)
+
+
+@router.post("/{budget_id}/unarchive", response_model=BudgetResponse)
+def unarchive_budget(
+    budget_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> BudgetResponse | JSONResponse:
+    service = UnarchiveBudgetService(SqlAlchemyBudgetRepository(db))
+    try:
+        record = service.execute(UnarchiveBudgetCommand(actor_user_id=user_id, budget_id=budget_id))
+    except BudgetNotFoundError:
+        return _budget_not_found()
+    logger.info("budget_unarchived budget_id=%s owner_user_id=%s", record.id, user_id)
+    spent, _history, _rules = _compute_spent_and_history(record, SqlAlchemyBudgetRepository(db))
+    view = BudgetView(
+        id=record.id,
+        name=record.name,
+        cap_amount=record.cap_amount,
+        currency=record.currency,
+        spent=spent,
+        state=classify_budget_state(spent, record.cap_amount),
+        source_list_ids=record.source_list_ids,
+        period_start=record.period_start,
+        period_end=record.period_end,
+        created_at=record.created_at,
+        is_archived=record.is_archived,
+    )
+    return _budget_response(view)
 
 
 @router.post("/{budget_id}/assignments", response_model=None)

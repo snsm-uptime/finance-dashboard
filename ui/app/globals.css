@@ -231,3 +231,13 @@ body {
 a {
   color: inherit;
 }
+
+.box-icon-lid {
+  transition: transform 200ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .box-icon-lid {
+    transition: none;
+  }
+}

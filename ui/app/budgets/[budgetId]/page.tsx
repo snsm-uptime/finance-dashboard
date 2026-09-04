@@ -54,6 +54,7 @@ export type BudgetRuleRow = {
 export type BudgetDetail = BudgetItem & {
   history: BudgetHistoryLine[];
   rules: BudgetRuleRow[];
+  is_archived: boolean;
 };
 
 function asHistoryLine(data: unknown): BudgetHistoryLine | null {
@@ -147,7 +148,8 @@ export function asBudgetDetail(data: unknown): BudgetDetail | null {
     (row.state !== "ok" && row.state !== "near" && row.state !== "over") ||
     !Array.isArray(row.source_lists) ||
     !row.source_lists.every((id) => typeof id === "string") ||
-    typeof row.created_at !== "string"
+    typeof row.created_at !== "string" ||
+    typeof row.is_archived !== "boolean"
   ) {
     return null;
   }
@@ -170,6 +172,7 @@ export function asBudgetDetail(data: unknown): BudgetDetail | null {
     period_start: typeof row.period_start === "string" ? row.period_start : null,
     period_end: typeof row.period_end === "string" ? row.period_end : null,
     created_at: row.created_at,
+    is_archived: row.is_archived,
     history,
     rules,
   };
@@ -290,6 +293,28 @@ export default async function BudgetDetailPage({
                   ariaLabel={budgetStateLabel(budget.state, t)}
                 />
               }
+              budgetId={budgetId}
+              isArchived={budget.is_archived}
+              archiveLabel={t.budgetsArchive}
+              unarchiveLabel={t.budgetsUnarchive}
+              messages={{
+                errorGeneric: t.errorGeneric,
+                errorUnauthorized: t.errorUnauthorized,
+                errorInvalidBudgetName: t.errorInvalidBudgetName,
+                errorInvalidBudgetCap: t.errorInvalidBudgetCap,
+                errorInvalidBudgetCurrency: t.errorInvalidBudgetCurrency,
+                errorInvalidBudgetSourceLists: t.errorInvalidBudgetSourceLists,
+                errorInvalidBudgetPeriod: t.errorInvalidBudgetPeriod,
+                errorForbidden: t.errorForbidden,
+              }}
+              editAction={
+                <BudgetUpdateForm
+                  budget={budget}
+                  lists={sourceLists}
+                  messages={{ ...t, cancelLabel: t.receiptMoveCancel }}
+                  locale={locale}
+                />
+              }
             />
 
             <section className="flex flex-col gap-[var(--space-1)]">
@@ -316,12 +341,6 @@ export default async function BudgetDetailPage({
                     {list.name}
                   </Chip>
                 ))}
-                <BudgetUpdateForm
-                  budget={budget}
-                  lists={sourceLists}
-                  messages={{ ...t, cancelLabel: t.receiptMoveCancel }}
-                  locale={locale}
-                />
               </div>
             </section>
 

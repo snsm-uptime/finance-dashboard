@@ -7,6 +7,7 @@ no Postgres required, runs under bare `pytest`.
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, field
 from dataclasses import replace as dataclass_replace
 from datetime import UTC, date, datetime
@@ -15,12 +16,18 @@ from uuid import UUID, uuid4
 
 import pytest
 from application.budgets import (
+    ArchiveBudgetCommand,
+    ArchiveBudgetService,
     BudgetRecord,
     DeleteBudgetCommand,
     DeleteBudgetService,
+    ListBudgetsCommand,
+    ListBudgetsService,
     PeriodChangeRequiresConfirmationError,
     PreviewBudgetPeriodChangeCommand,
     PreviewBudgetPeriodChangeService,
+    UnarchiveBudgetCommand,
+    UnarchiveBudgetService,
     UpdateBudgetCommand,
     UpdateBudgetService,
     _compute_spent_and_history,
@@ -48,8 +55,14 @@ class _FakeBudgetRepo:
     def create_budget(self, **kwargs) -> BudgetRecord:  # pragma: no cover - unused here
         raise NotImplementedError
 
-    def list_budgets_for_owner(self, owner_user_id: UUID) -> list[BudgetRecord]:
-        return [b for b in self.budgets.values() if b.owner_user_id == owner_user_id]
+    def list_budgets_for_owner(
+        self, owner_user_id: UUID, *, archived: bool = False
+    ) -> list[BudgetRecord]:
+        return [
+            b
+            for b in self.budgets.values()
+            if b.owner_user_id == owner_user_id and b.is_archived == archived
+        ]
 
     def get_budget(self, budget_id: UUID, owner_user_id: UUID) -> BudgetRecord | None:
         budget = self.budgets.get(budget_id)
@@ -80,6 +93,7 @@ class _FakeBudgetRepo:
             period_start=period_start,
             period_end=period_end,
             created_at=existing.created_at,
+            is_archived=existing.is_archived,
         )
         self.budgets[budget_id] = updated
         return updated
@@ -87,6 +101,14 @@ class _FakeBudgetRepo:
     def delete_budget(self, budget_id: UUID) -> None:
         self.delete_calls.append(budget_id)
         self.budgets.pop(budget_id, None)
+
+    def archive_budget(self, budget_id: UUID) -> None:
+        existing = self.budgets[budget_id]
+        self.budgets[budget_id] = dataclasses.replace(existing, is_archived=True)
+
+    def unarchive_budget(self, budget_id: UUID) -> None:
+        existing = self.budgets[budget_id]
+        self.budgets[budget_id] = dataclasses.replace(existing, is_archived=False)
 
     def list_ledger_entries(self, list_id: UUID) -> list[LedgerEntryRecord]:
         return [e for e in self.entries.values() if e.list_id == list_id]
@@ -198,6 +220,7 @@ def _budget(
     currency: str = "CRC",
     source_list_ids: tuple[UUID, ...] = (),
     cap_amount: Decimal = Decimal("500.00"),
+    is_archived: bool = False,
     period_start: date | None = None,
     period_end: date | None = None,
 ) -> BudgetRecord:
@@ -211,6 +234,7 @@ def _budget(
         period_start=period_start,
         period_end=period_end,
         created_at=datetime.now(UTC),
+        is_archived=is_archived,
     )
 
 
@@ -647,6 +671,71 @@ def test_delete_budget_foreign_budget_is_not_found():
         service.execute(DeleteBudgetCommand(actor_user_id=stranger, budget_id=budget.id))
     assert repo.delete_calls == []
     assert budget.id in repo.budgets
+
+
+# --- ArchiveBudgetService / UnarchiveBudgetService ---------------------------
+
+
+def test_archive_budget_marks_owned_budget_archived():
+    owner = uuid4()
+    budget = _budget(owner_user_id=owner)
+    repo = _FakeBudgetRepo(budgets={budget.id: budget}, owner_id=owner)
+    service = ArchiveBudgetService(repo)
+
+    result = service.execute(ArchiveBudgetCommand(actor_user_id=owner, budget_id=budget.id))
+
+    assert result.is_archived is True
+    assert repo.budgets[budget.id].is_archived is True
+
+
+def test_archive_budget_foreign_budget_is_not_found():
+    owner = uuid4()
+    stranger = uuid4()
+    budget = _budget(owner_user_id=owner)
+    repo = _FakeBudgetRepo(budgets={budget.id: budget}, owner_id=owner)
+    service = ArchiveBudgetService(repo)
+
+    with pytest.raises(BudgetNotFoundError):
+        service.execute(ArchiveBudgetCommand(actor_user_id=stranger, budget_id=budget.id))
+    assert repo.budgets[budget.id].is_archived is False
+
+
+def test_unarchive_budget_marks_owned_budget_active():
+    owner = uuid4()
+    budget = _budget(owner_user_id=owner, is_archived=True)
+    repo = _FakeBudgetRepo(budgets={budget.id: budget}, owner_id=owner)
+    service = UnarchiveBudgetService(repo)
+
+    result = service.execute(UnarchiveBudgetCommand(actor_user_id=owner, budget_id=budget.id))
+
+    assert result.is_archived is False
+    assert repo.budgets[budget.id].is_archived is False
+
+
+def test_unarchive_budget_foreign_budget_is_not_found():
+    owner = uuid4()
+    stranger = uuid4()
+    budget = _budget(owner_user_id=owner, is_archived=True)
+    repo = _FakeBudgetRepo(budgets={budget.id: budget}, owner_id=owner)
+    service = UnarchiveBudgetService(repo)
+
+    with pytest.raises(BudgetNotFoundError):
+        service.execute(UnarchiveBudgetCommand(actor_user_id=stranger, budget_id=budget.id))
+    assert repo.budgets[budget.id].is_archived is True
+
+
+def test_list_budgets_returns_only_matching_archived_state():
+    owner = uuid4()
+    active = _budget(owner_user_id=owner, name="Active")
+    archived = _budget(owner_user_id=owner, name="Archived", is_archived=True)
+    repo = _FakeBudgetRepo(budgets={active.id: active, archived.id: archived}, owner_id=owner)
+    service = ListBudgetsService(repo)
+
+    active_views = service.execute(ListBudgetsCommand(actor_user_id=owner, archived=False))
+    archived_views = service.execute(ListBudgetsCommand(actor_user_id=owner, archived=True))
+
+    assert [v.id for v in active_views] == [active.id]
+    assert [v.id for v in archived_views] == [archived.id]
 
 
 # --- _compute_spent_and_history viewer share ---------------------------------

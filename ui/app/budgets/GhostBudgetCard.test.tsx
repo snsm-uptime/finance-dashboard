@@ -137,6 +137,7 @@ describe("GhostBudgetCard", () => {
       period_start: null,
       period_end: null,
       created_at: "2026-08-01T00:00:00Z",
+      is_archived: false,
     };
     createBudgetMock.mockResolvedValue({ ok: true, budget: created });
     const onCreated = vi.fn();

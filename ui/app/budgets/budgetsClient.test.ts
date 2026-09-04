@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  archiveBudget,
   budgetStateLabel,
   createBudget,
   fetchBudgets,
   periodChangeConfirmBodyFrom,
   previewPeriodChange,
+  unarchiveBudget,
   updateBudget,
 } from "./budgetsClient";
 
@@ -38,6 +40,7 @@ const budgetWireRow = {
   period_start: null,
   period_end: null,
   created_at: "2026-08-01T00:00:00Z",
+  is_archived: false,
 };
 
 const budgetItem = {
@@ -51,6 +54,7 @@ const budgetItem = {
   period_start: null,
   period_end: null,
   created_at: "2026-08-01T00:00:00Z",
+  is_archived: false,
 };
 
 afterEach(() => {
@@ -159,6 +163,53 @@ describe("budgetsClient", () => {
       messages,
     );
     expect(result).toEqual({ ok: false, error: "invalid-source-lists" });
+  });
+
+  it("fetchBudgets requests ?archived=true when archived is true", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ budgets: [] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchBudgets(messages, { archived: true });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/budgets?archived=true",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("archiveBudget posts to /api/budgets/{id}/archive", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ ...budgetWireRow, is_archived: true }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await archiveBudget("b1", messages);
+    expect(result).toEqual({ ok: true, budget: { ...budgetItem, is_archived: true } });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/budgets/b1/archive",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("unarchiveBudget posts to /api/budgets/{id}/unarchive", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => budgetWireRow,
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await unarchiveBudget("b1", messages);
+    expect(result).toEqual({ ok: true, budget: budgetItem });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/budgets/b1/unarchive",
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 
   it("createBudget maps 403 not_list_member to forbidden message", async () => {
