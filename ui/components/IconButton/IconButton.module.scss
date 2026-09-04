@@ -2,7 +2,7 @@
 
 .button:not(:disabled):hover,
 .button:not(:disabled)[data-active="true"] {
-  color: var(--foreground);
+  color: var(--accent);
   background: rgba(226, 216, 200, 0.3); /* Fallback for --border at 30% opacity */
 }
 
@@ -26,7 +26,7 @@
 
 .muted:not(:disabled):hover,
 .muted:not(:disabled)[data-active="true"] {
-  color: var(--foreground);
+  color: var(--accent);
   background: rgba(63, 107, 69, 0.12); /* Fallback for --accent at 12% opacity */
 }
 
@@ -63,7 +63,7 @@
 
 .ghost:not(:disabled):hover,
 .ghost[aria-current="page"] {
-  color: var(--foreground) !important;
+  color: var(--accent) !important;
   background: transparent !important;
 }
 
