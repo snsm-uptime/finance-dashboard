@@ -11,8 +11,8 @@
   --color-border: var(--border);
   --color-accent: var(--accent);
   --color-on-accent: var(--on-accent);
-  --color-accent-2: var(--accent-2);
-  --color-on-accent-2: var(--on-accent-2);
+  --color-secondary: var(--secondary);
+  --color-on-secondary: var(--on-secondary);
   --color-owe: var(--owe);
   --color-owed: var(--owed);
   --color-warn: var(--warn);
@@ -51,10 +51,10 @@
   --owed: var(--wb-owed);
   --warn: var(--wb-warn);
 
-  /* button-system Accent variant — distinct from --accent (moss/Primary); see
+  /* button-system Secondary variant — distinct from --accent (moss/Primary); see
      _bmad-output/planning-artifacts/ux-designs/ux-finance-dashboard-2026-09-02-buttons/DESIGN.md */
-  --accent-2: #4356a3;
-  --on-accent-2: #ffffff;
+  --secondary: #4356a3;
+  --on-secondary: #ffffff;
 
   /* Dropdown rows: tint --surface so --foreground stays readable. Hover < selected. */
   --menu-item-hover: color-mix(in srgb, var(--accent) 10%, var(--surface));
@@ -163,8 +163,8 @@ html.dark {
   --owed: var(--wb-owed);
   --warn: var(--wb-warn);
 
-  --accent-2: #adbdff;
-  --on-accent-2: #17140f;
+  --secondary: #adbdff;
+  --on-secondary: #17140f;
 
   /* --foreground is cream here and would halo the shadow instead of shading it. */
   --lift-ink: #000;
@@ -198,8 +198,8 @@ html.dark {
     --owed: var(--wb-owed);
     --warn: var(--wb-warn);
 
-    --accent-2: #adbdff;
-    --on-accent-2: #17140f;
+    --secondary: #adbdff;
+    --on-secondary: #17140f;
 
     --lift-ink: #000;
   }

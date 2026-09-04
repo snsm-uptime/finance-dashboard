@@ -65,15 +65,15 @@
 }
 
 .accent {
-  background: var(--accent-2);
-  color: var(--on-accent-2);
+  background: var(--secondary);
+  color: var(--on-secondary);
 }
 .accent:not(:disabled):not([aria-disabled="true"]):hover,
 .accent:not(:disabled):not([aria-disabled="true"]):focus-visible {
-  background: color-mix(in srgb, var(--accent-2) 78%, white);
+  background: color-mix(in srgb, var(--secondary) 78%, white);
 }
 .accent:not(:disabled):not([aria-disabled="true"]):active {
-  background: color-mix(in srgb, var(--accent-2) 78%, black);
+  background: color-mix(in srgb, var(--secondary) 78%, black);
   box-shadow: none;
   transform: translateY(0);
 }
