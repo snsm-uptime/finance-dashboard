@@ -60,6 +60,7 @@ export function SettleControls({ listId, messages }: Props) {
   return (
     <>
       <PrimaryButton
+        className="w-full"
         onClick={() => setSettleOpen(true)}
         iconLeft={<CreditCardIcon className="size-4 shrink-0" />}
       >

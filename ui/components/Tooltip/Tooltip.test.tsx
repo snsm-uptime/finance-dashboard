@@ -4,7 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { Tooltip } from "./Tooltip";
+import { SHOW_DELAY_MS, Tooltip } from "./Tooltip";
 
 /**
  * jsdom's `:focus-visible` heuristic is limited/environment-dependent (in
@@ -21,9 +21,6 @@ function stubFocusVisible(element: HTMLElement, value: boolean) {
   element.matches = ((selector: string) =>
     selector === ":focus-visible" ? value : original(selector)) as typeof element.matches;
 }
-
-/** Matches Tooltip's own SHOW_DELAY_MS; advance fake timers past this after a show-triggering event. */
-const SHOW_DELAY_MS = 300;
 
 describe("Tooltip", () => {
   let container: HTMLDivElement;

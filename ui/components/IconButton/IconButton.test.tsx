@@ -6,7 +6,9 @@ import { fileURLToPath } from "node:url";
 
 import { act, createRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { SHOW_DELAY_MS } from "@/components/Tooltip";
 
 import { IconButton } from "./IconButton";
 
@@ -15,6 +17,7 @@ describe("IconButton", () => {
   let root: Root;
 
   beforeEach(() => {
+    vi.useFakeTimers();
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -25,6 +28,7 @@ describe("IconButton", () => {
       root.unmount();
     });
     container.remove();
+    vi.useRealTimers();
   });
 
   it("defaults to a compact ghost button: type=button, no fill/border classes", async () => {
@@ -172,6 +176,7 @@ describe("IconButton", () => {
     const button = container.querySelector("button") as HTMLButtonElement;
     await act(async () => {
       button.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+      vi.advanceTimersByTime(SHOW_DELAY_MS);
     });
     expect(
       document.querySelector('[data-testid="tooltip-bubble"]')?.textContent,
@@ -224,6 +229,7 @@ describe("IconButton", () => {
     const button = container.querySelector("button") as HTMLButtonElement;
     await act(async () => {
       button.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+      vi.advanceTimersByTime(SHOW_DELAY_MS);
     });
     expect(
       document.querySelector('[data-testid="tooltip-bubble"]'),

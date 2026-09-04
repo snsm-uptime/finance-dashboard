@@ -44,8 +44,12 @@ const GAP_PX = 4;
  */
 const TOP_FLIP_THRESHOLD_PX = 48;
 
-/** Standard hover/focus delay before the bubble appears; hiding is always instant. */
-const SHOW_DELAY_MS = 500;
+/**
+ * Standard hover/focus delay before the bubble appears; hiding is always
+ * instant. Exported so consuming tests advance fake timers by the actual
+ * value instead of a hardcoded guess that can drift out of sync.
+ */
+export const SHOW_DELAY_MS = 500;
 
 export function Tooltip({ label, disabled = false, children }: Props) {
   const suppressed = disabled || !label;
