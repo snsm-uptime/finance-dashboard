@@ -878,3 +878,269 @@ def test_update_budget_raises_not_found_when_row_vanishes_mid_request(
             currency="CRC",
             source_list_ids=(uuid.UUID(list_id),),
         )
+
+
+# --- Story 7.5: budget period range ------------------------------------------
+
+
+def _set_posted_date(db_session: Session, entry_id: str, posted_date: date) -> None:
+    db_session.query(LedgerEntryModel).filter(
+        LedgerEntryModel.id == uuid.UUID(entry_id)
+    ).update({"posted_date": posted_date})
+    db_session.flush()
+
+
+def test_create_budget_with_period_returned_in_response(client: TestClient) -> None:
+    _register(client, "budgetperiodcreate@example.com")
+    list_id = _own_list_id(client)
+
+    created = client.post(
+        "/budgets",
+        json={
+            "name": "Groceries",
+            "cap": "500.00",
+            "currency": "CRC",
+            "source_list_ids": [list_id],
+            "period_start": "2026-01-01",
+            "period_end": "2026-01-31",
+        },
+    )
+    assert created.status_code == 201, created.text
+    body = created.json()
+    assert body["period_start"] == "2026-01-01"
+    assert body["period_end"] == "2026-01-31"
+
+
+def test_create_budget_without_period_stays_open_ended(client: TestClient) -> None:
+    _register(client, "budgetperiodopenended@example.com")
+    list_id = _own_list_id(client)
+    budget_id = _create_budget(client, [list_id])
+
+    detail = client.get(f"/budgets/{budget_id}")
+    assert detail.status_code == 200
+    assert detail.json()["period_start"] is None
+    assert detail.json()["period_end"] is None
+
+
+def test_create_budget_invalid_period_rejected(client: TestClient) -> None:
+    _register(client, "budgetperiodinvalid@example.com")
+    list_id = _own_list_id(client)
+
+    created = client.post(
+        "/budgets",
+        json={
+            "name": "Groceries",
+            "cap": "500.00",
+            "currency": "CRC",
+            "source_list_ids": [list_id],
+            "period_start": "2026-02-01",
+            "period_end": "2026-01-01",
+        },
+    )
+    assert created.status_code == 422
+    assert created.json()["code"] == "invalid_budget_period"
+
+
+def test_out_of_period_entry_excluded_from_spend_and_candidates(
+    client: TestClient, db_session: Session
+) -> None:
+    owner_id = _register(client, "budgetperiodspend@example.com")
+    list_id = _own_list_id(client)
+    budget_id = _create_budget(client, [list_id])
+    in_period = _create_expense(client, list_id, owner_id, "Automercado in")
+    out_of_period = _create_expense(client, list_id, owner_id, "Automercado out")
+    _set_posted_date(db_session, in_period, date(2026, 1, 15))
+    _set_posted_date(db_session, out_of_period, date(2026, 2, 15))
+
+    updated = client.patch(
+        f"/budgets/{budget_id}",
+        json={
+            "name": "Groceries",
+            "cap": "500.00",
+            "currency": "CRC",
+            "source_list_ids": [list_id],
+            "period_start": "2026-01-01",
+            "period_end": "2026-01-31",
+        },
+    )
+    assert updated.status_code == 200, updated.text
+
+    candidates = client.get(f"/budgets/{budget_id}/candidates").json()["candidates"]
+    assert [c["id"] for c in candidates] == [in_period]
+
+    assign_in = client.post(
+        f"/budgets/{budget_id}/assignments", json={"ledger_entry_id": in_period}
+    )
+    assert assign_in.status_code == 204
+
+    assign_out = client.post(
+        f"/budgets/{budget_id}/assignments", json={"ledger_entry_id": out_of_period}
+    )
+    assert assign_out.status_code == 404
+    assert assign_out.json()["code"] == "ledger_entry_not_found"
+
+    detail = client.get(f"/budgets/{budget_id}").json()
+    assert detail["spent"] == "10.00"
+    assert [line["id"] for line in detail["history"]] == [in_period]
+
+
+def test_out_of_period_rule_matched_entry_excluded_from_spend_and_candidates(
+    client: TestClient, db_session: Session
+) -> None:
+    owner_id = _register(client, "budgetperiodrule@example.com")
+    list_id = _own_list_id(client)
+    budget_id = _create_budget(client, [list_id])
+    in_period = _create_expense(client, list_id, owner_id, "Automercado in")
+    out_of_period = _create_expense(client, list_id, owner_id, "Automercado out")
+    _set_posted_date(db_session, in_period, date(2026, 1, 15))
+    _set_posted_date(db_session, out_of_period, date(2026, 2, 15))
+
+    rule = client.post(f"/budgets/{budget_id}/rules", json={"match_text": "automercado"})
+    assert rule.status_code == 201, rule.text
+
+    updated = client.patch(
+        f"/budgets/{budget_id}",
+        json={
+            "name": "Groceries",
+            "cap": "500.00",
+            "currency": "CRC",
+            "source_list_ids": [list_id],
+            "period_start": "2026-01-01",
+            "period_end": "2026-01-31",
+        },
+    )
+    assert updated.status_code == 200, updated.text
+
+    # A rule-matched entry is never offered as a candidate regardless of
+    # period (it is already attributed), so candidates stay empty here.
+    candidates = client.get(f"/budgets/{budget_id}/candidates").json()["candidates"]
+    assert candidates == []
+
+    detail = client.get(f"/budgets/{budget_id}").json()
+    assert detail["spent"] == "10.00"
+    assert [line["id"] for line in detail["history"]] == [in_period]
+
+
+def test_period_preview_returns_excluded_lines(
+    client: TestClient, db_session: Session
+) -> None:
+    owner_id = _register(client, "budgetperiodpreview@example.com")
+    list_id = _own_list_id(client)
+    budget_id = _create_budget(client, [list_id])
+    entry_id = _create_expense(client, list_id, owner_id, "Automercado")
+    _set_posted_date(db_session, entry_id, date(2026, 1, 5))
+
+    set_period = client.patch(
+        f"/budgets/{budget_id}",
+        json={
+            "name": "Groceries",
+            "cap": "500.00",
+            "currency": "CRC",
+            "source_list_ids": [list_id],
+            "period_start": "2026-01-01",
+            "period_end": "2026-01-31",
+        },
+    )
+    assert set_period.status_code == 200, set_period.text
+
+    assign = client.post(
+        f"/budgets/{budget_id}/assignments", json={"ledger_entry_id": entry_id}
+    )
+    assert assign.status_code == 204, assign.text
+
+    preview = client.get(
+        f"/budgets/{budget_id}/period-preview",
+        params={"period_start": "2026-01-10", "period_end": "2026-01-31"},
+    )
+    assert preview.status_code == 200, preview.text
+    excluded = preview.json()["excluded_lines"]
+    assert [line["id"] for line in excluded] == [entry_id]
+
+
+def test_update_budget_narrowing_period_without_confirm_is_rejected(
+    client: TestClient, db_session: Session
+) -> None:
+    owner_id = _register(client, "budgetperiodnarrow@example.com")
+    list_id = _own_list_id(client)
+    budget_id = _create_budget(client, [list_id])
+    entry_id = _create_expense(client, list_id, owner_id, "Automercado")
+    _set_posted_date(db_session, entry_id, date(2026, 1, 5))
+
+    client.patch(
+        f"/budgets/{budget_id}",
+        json={
+            "name": "Groceries",
+            "cap": "500.00",
+            "currency": "CRC",
+            "source_list_ids": [list_id],
+            "period_start": "2026-01-01",
+            "period_end": "2026-01-31",
+        },
+    )
+    client.post(f"/budgets/{budget_id}/assignments", json={"ledger_entry_id": entry_id})
+
+    narrowed = client.patch(
+        f"/budgets/{budget_id}",
+        json={
+            "name": "Groceries",
+            "cap": "500.00",
+            "currency": "CRC",
+            "source_list_ids": [list_id],
+            "period_start": "2026-01-10",
+            "period_end": "2026-01-31",
+        },
+    )
+    assert narrowed.status_code == 422
+    body = narrowed.json()
+    assert body["code"] == "period_change_requires_confirmation"
+    assert [line["id"] for line in body["excluded_lines"]] == [entry_id]
+
+    # No silent removal — the budget still reflects the entry after the
+    # rejected attempt (AC #3/#5).
+    detail = client.get(f"/budgets/{budget_id}").json()
+    assert [line["id"] for line in detail["history"]] == [entry_id]
+
+
+def test_update_budget_narrowing_period_with_confirm_unassigns_excluded_lines(
+    client: TestClient, db_session: Session
+) -> None:
+    owner_id = _register(client, "budgetperiodconfirm@example.com")
+    list_id = _own_list_id(client)
+    budget_id = _create_budget(client, [list_id])
+    entry_id = _create_expense(client, list_id, owner_id, "Automercado")
+    _set_posted_date(db_session, entry_id, date(2026, 1, 5))
+
+    client.patch(
+        f"/budgets/{budget_id}",
+        json={
+            "name": "Groceries",
+            "cap": "500.00",
+            "currency": "CRC",
+            "source_list_ids": [list_id],
+            "period_start": "2026-01-01",
+            "period_end": "2026-01-31",
+        },
+    )
+    client.post(f"/budgets/{budget_id}/assignments", json={"ledger_entry_id": entry_id})
+
+    narrowed = client.patch(
+        f"/budgets/{budget_id}",
+        json={
+            "name": "Groceries",
+            "cap": "500.00",
+            "currency": "CRC",
+            "source_list_ids": [list_id],
+            "period_start": "2026-01-10",
+            "period_end": "2026-01-31",
+            "confirm_period_change": True,
+        },
+    )
+    assert narrowed.status_code == 200, narrowed.text
+    assert narrowed.json()["period_start"] == "2026-01-10"
+
+    detail = client.get(f"/budgets/{budget_id}").json()
+    assert detail["history"] == []
+    assert detail["spent"] == "0"
+
+    candidates = client.get(f"/budgets/{budget_id}/candidates").json()["candidates"]
+    assert candidates == []

@@ -25,6 +25,8 @@ describe("asBudgetDetail", () => {
       spent: "0",
       state: "ok",
       source_list_ids: ["l1"],
+      period_start: null,
+      period_end: null,
       created_at: "2026-08-01T00:00:00Z",
       history: [],
       rules: [],

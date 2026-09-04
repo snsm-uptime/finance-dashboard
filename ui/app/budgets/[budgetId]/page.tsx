@@ -19,6 +19,7 @@ import {
 import { BudgetAssignPanel } from "./BudgetAssignPanel";
 import { BudgetDetailChrome } from "./BudgetDetailChrome";
 import { BudgetRulesPanel } from "./BudgetRulesPanel";
+import { BudgetUpdateForm } from "./BudgetUpdateForm";
 import { UnassignButton } from "./UnassignButton";
 
 export const dynamic = "force-dynamic";
@@ -159,6 +160,8 @@ export function asBudgetDetail(data: unknown): BudgetDetail | null {
     spent: row.spent,
     state: row.state,
     source_list_ids: row.source_lists,
+    period_start: typeof row.period_start === "string" ? row.period_start : null,
+    period_end: typeof row.period_end === "string" ? row.period_end : null,
     created_at: row.created_at,
     history,
     rules,
@@ -276,6 +279,13 @@ export default async function BudgetDetailPage({
                   colorClassName={budgetSeverityColorClass(ratio)}
                   tooltipLabel={`${formatMoneyAmount(budget.spent, budget.currency)} / ${formatMoneyAmount(budget.cap, budget.currency)}`}
                   ariaLabel={budgetStateLabel(budget.state, t)}
+                />
+              }
+              editAction={
+                <BudgetUpdateForm
+                  budget={budget}
+                  lists={sourceLists}
+                  messages={{ ...t, cancelLabel: t.receiptMoveCancel }}
                 />
               }
             />

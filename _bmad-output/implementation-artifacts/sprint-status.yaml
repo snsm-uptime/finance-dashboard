@@ -1,5 +1,5 @@
 # generated: 2026-08-03T22:46:31
-# last_updated: 2026-09-03 (7-5-budget-period-range: ready-for-dev)
+# last_updated: 2026-09-03 (7-5-budget-period-range: done)
 
 # project: finance-dashboard
 # project_key: NOKEY
@@ -156,7 +156,7 @@ development_status:
   7-2-cross-list-budget-detail: done
   7-3-cross-list-attribution-rule-badge: done
   7-4-budget-progress-bar-visualization: done
-  7-5-budget-period-range: ready-for-dev
+  7-5-budget-period-range: done
   7-6-archive-budgets: backlog
   epic-7-retrospective: optional
 

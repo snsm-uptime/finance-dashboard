@@ -671,6 +671,16 @@ class InvalidBudgetSourceListsError(DomainError):
         super().__init__(self.MESSAGE)
 
 
+class InvalidBudgetPeriodError(DomainError):
+    """Raised when a budget period's start date is after its end date."""
+
+    MESSAGE = "Period start must be on or before period end."
+    CODE = "invalid_budget_period"
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(detail or self.MESSAGE)
+
+
 class BudgetNotFoundError(DomainError):
     """Raised when a budget id does not exist for the acting user's list."""
 

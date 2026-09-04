@@ -19,6 +19,8 @@ export type BudgetsCreateFormMessages = BudgetsClientMessages & {
   budgetsSourceListsLabel: string;
   budgetsCreateSubmit: string;
   budgetsCreating: string;
+  budgetsPeriodStartLabel: string;
+  budgetsPeriodEndLabel: string;
 };
 
 type Props = {
@@ -57,15 +59,28 @@ export function BudgetsCreateForm({ lists, messages, onCreated }: Props) {
   const [cap, setCap] = useState("");
   const [currency, setCurrency] = useState("CRC");
   const [selectedListIds, setSelectedListIds] = useState<string[]>([]);
+  const [periodStart, setPeriodStart] = useState("");
+  const [periodEnd, setPeriodEnd] = useState("");
+  const periodStartId = `${baseId}-period-start`;
+  const periodEndId = `${baseId}-period-end`;
 
   const { pending, error, submit, clearError } = useFormSubmission(
-    async (body: { name: string; cap: string; currency: string; source_list_ids: string[] }) => {
+    async (body: {
+      name: string;
+      cap: string;
+      currency: string;
+      source_list_ids: string[];
+      period_start: string | null;
+      period_end: string | null;
+    }) => {
       const result = await createBudget(body, messages);
       if (result.ok) {
         setName("");
         setCap("");
         setCurrency("CRC");
         setSelectedListIds([]);
+        setPeriodStart("");
+        setPeriodEnd("");
         onCreated(result.budget);
       }
       return result;
@@ -85,11 +100,15 @@ export function BudgetsCreateForm({ lists, messages, onCreated }: Props) {
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canSubmit) return;
+    // Unset stays open-ended — omit rather than send an empty string
+    // (Story 7.5, AC #1/#6).
     await submit({
       name: name.trim(),
       cap: cap.trim(),
       currency,
       source_list_ids: selectedListIds,
+      period_start: periodStart || null,
+      period_end: periodEnd || null,
     });
   }
 
@@ -153,6 +172,39 @@ export function BudgetsCreateForm({ lists, messages, onCreated }: Props) {
           disabled={!canSubmit}
           label={pending ? messages.budgetsCreating : messages.budgetsCreateSubmit}
           icon={<PlusIcon />}
+        />
+      </div>
+      <div className="flex items-center gap-2 rounded-[8px] border-2 border-border bg-background px-[0.65rem] py-[0.5rem]">
+        <label htmlFor={periodStartId} className="sr-only">
+          {messages.budgetsPeriodStartLabel}
+        </label>
+        <input
+          id={periodStartId}
+          className={fieldInputClass}
+          type="date"
+          value={periodStart}
+          aria-label={messages.budgetsPeriodStartLabel}
+          disabled={pending}
+          onChange={(e) => {
+            setPeriodStart(e.target.value);
+            clearError();
+          }}
+        />
+        <span className="h-5 w-px shrink-0 bg-border" aria-hidden="true" />
+        <label htmlFor={periodEndId} className="sr-only">
+          {messages.budgetsPeriodEndLabel}
+        </label>
+        <input
+          id={periodEndId}
+          className={fieldInputClass}
+          type="date"
+          value={periodEnd}
+          aria-label={messages.budgetsPeriodEndLabel}
+          disabled={pending}
+          onChange={(e) => {
+            setPeriodEnd(e.target.value);
+            clearError();
+          }}
         />
       </div>
       <div className="flex flex-wrap gap-2" role="group" aria-label={messages.budgetsSourceListsLabel}>

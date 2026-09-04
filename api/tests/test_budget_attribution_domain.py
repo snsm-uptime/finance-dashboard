@@ -137,6 +137,72 @@ class TestComputeAttributedEntries:
 
         assert result == ()
 
+    def test_manual_match_before_period_start_excluded(self):
+        budget_id = uuid4()
+        entry = FakeEntry(
+            uuid4(), "AUTOMERCADO", "purchase", date(2026, 1, 1), Decimal("10"), budget_id
+        )
+
+        result = compute_attributed_entries(
+            [entry], budget_id=budget_id, rule_texts=[], period_start=date(2026, 1, 2)
+        )
+
+        assert result == ()
+
+    def test_manual_match_after_period_end_excluded(self):
+        budget_id = uuid4()
+        entry = FakeEntry(
+            uuid4(), "AUTOMERCADO", "purchase", date(2026, 1, 5), Decimal("10"), budget_id
+        )
+
+        result = compute_attributed_entries(
+            [entry], budget_id=budget_id, rule_texts=[], period_end=date(2026, 1, 4)
+        )
+
+        assert result == ()
+
+    def test_manual_match_within_period_included(self):
+        budget_id = uuid4()
+        entry = FakeEntry(
+            uuid4(), "AUTOMERCADO", "purchase", date(2026, 1, 3), Decimal("10"), budget_id
+        )
+
+        result = compute_attributed_entries(
+            [entry],
+            budget_id=budget_id,
+            rule_texts=[],
+            period_start=date(2026, 1, 1),
+            period_end=date(2026, 1, 5),
+        )
+
+        assert result == (entry,)
+
+    def test_rule_match_out_of_period_excluded(self):
+        budget_id = uuid4()
+        entry = FakeEntry(uuid4(), "SUPER 24", "purchase", date(2026, 1, 1), Decimal("10"), None)
+
+        result = compute_attributed_entries(
+            [entry], budget_id=budget_id, rule_texts=["super"], period_start=date(2026, 1, 2)
+        )
+
+        assert result == ()
+
+    def test_period_boundary_dates_inclusive(self):
+        budget_id = uuid4()
+        entry = FakeEntry(
+            uuid4(), "AUTOMERCADO", "purchase", date(2026, 1, 5), Decimal("10"), budget_id
+        )
+
+        result = compute_attributed_entries(
+            [entry],
+            budget_id=budget_id,
+            rule_texts=[],
+            period_start=date(2026, 1, 5),
+            period_end=date(2026, 1, 5),
+        )
+
+        assert result == (entry,)
+
 
 class TestComputeBudgetSpent:
     """compute_budget_spent is currency-agnostic by design — the CRC-only

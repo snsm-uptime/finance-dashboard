@@ -48,6 +48,8 @@ const budget: BudgetItem = {
   spent: "10.00",
   state: "ok",
   source_list_ids: [],
+  period_start: null,
+  period_end: null,
   created_at: "2026-08-01T00:00:00Z",
 };
 

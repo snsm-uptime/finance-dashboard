@@ -6,6 +6,7 @@ No FastAPI / SQLAlchemy imports (AD-1). Mirrors `domain/cards.py`'s shape.
 from __future__ import annotations
 
 import re
+from datetime import date
 from decimal import Decimal
 from typing import Literal
 from uuid import UUID
@@ -14,6 +15,7 @@ from domain.errors import (
     InvalidBudgetCapError,
     InvalidBudgetCurrencyError,
     InvalidBudgetNameError,
+    InvalidBudgetPeriodError,
     InvalidBudgetSourceListsError,
 )
 from domain.line_types import (
@@ -130,6 +132,14 @@ def validate_budget_source_list_ids(raw: list[UUID]) -> tuple[UUID, ...]:
     if not deduped:
         raise InvalidBudgetSourceListsError()
     return tuple(deduped)
+
+
+def validate_budget_period(period_start: date | None, period_end: date | None) -> None:
+    """Validate an optional date-range period. Either or both bounds may be
+    `None` (an open-ended budget or a half-open range is valid, AC #1);
+    when both are set, `period_start` must be on or before `period_end`."""
+    if period_start is not None and period_end is not None and period_start > period_end:
+        raise InvalidBudgetPeriodError()
 
 
 def classify_budget_state(spent: Decimal, cap: Decimal) -> BudgetState:

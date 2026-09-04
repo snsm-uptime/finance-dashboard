@@ -7,6 +7,8 @@ type CreateBudgetBody = {
   cap?: unknown;
   currency?: unknown;
   source_list_ids?: unknown;
+  period_start?: unknown;
+  period_end?: unknown;
 };
 
 function forwardCookie(request: NextRequest): Headers {
@@ -63,6 +65,8 @@ export async function POST(request: NextRequest) {
   const sourceListIds = Array.isArray(body.source_list_ids)
     ? body.source_list_ids.filter((id): id is string => typeof id === "string")
     : [];
+  const periodStart = typeof body.period_start === "string" ? body.period_start : null;
+  const periodEnd = typeof body.period_end === "string" ? body.period_end : null;
 
   const headers = forwardCookie(request);
   headers.set("Content-Type", "application/json");
@@ -72,7 +76,14 @@ export async function POST(request: NextRequest) {
     upstream = await fetch(`${getApiInternalUrl()}/budgets`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ name, cap, currency, source_list_ids: sourceListIds }),
+      body: JSON.stringify({
+        name,
+        cap,
+        currency,
+        source_list_ids: sourceListIds,
+        period_start: periodStart,
+        period_end: periodEnd,
+      }),
       cache: "no-store",
     });
   } catch {

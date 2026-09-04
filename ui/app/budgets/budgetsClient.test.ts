@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { budgetStateLabel, createBudget, fetchBudgets } from "./budgetsClient";
+import {
+  budgetStateLabel,
+  createBudget,
+  fetchBudgets,
+  periodChangeConfirmBodyFrom,
+  previewPeriodChange,
+  updateBudget,
+} from "./budgetsClient";
 
 const messages = {
   errorGeneric: "generic",
@@ -9,6 +16,7 @@ const messages = {
   errorInvalidBudgetCap: "invalid-cap",
   errorInvalidBudgetCurrency: "invalid-currency",
   errorInvalidBudgetSourceLists: "invalid-source-lists",
+  errorInvalidBudgetPeriod: "invalid-period",
   errorForbidden: "forbidden",
 };
 
@@ -27,6 +35,8 @@ const budgetWireRow = {
   spent: "0",
   state: "ok" as const,
   source_lists: ["l1", "l2"],
+  period_start: null,
+  period_end: null,
   created_at: "2026-08-01T00:00:00Z",
 };
 
@@ -38,6 +48,8 @@ const budgetItem = {
   spent: "0",
   state: "ok" as const,
   source_list_ids: ["l1", "l2"],
+  period_start: null,
+  period_end: null,
   created_at: "2026-08-01T00:00:00Z",
 };
 
@@ -164,5 +176,130 @@ describe("budgetsClient", () => {
       messages,
     );
     expect(result).toEqual({ ok: false, error: "forbidden" });
+  });
+
+  it("createBudget maps invalid_budget_period code to its message", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 422,
+        json: async () => ({ code: "invalid_budget_period", detail: "bad period" }),
+      }),
+    );
+
+    const result = await createBudget(
+      {
+        name: "Groceries",
+        cap: "500.00",
+        currency: "CRC",
+        source_list_ids: ["l1"],
+        period_start: "2026-02-01",
+        period_end: "2026-01-01",
+      },
+      messages,
+    );
+    expect(result).toEqual({ ok: false, error: "invalid-period" });
+  });
+
+  it("updateBudget patches the budget and returns the updated record", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ ...budgetWireRow, name: "New name" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await updateBudget(
+      "b1",
+      { name: "New name", cap: "500.00", currency: "CRC", source_list_ids: ["l1", "l2"] },
+      messages,
+    );
+    expect(result).toEqual({ ok: true, budget: { ...budgetItem, name: "New name" } });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/budgets/b1",
+      expect.objectContaining({ method: "PATCH" }),
+    );
+  });
+
+  it("updateBudget surfaces a period-narrowing 422 as requiresConfirmation with the excluded lines", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 422,
+        json: async () => ({
+          code: "period_change_requires_confirmation",
+          detail: "confirm",
+          excluded_lines: [
+            { id: "e1", description: "Automercado", posted_date: "2026-01-05", amount_crc: "10.00" },
+          ],
+        }),
+      }),
+    );
+
+    const result = await updateBudget(
+      "b1",
+      {
+        name: "Groceries",
+        cap: "500.00",
+        currency: "CRC",
+        source_list_ids: ["l1"],
+        period_start: "2026-01-10",
+        period_end: "2026-01-31",
+      },
+      messages,
+    );
+    expect(result).toEqual({
+      ok: false,
+      requiresConfirmation: true,
+      excludedLines: [
+        { id: "e1", description: "Automercado", posted_date: "2026-01-05", amount_crc: "10.00" },
+      ],
+    });
+  });
+
+  it("previewPeriodChange returns the excluded lines list", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        excluded_lines: [
+          { id: "e1", description: "Automercado", posted_date: "2026-01-05", amount_crc: "10.00" },
+        ],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await previewPeriodChange("b1", "2026-01-10", "2026-01-31", messages);
+    expect(result).toEqual({
+      ok: true,
+      excludedLines: [
+        { id: "e1", description: "Automercado", posted_date: "2026-01-05", amount_crc: "10.00" },
+      ],
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/budgets/b1/period-preview?period_start=2026-01-10&period_end=2026-01-31",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+});
+
+describe("periodChangeConfirmBodyFrom", () => {
+  const t = {
+    budgetsPeriodChangeConfirmBody: "This removes 1 line.",
+    budgetsPeriodChangeConfirmBodyCount: "This removes {count} lines.",
+  };
+
+  it("uses singular copy for exactly one excluded line", () => {
+    const line = { id: "e1", description: "x", posted_date: "2026-01-01", amount_crc: "1.00" };
+    expect(periodChangeConfirmBodyFrom([line], t)).toBe("This removes 1 line.");
+  });
+
+  it("uses plural copy with the count for multiple excluded lines", () => {
+    const line = { id: "e1", description: "x", posted_date: "2026-01-01", amount_crc: "1.00" };
+    expect(periodChangeConfirmBodyFrom([line, { ...line, id: "e2" }], t)).toBe(
+      "This removes 2 lines.",
+    );
   });
 });

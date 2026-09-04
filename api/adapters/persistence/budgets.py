@@ -4,6 +4,7 @@ AD-30) and attribution (manual assignment, rules, candidates — Story 6.5)."""
 from __future__ import annotations
 
 from collections import defaultdict
+from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
@@ -30,6 +31,8 @@ def _budget_record(row: BudgetModel, source_list_ids: tuple[UUID, ...]) -> Budge
         cap_amount=row.cap_amount,
         currency=row.currency,
         source_list_ids=source_list_ids,
+        period_start=row.period_start,
+        period_end=row.period_end,
         created_at=row.created_at,
     )
 
@@ -56,6 +59,8 @@ class SqlAlchemyBudgetRepository:
         cap_amount: Decimal,
         currency: str,
         source_list_ids: tuple[UUID, ...],
+        period_start: date | None = None,
+        period_end: date | None = None,
     ) -> BudgetRecord:
         row = BudgetModel(
             id=budget_id,
@@ -63,6 +68,8 @@ class SqlAlchemyBudgetRepository:
             name=name,
             cap_amount=cap_amount,
             currency=currency,
+            period_start=period_start,
+            period_end=period_end,
         )
         self._session.add(row)
         for list_id in source_list_ids:
@@ -110,6 +117,8 @@ class SqlAlchemyBudgetRepository:
         cap_amount: Decimal,
         currency: str,
         source_list_ids: tuple[UUID, ...],
+        period_start: date | None = None,
+        period_end: date | None = None,
     ) -> BudgetRecord:
         row = self._session.get(BudgetModel, budget_id)
         if row is None:
@@ -117,6 +126,8 @@ class SqlAlchemyBudgetRepository:
         row.name = name
         row.cap_amount = cap_amount
         row.currency = currency
+        row.period_start = period_start
+        row.period_end = period_end
         existing = self._session.scalars(
             select(BudgetSourceListModel).where(BudgetSourceListModel.budget_id == budget_id)
         ).all()

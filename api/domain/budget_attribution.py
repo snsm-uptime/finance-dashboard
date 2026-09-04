@@ -67,6 +67,8 @@ def compute_attributed_entries(
     *,
     budget_id: UUID,
     rule_texts: list[str],
+    period_start: date | None = None,
+    period_end: date | None = None,
 ) -> tuple[HasAttributionFields, ...]:
     """Entries attributed to `budget_id`, manual assignment or rule match.
 
@@ -75,11 +77,19 @@ def compute_attributed_entries(
     assigned elsewhere is never re-captured (AC #6). Filters to
     `line_type in BUDGET_ASSIGNABLE_LINE_TYPES` first (AC #9). Sorted
     newest-first by `(posted_date, id)`.
+
+    `period_start`/`period_end` are an optional inclusive date-range gate
+    (Story 7.5, AC #2) — each bound independently optional. Applied at this
+    single choke point (not as a pre-filter on `entries`) so `attributed_via`
+    semantics stay correct for lines that are in-period-but-rule-matching vs.
+    genuinely out-of-period.
     """
     attributed = [
         entry
         for entry in entries
         if entry.line_type in BUDGET_ASSIGNABLE_LINE_TYPES
+        and (period_start is None or entry.posted_date >= period_start)
+        and (period_end is None or entry.posted_date <= period_end)
         and (
             entry.budget_id == budget_id
             or (
