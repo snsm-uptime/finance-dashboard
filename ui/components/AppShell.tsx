@@ -82,7 +82,7 @@ function AppShellFrame({ children }: { children: ReactNode }) {
             </div>
             <div className="flex min-w-0 flex-1 items-center justify-start gap-2 self-center">
               {header.title ? (
-                <h1 className="m-0 min-w-0 truncate text-[1.5rem] font-[550] leading-none text-foreground">
+                <h1 className="m-0 min-w-0 truncate text-[1.5rem] font-[550] leading-normal text-foreground">
                   {header.title}
                 </h1>
               ) : null}
