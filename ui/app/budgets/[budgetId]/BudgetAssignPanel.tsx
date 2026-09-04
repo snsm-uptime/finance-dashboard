@@ -14,6 +14,8 @@ import {
   type BudgetCandidate,
   type BudgetDetailClientMessages,
 } from "./budgetDetailClient";
+import { GhostButton } from "@/components/soft-ledger/GhostButton";
+import { AccentButton } from "@/components/soft-ledger/AccentButton";
 
 export type BudgetAssignPanelMessages = BudgetDetailClientMessages & {
   budgetsAssignTitle: string;
@@ -81,9 +83,9 @@ export function BudgetAssignPanel({ budgetId, messages }: Props) {
 
   return (
     <>
-      <PrimaryButton className="self-start" onClick={openPicker}>
+      <AccentButton className="self-start" onClick={openPicker}>
         {messages.budgetsAssignTitle}
-      </PrimaryButton>
+      </AccentButton>
       <Sheet
         open={open}
         onClose={() => setOpen(false)}
@@ -121,9 +123,8 @@ export function BudgetAssignPanel({ budgetId, messages }: Props) {
                   return (
                     <li key={item.id} className="border-b border-border">
                       <label
-                        className={`flex w-full cursor-pointer items-center justify-between gap-[var(--space-2)] px-0 py-[var(--space-3)] text-foreground ${
-                          selected ? "bg-accent/10" : "hover:bg-accent/10"
-                        } ${busy ? "cursor-not-allowed opacity-55" : ""}`}
+                        className={`flex w-full cursor-pointer items-center justify-between gap-[var(--space-2)] px-0 py-[var(--space-3)] text-foreground ${selected ? "bg-accent/10" : "hover:bg-accent/10"
+                          } ${busy ? "cursor-not-allowed opacity-55" : ""}`}
                       >
                         <span className="flex min-w-0 items-center gap-[var(--space-2)]">
                           <input
