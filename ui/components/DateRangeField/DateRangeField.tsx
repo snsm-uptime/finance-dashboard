@@ -179,6 +179,13 @@ export function DateRangeField({
   return (
     <div ref={rootRef} className="relative">
       {renderTrigger ? (
+        // `openPopover` reads `rootRef.current` inside its own body, only
+        // when actually invoked (a click handler) — never synchronously
+        // during this render. The compiler can't prove that from a
+        // caller-supplied `renderTrigger`, so it conservatively flags
+        // passing the closure at all; same pattern already accepted in
+        // Tooltip.tsx's `updatePosition`/`triggerRef` usage.
+        /* eslint-disable-next-line react-hooks/refs */
         renderTrigger({ open: openPopover, disabled, popoverOpen: open })
       ) : (
         <div className="flex items-center gap-2 rounded-[8px] border-2 border-border bg-background px-[0.65rem] py-[0.5rem]">
