@@ -20,7 +20,13 @@ export type ChromeHeaderConfig = {
    */
   leading?: ReactNode;
   title?: ReactNode;
-  details?: string | null;
+  /** Short inline content next to the title (e.g. a status word or a count) — not for large/interactive elements. */
+  details?: ReactNode;
+  /**
+   * Overrides the `details` chip's border/text color classes (e.g. `"border-owe text-owe"`
+   * for an over-budget state) — full Tailwind classes, not limited to the fixed Chip tones.
+   */
+  detailsClassName?: string;
   trailing?: ReactNode;
   /**
    * Optional full-width strip rendered edge-to-edge above the header row,
@@ -68,12 +74,40 @@ export function chromeHeaderIsActive(header: ChromeHeaderConfig): boolean {
  */
 export function useChromeHeader(config: ChromeHeaderConfig) {
   const setHeader = useContext(ChromeHeaderSetContext);
-  const { backHref, onBack, leading, title, details, trailing, progressBar } = config;
+  const {
+    backHref,
+    onBack,
+    leading,
+    title,
+    details,
+    detailsClassName,
+    trailing,
+    progressBar,
+  } = config;
   useEffect(() => {
     if (!setHeader) return;
-    setHeader({ backHref, onBack, leading, title, details, trailing, progressBar });
+    setHeader({
+      backHref,
+      onBack,
+      leading,
+      title,
+      details,
+      detailsClassName,
+      trailing,
+      progressBar,
+    });
     return () => setHeader(emptyHeader);
-  }, [setHeader, backHref, onBack, leading, title, details, trailing, progressBar]);
+  }, [
+    setHeader,
+    backHref,
+    onBack,
+    leading,
+    title,
+    details,
+    detailsClassName,
+    trailing,
+    progressBar,
+  ]);
 }
 
 export function useChromeBackHref(): string | null {
