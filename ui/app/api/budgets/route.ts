@@ -25,9 +25,14 @@ function forwardCookie(request: NextRequest): Headers {
  * owner-scoped; no listId param).
  */
 export async function GET(request: NextRequest) {
+  const archived = new URL(request.url).searchParams.get("archived");
+  const upstreamUrl =
+    archived === "true"
+      ? `${getApiInternalUrl()}/budgets?archived=true`
+      : `${getApiInternalUrl()}/budgets`;
   let upstream: Response;
   try {
-    upstream = await fetch(`${getApiInternalUrl()}/budgets`, {
+    upstream = await fetch(upstreamUrl, {
       method: "GET",
       headers: forwardCookie(request),
       cache: "no-store",

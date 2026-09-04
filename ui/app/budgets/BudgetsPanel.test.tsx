@@ -17,12 +17,16 @@ vi.mock("@/components/PreferencesProvider", () => ({
 }));
 
 const fetchBudgetsMock = vi.fn();
+const archiveBudgetMock = vi.fn();
+const unarchiveBudgetMock = vi.fn();
 vi.mock("./budgetsClient", async () => {
   const actual =
     await vi.importActual<typeof import("./budgetsClient")>("./budgetsClient");
   return {
     ...actual,
     fetchBudgets: (...args: unknown[]) => fetchBudgetsMock(...args),
+    archiveBudget: (...args: unknown[]) => archiveBudgetMock(...args),
+    unarchiveBudget: (...args: unknown[]) => unarchiveBudgetMock(...args),
   };
 });
 
@@ -51,6 +55,7 @@ const budget: BudgetItem = {
   period_start: null,
   period_end: null,
   created_at: "2026-08-01T00:00:00Z",
+  is_archived: false,
 };
 
 describe("BudgetsPanel tile link", () => {
@@ -59,6 +64,8 @@ describe("BudgetsPanel tile link", () => {
 
   beforeEach(() => {
     fetchBudgetsMock.mockReset();
+    archiveBudgetMock.mockReset();
+    unarchiveBudgetMock.mockReset();
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -182,5 +189,98 @@ describe("BudgetsPanel tile link", () => {
       helpButton.click();
     });
     expect(push).toHaveBeenCalledWith("/docs?from=%2Fbudgets#budgets");
+  });
+
+  it("toggling the archived view fetches archived budgets and hides the create form", async () => {
+    fetchBudgetsMock.mockResolvedValue({ ok: true, budgets: [budget] });
+
+    await act(async () => {
+      root.render(
+        <AppShell>
+          <BudgetsPanel />
+        </AppShell>,
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(fetchBudgetsMock).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ archived: false }),
+    );
+    expect(container.querySelector("form")).not.toBeNull();
+
+    const toggle = container.querySelector(
+      'button[aria-label="Show archived budgets"]',
+    ) as HTMLButtonElement;
+    expect(toggle).toBeTruthy();
+
+    fetchBudgetsMock.mockResolvedValue({
+      ok: true,
+      budgets: [{ ...budget, is_archived: true }],
+    });
+    await act(async () => {
+      toggle.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(fetchBudgetsMock).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ archived: true }),
+    );
+    expect(container.querySelector("form")).toBeNull();
+    expect(
+      container.querySelector('button[aria-label="Show active budgets"]'),
+    ).toBeTruthy();
+
+    fetchBudgetsMock.mockResolvedValue({ ok: true, budgets: [budget] });
+    const toggleBack = container.querySelector(
+      'button[aria-label="Show active budgets"]',
+    ) as HTMLButtonElement;
+    await act(async () => {
+      toggleBack.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(fetchBudgetsMock).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ archived: false }),
+    );
+    expect(container.querySelector("form")).not.toBeNull();
+  });
+
+  it("archiving a tile removes it from the current view on success", async () => {
+    fetchBudgetsMock.mockResolvedValue({ ok: true, budgets: [budget] });
+    archiveBudgetMock.mockResolvedValue({
+      ok: true,
+      budget: { ...budget, is_archived: true },
+    });
+
+    await act(async () => {
+      root.render(<BudgetsPanel />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const archiveButton = container.querySelector(
+      'button[aria-label="Archive"]',
+    ) as HTMLButtonElement;
+    expect(archiveButton).toBeTruthy();
+
+    await act(async () => {
+      archiveButton.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(archiveBudgetMock).toHaveBeenCalledWith("b1", expect.anything());
+    expect(container.querySelector('a[href="/budgets/b1"]')).toBeNull();
   });
 });

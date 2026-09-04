@@ -13,6 +13,7 @@ export type BudgetItem = {
   period_start: string | null;
   period_end: string | null;
   created_at: string;
+  is_archived: boolean;
 };
 
 export type BudgetsClientMessages = {
@@ -138,7 +139,8 @@ function asBudget(data: unknown): BudgetItem | null {
     (row.state !== "ok" && row.state !== "near" && row.state !== "over") ||
     !Array.isArray(row.source_list_ids) ||
     !row.source_list_ids.every((id) => typeof id === "string") ||
-    typeof row.created_at !== "string"
+    typeof row.created_at !== "string" ||
+    typeof row.is_archived !== "boolean"
   ) {
     return null;
   }
@@ -153,6 +155,7 @@ function asBudget(data: unknown): BudgetItem | null {
     period_start: asPeriodBound(row.period_start),
     period_end: asPeriodBound(row.period_end),
     created_at: row.created_at,
+    is_archived: row.is_archived,
   };
 }
 
@@ -165,10 +168,12 @@ function asBudgetFromWire(data: unknown): BudgetItem | null {
 
 export async function fetchBudgets(
   messages: BudgetsClientMessages,
+  options: { archived?: boolean } = {},
 ): Promise<OkBudgets | ErrorResult> {
+  const url = options.archived ? "/api/budgets?archived=true" : "/api/budgets";
   let response: Response;
   try {
-    response = await fetch("/api/budgets", {
+    response = await fetch(url, {
       method: "GET",
       headers: { Accept: "application/json" },
       credentials: "same-origin",
@@ -324,6 +329,47 @@ export async function updateBudget(
   const budget = asBudgetFromWire(parsed);
   if (!budget) return { ok: false, error: messages.errorGeneric };
   return { ok: true, budget };
+}
+
+async function postBudgetAction(
+  budgetId: string,
+  action: "archive" | "unarchive",
+  messages: BudgetsClientMessages,
+): Promise<OkBudget | ErrorResult> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/budgets/${budgetId}/${action}`, {
+      method: "POST",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+    });
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  if (!response.ok) {
+    const parsed = (await parseJson(response)) as {
+      detail?: unknown;
+      code?: unknown;
+    } | null;
+    return { ok: false, error: mapError(response.status, parsed, messages) };
+  }
+  const budget = asBudgetFromWire(await parseJson(response));
+  if (!budget) return { ok: false, error: messages.errorGeneric };
+  return { ok: true, budget };
+}
+
+export async function archiveBudget(
+  budgetId: string,
+  messages: BudgetsClientMessages,
+): Promise<OkBudget | ErrorResult> {
+  return postBudgetAction(budgetId, "archive", messages);
+}
+
+export async function unarchiveBudget(
+  budgetId: string,
+  messages: BudgetsClientMessages,
+): Promise<OkBudget | ErrorResult> {
+  return postBudgetAction(budgetId, "unarchive", messages);
 }
 
 export async function previewPeriodChange(

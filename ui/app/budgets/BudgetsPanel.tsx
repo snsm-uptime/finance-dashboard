@@ -6,12 +6,14 @@ import Link from "next/link";
 import { Chip } from "@/components/Chip";
 import { useChromeHeader } from "@/components/ChromeBack";
 import { ChromeAvatarLink } from "@/components/ChromeAvatarLink";
+import { IconButton } from "@/components/IconButton";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { StackedListPanel } from "@/components/StackedListPanel";
 import { TopProgressBar } from "@/components/TopProgressBar";
 import { Tooltip } from "@/components/Tooltip";
 import { formatMoneyAmount } from "@/lib/currency";
 import { listsMessages } from "@/lib/i18n/lists";
+import { BoxIcon } from "@/app/icons";
 import { DocsHelpButton } from "@/app/docs/DocsHelpButton";
 import { fetchLists } from "@/app/lists/listsClient";
 import {
@@ -21,12 +23,14 @@ import {
 } from "@/app/lists/membershipListsStore";
 import { GhostBudgetCard } from "./GhostBudgetCard";
 import {
+  archiveBudget,
   budgetDaysLeft,
   budgetSeverityColorClass,
   budgetStateLabel,
   budgetUsageRatio,
   fetchBudgets,
   formatPeriodBoundShort,
+  unarchiveBudget,
   type BudgetItem,
   type BudgetsClientMessages,
 } from "./budgetsClient";
@@ -127,12 +131,23 @@ function useMasonryColumns(items: MasonryEntry[], columnCount: number) {
 export function BudgetsPanel() {
   const { locale, me } = usePreferences();
   const t = listsMessages[locale];
+  const [showArchived, setShowArchived] = useState(false);
   useChromeHeader({
     leading: me ? (
       <ChromeAvatarLink alias={me.alias} userId={me.user_id} photoBase64={me.photo_base64} />
     ) : null,
     title: t.budgetsTitle,
-    trailing: <DocsHelpButton pageName="Budgets" docsAnchor="/docs#budgets" />,
+    trailing: (
+      <>
+        <IconButton
+          icon={<BoxIcon active={showArchived} className="size-5" />}
+          label={showArchived ? t.budgetsShowActive : t.budgetsShowArchived}
+          aria-pressed={showArchived}
+          onClick={() => setShowArchived((prev) => !prev)}
+        />
+        <DocsHelpButton pageName="Budgets" docsAnchor="/docs#budgets" />
+      </>
+    ),
   });
   const [budgets, setBudgets] = useState<BudgetItem[]>([]);
   const lists = useMembershipLists() ?? [];
@@ -157,10 +172,12 @@ export function BudgetsPanel() {
   // its `setMeasured` state update) every render, an infinite update loop.
   const masonryEntries: MasonryEntry[] = useMemo(
     () => [
-      { id: "ghost", kind: "ghost" } as const,
+      // Hidden in the archived view (AC #3) — archiving is a per-tile action
+      // there, not a place to create new budgets.
+      ...(showArchived ? [] : [{ id: "ghost", kind: "ghost" } as const]),
       ...budgets.map((budget): MasonryEntry => ({ id: budget.id, kind: "budget", budget })),
     ],
-    [budgets],
+    [budgets, showArchived],
   );
   const { columns, registerCard } = useMasonryColumns(masonryEntries, columnCount);
   const masonryColumns: MasonryColumn[] = columns.map((colEntries, i) => ({
@@ -182,18 +199,13 @@ export function BudgetsPanel() {
     [t],
   );
 
+  // Membership-lists seeding is mount-only — the source-list picker/chips
+  // never need a refetch just because the archived toggle flipped.
   useEffect(() => {
     let cancelled = false;
-    async function load() {
-      const result = await fetchBudgets(messages);
-      if (cancelled) return;
-      if (!result.ok) {
-        setLoadError(result.error);
-      } else {
-        setBudgets(result.budgets);
-      }
-      // Seed the shared membership store once — GhostBudgetCard's source-list
-      // picker and this panel's per-tile chips both read from it.
+    // Seed the shared membership store once — GhostBudgetCard's source-list
+    // picker and this panel's per-tile chips both read from it.
+    async function seedLists() {
       if (getMembershipListsSnapshot() === null) {
         const listsResult = await fetchLists({
           errorGeneric: t.errorGeneric,
@@ -201,19 +213,48 @@ export function BudgetsPanel() {
           errorForbidden: t.errorForbidden,
           errorUnauthorized: t.errorUnauthorized,
         });
-        if (listsResult.ok) replaceMembershipLists(listsResult.lists);
+        if (!cancelled && listsResult.ok) replaceMembershipLists(listsResult.lists);
       }
-      if (!cancelled) setLoading(false);
     }
-    void load();
+    void seedLists();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      const result = await fetchBudgets(messages, { archived: showArchived });
+      if (cancelled) return;
+      if (!result.ok) {
+        setLoadError(result.error);
+      } else {
+        setLoadError(null);
+        setBudgets(result.budgets);
+      }
+      setLoading(false);
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showArchived]);
+
   function onCreated(budget: BudgetItem) {
     setBudgets((prev) => [budget, ...prev]);
+  }
+
+  async function onToggleArchive(budget: BudgetItem) {
+    const result = budget.is_archived
+      ? await unarchiveBudget(budget.id, messages)
+      : await archiveBudget(budget.id, messages);
+    if (result.ok) {
+      setBudgets((prev) => prev.filter((b) => b.id !== budget.id));
+    }
   }
 
   return (
@@ -227,7 +268,7 @@ export function BudgetsPanel() {
         loading={loading}
         loadingLabel={t.budgetsLoading}
         error={loadError}
-        emptyLabel={t.budgetsEmpty}
+        emptyLabel={showArchived ? t.budgetsArchivedEmpty : t.budgetsEmpty}
         listClassName="list-none m-0 p-0 flex items-start gap-[var(--space-3)]"
         itemClassName="flex-1 min-w-0 flex flex-col gap-[var(--space-3)]"
         renderItem={(column) => (
@@ -326,6 +367,17 @@ export function BudgetsPanel() {
                       startLabel={formatMoneyAmount(budget.spent, budget.currency)}
                       endLabel={formatMoneyAmount(budget.cap, budget.currency)}
                       ariaLabel={budgetStateLabel(budget.state, t)}
+                    />
+                  </div>
+                  <div className="absolute top-1 right-1">
+                    <IconButton
+                      icon={<BoxIcon active={budget.is_archived} className="size-4" />}
+                      label={budget.is_archived ? t.budgetsUnarchive : t.budgetsArchive}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        void onToggleArchive(budget);
+                      }}
                     />
                   </div>
                 </Link>

@@ -50,6 +50,7 @@ class BudgetRecord:
     period_start: date | None
     period_end: date | None
     created_at: datetime
+    is_archived: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,9 +75,15 @@ class BudgetRepository(Protocol):
         period_end: date | None = None,
     ) -> BudgetRecord: ...
 
-    def list_budgets_for_owner(self, owner_user_id: UUID) -> list[BudgetRecord]: ...
+    def list_budgets_for_owner(
+        self, owner_user_id: UUID, *, archived: bool = False
+    ) -> list[BudgetRecord]: ...
 
     def get_budget(self, budget_id: UUID, owner_user_id: UUID) -> BudgetRecord | None: ...
+
+    def archive_budget(self, budget_id: UUID) -> None: ...
+
+    def unarchive_budget(self, budget_id: UUID) -> None: ...
 
     def update_budget(
         self,
@@ -134,6 +141,7 @@ class BudgetView:
     period_start: date | None
     period_end: date | None
     created_at: datetime
+    is_archived: bool
 
 
 class CreateBudgetService:
@@ -261,7 +269,11 @@ class UpdateBudgetService:
             if membership is None:
                 raise NotListMemberError()
 
-        siblings = self._repo.list_budgets_for_owner(command.actor_user_id)
+        # Name uniqueness must hold across both archived and non-archived
+        # siblings — archiving a budget must not free up its name.
+        siblings = self._repo.list_budgets_for_owner(
+            command.actor_user_id, archived=False
+        ) + self._repo.list_budgets_for_owner(command.actor_user_id, archived=True)
         for sibling in siblings:
             if sibling.id != budget.id and sibling.name == name:
                 raise DuplicateBudgetNameError()
@@ -340,6 +352,42 @@ class DeleteBudgetService:
     def execute(self, command: DeleteBudgetCommand) -> None:
         budget = _get_owned_budget(self._repo, command.budget_id, command.actor_user_id)
         self._repo.delete_budget(budget.id)
+
+
+@dataclass(frozen=True, slots=True)
+class ArchiveBudgetCommand:
+    actor_user_id: UUID
+    budget_id: UUID
+
+
+class ArchiveBudgetService:
+    """Owner-only, 404-on-deny (AD-30), mirrors DeleteBudgetService's shape."""
+
+    def __init__(self, repo: BudgetRepository) -> None:
+        self._repo = repo
+
+    def execute(self, command: ArchiveBudgetCommand) -> BudgetRecord:
+        budget = _get_owned_budget(self._repo, command.budget_id, command.actor_user_id)
+        self._repo.archive_budget(budget.id)
+        return _get_owned_budget(self._repo, budget.id, command.actor_user_id)
+
+
+@dataclass(frozen=True, slots=True)
+class UnarchiveBudgetCommand:
+    actor_user_id: UUID
+    budget_id: UUID
+
+
+class UnarchiveBudgetService:
+    """Owner-only, 404-on-deny (AD-30), mirrors DeleteBudgetService's shape."""
+
+    def __init__(self, repo: BudgetRepository) -> None:
+        self._repo = repo
+
+    def execute(self, command: UnarchiveBudgetCommand) -> BudgetRecord:
+        budget = _get_owned_budget(self._repo, command.budget_id, command.actor_user_id)
+        self._repo.unarchive_budget(budget.id)
+        return _get_owned_budget(self._repo, budget.id, command.actor_user_id)
 
 
 @dataclass(frozen=True, slots=True)
@@ -444,6 +492,7 @@ def _compute_spent_and_history(
 @dataclass(frozen=True, slots=True)
 class ListBudgetsCommand:
     actor_user_id: UUID
+    archived: bool = False
 
 
 class ListBudgetsService:
@@ -454,7 +503,9 @@ class ListBudgetsService:
         self._repo = repo
 
     def execute(self, command: ListBudgetsCommand) -> list[BudgetView]:
-        records = self._repo.list_budgets_for_owner(command.actor_user_id)
+        records = self._repo.list_budgets_for_owner(
+            command.actor_user_id, archived=command.archived
+        )
 
         views = []
         for record in records:
@@ -476,6 +527,7 @@ class ListBudgetsService:
                     period_start=record.period_start,
                     period_end=record.period_end,
                     created_at=record.created_at,
+                    is_archived=record.is_archived,
                 )
             )
         return views
@@ -501,6 +553,7 @@ class BudgetDetailView:
     created_at: datetime
     history: tuple[BudgetHistoryLine, ...]
     rules: tuple[BudgetRuleView, ...]
+    is_archived: bool
 
 
 def _get_owned_budget(repo: BudgetRepository, budget_id: UUID, actor_user_id: UUID) -> BudgetRecord:
@@ -540,6 +593,7 @@ class GetBudgetDetailService:
             created_at=record.created_at,
             history=history,
             rules=rules,
+            is_archived=record.is_archived,
         )
 
 

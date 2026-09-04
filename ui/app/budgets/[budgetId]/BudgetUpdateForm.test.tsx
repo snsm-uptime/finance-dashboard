@@ -54,6 +54,7 @@ const budget: BudgetItem = {
   period_start: "2026-01-01",
   period_end: "2026-01-31",
   created_at: "2026-08-01T00:00:00Z",
+  is_archived: false,
 };
 
 const lists = [{ id: "l1", name: "Groceries List" }];

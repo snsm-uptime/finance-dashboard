@@ -608,6 +608,14 @@ def test_non_owner_is_404_on_every_budget_scoped_route(client: TestClient) -> No
     assert update.status_code == 404
     assert update.json()["code"] == "budget_not_found"
 
+    archive = client.post(f"/budgets/{budget_id}/archive")
+    assert archive.status_code == 404
+    assert archive.json()["code"] == "budget_not_found"
+
+    unarchive = client.post(f"/budgets/{budget_id}/unarchive")
+    assert unarchive.status_code == 404
+    assert unarchive.json()["code"] == "budget_not_found"
+
     delete_budget_response = client.delete(f"/budgets/{budget_id}")
     assert delete_budget_response.status_code == 404
     assert delete_budget_response.json()["code"] == "budget_not_found"
@@ -851,6 +859,95 @@ def test_solo_list_history_line_viewer_share_equals_full_amount(client: TestClie
     line = detail.json()["history"][0]
     assert line["viewer_share_crc"] == line["amount_crc"] == "10.00"
     assert line["payer_id"] == owner_id
+
+
+# --- Story 7.6: archive/unarchive ---------------------------------------
+
+
+def test_archive_then_unarchive_budget_roundtrip(client: TestClient) -> None:
+    _register(client, "budgetarchiveroundtrip@example.com")
+    list_id = _own_list_id(client)
+    budget_id = _create_budget(client, [list_id])
+
+    default_list = client.get("/budgets")
+    assert [b["id"] for b in default_list.json()["budgets"]] == [budget_id]
+
+    archived = client.post(f"/budgets/{budget_id}/archive")
+    assert archived.status_code == 200, archived.text
+    assert archived.json()["is_archived"] is True
+
+    after_archive_default = client.get("/budgets")
+    assert after_archive_default.json()["budgets"] == []
+
+    after_archive_filtered = client.get("/budgets", params={"archived": "true"})
+    assert [b["id"] for b in after_archive_filtered.json()["budgets"]] == [budget_id]
+    assert after_archive_filtered.json()["budgets"][0]["is_archived"] is True
+
+    unarchived = client.post(f"/budgets/{budget_id}/unarchive")
+    assert unarchived.status_code == 200, unarchived.text
+    assert unarchived.json()["is_archived"] is False
+
+    back_to_default = client.get("/budgets")
+    assert [b["id"] for b in back_to_default.json()["budgets"]] == [budget_id]
+
+    back_filtered = client.get("/budgets", params={"archived": "true"})
+    assert back_filtered.json()["budgets"] == []
+
+
+def test_archive_preserves_history_and_rules_detail_unfiltered(client: TestClient) -> None:
+    owner_id = _register(client, "budgetarchivepreserve@example.com")
+    list_id = _own_list_id(client)
+    budget_id = _create_budget(client, [list_id])
+    entry_id = _create_expense(client, list_id, owner_id, "Automercado")
+
+    assigned = client.post(f"/budgets/{budget_id}/assignments", json={"ledger_entry_id": entry_id})
+    assert assigned.status_code == 204, assigned.text
+
+    archived = client.post(f"/budgets/{budget_id}/archive")
+    assert archived.status_code == 200, archived.text
+
+    detail = client.get(f"/budgets/{budget_id}")
+    assert detail.status_code == 200, detail.text
+    body = detail.json()
+    assert body["is_archived"] is True
+    assert body["spent"] == "10.00"
+    assert len(body["history"]) == 1
+    assert body["history"][0]["id"] == entry_id
+
+
+def test_archive_foreign_budget_is_not_found(client: TestClient) -> None:
+    _register(client, "budgetarchiveownera@example.com")
+    list_id = _own_list_id(client)
+    budget_id = _create_budget(client, [list_id])
+
+    client.post("/auth/sign-out")
+    _register(client, "budgetarchiveownerb@example.com")
+
+    response = client.post(f"/budgets/{budget_id}/archive")
+    assert response.status_code == 404
+    assert response.json()["code"] == "budget_not_found"
+
+
+def test_archiving_does_not_free_up_name_for_reuse(client: TestClient) -> None:
+    _register(client, "budgetarchivenamereuse@example.com")
+    list_id = _own_list_id(client)
+    budget_id = _create_budget(client, [list_id], name="Groceries")
+    other_id = _create_budget(client, [list_id], name="Rent")
+
+    archived = client.post(f"/budgets/{budget_id}/archive")
+    assert archived.status_code == 200, archived.text
+
+    renamed = client.patch(
+        f"/budgets/{other_id}",
+        json={
+            "name": "Groceries",
+            "cap": "500.00",
+            "currency": "CRC",
+            "source_list_ids": [list_id],
+        },
+    )
+    assert renamed.status_code == 422, renamed.text
+    assert renamed.json()["code"] == "budget_name_taken"
 
 
 def test_update_budget_raises_not_found_when_row_vanishes_mid_request(

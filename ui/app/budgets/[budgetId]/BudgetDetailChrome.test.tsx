@@ -39,7 +39,23 @@ describe("BudgetDetailChrome", () => {
     await act(async () => {
       root.render(
         <AppShell>
-          <BudgetDetailChrome title="Groceries" />
+          <BudgetDetailChrome
+            title="Groceries"
+            budgetId="b1"
+            isArchived={false}
+            archiveLabel="Archive"
+            unarchiveLabel="Unarchive"
+            messages={{
+              errorGeneric: "Something went wrong.",
+              errorUnauthorized: "Please sign in again.",
+              errorInvalidBudgetName: "Enter a budget name.",
+              errorInvalidBudgetCap: "Enter a valid budget cap.",
+              errorInvalidBudgetCurrency: "Choose a supported currency.",
+              errorInvalidBudgetSourceLists: "Select at least one source list.",
+              errorInvalidBudgetPeriod: "Period start must be on or before period end.",
+              errorForbidden: "You do not have access to this.",
+            }}
+          />
         </AppShell>,
       );
     });

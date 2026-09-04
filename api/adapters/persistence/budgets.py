@@ -34,6 +34,7 @@ def _budget_record(row: BudgetModel, source_list_ids: tuple[UUID, ...]) -> Budge
         period_start=row.period_start,
         period_end=row.period_end,
         created_at=row.created_at,
+        is_archived=row.is_archived,
     )
 
 
@@ -86,10 +87,15 @@ class SqlAlchemyBudgetRepository:
             grouped[row.budget_id].append(row.list_id)
         return {budget_id: tuple(list_ids) for budget_id, list_ids in grouped.items()}
 
-    def list_budgets_for_owner(self, owner_user_id: UUID) -> list[BudgetRecord]:
+    def list_budgets_for_owner(
+        self, owner_user_id: UUID, *, archived: bool = False
+    ) -> list[BudgetRecord]:
         stmt = (
             select(BudgetModel)
-            .where(BudgetModel.owner_user_id == owner_user_id)
+            .where(
+                BudgetModel.owner_user_id == owner_user_id,
+                BudgetModel.is_archived == archived,
+            )
             .order_by(BudgetModel.created_at.asc(), BudgetModel.id.asc())
         )
         rows = self._session.scalars(stmt).all()
@@ -138,6 +144,18 @@ class SqlAlchemyBudgetRepository:
             self._session.add(BudgetSourceListModel(budget_id=budget_id, list_id=list_id))
         self._session.flush()
         return _budget_record(row, source_list_ids)
+
+    def archive_budget(self, budget_id: UUID) -> None:
+        row = self._session.get(BudgetModel, budget_id)
+        if row is not None:
+            row.is_archived = True
+            self._session.flush()
+
+    def unarchive_budget(self, budget_id: UUID) -> None:
+        row = self._session.get(BudgetModel, budget_id)
+        if row is not None:
+            row.is_archived = False
+            self._session.flush()
 
     def delete_budget(self, budget_id: UUID) -> None:
         # FK cascades handle budget_rules/budget_source_lists (CASCADE) and

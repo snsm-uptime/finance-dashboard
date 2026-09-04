@@ -1,5 +1,5 @@
 # generated: 2026-08-03T22:46:31
-# last_updated: 2026-09-04 (7-5-budget-period-range: review — ghost-card form amendment)
+# last_updated: 2026-09-04 (story 7-6: archive budgets, review)
 
 # project: finance-dashboard
 # project_key: NOKEY
@@ -157,7 +157,7 @@ development_status:
   7-3-cross-list-attribution-rule-badge: done
   7-4-budget-progress-bar-visualization: done
   7-5-budget-period-range: review
-  7-6-archive-budgets: backlog
+  7-6-archive-budgets: review
   epic-7-retrospective: optional
 
   # Epic 8 — Onboarding & documentation (v1). Independent of other epics.

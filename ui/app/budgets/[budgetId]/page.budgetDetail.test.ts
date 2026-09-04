@@ -14,6 +14,7 @@ describe("asBudgetDetail", () => {
         state: "ok",
         source_lists: ["l1"],
         created_at: "2026-08-01T00:00:00Z",
+      is_archived: false,
         history: [],
         rules: [],
       }),
@@ -28,6 +29,7 @@ describe("asBudgetDetail", () => {
       period_start: null,
       period_end: null,
       created_at: "2026-08-01T00:00:00Z",
+      is_archived: false,
       history: [],
       rules: [],
     });
@@ -43,6 +45,7 @@ describe("asBudgetDetail", () => {
       state: "ok",
       source_lists: ["l1", "l2"],
       created_at: "2026-08-01T00:00:00Z",
+      is_archived: false,
       history: [
         {
           id: "e1",
@@ -80,6 +83,7 @@ describe("asBudgetDetail", () => {
       state: "ok",
       source_lists: ["l1"],
       created_at: "2026-08-01T00:00:00Z",
+      is_archived: false,
     });
     expect(withoutRules?.rules).toEqual([]);
 
@@ -92,6 +96,7 @@ describe("asBudgetDetail", () => {
       state: "ok",
       source_lists: ["l1"],
       created_at: "2026-08-01T00:00:00Z",
+      is_archived: false,
       rules: "not-an-array",
     });
     expect(malformedRules?.rules).toEqual([]);
@@ -107,6 +112,7 @@ describe("asBudgetDetail", () => {
       state: "ok",
       source_lists: ["l1"],
       created_at: "2026-08-01T00:00:00Z",
+      is_archived: false,
       rules: [
         { id: "r1", match_text: "automercado", created_at: "2026-08-01T00:00:00Z" },
         // Missing created_at — dropped, not defaulted to a fabricated value.
@@ -132,6 +138,7 @@ describe("asBudgetDetail", () => {
         state: "bogus",
         source_lists: ["l1"],
         created_at: "2026-08-01T00:00:00Z",
+      is_archived: false,
         history: [],
       }),
     ).toBeNull();
@@ -148,6 +155,7 @@ describe("asBudgetDetail", () => {
         state: "ok",
         source_lists: "not-an-array",
         created_at: "2026-08-01T00:00:00Z",
+      is_archived: false,
       }),
     ).toBeNull();
   });
@@ -162,6 +170,7 @@ describe("asBudgetDetail", () => {
       state: "ok",
       source_lists: ["l1"],
       created_at: "2026-08-01T00:00:00Z",
+      is_archived: false,
     });
     expect(withoutHistory?.history).toEqual([]);
 
@@ -174,6 +183,7 @@ describe("asBudgetDetail", () => {
       state: "ok",
       source_lists: ["l1"],
       created_at: "2026-08-01T00:00:00Z",
+      is_archived: false,
       history: "not-an-array",
     });
     expect(malformedHistory?.history).toEqual([]);
@@ -189,6 +199,7 @@ describe("asBudgetDetail", () => {
       state: "ok",
       source_lists: ["l1"],
       created_at: "2026-08-01T00:00:00Z",
+      is_archived: false,
       history: [
         {
           id: "e1",

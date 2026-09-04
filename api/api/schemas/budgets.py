@@ -54,6 +54,7 @@ class BudgetResponse(BaseModel):
     period_start: date | None = None
     period_end: date | None = None
     created_at: datetime
+    is_archived: bool
 
 
 class BudgetsListResponse(BaseModel):
@@ -89,6 +90,7 @@ class BudgetDetailResponse(BaseModel):
     created_at: datetime
     history: list[BudgetHistoryLineResponse] = Field(default_factory=list)
     rules: list[BudgetRuleResponse] = Field(default_factory=list)
+    is_archived: bool
 
 
 class AssignBudgetEntryBody(BaseModel):
