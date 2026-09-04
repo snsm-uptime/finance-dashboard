@@ -5,6 +5,7 @@ import {
   cloneElement,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type FocusEvent,
@@ -35,6 +36,9 @@ type Coords = { top: number; left: number; placement: "above" | "below" };
 /** Extra px above the trigger's top edge, matching the prior `-top-7` offset feel. */
 const GAP_PX = 4;
 
+/** Minimum breathing room kept between the bubble and the viewport's edges. */
+const EDGE_MARGIN_PX = 8;
+
 /**
  * If the trigger's top edge is closer to the viewport top than this, flip
  * the bubble to render below the trigger instead of above it, so it can't
@@ -54,7 +58,13 @@ export const SHOW_DELAY_MS = 500;
 export function Tooltip({ label, disabled = false, children }: Props) {
   const suppressed = disabled || !label;
   const triggerRef = useRef<HTMLElement | null>(null);
+  const bubbleRef = useRef<HTMLSpanElement | null>(null);
   const [coords, setCoords] = useState<Coords | null>(null);
+  // Extra horizontal nudge (px) applied on top of the centered `coords.left`,
+  // measured post-render once the bubble's actual width is known, so it can
+  // be pulled back on-screen when centering it on the trigger would clip it
+  // against the left/right viewport edge.
+  const [shiftX, setShiftX] = useState(0);
   // Hover and keyboard-focus-visible are tracked independently (rather than
   // one combined "isActive" flag toggled by whichever of
   // mouseenter/mouseleave/focus/blur fires) so that being both hovered and
@@ -137,6 +147,7 @@ export function Tooltip({ label, disabled = false, children }: Props) {
     // icon button near the top of the viewport) instead of always
     // positioning above via `rect.top - GAP_PX`, which can push the bubble
     // off-screen.
+    setShiftX(0);
     if (rect.top < TOP_FLIP_THRESHOLD_PX) {
       setCoords({
         top: rect.bottom + GAP_PX,
@@ -151,6 +162,26 @@ export function Tooltip({ label, disabled = false, children }: Props) {
       });
     }
   }, []);
+
+  // Once the bubble has actually rendered (and its real width is known),
+  // clamp it back on-screen if centering it on the trigger pushed it past
+  // the left/right viewport edge — `white-space: nowrap` means the width
+  // can't be predicted ahead of layout.
+  useLayoutEffect(() => {
+    if (coords === null) return;
+    const node = bubbleRef.current;
+    if (!node) return;
+    const rect = node.getBoundingClientRect();
+    let delta = 0;
+    if (rect.left < EDGE_MARGIN_PX) {
+      delta = EDGE_MARGIN_PX - rect.left;
+    } else if (rect.right > window.innerWidth - EDGE_MARGIN_PX) {
+      delta = window.innerWidth - EDGE_MARGIN_PX - rect.right;
+    }
+    if (delta !== 0) {
+      setShiftX(delta);
+    }
+  }, [coords]);
 
   // Visible whenever hovered OR focus-visible (independent refs, see
   // above) — called imperatively from the handlers below on every
@@ -245,11 +276,12 @@ export function Tooltip({ label, disabled = false, children }: Props) {
       {!suppressed && coords && typeof document !== "undefined"
         ? createPortal(
           <span
+            ref={bubbleRef}
             className={styles.bubble}
             data-testid="tooltip-bubble"
             style={{
               top: coords.top,
-              left: coords.left,
+              left: coords.left + shiftX,
               transform:
                 coords.placement === "below"
                   ? "translate(-50%, 0)"
