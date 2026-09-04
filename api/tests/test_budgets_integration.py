@@ -998,6 +998,10 @@ def test_out_of_period_rule_matched_entry_excluded_from_spend_and_candidates(
     rule = client.post(f"/budgets/{budget_id}/rules", json={"match_text": "automercado"})
     assert rule.status_code == 201, rule.text
 
+    # The "automercado" rule already matches `out_of_period` (rules aren't
+    # period-scoped until a period exists), so setting this period for the
+    # first time excludes an already-attributed line — the confirm-before-
+    # narrow gate (AC #3) requires `confirm_period_change` here.
     updated = client.patch(
         f"/budgets/{budget_id}",
         json={
@@ -1007,6 +1011,7 @@ def test_out_of_period_rule_matched_entry_excluded_from_spend_and_candidates(
             "source_list_ids": [list_id],
             "period_start": "2026-01-01",
             "period_end": "2026-01-31",
+            "confirm_period_change": True,
         },
     )
     assert updated.status_code == 200, updated.text
