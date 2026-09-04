@@ -110,6 +110,13 @@ export function resolveSourceListChips(
     .filter((list): list is { id: string; name: string } => list !== undefined);
 }
 
+/** Border/text color for the status badge below the progress bar — mirrors the bar's own severity tiers. */
+function budgetStatusChipClassName(state: BudgetItem["state"]): string {
+  if (state === "over") return "border-owe text-owe";
+  if (state === "near") return "border-warn text-warn";
+  return "border-border text-muted";
+}
+
 function asRuleRow(data: unknown): BudgetRuleRow | null {
   if (!data || typeof data !== "object") return null;
   const row = data as Partial<BudgetRuleRow>;
@@ -239,8 +246,8 @@ export default async function BudgetDetailPage({
         const data: unknown = await listsResponse.json().catch(() => null);
         const rows =
           data &&
-          typeof data === "object" &&
-          Array.isArray((data as { lists?: unknown }).lists)
+            typeof data === "object" &&
+            Array.isArray((data as { lists?: unknown }).lists)
             ? (data as { lists: unknown[] }).lists
             : [];
         sourceLists = rows.filter(
@@ -276,60 +283,73 @@ export default async function BudgetDetailPage({
               progressBar={
                 <TopProgressBar
                   ratio={ratio}
+                  variant="thick"
                   colorClassName={budgetSeverityColorClass(ratio)}
-                  tooltipLabel={`${formatMoneyAmount(budget.spent, budget.currency)} / ${formatMoneyAmount(budget.cap, budget.currency)}`}
+                  startLabel={formatMoneyAmount(budget.spent, budget.currency)}
+                  endLabel={formatMoneyAmount(budget.cap, budget.currency)}
                   ariaLabel={budgetStateLabel(budget.state, t)}
                 />
               }
-              editAction={
+            />
+
+            <section className="flex flex-col gap-[var(--space-1)]">
+              <div className="flex items-center justify-between px-[var(--space-1)]">
+                <span className="text-[0.7rem] text-muted">
+                  {t.budgetsSpentCaption} · {formatMoneyAmount(budget.spent, budget.currency)}
+                </span>
+                <span className="text-[0.7rem] text-muted">
+                  {t.budgetsCapCaption} · {formatMoneyAmount(budget.cap, budget.currency)}
+                </span>
+              </div>
+              <div>
+                <Chip className={budgetStatusChipClassName(budget.state)}>
+                  {budgetStateLabel(budget.state, t)}
+                </Chip>
+              </div>
+            </section>
+
+            <section className="flex flex-col gap-[var(--space-2)]">
+              <SectionLabel>{t.budgetsSourcesHeading}</SectionLabel>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {resolveSourceListChips(budget.source_list_ids, sourceLists).map((list) => (
+                  <Chip key={list.id} tone="muted">
+                    {list.name}
+                  </Chip>
+                ))}
                 <BudgetUpdateForm
                   budget={budget}
                   lists={sourceLists}
                   messages={{ ...t, cancelLabel: t.receiptMoveCancel }}
                   locale={locale}
                 />
-              }
-            />
-            <section className="flex flex-col gap-[var(--space-2)] mx-strip-inset">
-              <SectionLabel>{budget.name}</SectionLabel>
-              <p
-                className={`m-0 ${budget.state === "ok" ? "text-muted" : "text-owe font-semibold"}`}
-              >
-                {budgetStateLabel(budget.state, t)}
-              </p>
-              <p className="m-0 tabular-nums text-foreground">
-                {formatMoneyAmount(budget.spent, budget.currency)} /{" "}
-                {formatMoneyAmount(budget.cap, budget.currency)}
-              </p>
-              {budget.source_list_ids.length > 0 ? (
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {resolveSourceListChips(budget.source_list_ids, sourceLists).map(
-                    (list) => (
-                      <Chip key={list.id} tone="muted">
-                        {list.name}
-                      </Chip>
-                    ),
-                  )}
-                </div>
-              ) : null}
+              </div>
             </section>
 
-            <section className="flex flex-col gap-[var(--space-3)] mx-strip-inset">
-              <SectionLabel>{t.budgetsHistoryTitle}</SectionLabel>
-              <BudgetAssignPanel
+            <section className="flex flex-col gap-[var(--space-3)]">
+              <BudgetRulesPanel
                 budgetId={budgetId}
-                messages={{ ...t, cancelLabel: t.receiptMoveCancel }}
+                rules={budget.rules}
+                messages={t}
               />
               {budget.history.length === 0 ? (
                 <div
-                  className="px-[var(--space-4)] py-[var(--space-5)] bg-surface border border-border rounded-md"
+                  className="flex flex-col items-start gap-[var(--space-3)] px-[var(--space-4)] py-[var(--space-5)] bg-surface border border-border rounded-md"
                   role="status"
                 >
                   <p className="m-0 text-muted">{t.budgetsHistoryEmpty}</p>
+                  <BudgetAssignPanel
+                    budgetId={budgetId}
+                    messages={{ ...t, cancelLabel: t.receiptMoveCancel }}
+                  />
                 </div>
               ) : (
-                <ul className="m-0 list-none p-0 flex flex-col gap-[var(--space-2)]">
-                  {budget.history.map((line) => {
+                <>
+                  <BudgetAssignPanel
+                    budgetId={budgetId}
+                    messages={{ ...t, cancelLabel: t.receiptMoveCancel }}
+                  />
+                  <ul className="m-0 list-none p-0 flex flex-col gap-[var(--space-2)]">
+                    {budget.history.map((line) => {
                     const { viaLabelKey, showUnassign } =
                       historyRowAttribution(line);
                     return (
@@ -359,15 +379,10 @@ export default async function BudgetDetailPage({
                       </li>
                     );
                   })}
-                </ul>
+                  </ul>
+                </>
               )}
             </section>
-
-            <BudgetRulesPanel
-              budgetId={budgetId}
-              rules={budget.rules}
-              messages={t}
-            />
           </div>
         </>
       )}

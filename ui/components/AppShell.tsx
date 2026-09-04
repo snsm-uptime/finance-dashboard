@@ -15,6 +15,7 @@ import { TabBar, type TabBarItem } from "@/components/soft-ledger/TabBar";
 import { cardsCopy } from "@/lib/i18n/cards";
 import { showsAppChrome, tabKeyFromPath } from "@/lib/appChrome";
 import { listsMessages } from "@/lib/i18n/lists";
+import { Chip } from "./Chip";
 
 /** Persistent application chrome around authenticated pages. Auth/setup routes skip it. */
 export function AppShell({ children }: { children: ReactNode }) {
@@ -55,9 +56,13 @@ function AppShellFrame({ children }: { children: ReactNode }) {
         {showHeader ? (
           <header
             data-app-chrome="header"
-            className="flex shrink-0 items-center gap-2 pt-[max(0.5rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pb-1 pl-[max(0.5rem,env(safe-area-inset-left))]"
+            className={`flex shrink-0 items-center gap-2 ${
+              header.progressBar
+                ? "pt-[max(1rem,env(safe-area-inset-top))]"
+                : "pt-[max(0.5rem,env(safe-area-inset-top))]"
+            } pr-[max(1rem,env(safe-area-inset-right))] pb-1 pl-[max(0.5rem,env(safe-area-inset-left))]`}
           >
-            <div className="flex w-10 shrink-0 items-center justify-start">
+            <div className="flex w-10 shrink-0 items-center justify-start self-center">
               {header.onBack || header.backHref ? (
                 <IconButton
                   variant="ghost"
@@ -75,18 +80,20 @@ function AppShellFrame({ children }: { children: ReactNode }) {
                 header.leading
               ) : null}
             </div>
-            <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
+            <div className="flex min-w-0 flex-1 items-center justify-start gap-2 self-center">
               {header.title ? (
-                <h1 className="m-0 min-w-0 truncate text-[1.5rem] font-[550] text-foreground">
+                <h1 className="m-0 min-w-0 truncate text-[1.5rem] font-[550] leading-none text-foreground">
                   {header.title}
                 </h1>
               ) : null}
               {header.details ? (
-                <span className="shrink-0 text-[0.85rem] text-muted">{header.details}</span>
+                <Chip className={header.detailsClassName}>
+                  <span className="shrink-0 text-[0.85rem] text-muted">{header.details}</span>
+                </Chip>
               ) : null}
             </div>
             {header.trailing ? (
-              <div className="flex shrink-0 items-center gap-1">{header.trailing}</div>
+              <div className="flex shrink-0 items-center gap-1 self-center">{header.trailing}</div>
             ) : null}
           </header>
         ) : null}
