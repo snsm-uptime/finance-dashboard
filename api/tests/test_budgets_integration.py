@@ -884,9 +884,9 @@ def test_update_budget_raises_not_found_when_row_vanishes_mid_request(
 
 
 def _set_posted_date(db_session: Session, entry_id: str, posted_date: date) -> None:
-    db_session.query(LedgerEntryModel).filter(
-        LedgerEntryModel.id == uuid.UUID(entry_id)
-    ).update({"posted_date": posted_date})
+    db_session.query(LedgerEntryModel).filter(LedgerEntryModel.id == uuid.UUID(entry_id)).update(
+        {"posted_date": posted_date}
+    )
     db_session.flush()
 
 
@@ -1021,9 +1021,7 @@ def test_out_of_period_rule_matched_entry_excluded_from_spend_and_candidates(
     assert [line["id"] for line in detail["history"]] == [in_period]
 
 
-def test_period_preview_returns_excluded_lines(
-    client: TestClient, db_session: Session
-) -> None:
+def test_period_preview_returns_excluded_lines(client: TestClient, db_session: Session) -> None:
     owner_id = _register(client, "budgetperiodpreview@example.com")
     list_id = _own_list_id(client)
     budget_id = _create_budget(client, [list_id])
@@ -1043,9 +1041,7 @@ def test_period_preview_returns_excluded_lines(
     )
     assert set_period.status_code == 200, set_period.text
 
-    assign = client.post(
-        f"/budgets/{budget_id}/assignments", json={"ledger_entry_id": entry_id}
-    )
+    assign = client.post(f"/budgets/{budget_id}/assignments", json={"ledger_entry_id": entry_id})
     assert assign.status_code == 204, assign.text
 
     preview = client.get(

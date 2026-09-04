@@ -371,9 +371,7 @@ def test_update_budget_widening_period_applies_without_confirmation():
     entry = _entry(
         list_id=list_id, payer_id=owner, amount_crc=Decimal("10.00"), budget_id=budget.id
     )
-    repo = _FakeBudgetRepo(
-        budgets={budget.id: budget}, owner_id=owner, entries={entry.id: entry}
-    )
+    repo = _FakeBudgetRepo(budgets={budget.id: budget}, owner_id=owner, entries={entry.id: entry})
     lookup = _FakeListAccessLookup(member_of={list_id})
     service = UpdateBudgetService(repo, lookup)
 
