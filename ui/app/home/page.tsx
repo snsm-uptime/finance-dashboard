@@ -9,7 +9,6 @@ import { fetchSession } from "@/lib/session";
 import { ListsPanel } from "@/app/lists/ListsPanel";
 import type { ListItem } from "@/app/lists/listsClient";
 import listsStyles from "@/app/lists/lists.module.scss";
-import styles from "./home.module.scss";
 import { HomeChrome } from "./HomeChrome";
 
 export const dynamic = "force-dynamic";
@@ -63,7 +62,7 @@ export default async function Home() {
   const loaded = await fetchMembershipLists();
 
   return (
-    <main className={`${listsStyles.main} ${styles.page}`}>
+    <main className={listsStyles.main}>
       <HomeChrome
         title={t.title}
         alias={me.alias}
@@ -71,15 +70,13 @@ export default async function Home() {
         photoBase64={me.photo_base64}
       />
 
-      <div className={styles.layout}>
-        {loaded.ok ? (
-          <ListsPanel initialLists={loaded.lists} currentUserId={session.user_id} />
-        ) : (
-          <p className={listsStyles.error} role="alert">
-            {t.loadError}
-          </p>
-        )}
-      </div>
+      {loaded.ok ? (
+        <ListsPanel initialLists={loaded.lists} currentUserId={session.user_id} />
+      ) : (
+        <p className={listsStyles.error} role="alert">
+          {t.loadError}
+        </p>
+      )}
     </main>
   );
 }

@@ -17,6 +17,7 @@ import { TriSwitch } from "@/components/TriSwitch";
 import { accountCopy } from "@/lib/i18n/account";
 import { encodeAvatarPhoto } from "@/lib/imageEncode";
 import type { Locale, ThemePreference } from "@/lib/i18n/locale";
+import listsStyles from "@/app/lists/lists.module.scss";
 
 import styles from "./AccountMenu.module.scss";
 import { Tooltip } from "./Tooltip";
@@ -165,7 +166,7 @@ export function AccountMenu() {
     "absolute inline-flex items-center justify-center w-8 h-8 rounded-full border border-border bg-surface text-foreground cursor-pointer shadow-sm disabled:opacity-45 disabled:cursor-not-allowed";
 
   return (
-    <main className="py-[1rem] px-[1.5rem]" style={{ fontFamily: "var(--font-ui), Manrope, system-ui, sans-serif" }}>
+    <main className={listsStyles.main} style={{ fontFamily: "var(--font-ui), Manrope, system-ui, sans-serif" }}>
       {!ready ? (
         <p className="text-muted text-[0.85rem]">{t.loading}</p>
       ) : null}

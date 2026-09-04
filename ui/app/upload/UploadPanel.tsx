@@ -10,6 +10,7 @@ import { usePreferences } from "@/components/PreferencesProvider";
 import { AlertIcon, CloseIcon, SpinnerIcon } from "@/app/icons";
 import { DocsHelpButton } from "@/app/docs/DocsHelpButton";
 import { uploadCopy } from "@/lib/i18n/upload";
+import listsStyles from "@/app/lists/lists.module.scss";
 import { UploadButton } from "./UploadButton";
 import {
   discardSession,
@@ -342,12 +343,12 @@ export function UploadPanel({ initialSession = null }: { initialSession?: Import
 
   return (
     <main
-      className="min-h-full h-full flex flex-col"
+      className={`${listsStyles.main} flex flex-col`}
       style={{ fontFamily: "var(--font-ui), Manrope, system-ui, sans-serif" }}
     >
       <h1 className="sr-only">{t.title}</h1>
 
-      <div className="flex-1 flex flex-col items-center justify-center px-[1.5rem] py-[2.5rem]">
+      <div className="flex-1 flex flex-col items-center justify-center">
         <div className="flex flex-col items-center">
           <UploadButton
             pending={uploading}
