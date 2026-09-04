@@ -2,7 +2,7 @@
 
 export const listsMessages = {
   en: {
-    title: "Home",
+    title: "Lists",
     subtitle:
       "Your lists and cards, all in one place. Open a list, create another, or manage your cards.",
     createLabel: "New list name",
@@ -162,9 +162,33 @@ export const listsMessages = {
     errorInvalidBudgetCurrency: "Choose a supported currency.",
     budgetsSourceListsLabel: "Source lists",
     errorInvalidBudgetSourceLists: "Select at least one source list.",
+    budgetsPeriodStartLabel: "From (optional)",
+    budgetsPeriodEndLabel: "To (optional)",
+    errorInvalidBudgetPeriod: "Period start must be on or before period end.",
+    budgetsEditAria: "Edit budget",
+    budgetsEditTitle: "Edit budget",
+    budgetsEditSubmit: "Save changes",
+    budgetsSaving: "Saving…",
+    budgetsPeriodChangeConfirmTitle: "Remove lines from this budget?",
+    budgetsPeriodChangeConfirmBody:
+      "This removes 1 line from the budget's spend and history.",
+    budgetsPeriodChangeConfirmBodyCount:
+      "This removes {count} lines from the budget's spend and history.",
+    budgetsPeriodChangeConfirmAction: "Confirm period change",
+    budgetsPeriodChangeCancel: "Cancel",
+    budgetsDaysLeft: "days left",
+    budgetsDaysOverdue: "days overdue",
+    budgetsOpenEnded: "open-ended",
+    budgetsEndsOn: "Ends {date}",
+    budgetsWasDueOn: "Was due {date}",
+    budgetsDateFrom: "From",
+    budgetsDateTo: "To (optional)",
+    budgetsDateClear: "Clear",
+    budgetsAddListTrigger: "+ Add list",
+    budgetsPeriodTriggerLabel: "Set budget period",
   },
   es: {
-    title: "Inicio",
+    title: "Listas",
     subtitle:
       "Tus listas y tarjetas, todo en un solo lugar. Abre una lista, crea otra o administra tus tarjetas.",
     createLabel: "Nombre de la nueva lista",
@@ -325,6 +349,30 @@ export const listsMessages = {
     errorInvalidBudgetCurrency: "Elige una moneda admitida.",
     budgetsSourceListsLabel: "Listas de origen",
     errorInvalidBudgetSourceLists: "Selecciona al menos una lista de origen.",
+    budgetsPeriodStartLabel: "Desde (opcional)",
+    budgetsPeriodEndLabel: "Hasta (opcional)",
+    errorInvalidBudgetPeriod: "La fecha de inicio debe ser anterior o igual a la fecha final.",
+    budgetsEditAria: "Editar presupuesto",
+    budgetsEditTitle: "Editar presupuesto",
+    budgetsEditSubmit: "Guardar cambios",
+    budgetsSaving: "Guardando…",
+    budgetsPeriodChangeConfirmTitle: "¿Quitar líneas de este presupuesto?",
+    budgetsPeriodChangeConfirmBody:
+      "Esto quita 1 línea del gasto e historial del presupuesto.",
+    budgetsPeriodChangeConfirmBodyCount:
+      "Esto quita {count} líneas del gasto e historial del presupuesto.",
+    budgetsPeriodChangeConfirmAction: "Confirmar cambio de período",
+    budgetsPeriodChangeCancel: "Cancelar",
+    budgetsDaysLeft: "días restantes",
+    budgetsDaysOverdue: "días de atraso",
+    budgetsOpenEnded: "sin fecha límite",
+    budgetsEndsOn: "Termina {date}",
+    budgetsWasDueOn: "Venció {date}",
+    budgetsDateFrom: "Desde",
+    budgetsDateTo: "Hasta (opcional)",
+    budgetsDateClear: "Borrar",
+    budgetsAddListTrigger: "+ Agregar lista",
+    budgetsPeriodTriggerLabel: "Definir período del presupuesto",
   },
 } as const;
 

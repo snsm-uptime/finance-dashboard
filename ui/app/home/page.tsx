@@ -6,11 +6,10 @@ import { getApiInternalUrl } from "@/lib/api";
 import { listsMessages } from "@/lib/i18n/lists";
 import type { Locale } from "@/lib/i18n/locale";
 import { fetchSession } from "@/lib/session";
-import { Avatar } from "@/components/Avatar";
 import { ListsPanel } from "@/app/lists/ListsPanel";
 import type { ListItem } from "@/app/lists/listsClient";
 import listsStyles from "@/app/lists/lists.module.scss";
-import styles from "./home.module.scss";
+import { HomeChrome } from "./HomeChrome";
 
 export const dynamic = "force-dynamic";
 
@@ -63,24 +62,21 @@ export default async function Home() {
   const loaded = await fetchMembershipLists();
 
   return (
-    <main className={`${listsStyles.main} ${styles.page}`}>
-      <div className={styles.head}>
-        <h1 className={`${listsStyles.title} flex items-center gap-3`}>
-          <Avatar alias={me.alias} seed={me.user_id} photoBase64={me.photo_base64} size="md" />
-          {t.title}
-        </h1>
-        <p className={listsStyles.copy}>{t.subtitle}</p>
-      </div>
+    <main className={listsStyles.main}>
+      <HomeChrome
+        title={t.title}
+        alias={me.alias}
+        userId={me.user_id}
+        photoBase64={me.photo_base64}
+      />
 
-      <div className={styles.layout}>
-        {loaded.ok ? (
-          <ListsPanel initialLists={loaded.lists} currentUserId={session.user_id} />
-        ) : (
-          <p className={listsStyles.error} role="alert">
-            {t.loadError}
-          </p>
-        )}
-      </div>
+      {loaded.ok ? (
+        <ListsPanel initialLists={loaded.lists} currentUserId={session.user_id} />
+      ) : (
+        <p className={listsStyles.error} role="alert">
+          {t.loadError}
+        </p>
+      )}
     </main>
   );
 }

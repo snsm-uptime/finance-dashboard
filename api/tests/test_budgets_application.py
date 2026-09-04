@@ -8,6 +8,7 @@ no Postgres required, runs under bare `pytest`.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from dataclasses import replace as dataclass_replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
@@ -17,6 +18,9 @@ from application.budgets import (
     BudgetRecord,
     DeleteBudgetCommand,
     DeleteBudgetService,
+    PeriodChangeRequiresConfirmationError,
+    PreviewBudgetPeriodChangeCommand,
+    PreviewBudgetPeriodChangeService,
     UpdateBudgetCommand,
     UpdateBudgetService,
     _compute_spent_and_history,
@@ -39,6 +43,7 @@ class _FakeBudgetRepo:
     entries: dict[UUID, LedgerEntryRecord] = field(default_factory=dict)
     update_calls: list[UUID] = field(default_factory=list)
     delete_calls: list[UUID] = field(default_factory=list)
+    unassign_calls: list[UUID] = field(default_factory=list)
 
     def create_budget(self, **kwargs) -> BudgetRecord:  # pragma: no cover - unused here
         raise NotImplementedError
@@ -60,6 +65,8 @@ class _FakeBudgetRepo:
         cap_amount: Decimal,
         currency: str,
         source_list_ids: tuple[UUID, ...],
+        period_start: date | None = None,
+        period_end: date | None = None,
     ) -> BudgetRecord:
         self.update_calls.append(budget_id)
         existing = self.budgets[budget_id]
@@ -70,6 +77,8 @@ class _FakeBudgetRepo:
             cap_amount=cap_amount,
             currency=currency,
             source_list_ids=source_list_ids,
+            period_start=period_start,
+            period_end=period_end,
             created_at=existing.created_at,
         )
         self.budgets[budget_id] = updated
@@ -98,7 +107,10 @@ class _FakeBudgetRepo:
         pass
 
     def unassign_entry(self, entry_id: UUID) -> None:
-        pass
+        self.unassign_calls.append(entry_id)
+        entry = self.entries.get(entry_id)
+        if entry is not None:
+            self.entries[entry_id] = dataclass_replace(entry, budget_id=None)
 
     def list_rules_for_budget(self, budget_id: UUID) -> list:
         return list(self.rules.get(budget_id, []))
@@ -186,6 +198,8 @@ def _budget(
     currency: str = "CRC",
     source_list_ids: tuple[UUID, ...] = (),
     cap_amount: Decimal = Decimal("500.00"),
+    period_start: date | None = None,
+    period_end: date | None = None,
 ) -> BudgetRecord:
     return BudgetRecord(
         id=uuid4(),
@@ -194,6 +208,8 @@ def _budget(
         cap_amount=cap_amount,
         currency=currency,
         source_list_ids=source_list_ids,
+        period_start=period_start,
+        period_end=period_end,
         created_at=datetime.now(UTC),
     )
 
@@ -338,6 +354,269 @@ def test_update_budget_invalid_name_rejected_before_any_write():
             )
         )
     assert repo.update_calls == []
+
+
+# --- UpdateBudgetService period-change preview + apply-with-unassign --------
+
+
+def test_update_budget_widening_period_applies_without_confirmation():
+    owner = uuid4()
+    list_id = uuid4()
+    budget = _budget(
+        owner_user_id=owner,
+        source_list_ids=(list_id,),
+        period_start=date(2026, 1, 10),
+        period_end=date(2026, 1, 20),
+    )
+    entry = _entry(
+        list_id=list_id, payer_id=owner, amount_crc=Decimal("10.00"), budget_id=budget.id
+    )
+    repo = _FakeBudgetRepo(budgets={budget.id: budget}, owner_id=owner, entries={entry.id: entry})
+    lookup = _FakeListAccessLookup(member_of={list_id})
+    service = UpdateBudgetService(repo, lookup)
+
+    result = service.execute(
+        UpdateBudgetCommand(
+            actor_user_id=owner,
+            budget_id=budget.id,
+            name=budget.name,
+            cap="600.00",
+            currency="CRC",
+            source_list_ids=[list_id],
+            period_start=date(2026, 1, 1),
+            period_end=date(2026, 1, 31),
+        )
+    )
+
+    assert result.period_start == date(2026, 1, 1)
+    assert repo.unassign_calls == []
+
+
+def test_update_budget_setting_period_first_time_that_excludes_nothing_applies_directly():
+    owner = uuid4()
+    list_id = uuid4()
+    budget = _budget(owner_user_id=owner, source_list_ids=(list_id,))
+    entry = _entry(
+        list_id=list_id, payer_id=owner, amount_crc=Decimal("10.00"), budget_id=budget.id
+    )
+    entry_dated = dataclass_replace(entry, posted_date=date(2026, 1, 15))
+    repo = _FakeBudgetRepo(
+        budgets={budget.id: budget}, owner_id=owner, entries={entry_dated.id: entry_dated}
+    )
+    lookup = _FakeListAccessLookup(member_of={list_id})
+    service = UpdateBudgetService(repo, lookup)
+
+    result = service.execute(
+        UpdateBudgetCommand(
+            actor_user_id=owner,
+            budget_id=budget.id,
+            name=budget.name,
+            cap="600.00",
+            currency="CRC",
+            source_list_ids=[list_id],
+            period_start=date(2026, 1, 1),
+            period_end=date(2026, 1, 31),
+        )
+    )
+
+    assert result.period_start == date(2026, 1, 1)
+    assert repo.unassign_calls == []
+
+
+def test_update_budget_narrowing_period_without_confirm_raises_and_does_not_write():
+    owner = uuid4()
+    list_id = uuid4()
+    budget = _budget(
+        owner_user_id=owner,
+        source_list_ids=(list_id,),
+        period_start=date(2026, 1, 1),
+        period_end=date(2026, 1, 31),
+    )
+    entry = _entry(
+        list_id=list_id, payer_id=owner, amount_crc=Decimal("10.00"), budget_id=budget.id
+    )
+    entry_dated = dataclass_replace(entry, posted_date=date(2026, 1, 5))
+    repo = _FakeBudgetRepo(
+        budgets={budget.id: budget}, owner_id=owner, entries={entry_dated.id: entry_dated}
+    )
+    lookup = _FakeListAccessLookup(member_of={list_id})
+    service = UpdateBudgetService(repo, lookup)
+
+    with pytest.raises(PeriodChangeRequiresConfirmationError) as exc_info:
+        service.execute(
+            UpdateBudgetCommand(
+                actor_user_id=owner,
+                budget_id=budget.id,
+                name=budget.name,
+                cap="600.00",
+                currency="CRC",
+                source_list_ids=[list_id],
+                period_start=date(2026, 1, 10),
+                period_end=date(2026, 1, 31),
+            )
+        )
+
+    assert exc_info.value.excluded_entries == (entry_dated,)
+    assert repo.update_calls == []
+    assert repo.unassign_calls == []
+
+
+def test_update_budget_narrowing_period_with_confirm_applies_and_unassigns():
+    owner = uuid4()
+    list_id = uuid4()
+    budget = _budget(
+        owner_user_id=owner,
+        source_list_ids=(list_id,),
+        period_start=date(2026, 1, 1),
+        period_end=date(2026, 1, 31),
+    )
+    entry = _entry(
+        list_id=list_id, payer_id=owner, amount_crc=Decimal("10.00"), budget_id=budget.id
+    )
+    entry_dated = dataclass_replace(entry, posted_date=date(2026, 1, 5))
+    repo = _FakeBudgetRepo(
+        budgets={budget.id: budget}, owner_id=owner, entries={entry_dated.id: entry_dated}
+    )
+    lookup = _FakeListAccessLookup(member_of={list_id})
+    service = UpdateBudgetService(repo, lookup)
+
+    result = service.execute(
+        UpdateBudgetCommand(
+            actor_user_id=owner,
+            budget_id=budget.id,
+            name=budget.name,
+            cap="600.00",
+            currency="CRC",
+            source_list_ids=[list_id],
+            period_start=date(2026, 1, 10),
+            period_end=date(2026, 1, 31),
+            confirm_period_change=True,
+        )
+    )
+
+    assert result.period_start == date(2026, 1, 10)
+    assert repo.unassign_calls == [entry_dated.id]
+    assert repo.entries[entry_dated.id].budget_id is None
+
+
+def test_update_budget_no_period_change_applies_without_confirmation():
+    owner = uuid4()
+    list_id = uuid4()
+    budget = _budget(
+        owner_user_id=owner,
+        source_list_ids=(list_id,),
+        period_start=date(2026, 1, 1),
+        period_end=date(2026, 1, 31),
+    )
+    entry = _entry(
+        list_id=list_id, payer_id=owner, amount_crc=Decimal("10.00"), budget_id=budget.id
+    )
+    entry_dated = dataclass_replace(entry, posted_date=date(2026, 1, 5))
+    repo = _FakeBudgetRepo(
+        budgets={budget.id: budget}, owner_id=owner, entries={entry_dated.id: entry_dated}
+    )
+    lookup = _FakeListAccessLookup(member_of={list_id})
+    service = UpdateBudgetService(repo, lookup)
+
+    result = service.execute(
+        UpdateBudgetCommand(
+            actor_user_id=owner,
+            budget_id=budget.id,
+            name=budget.name,
+            cap="600.00",
+            currency="CRC",
+            source_list_ids=[list_id],
+            period_start=date(2026, 1, 1),
+            period_end=date(2026, 1, 31),
+        )
+    )
+
+    assert result.cap_amount == Decimal("600.00")
+    assert repo.unassign_calls == []
+
+
+class TestPreviewBudgetPeriodChangeService:
+    def test_preview_returns_excluded_lines_diff(self):
+        owner = uuid4()
+        list_id = uuid4()
+        budget = _budget(
+            owner_user_id=owner,
+            source_list_ids=(list_id,),
+            period_start=date(2026, 1, 1),
+            period_end=date(2026, 1, 31),
+        )
+        entry = _entry(
+            list_id=list_id, payer_id=owner, amount_crc=Decimal("10.00"), budget_id=budget.id
+        )
+        entry_dated = dataclass_replace(entry, posted_date=date(2026, 1, 5))
+        repo = _FakeBudgetRepo(
+            budgets={budget.id: budget}, owner_id=owner, entries={entry_dated.id: entry_dated}
+        )
+        service = PreviewBudgetPeriodChangeService(repo)
+
+        result = service.execute(
+            PreviewBudgetPeriodChangeCommand(
+                actor_user_id=owner,
+                budget_id=budget.id,
+                period_start=date(2026, 1, 10),
+                period_end=date(2026, 1, 31),
+            )
+        )
+
+        assert result == (entry_dated,)
+
+    def test_preview_widening_excludes_nothing(self):
+        owner = uuid4()
+        list_id = uuid4()
+        budget = _budget(
+            owner_user_id=owner,
+            source_list_ids=(list_id,),
+            period_start=date(2026, 1, 10),
+            period_end=date(2026, 1, 20),
+        )
+        entry = _entry(
+            list_id=list_id, payer_id=owner, amount_crc=Decimal("10.00"), budget_id=budget.id
+        )
+        entry_dated = dataclass_replace(entry, posted_date=date(2026, 1, 15))
+        repo = _FakeBudgetRepo(
+            budgets={budget.id: budget}, owner_id=owner, entries={entry_dated.id: entry_dated}
+        )
+        service = PreviewBudgetPeriodChangeService(repo)
+
+        result = service.execute(
+            PreviewBudgetPeriodChangeCommand(
+                actor_user_id=owner,
+                budget_id=budget.id,
+                period_start=date(2026, 1, 1),
+                period_end=date(2026, 1, 31),
+            )
+        )
+
+        assert result == ()
+
+    def test_preview_setting_period_first_time_excludes_out_of_range_lines(self):
+        owner = uuid4()
+        list_id = uuid4()
+        budget = _budget(owner_user_id=owner, source_list_ids=(list_id,))
+        entry = _entry(
+            list_id=list_id, payer_id=owner, amount_crc=Decimal("10.00"), budget_id=budget.id
+        )
+        entry_dated = dataclass_replace(entry, posted_date=date(2026, 2, 1))
+        repo = _FakeBudgetRepo(
+            budgets={budget.id: budget}, owner_id=owner, entries={entry_dated.id: entry_dated}
+        )
+        service = PreviewBudgetPeriodChangeService(repo)
+
+        result = service.execute(
+            PreviewBudgetPeriodChangeCommand(
+                actor_user_id=owner,
+                budget_id=budget.id,
+                period_start=date(2026, 1, 1),
+                period_end=date(2026, 1, 31),
+            )
+        )
+
+        assert result == (entry_dated,)
 
 
 # --- DeleteBudgetService -----------------------------------------------------

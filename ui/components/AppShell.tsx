@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { BackIcon, FolderIcon, HomeIcon, UserIcon, WalletIcon } from "@/app/icons";
+import { BackIcon, FolderIcon, HomeIcon, WalletIcon } from "@/app/icons";
 import {
   ChromeBackProvider,
   chromeHeaderIsActive,
@@ -12,7 +12,6 @@ import {
 import { IconButton } from "@/components/IconButton";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { TabBar, type TabBarItem } from "@/components/soft-ledger/TabBar";
-import { accountCopy } from "@/lib/i18n/account";
 import { cardsCopy } from "@/lib/i18n/cards";
 import { showsAppChrome, tabKeyFromPath } from "@/lib/appChrome";
 import { listsMessages } from "@/lib/i18n/lists";
@@ -31,7 +30,6 @@ function AppShellFrame({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { locale } = usePreferences();
   const t = listsMessages[locale];
-  const account = accountCopy(locale);
   const cards = cardsCopy(locale);
   const header = useChromeHeaderState();
   const showHeader = chromeHeaderIsActive(header);
@@ -44,7 +42,6 @@ function AppShellFrame({ children }: { children: ReactNode }) {
     { key: "home", href: "/home", label: t.tabList, Icon: HomeIcon },
     { key: "budgets", href: "/budgets", label: t.budgetsEntryLabel, Icon: FolderIcon },
     { key: "cards", href: "/cards", label: cards.title, Icon: WalletIcon },
-    { key: "account", href: "/account", label: account.navAccount, Icon: UserIcon },
   ];
 
   if (!showHeader && !showTabBar) {
@@ -74,11 +71,13 @@ function AppShellFrame({ children }: { children: ReactNode }) {
                     if (header.backHref) router.push(header.backHref);
                   }}
                 />
+              ) : header.leading ? (
+                header.leading
               ) : null}
             </div>
             <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
               {header.title ? (
-                <h1 className="m-0 truncate text-[1.5rem] font-[550] text-foreground">
+                <h1 className="m-0 min-w-0 truncate text-[1.5rem] font-[550] text-foreground">
                   {header.title}
                 </h1>
               ) : null}

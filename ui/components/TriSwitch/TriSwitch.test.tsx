@@ -13,6 +13,8 @@ vi.mock("./TriSwitch.module.scss", () => ({
   ),
 }));
 
+import { SHOW_DELAY_MS } from "@/components/Tooltip";
+
 import { TriSwitch } from "./TriSwitch";
 
 const options = [
@@ -26,6 +28,7 @@ describe("TriSwitch", () => {
   let root: Root;
 
   beforeEach(() => {
+    vi.useFakeTimers();
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -36,6 +39,7 @@ describe("TriSwitch", () => {
       root.unmount();
     });
     container.remove();
+    vi.useRealTimers();
   });
 
   it("exposes three radios, tooltips, and a sliding thumb on the selected value", async () => {
@@ -170,6 +174,7 @@ describe("TriSwitch", () => {
     const left = container.querySelector('[aria-label="Left"]') as HTMLButtonElement;
     await act(async () => {
       left.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+      vi.advanceTimersByTime(SHOW_DELAY_MS);
     });
 
     const bubble = document.querySelector('[data-testid="tooltip-bubble"]');

@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState, type ChangeEvent } from "react";
+import { useRouter } from "next/navigation";
 
 import { DefaultImportListControl } from "@/app/cards/DefaultImportListControl";
 import { MoonIcon, PencilIcon, SunIcon, SystemIcon, TrashIcon } from "@/app/icons";
 import { fetchLists, type ListItem } from "@/app/lists/listsClient";
 import { resetMembershipListsStore } from "@/app/lists/membershipListsStore";
 import { Avatar } from "@/components/Avatar";
+import { useChromeHeader } from "@/components/ChromeBack";
 import {
   clearPrefsCache,
   usePreferences,
@@ -15,6 +17,7 @@ import { TriSwitch } from "@/components/TriSwitch";
 import { accountCopy } from "@/lib/i18n/account";
 import { encodeAvatarPhoto } from "@/lib/imageEncode";
 import type { Locale, ThemePreference } from "@/lib/i18n/locale";
+import listsStyles from "@/app/lists/lists.module.scss";
 
 import styles from "./AccountMenu.module.scss";
 import { Tooltip } from "./Tooltip";
@@ -24,6 +27,7 @@ export function AccountMenu() {
   // This can cause brief light→dark flicker on page load. Mitigation: ensure initial HTML theme matches system preference.
   const { locale, theme, setLanguage, setTheme, ready, me, refresh } = usePreferences();
   const t = accountCopy(locale);
+  const router = useRouter();
   const [pending, setPending] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,6 +35,14 @@ export function AccountMenu() {
   const [, setCardsRefreshToken] = useState(0);
   const [photoPending, setPhotoPending] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
+
+  // Account has no tab-bar entry of its own — it's reached only via the
+  // avatar in the chrome leading slot on other pages, so this is the one
+  // page where that slot goes back to Back instead of the avatar.
+  useChromeHeader({
+    onBack: () => router.back(),
+    title: t.title,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -154,14 +166,7 @@ export function AccountMenu() {
     "absolute inline-flex items-center justify-center w-8 h-8 rounded-full border border-border bg-surface text-foreground cursor-pointer shadow-sm disabled:opacity-45 disabled:cursor-not-allowed";
 
   return (
-    <main className="py-[2.5rem] px-[1.5rem]" style={{ fontFamily: "var(--font-ui), Manrope, system-ui, sans-serif" }}>
-      <h1 className="m-0 mb-[0.35rem] text-[1.75rem] font-[550] text-foreground">
-        {t.title}
-      </h1>
-      <p className="m-0 mb-[1.75rem] max-w-[28rem] text-muted leading-[1.45] text-[0.95rem]">
-        {t.subtitle}
-      </p>
-
+    <main className={listsStyles.main} style={{ fontFamily: "var(--font-ui), Manrope, system-ui, sans-serif" }}>
       {!ready ? (
         <p className="text-muted text-[0.85rem]">{t.loading}</p>
       ) : null}

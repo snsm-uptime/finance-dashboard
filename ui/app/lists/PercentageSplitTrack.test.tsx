@@ -50,9 +50,9 @@ describe("PercentageSplitTrack", () => {
     });
 
     // Each label is an Avatar only (no visible alias text) — the alias
-    // still surfaces as the avatar's native hover tooltip/aria-label.
+    // still surfaces as the avatar's role="img" aria-label.
     const labels = Array.from(container.querySelectorAll(".sliderLabel")).map(
-      (el) => el.querySelector("[title]")?.getAttribute("title"),
+      (el) => el.querySelector('[role="img"][aria-label]')?.getAttribute("aria-label"),
     );
     expect(labels).toHaveLength(3);
     expect(labels[0]).toBe("Bob");

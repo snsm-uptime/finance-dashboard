@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>New Budget sheet — 3 layout directions</title>
+<style>
+  :root {
+    --background: #f7f3ec; --surface: #fffcf7; --foreground: #2a241c;
+    --muted: #6e6456; --border: #e2d8c8; --accent: #3f6b45; --owe: #a04936;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--background); color: var(--foreground);
+    font-family: -apple-system, "Inter", "Segoe UI", sans-serif;
+    margin: 0; padding: 32px; display: flex; gap: 28px; flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  h1 { width: 100%; font-size: 1rem; font-weight: 600; margin: 0 0 8px; }
+  .col { display: flex; flex-direction: column; gap: 8px; }
+  .col-label { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+  .sheet {
+    width: 340px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px 16px 0 0; box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+    overflow: hidden;
+  }
+  .sheet-header {
+    display: flex; align-items: center; justify-content: center; position: relative;
+    padding: 14px 16px; border-bottom: 1px solid var(--border);
+    font-size: 0.9rem; font-weight: 600;
+  }
+  .sheet-header .x { position: absolute; right: 14px; color: var(--muted); font-size: 1.1rem; }
+  .sheet-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+  label.field-label { font-size: 0.72rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; display:block; margin-bottom: 4px; }
+  .field {
+    border: 1.5px solid var(--border); border-radius: 8px; background: var(--background);
+    padding: 9px 10px; font-size: 0.9rem; color: var(--foreground);
+  }
+  .field.placeholder { color: var(--muted); }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; min-width: 0; }
+  .amount-row .field { display: flex; align-items: center; gap: 6px; }
+  .amount-row .currency-tag {
+    font-size: 0.78rem; font-weight: 600; color: var(--muted); border-right: 1px solid var(--border); padding-right: 6px;
+  }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px; font-size: 0.8rem; color: var(--muted);
+  }
+  .chip.selected { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); font-weight: 600; }
+  .section-title { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); margin: 2px 0 -4px; }
+  .cta {
+    background: var(--accent); color: var(--surface); border: none; border-radius: 8px;
+    padding: 11px; font-size: 0.88rem; font-weight: 600; text-align: center; margin-top: 4px;
+  }
+  .trigger {
+    width: 340px; display:flex; align-items:center; justify-content:center; gap:6px;
+    border: 1.5px dashed var(--border); border-radius: 10px; padding: 10px; color: var(--muted);
+    font-size: 0.85rem; margin-bottom: 4px;
+  }
+  .note { font-size: 0.72rem; color: var(--muted); width: 340px; line-height: 1.4; }
+  .divider { height: 1px; background: var(--border); margin: 2px 0; }
+</style>
+</head>
+<body>
+<h1>New Budget — sheet content, 3 grouping directions (trigger row shown above each)</h1>
+
+<div class="col">
+  <div class="col-label">A — Sectioned (identity / amount / period / scope)</div>
+  <div class="trigger">+ New budget</div>
+  <div class="sheet">
+    <div class="sheet-header">New budget<span class="x">✕</span></div>
+    <div class="sheet-body">
+      <div>
+        <label class="field-label">Name</label>
+        <div class="field placeholder">e.g. Groceries</div>
+      </div>
+      <div class="divider"></div>
+      <div class="section-title">Amount</div>
+      <div class="row amount-row">
+        <div class="field"><span class="currency-tag">CRC</span><span class="placeholder">Cap</span></div>
+      </div>
+      <div class="divider"></div>
+      <div class="section-title">Period (optional)</div>
+      <div class="row">
+        <div class="field placeholder">Sep 4, 2026</div>
+        <div class="field placeholder">Sep 10, 2026</div>
+      </div>
+      <div class="divider"></div>
+      <div class="section-title">Source lists</div>
+      <div class="chips">
+        <div class="chip selected">Eco</div>
+        <div class="chip">Personal</div>
+        <div class="chip">Home</div>
+        <div class="chip">Trip</div>
+      </div>
+      <div class="cta">Create budget</div>
+    </div>
+  </div>
+  <div class="note">Clear hierarchy, most explicit. Costs vertical space / more scrolling for a form this short.</div>
+</div>
+
+<div class="col">
+  <div class="col-label">B — Amount-led (cap+currency is the hero, name below)</div>
+  <div class="trigger">+ New budget</div>
+  <div class="sheet">
+    <div class="sheet-header">New budget<span class="x">✕</span></div>
+    <div class="sheet-body">
+      <div class="row amount-row">
+        <div class="field" style="flex:0 0 30%"><span class="placeholder">CRC</span></div>
+        <div class="field placeholder" style="flex:1">Cap amount</div>
+      </div>
+      <div>
+        <div class="field placeholder">Budget name</div>
+      </div>
+      <div class="row">
+        <div class="field placeholder">Start date</div>
+        <div class="field placeholder">End date</div>
+      </div>
+      <div class="chips">
+        <div class="chip selected">Eco</div>
+        <div class="chip">Personal</div>
+        <div class="chip">Home</div>
+        <div class="chip">Trip</div>
+      </div>
+      <div class="cta">Create budget</div>
+    </div>
+  </div>
+  <div class="note">Closest to today's grouping, just unstacked from one crowded row into one field per row + a real button. Minimal restructuring.</div>
+</div>
+
+<div class="col">
+  <div class="col-label">C — Name-led (name is the title, amount is a compact pair)</div>
+  <div class="trigger">+ New budget</div>
+  <div class="sheet">
+    <div class="sheet-header">New budget<span class="x">✕</span></div>
+    <div class="sheet-body">
+      <div>
+        <div class="field placeholder" style="font-size:1rem;">Budget name</div>
+      </div>
+      <div class="row">
+        <div class="field" style="flex:0 0 34%"><span class="currency-tag">CRC</span><span class="placeholder">Cap</span></div>
+        <div class="field placeholder" style="flex:1">Sep 4 – Sep 10, 2026</div>
+      </div>
+      <div class="chips">
+        <div class="chip selected">Eco</div>
+        <div class="chip">Personal</div>
+        <div class="chip">Home</div>
+        <div class="chip">Trip</div>
+      </div>
+      <div class="cta">Create budget</div>
+    </div>
+  </div>
+  <div class="note">Name first (matches how budget cards identify themselves on the panel). Cap+currency stay paired as one "amount" control; date range collapses to a single field like the existing DateRangeField trigger. Most compact.</div>
+</div>
+
+</body>
+</html>

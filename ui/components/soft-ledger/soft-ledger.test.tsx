@@ -334,9 +334,11 @@ describe("Soft-Ledger primitives", () => {
         />,
       );
     });
-    // Alias text is replaced by an Avatar (alias surfaces as its tooltip).
-    const titles = Array.from(host.querySelectorAll("[title]")).map((el) =>
-      el.getAttribute("title"),
+    // Alias text is replaced by an Avatar (alias surfaces as its
+    // role="img" aria-label, not a native title attribute — Avatar's own
+    // custom Tooltip provides the hover bubble instead).
+    const titles = Array.from(host.querySelectorAll('[role="img"][aria-label]')).map((el) =>
+      el.getAttribute("aria-label"),
     );
     expect(titles).toContain("Alice");
     expect(titles).toContain("Bob");
@@ -384,9 +386,10 @@ describe("Soft-Ledger primitives", () => {
     expect(host.querySelector('[data-slot="type-icon"]')).not.toBeNull();
     expect(host.textContent).toContain("1000 colones");
     // The payer alias is an Avatar, not visible text — it only shows up as
-    // the avatar's native hover tooltip/aria-label.
+    // the avatar's role="img" aria-label (its custom Tooltip provides the
+    // hover bubble, not a native title attribute).
     expect(host.textContent).not.toContain("@sebas");
-    expect(host.querySelector('[title="sebas"]')).not.toBeNull();
+    expect(host.querySelector('[role="img"][aria-label="sebas"]')).not.toBeNull();
     expect(host.textContent).toContain("2026-08-19");
     expect(host.textContent).toContain("Cash");
     expect(host.textContent).toContain("you lent");
@@ -404,7 +407,7 @@ describe("Soft-Ledger primitives", () => {
     );
     const originEl = dateEl?.nextElementSibling as HTMLElement | null;
     expect(originEl?.textContent).toContain("Cash");
-    const handle = originEl?.querySelector('[title="sebas"]');
+    const handle = originEl?.querySelector('[role="img"][aria-label="sebas"]');
     expect(handle).not.toBeNull();
     expect(totalEl?.parentElement).toBe(dateEl?.parentElement);
     expect(originEl?.nextElementSibling).toBe(totalEl ?? null);
@@ -544,9 +547,9 @@ describe("Soft-Ledger primitives", () => {
     expect(host.textContent).toContain("grill out");
     expect(host.textContent).toContain("Unknown");
     // The payer alias is an Avatar, not visible text — it only shows up as
-    // the avatar's native hover tooltip/aria-label.
+    // the avatar's role="img" aria-label.
     expect(host.textContent).not.toContain("@dotmail");
-    expect(host.querySelector('[title="dotmail"]')).not.toBeNull();
+    expect(host.querySelector('[role="img"][aria-label="dotmail"]')).not.toBeNull();
     expect(host.textContent).toContain("you borrowed");
     expect(host.querySelector("button[aria-expanded]")).toBeNull();
     const chip = Array.from(host.querySelectorAll("span")).find((el) =>
@@ -557,7 +560,7 @@ describe("Soft-Ledger primitives", () => {
       (el) => el.textContent === "Unknown",
     );
     expect(originLabel?.className).toContain("text-muted");
-    const handle = chip?.querySelector('[title="dotmail"]');
+    const handle = chip?.querySelector('[role="img"][aria-label="dotmail"]');
     expect(handle).not.toBeNull();
     const direction = Array.from(host.querySelectorAll("span")).find(
       (el) => el.textContent === "you borrowed",
@@ -591,7 +594,7 @@ describe("Soft-Ledger primitives", () => {
     expect(originLabel?.className).toContain("text-muted");
     // The payer alias is an Avatar, not visible text.
     expect(chip?.textContent).not.toContain("@dotmail");
-    expect(chip?.querySelector('[title="dotmail"]')).not.toBeNull();
+    expect(chip?.querySelector('[role="img"][aria-label="dotmail"]')).not.toBeNull();
   });
 
   it("renders a warning No Origin chip and a below-row origin panel slot", () => {

@@ -48,6 +48,8 @@ const budget: BudgetItem = {
   spent: "10.00",
   state: "ok",
   source_list_ids: [],
+  period_start: null,
+  period_end: null,
   created_at: "2026-08-01T00:00:00Z",
 };
 
@@ -129,6 +131,33 @@ describe("BudgetsPanel tile link", () => {
       expect(bar?.getAttribute("aria-label")).toBe(label);
     },
   );
+
+  it("renders the ghost create card as the first item, before any real budget", async () => {
+    fetchBudgetsMock.mockResolvedValue({ ok: true, budgets: [budget] });
+    await act(async () => {
+      root.render(<BudgetsPanel />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const items = Array.from(container.querySelectorAll("form[aria-label], a[href^='/budgets/']"));
+    expect(items[0]?.tagName).toBe("FORM");
+    expect(container.querySelector('form input[type="text"]')).not.toBeNull();
+  });
+
+  it("prepends a newly created budget after the ghost card without replacing it", async () => {
+    fetchBudgetsMock.mockResolvedValue({ ok: true, budgets: [] });
+    await act(async () => {
+      root.render(<BudgetsPanel />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector("form")).not.toBeNull();
+    expect(container.querySelectorAll('a[href^="/budgets/"]').length).toBe(0);
+  });
 
   it("renders a help icon that navigates to /docs#budgets", async () => {
     fetchBudgetsMock.mockResolvedValue({ ok: true, budgets: [] });

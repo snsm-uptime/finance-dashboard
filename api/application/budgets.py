@@ -23,6 +23,7 @@ from domain.budgets import (
     validate_budget_cap,
     validate_budget_currency,
     validate_budget_name,
+    validate_budget_period,
     validate_budget_source_list_ids,
 )
 from domain.errors import (
@@ -46,6 +47,8 @@ class BudgetRecord:
     cap_amount: Decimal
     currency: str
     source_list_ids: tuple[UUID, ...]
+    period_start: date | None
+    period_end: date | None
     created_at: datetime
 
 
@@ -67,6 +70,8 @@ class BudgetRepository(Protocol):
         cap_amount: Decimal,
         currency: str,
         source_list_ids: tuple[UUID, ...],
+        period_start: date | None = None,
+        period_end: date | None = None,
     ) -> BudgetRecord: ...
 
     def list_budgets_for_owner(self, owner_user_id: UUID) -> list[BudgetRecord]: ...
@@ -81,6 +86,8 @@ class BudgetRepository(Protocol):
         cap_amount: Decimal,
         currency: str,
         source_list_ids: tuple[UUID, ...],
+        period_start: date | None = None,
+        period_end: date | None = None,
     ) -> BudgetRecord: ...
 
     def delete_budget(self, budget_id: UUID) -> None: ...
@@ -111,6 +118,8 @@ class CreateBudgetCommand:
     cap: str
     currency: str
     source_list_ids: list[UUID]
+    period_start: date | None = None
+    period_end: date | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,6 +131,8 @@ class BudgetView:
     spent: Decimal
     state: BudgetState
     source_list_ids: tuple[UUID, ...]
+    period_start: date | None
+    period_end: date | None
     created_at: datetime
 
 
@@ -140,6 +151,7 @@ class CreateBudgetService:
         cap = validate_budget_cap(command.cap, currency_exponent=2)
         currency = validate_budget_currency(command.currency)
         source_list_ids = validate_budget_source_list_ids(command.source_list_ids)
+        validate_budget_period(command.period_start, command.period_end)
 
         for list_id in source_list_ids:
             membership = self._list_lookup.get_membership(list_id, command.actor_user_id)
@@ -154,6 +166,8 @@ class CreateBudgetService:
             cap_amount=cap,
             currency=currency,
             source_list_ids=source_list_ids,
+            period_start=command.period_start,
+            period_end=command.period_end,
         )
 
 
@@ -165,13 +179,69 @@ class UpdateBudgetCommand:
     cap: str
     currency: str
     source_list_ids: list[UUID]
+    period_start: date | None = None
+    period_end: date | None = None
+    confirm_period_change: bool = False
+
+
+class PeriodChangeRequiresConfirmationError(Exception):
+    """Raised when narrowing/first-setting a budget's period would exclude
+    currently-attributed lines and the caller has not set
+    `confirm_period_change=True` (AC #3 — no silent removal). Carries the
+    excluded-lines diff so the API layer can map it without recomputing."""
+
+    def __init__(self, excluded_entries: tuple[LedgerEntryRecord, ...]) -> None:
+        self.excluded_entries = excluded_entries
+        super().__init__("Confirm the period change to remove affected lines.")
+
+
+def _compute_period_change_exclusions(
+    repo: BudgetRepository,
+    budget: BudgetRecord,
+    *,
+    period_start: date | None,
+    period_end: date | None,
+) -> tuple[LedgerEntryRecord, ...]:
+    """Entries currently attributed to `budget` (under its stored period)
+    that would no longer be attributed under the proposed `period_start`/
+    `period_end`. Reuses the same rule/assignment inputs `compute_attributed_entries`
+    already takes — only the period bounds differ between the two calls."""
+    rules = repo.list_rules_for_budget(budget.id)
+    rule_texts = [r.match_text for r in rules]
+    entries = repo.list_ledger_entries_for_lists(list(budget.source_list_ids))
+
+    currently_attributed = compute_attributed_entries(
+        entries,
+        budget_id=budget.id,
+        rule_texts=rule_texts,
+        period_start=budget.period_start,
+        period_end=budget.period_end,
+    )
+    would_remain_attributed = compute_attributed_entries(
+        entries,
+        budget_id=budget.id,
+        rule_texts=rule_texts,
+        period_start=period_start,
+        period_end=period_end,
+    )
+    remaining_ids = {e.id for e in would_remain_attributed}
+    return tuple(e for e in currently_attributed if e.id not in remaining_ids)
 
 
 class UpdateBudgetService:
     """Full-replace PATCH mirroring CreateBudgetService's validation, plus a
     404-on-deny ownership check (AD-30 — no 403 path, see `_get_owned_budget`)
     and a same-owner name-uniqueness guard (excluding the budget being
-    updated)."""
+    updated).
+
+    Period narrowing (AC #3/#4/#5): when the proposed period would exclude
+    lines currently attributed under the budget's stored period, applying
+    the change requires `confirm_period_change=True`; otherwise this raises
+    `PeriodChangeRequiresConfirmationError` carrying the excluded set so the
+    API layer can reject with 422 without a silent narrower apply. On a
+    confirmed narrowing, every excluded entry is unassigned via the same
+    `repo.unassign_entry` primitive Story 7.3's `UnassignEntryFromBudgetService`
+    uses — no second unassign code path."""
 
     def __init__(self, repo: BudgetRepository, list_lookup: ListAccessLookup) -> None:
         self._repo = repo
@@ -184,6 +254,7 @@ class UpdateBudgetService:
         cap = validate_budget_cap(command.cap, currency_exponent=2)
         currency = validate_budget_currency(command.currency)
         source_list_ids = validate_budget_source_list_ids(command.source_list_ids)
+        validate_budget_period(command.period_start, command.period_end)
 
         for list_id in source_list_ids:
             membership = self._list_lookup.get_membership(list_id, command.actor_user_id)
@@ -195,12 +266,60 @@ class UpdateBudgetService:
             if sibling.id != budget.id and sibling.name == name:
                 raise DuplicateBudgetNameError()
 
-        return self._repo.update_budget(
+        period_changed = (
+            command.period_start != budget.period_start or command.period_end != budget.period_end
+        )
+        excluded_entries: tuple[LedgerEntryRecord, ...] = ()
+        if period_changed:
+            excluded_entries = _compute_period_change_exclusions(
+                self._repo,
+                budget,
+                period_start=command.period_start,
+                period_end=command.period_end,
+            )
+            if excluded_entries and not command.confirm_period_change:
+                raise PeriodChangeRequiresConfirmationError(excluded_entries)
+
+        updated = self._repo.update_budget(
             budget_id=budget.id,
             name=name,
             cap_amount=cap,
             currency=currency,
             source_list_ids=source_list_ids,
+            period_start=command.period_start,
+            period_end=command.period_end,
+        )
+
+        for entry in excluded_entries:
+            self._repo.unassign_entry(entry.id)
+
+        return updated
+
+
+@dataclass(frozen=True, slots=True)
+class PreviewBudgetPeriodChangeCommand:
+    actor_user_id: UUID
+    budget_id: UUID
+    period_start: date | None
+    period_end: date | None
+
+
+class PreviewBudgetPeriodChangeService:
+    """Read-only: the confirmation Sheet (AC #3) fetches this before the
+    owner confirms, so the excluded-lines list shown to them exactly matches
+    what `UpdateBudgetService` would exclude on confirm."""
+
+    def __init__(self, repo: BudgetRepository) -> None:
+        self._repo = repo
+
+    def execute(self, command: PreviewBudgetPeriodChangeCommand) -> tuple[LedgerEntryRecord, ...]:
+        budget = _get_owned_budget(self._repo, command.budget_id, command.actor_user_id)
+        validate_budget_period(command.period_start, command.period_end)
+        return _compute_period_change_exclusions(
+            self._repo,
+            budget,
+            period_start=command.period_start,
+            period_end=command.period_end,
         )
 
 
@@ -275,7 +394,11 @@ def _compute_spent_and_history(
     if entries is None:
         entries = repo.list_ledger_entries_for_lists(list(record.source_list_ids))
     attributed = compute_attributed_entries(
-        entries, budget_id=record.id, rule_texts=[r.match_text for r in rules]
+        entries,
+        budget_id=record.id,
+        rule_texts=[r.match_text for r in rules],
+        period_start=record.period_start,
+        period_end=record.period_end,
     )
     spent = compute_budget_spent(attributed)
 
@@ -350,6 +473,8 @@ class ListBudgetsService:
                     spent=spent,
                     state=state,
                     source_list_ids=record.source_list_ids,
+                    period_start=record.period_start,
+                    period_end=record.period_end,
                     created_at=record.created_at,
                 )
             )
@@ -371,6 +496,8 @@ class BudgetDetailView:
     spent: Decimal
     state: BudgetState
     source_list_ids: tuple[UUID, ...]
+    period_start: date | None
+    period_end: date | None
     created_at: datetime
     history: tuple[BudgetHistoryLine, ...]
     rules: tuple[BudgetRuleView, ...]
@@ -408,6 +535,8 @@ class GetBudgetDetailService:
             spent=spent,
             state=state,
             source_list_ids=record.source_list_ids,
+            period_start=record.period_start,
+            period_end=record.period_end,
             created_at=record.created_at,
             history=history,
             rules=rules,
@@ -449,6 +578,13 @@ class AssignEntryToBudgetService:
             # A non-spend line is not a valid attribution target — looks
             # identical to "doesn't exist" from the caller's perspective
             # (no distinct error code; nothing leaks about which ids exist).
+            raise LedgerEntryNotFoundError()
+        if (budget.period_start is not None and entry.posted_date < budget.period_start) or (
+            budget.period_end is not None and entry.posted_date > budget.period_end
+        ):
+            # Out-of-period, same "looks identical to not found" philosophy
+            # (Story 7.5, AC #2) — an out-of-period line can't be assigned
+            # by a crafted request even though it isn't shown as a candidate.
             raise LedgerEntryNotFoundError()
 
         self._repo.assign_entry_to_budget(entry.id, budget.id)
@@ -511,6 +647,8 @@ class ListBudgetCandidatesService:
             if e.line_type in BUDGET_ASSIGNABLE_LINE_TYPES
             and e.budget_id is None
             and not any(matches_rule(e.normalized_description, rt) for rt in rule_texts)
+            and (budget.period_start is None or e.posted_date >= budget.period_start)
+            and (budget.period_end is None or e.posted_date <= budget.period_end)
         ]
         candidates.sort(key=lambda e: (e.posted_date, str(e.id)), reverse=True)
         return tuple(

@@ -5,10 +5,12 @@ import { ChangeEvent, useEffect, useId, useRef, useState } from "react";
 
 import { IconButton } from "@/components/IconButton";
 import { useChromeHeader } from "@/components/ChromeBack";
+import { ChromeAvatarLink } from "@/components/ChromeAvatarLink";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { AlertIcon, CloseIcon, SpinnerIcon } from "@/app/icons";
 import { DocsHelpButton } from "@/app/docs/DocsHelpButton";
 import { uploadCopy } from "@/lib/i18n/upload";
+import listsStyles from "@/app/lists/lists.module.scss";
 import { UploadButton } from "./UploadButton";
 import {
   discardSession,
@@ -149,7 +151,7 @@ function reconcileWithLiveActive(queue: QueueEntry[], live: ImportSession | null
 }
 
 export function UploadPanel({ initialSession = null }: { initialSession?: ImportSession | null }) {
-  const { locale } = usePreferences();
+  const { locale, me } = usePreferences();
   const t = uploadCopy(locale);
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -161,6 +163,10 @@ export function UploadPanel({ initialSession = null }: { initialSession?: Import
   const pickChainRef = useRef(Promise.resolve());
   const [capMessage, setCapMessage] = useState<string | null>(null);
   useChromeHeader({
+    leading: me ? (
+      <ChromeAvatarLink alias={me.alias} userId={me.user_id} photoBase64={me.photo_base64} />
+    ) : null,
+    title: t.title,
     trailing: (
       <DocsHelpButton pageName="Upload" docsAnchor="/docs#cards-imports" />
     ),
@@ -337,12 +343,12 @@ export function UploadPanel({ initialSession = null }: { initialSession?: Import
 
   return (
     <main
-      className="min-h-full h-full flex flex-col"
+      className={`${listsStyles.main} flex flex-col`}
       style={{ fontFamily: "var(--font-ui), Manrope, system-ui, sans-serif" }}
     >
       <h1 className="sr-only">{t.title}</h1>
 
-      <div className="flex-1 flex flex-col items-center justify-center px-[1.5rem] py-[2.5rem]">
+      <div className="flex-1 flex flex-col items-center justify-center">
         <div className="flex flex-col items-center">
           <UploadButton
             pending={uploading}

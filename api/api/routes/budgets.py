@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from datetime import date
 from decimal import Decimal
 
 from adapters.persistence.budgets import SqlAlchemyBudgetRepository
@@ -31,12 +32,16 @@ from application.budgets import (
     ListBudgetCandidatesService,
     ListBudgetsCommand,
     ListBudgetsService,
+    PeriodChangeRequiresConfirmationError,
+    PreviewBudgetPeriodChangeCommand,
+    PreviewBudgetPeriodChangeService,
     UnassignEntryFromBudgetCommand,
     UnassignEntryFromBudgetService,
     UpdateBudgetCommand,
     UpdateBudgetService,
     _compute_spent_and_history,
 )
+from application.expenses import LedgerEntryRecord
 from domain.budgets import classify_budget_state
 from domain.errors import (
     BudgetNotFoundError,
@@ -45,6 +50,7 @@ from domain.errors import (
     InvalidBudgetCapError,
     InvalidBudgetCurrencyError,
     InvalidBudgetNameError,
+    InvalidBudgetPeriodError,
     InvalidBudgetRuleMatchTextError,
     InvalidBudgetSourceListsError,
     LedgerEntryNotFoundError,
@@ -61,6 +67,8 @@ from api.schemas.budgets import (
     BudgetCandidatesResponse,
     BudgetDetailResponse,
     BudgetHistoryLineResponse,
+    BudgetPeriodPreviewLineResponse,
+    BudgetPeriodPreviewResponse,
     BudgetResponse,
     BudgetRuleResponse,
     BudgetsListResponse,
@@ -134,6 +142,40 @@ def _budget_candidate_response(candidate: BudgetCandidate) -> BudgetCandidateRes
     )
 
 
+def _budget_period_preview_line_response(
+    entry: LedgerEntryRecord,
+) -> BudgetPeriodPreviewLineResponse:
+    return BudgetPeriodPreviewLineResponse(
+        id=entry.id,
+        description=entry.normalized_description,
+        posted_date=entry.posted_date,
+        amount_crc=format(entry.amount_crc, "f"),
+    )
+
+
+def _invalid_budget_period(exc: InvalidBudgetPeriodError) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content={"detail": str(exc), "code": "invalid_budget_period"},
+    )
+
+
+def _period_change_requires_confirmation(
+    exc: PeriodChangeRequiresConfirmationError,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content={
+            "detail": str(exc),
+            "code": "period_change_requires_confirmation",
+            "excluded_lines": [
+                _budget_period_preview_line_response(e).model_dump(mode="json")
+                for e in exc.excluded_entries
+            ],
+        },
+    )
+
+
 def _budget_response(view: BudgetView) -> BudgetResponse:
     return BudgetResponse(
         id=view.id,
@@ -143,6 +185,8 @@ def _budget_response(view: BudgetView) -> BudgetResponse:
         spent=format(view.spent, "f"),
         state=view.state,
         source_lists=list(view.source_list_ids),
+        period_start=view.period_start,
+        period_end=view.period_end,
         created_at=view.created_at,
     )
 
@@ -156,6 +200,8 @@ def _budget_detail_response(view: BudgetDetailView) -> BudgetDetailResponse:
         spent=format(view.spent, "f"),
         state=view.state,
         source_lists=list(view.source_list_ids),
+        period_start=view.period_start,
+        period_end=view.period_end,
         created_at=view.created_at,
         history=[_budget_history_line_response(line) for line in view.history],
         rules=[_budget_rule_response(rule) for rule in view.rules],
@@ -187,6 +233,8 @@ def create_budget(
                 cap=body.cap,
                 currency=body.currency,
                 source_list_ids=body.source_list_ids,
+                period_start=body.period_start,
+                period_end=body.period_end,
             )
         )
     except InvalidBudgetNameError as exc:
@@ -209,6 +257,8 @@ def create_budget(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             content={"detail": str(exc), "code": "invalid_budget_source_lists"},
         )
+    except InvalidBudgetPeriodError as exc:
+        return _invalid_budget_period(exc)
     except NotListMemberError:
         # The one remaining 403 in this module (AC #5) — a named source list
         # the caller doesn't belong to.
@@ -223,6 +273,8 @@ def create_budget(
         spent=spent,
         state=classify_budget_state(spent, record.cap_amount),
         source_list_ids=record.source_list_ids,
+        period_start=record.period_start,
+        period_end=record.period_end,
         created_at=record.created_at,
     )
     return _budget_response(view)
@@ -259,6 +311,9 @@ def update_budget(
                 cap=body.cap,
                 currency=body.currency,
                 source_list_ids=body.source_list_ids,
+                period_start=body.period_start,
+                period_end=body.period_end,
+                confirm_period_change=body.confirm_period_change,
             )
         )
     except BudgetNotFoundError:
@@ -283,6 +338,10 @@ def update_budget(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             content={"detail": str(exc), "code": "invalid_budget_source_lists"},
         )
+    except InvalidBudgetPeriodError as exc:
+        return _invalid_budget_period(exc)
+    except PeriodChangeRequiresConfirmationError as exc:
+        return _period_change_requires_confirmation(exc)
     except DuplicateBudgetNameError:
         return _budget_name_taken()
     except NotListMemberError:
@@ -297,6 +356,8 @@ def update_budget(
         spent=spent,
         state=classify_budget_state(spent, record.cap_amount),
         source_list_ids=record.source_list_ids,
+        period_start=record.period_start,
+        period_end=record.period_end,
         created_at=record.created_at,
     )
     return _budget_response(view)
@@ -377,6 +438,47 @@ def list_budget_candidates(
     except BudgetNotFoundError:
         return _budget_not_found()
     return BudgetCandidatesResponse(candidates=[_budget_candidate_response(c) for c in candidates])
+
+
+def _parse_period_query_date(raw: str | None, *, field: str) -> date | None:
+    if raw is None or raw == "":
+        return None
+    try:
+        return date.fromisoformat(raw)
+    except ValueError as exc:
+        raise InvalidBudgetPeriodError(f"{field} must be an ISO-8601 date.") from exc
+
+
+@router.get("/{budget_id}/period-preview", response_model=BudgetPeriodPreviewResponse)
+def preview_budget_period_change(
+    budget_id: uuid.UUID,
+    period_start: str | None = None,
+    period_end: str | None = None,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> BudgetPeriodPreviewResponse | JSONResponse:
+    service = PreviewBudgetPeriodChangeService(SqlAlchemyBudgetRepository(db))
+    try:
+        parsed_period_start = _parse_period_query_date(period_start, field="period_start")
+        parsed_period_end = _parse_period_query_date(period_end, field="period_end")
+    except InvalidBudgetPeriodError as exc:
+        return _invalid_budget_period(exc)
+    try:
+        excluded_entries = service.execute(
+            PreviewBudgetPeriodChangeCommand(
+                actor_user_id=user_id,
+                budget_id=budget_id,
+                period_start=parsed_period_start,
+                period_end=parsed_period_end,
+            )
+        )
+    except BudgetNotFoundError:
+        return _budget_not_found()
+    except InvalidBudgetPeriodError as exc:
+        return _invalid_budget_period(exc)
+    return BudgetPeriodPreviewResponse(
+        excluded_lines=[_budget_period_preview_line_response(e) for e in excluded_entries]
+    )
 
 
 @router.post(

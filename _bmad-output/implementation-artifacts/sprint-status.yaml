@@ -1,5 +1,5 @@
 # generated: 2026-08-03T22:46:31
-# last_updated: 2026-09-03 (story 8-3: docs page UX refactor, ready-for-dev)
+# last_updated: 2026-09-04 (7-5-budget-period-range: review — ghost-card form amendment)
 
 # project: finance-dashboard
 # project_key: NOKEY
@@ -42,7 +42,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-03T22:46:31
-last_updated: 2026-09-03 (story 8-3: docs page UX refactor, review)
+last_updated: 2026-09-04
 
 project: finance-dashboard
 project_key: NOKEY
@@ -152,11 +152,11 @@ development_status:
   # Epic 7 — budgets as a standalone entity (post-v1). Supersedes Epic 6
   # Stories 6.3-6.5's budget-specific ACs. Sprint Change Proposal 2026-09-01.md
   epic-7: in-progress
-  7-1-standalone-budget-list-create: review
+  7-1-standalone-budget-list-create: done
   7-2-cross-list-budget-detail: done
   7-3-cross-list-attribution-rule-badge: done
   7-4-budget-progress-bar-visualization: done
-  7-5-budget-period-range: backlog
+  7-5-budget-period-range: review
   7-6-archive-budgets: backlog
   epic-7-retrospective: optional
 

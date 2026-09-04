@@ -105,6 +105,8 @@ describe("POST /api/budgets BFF", () => {
         cap: "500.00",
         currency: "CRC",
         source_list_ids: ["l1", "l2"],
+        period_start: null,
+        period_end: null,
       }),
     );
   });

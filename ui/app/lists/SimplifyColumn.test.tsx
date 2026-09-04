@@ -66,9 +66,9 @@ describe("SimplifyColumn", () => {
       (b) => b.getAttribute("aria-label") !== messages.copyLabel && !b.textContent?.includes(messages.title),
     );
     expect(loadTriggerButtons).toHaveLength(0);
-    // Alias text is replaced by an Avatar (alias surfaces as its tooltip).
-    const titles = Array.from(container.querySelectorAll("[title]")).map((el) =>
-      el.getAttribute("title"),
+    // Alias text is replaced by an Avatar (alias surfaces as its role="img" aria-label).
+    const titles = Array.from(container.querySelectorAll('[role="img"][aria-label]')).map((el) =>
+      el.getAttribute("aria-label"),
     );
     expect(titles).toContain("Alice");
     expect(titles).toContain("Bob");

@@ -514,6 +514,8 @@ class BudgetModel(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     cap_amount: Mapped[Decimal] = mapped_column(Numeric, nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    period_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    period_end: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

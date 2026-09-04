@@ -364,3 +364,7 @@
 ## Deferred from: code review of 8-2-documentation-index-page (2026-09-02)
 
 - No test cross-references all `TutorialEntry href` values against `TutorialDetail id` values in `ui/app/docs/page.tsx` — 6 of 9 anchor pairs are untested (only 3 spot-checked in `page.docs.test.tsx`). Manually verified all 9 currently match correctly; deferred as a pre-existing test-coverage pattern gap, not a live bug.
+
+## Deferred from: code review of 7-5-budget-period-range (2026-09-03)
+
+- Removing a source list from a budget's `source_list_ids` on update never unassigns entries previously attributed from that list — the FK (`ledger_entries.budget_id`) is left set even though the list is no longer a member of `budget_source_lists`. Pre-existing repository behavior (`api/adapters/persistence/budgets.py:112-140`), not introduced by Story 7.5, but it means combining a period-narrow with a source-list-narrow in the same PATCH won't surface source-list-driven exclusions in the confirmation diff either.

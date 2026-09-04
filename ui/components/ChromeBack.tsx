@@ -13,7 +13,13 @@ export type ChromeHeaderConfig = {
   backHref?: string | null;
   /** When set, Back runs this instead of pushing `backHref` (e.g. discard then navigate). */
   onBack?: (() => void) | null;
-  title?: string | null;
+  /**
+   * Replaces the Back button in the same fixed leading slot (e.g. an Avatar on
+   * top-level tabs that have no back navigation). Ignored if `backHref`/`onBack`
+   * is also set — Back takes priority.
+   */
+  leading?: ReactNode;
+  title?: ReactNode;
   details?: string | null;
   trailing?: ReactNode;
   /**
@@ -47,7 +53,12 @@ export function useChromeHeaderState(): ChromeHeaderConfig {
 
 export function chromeHeaderIsActive(header: ChromeHeaderConfig): boolean {
   return Boolean(
-    header.backHref || header.onBack || header.title || header.details || header.trailing,
+    header.backHref ||
+      header.onBack ||
+      header.leading ||
+      header.title ||
+      header.details ||
+      header.trailing,
   );
 }
 
@@ -57,12 +68,12 @@ export function chromeHeaderIsActive(header: ChromeHeaderConfig): boolean {
  */
 export function useChromeHeader(config: ChromeHeaderConfig) {
   const setHeader = useContext(ChromeHeaderSetContext);
-  const { backHref, onBack, title, details, trailing, progressBar } = config;
+  const { backHref, onBack, leading, title, details, trailing, progressBar } = config;
   useEffect(() => {
     if (!setHeader) return;
-    setHeader({ backHref, onBack, title, details, trailing, progressBar });
+    setHeader({ backHref, onBack, leading, title, details, trailing, progressBar });
     return () => setHeader(emptyHeader);
-  }, [setHeader, backHref, onBack, title, details, trailing, progressBar]);
+  }, [setHeader, backHref, onBack, leading, title, details, trailing, progressBar]);
 }
 
 export function useChromeBackHref(): string | null {

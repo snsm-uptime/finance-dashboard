@@ -1,6 +1,7 @@
 """Unit tests for budget name/cap/currency validation + near-cap classification
 (Story 6.3) and source-list-id validation (Story 7.1)."""
 
+from datetime import date
 from decimal import Decimal
 from uuid import uuid4
 
@@ -11,12 +12,14 @@ from domain.budgets import (
     validate_budget_cap,
     validate_budget_currency,
     validate_budget_name,
+    validate_budget_period,
     validate_budget_source_list_ids,
 )
 from domain.errors import (
     InvalidBudgetCapError,
     InvalidBudgetCurrencyError,
     InvalidBudgetNameError,
+    InvalidBudgetPeriodError,
     InvalidBudgetSourceListsError,
 )
 
@@ -122,3 +125,24 @@ class TestValidateBudgetSourceListIds:
     def test_order_preserving_dedupe_with_repeat_in_middle(self):
         a, b, c = uuid4(), uuid4(), uuid4()
         assert validate_budget_source_list_ids([a, b, a, c]) == (a, b, c)
+
+
+class TestValidateBudgetPeriod:
+    def test_both_unset_accepted(self):
+        validate_budget_period(None, None)
+
+    def test_only_start_accepted(self):
+        validate_budget_period(date(2026, 1, 1), None)
+
+    def test_only_end_accepted(self):
+        validate_budget_period(None, date(2026, 1, 31))
+
+    def test_start_before_end_accepted(self):
+        validate_budget_period(date(2026, 1, 1), date(2026, 1, 31))
+
+    def test_start_equal_end_accepted(self):
+        validate_budget_period(date(2026, 1, 1), date(2026, 1, 1))
+
+    def test_start_after_end_rejected(self):
+        with pytest.raises(InvalidBudgetPeriodError):
+            validate_budget_period(date(2026, 2, 1), date(2026, 1, 1))

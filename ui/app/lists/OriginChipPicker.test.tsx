@@ -155,7 +155,7 @@ describe("OriginChipPicker", () => {
       renderPicker(root, { payerAlias: "sebas", payerSeed: "user-1" });
     });
     const trigger = container.querySelector("button[aria-expanded]") as HTMLButtonElement;
-    expect(trigger.querySelector('[title="sebas"]')).not.toBeNull();
+    expect(trigger.querySelector('[role="img"][aria-label="sebas"]')).not.toBeNull();
     expect(trigger.textContent).not.toContain("@sebas");
     expect(trigger.textContent).toContain(messages.expenseOriginNone);
 
@@ -164,10 +164,10 @@ describe("OriginChipPicker", () => {
     });
 
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
-    expect(trigger.querySelector('[title="sebas"]')).not.toBeNull();
+    expect(trigger.querySelector('[role="img"][aria-label="sebas"]')).not.toBeNull();
     expect(trigger.textContent).toContain(messages.expenseOriginNone);
     for (const option of container.querySelectorAll('[role="region"] button')) {
-      expect(option.querySelector('[title="sebas"]')).toBeNull();
+      expect(option.querySelector('[role="img"][aria-label="sebas"]')).toBeNull();
     }
   });
 

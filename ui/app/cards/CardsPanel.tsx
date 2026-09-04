@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { CopyButton } from "@/components/CopyButton";
 import { useChromeHeader } from "@/components/ChromeBack";
+import { ChromeAvatarLink } from "@/components/ChromeAvatarLink";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { StackedListPanel } from "@/components/StackedListPanel";
 import { cardsCopy } from "@/lib/i18n/cards";
@@ -39,6 +40,10 @@ export function CardsPanel({ refreshToken = 0 }: Props = {}) {
   const [registeredStatus, setRegisteredStatus] = useState("");
   const defaultListId = me?.default_import_list_id ?? "";
   useChromeHeader({
+    leading: me ? (
+      <ChromeAvatarLink alias={me.alias} userId={me.user_id} photoBase64={me.photo_base64} />
+    ) : null,
+    title: t.title,
     trailing: (
       <DocsHelpButton pageName="Cards" docsAnchor="/docs#cards-imports" />
     ),

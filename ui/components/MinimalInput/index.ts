@@ -1,0 +1,1 @@
+export { MinimalInput } from "./MinimalInput";

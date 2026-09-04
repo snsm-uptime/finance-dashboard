@@ -2,7 +2,9 @@
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { SHOW_DELAY_MS } from "@/components/Tooltip";
 
 import { TopProgressBar } from "./TopProgressBar";
 
@@ -19,6 +21,7 @@ describe("TopProgressBar", () => {
   let root: Root;
 
   beforeEach(() => {
+    vi.useFakeTimers();
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -29,6 +32,7 @@ describe("TopProgressBar", () => {
       root.unmount();
     });
     container.remove();
+    vi.useRealTimers();
   });
 
   it("renders a filled width proportional to ratio", async () => {
@@ -119,6 +123,7 @@ describe("TopProgressBar", () => {
 
     await act(async () => {
       bar.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+      vi.advanceTimersByTime(SHOW_DELAY_MS);
     });
     const bubble = document.querySelector('[data-testid="tooltip-bubble"]');
     expect(bubble).not.toBeNull();
@@ -141,6 +146,7 @@ describe("TopProgressBar", () => {
 
     await act(async () => {
       bar.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+      vi.advanceTimersByTime(SHOW_DELAY_MS);
     });
     const bubble = document.querySelector('[data-testid="tooltip-bubble"]');
     expect(bubble).not.toBeNull();

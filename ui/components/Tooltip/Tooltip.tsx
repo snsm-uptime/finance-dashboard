@@ -44,8 +44,12 @@ const GAP_PX = 4;
  */
 const TOP_FLIP_THRESHOLD_PX = 48;
 
-/** Standard hover/focus delay before the bubble appears; hiding is always instant. */
-const SHOW_DELAY_MS = 500;
+/**
+ * Standard hover/focus delay before the bubble appears; hiding is always
+ * instant. Exported so consuming tests advance fake timers by the actual
+ * value instead of a hardcoded guess that can drift out of sync.
+ */
+export const SHOW_DELAY_MS = 500;
 
 export function Tooltip({ label, disabled = false, children }: Props) {
   const suppressed = disabled || !label;
@@ -83,11 +87,15 @@ export function Tooltip({ label, disabled = false, children }: Props) {
       hoveredRef.current = false;
       /* eslint-disable-next-line react-hooks/refs */
       focusVisibleRef.current = false;
+      /* eslint-disable react-hooks/refs -- see the block comment above: this
+         whole reset (including the `if` guard) runs during render, adjusting
+         state in response to a prop change per the documented pattern; none
+         of these refs feed render output. */
       if (showTimeoutRef.current !== null) {
         clearTimeout(showTimeoutRef.current);
-        /* eslint-disable-next-line react-hooks/refs */
         showTimeoutRef.current = null;
       }
+      /* eslint-enable react-hooks/refs */
       if (coords !== null) {
         setCoords(null);
       }
