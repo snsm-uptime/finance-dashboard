@@ -1,0 +1,629 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Budget card + calendar popover — key-screen mock</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Petrona:wght@500&family=Manrope:wght@400;500;550&display=swap');
+
+  :root {
+    --background: #F7F3EC;
+    --surface: #FFFCF7;
+    --text: #2A241C;
+    --muted: #6E6456;
+    --border: #E2D8C8;
+    --accent: #3F6B45;
+    --on-accent: #FFFCF7;
+    --owe: #A04936;
+    --owed: #2F6E48;
+    --warn: #A6791F;
+    --rounded-md: 10px;
+    --rounded-sm: 6px;
+    --space-2: 6px;
+    --space-3: 10px;
+    --space-4: 14px;
+  }
+  [data-theme="dark"] {
+    --background: #17140F;
+    --surface: #221E17;
+    --text: #F0E9DC;
+    --muted: #A89B88;
+    --border: #3A342A;
+    --accent: #8FBB8E;
+    --on-accent: #17140F;
+    --owe: #D48B78;
+    --owed: #7EC794;
+    --warn: #D9B866;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--background);
+    color: var(--text);
+    font-family: Manrope, system-ui, sans-serif;
+    margin: 0;
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+  h2 {
+    font-family: Manrope, system-ui, sans-serif;
+    font-size: 0.66rem;
+    font-weight: 550;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 10px;
+  }
+  .theme-block {
+    background: var(--background);
+    padding: 20px;
+    border-radius: 14px;
+  }
+  .row {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+
+  /* ---- budget-card ---- */
+  .budget-card {
+    width: 240px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--rounded-md);
+    padding: var(--space-4) var(--space-3) 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    text-decoration: none;
+    color: inherit;
+    overflow: hidden; /* keeps the flush bar's square top corners clipped to the card radius */
+  }
+  .budget-card__top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center; /* col2 is always vertically centered against col1, even when col1 wraps to two lines of chips or col2 is in its overdue/open-ended state */
+    gap: var(--space-3);
+    padding-bottom: var(--space-3);
+  }
+  .budget-card__col1 {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+  .budget-card__name {
+    margin: 0;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .budget-card__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: var(--rounded-sm);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 0.62rem;
+    font-weight: 550;
+    letter-spacing: 0.02em;
+  }
+  .budget-card__col2 {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    cursor: default;
+  }
+  .budget-card__days {
+    font-family: Petrona, 'Times New Roman', serif;
+    font-size: 2.3rem;
+    font-weight: 500;
+    line-height: 0.95;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+  /* Overdue (0 or negative days left) tints owe-color but keeps the same
+     size/weight as the on-track state — no separate typographic register
+     for "ended"; a budget is only actually gone once archived (manually,
+     or automatically 7 days past period_end). */
+  .budget-card__days--overdue { color: var(--owe); }
+  .budget-card__days--infinite {
+    font-size: 1.7rem;
+    color: var(--muted);
+  }
+  .budget-card__period-caption {
+    /* Sized/tracked to read as a caption of the number above it, width
+       pinned to the number's own rendered width (not the reverse) so it
+       never runs wider than the digit stack it explains. */
+    font-size: 0.56rem;
+    font-weight: 550;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  /* End date: hidden until hover/focus/tap on col2 — a tooltip, not a
+     permanent line. Click/tap toggles `.is-open` (see script) for touch
+     devices; hover/focus covers pointer + keyboard. */
+  .budget-card__end-date {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    background: var(--text);
+    color: var(--surface);
+    font-size: 0.65rem;
+    font-weight: 500;
+    padding: 4px 8px;
+    border-radius: var(--rounded-sm);
+    white-space: nowrap;
+    opacity: 0;
+    transform: translateY(-2px);
+    pointer-events: none;
+    transition: opacity 120ms ease-out, transform 120ms ease-out;
+    z-index: 1;
+  }
+  .budget-card__col2:hover .budget-card__end-date,
+  .budget-card__col2:focus-within .budget-card__end-date,
+  .budget-card__col2.is-open .budget-card__end-date {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ---- progress bar with embedded, always-readable value ----
+     Bleeds flush to the card's left/right/bottom edges (negative margins
+     cancel the card's own padding) — no gutter, no radius of its own; the
+     card's `overflow: hidden` clips it to the card's already-rounded
+     bottom corners. */
+  .budget-bar {
+    position: relative;
+    height: 30px;
+    margin: 0 calc(-1 * var(--space-3)) calc(-1 * 1px);
+    background: var(--border);
+    overflow: hidden;
+  }
+  .budget-bar__fill {
+    position: absolute;
+    inset: 0;
+    width: var(--ratio, 50%);
+    background: var(--fill-color, var(--owed));
+  }
+  .budget-bar__fill--full { }
+  /* Two stacked copies of the same label: the base copy paints in --text
+     (readable on the --border track); the second copy is absolutely
+     positioned identically but clipped to the fill width and painted in
+     --on-accent, so wherever the fill edge lands, one of the two copies is
+     always the one showing through — no fixed color choice can fail
+     contrast against both the track and every severity fill color. */
+  .budget-bar__label {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 10px;
+    font-size: 0.72rem;
+    font-weight: 550;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  .budget-bar__label--track { color: var(--text); }
+  .budget-bar__label--fill {
+    color: var(--on-accent);
+    clip-path: inset(0 calc(100% - var(--ratio, 50%)) 0 0);
+  }
+
+  .legend {
+    font-size: 0.7rem;
+    color: var(--muted);
+    max-width: 240px;
+  }
+
+  /* ---- calendar popover ---- */
+  .field-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    padding: 0.5rem 0.65rem;
+    width: fit-content;
+  }
+  .field-row__divider {
+    width: 1px;
+    height: 20px;
+    background: var(--border);
+  }
+  .field-btn {
+    font-family: Manrope, system-ui, sans-serif;
+    font-size: 0.85rem;
+    color: var(--text);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+  }
+  .field-btn--placeholder { color: var(--muted); }
+
+  .repeats-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .repeats-row__label {
+    font-size: 0.6rem;
+    font-weight: 550;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-right: 4px;
+  }
+  .repeats-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 0.68rem;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .repeats-chip--selected {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    font-weight: 550;
+  }
+
+  .calendar-popover {
+    margin-top: 8px;
+    width: 248px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--rounded-md);
+    padding: var(--space-3);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  }
+  .calendar-popover__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .calendar-popover__month {
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .calendar-popover__nav {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: 0.85rem;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  .calendar-popover__nav:hover { background: var(--border); }
+  .calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    text-align: center;
+  }
+  .calendar-grid__dow {
+    font-size: 0.58rem;
+    font-weight: 550;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding-bottom: 4px;
+  }
+  .calendar-grid__day {
+    font-size: 0.72rem;
+    color: var(--text);
+    padding: 5px 0;
+    border-radius: 999px;
+    font-variant-numeric: tabular-nums;
+  }
+  .calendar-grid__day--muted { color: var(--border); }
+  .calendar-grid__day--today {
+    box-shadow: inset 0 0 0 1px var(--muted);
+  }
+  .calendar-grid__day--in-range {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    border-radius: 0;
+  }
+  .calendar-grid__day--selected {
+    background: var(--accent);
+    color: var(--on-accent);
+    font-weight: 550;
+  }
+  .calendar-popover__footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+  .calendar-popover__clear {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: 0.72rem;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<div class="theme-block" data-theme="light">
+  <h2>Light — budget-card states</h2>
+  <div class="row">
+
+    <!-- On-track, period set -->
+    <a class="budget-card">
+      <div class="budget-card__top">
+        <div class="budget-card__col1">
+          <p class="budget-card__name">Groceries</p>
+          <div class="budget-card__chips">
+            <span class="chip">Household</span>
+          </div>
+        </div>
+        <div class="budget-card__col2" tabindex="0">
+          <span class="budget-card__days">12</span>
+          <span class="budget-card__period-caption">days left</span>
+          <span class="budget-card__end-date">Ends Jan 31</span>
+        </div>
+      </div>
+      <div class="budget-bar">
+        <div class="budget-bar__fill" style="--ratio: 45%; --fill-color: var(--owed);"></div>
+        <div class="budget-bar__label budget-bar__label--track">
+          <span>₡27,000</span><span>₡60,000</span>
+        </div>
+        <div class="budget-bar__label budget-bar__label--fill">
+          <span>₡27,000</span><span>₡60,000</span>
+        </div>
+      </div>
+    </a>
+
+    <!-- Near cap -->
+    <a class="budget-card">
+      <div class="budget-card__top">
+        <div class="budget-card__col1">
+          <p class="budget-card__name">Dining out</p>
+          <div class="budget-card__chips">
+            <span class="chip">Household</span>
+            <span class="chip">Personal card</span>
+          </div>
+        </div>
+        <div class="budget-card__col2" tabindex="0">
+          <span class="budget-card__days">3</span>
+          <span class="budget-card__period-caption">days left</span>
+          <span class="budget-card__end-date">Ends Jan 22</span>
+        </div>
+      </div>
+      <div class="budget-bar">
+        <div class="budget-bar__fill" style="--ratio: 82%; --fill-color: var(--warn);"></div>
+        <div class="budget-bar__label budget-bar__label--track">
+          <span>₡49,200</span><span>₡60,000</span>
+        </div>
+        <div class="budget-bar__label budget-bar__label--fill">
+          <span>₡49,200</span><span>₡60,000</span>
+        </div>
+      </div>
+    </a>
+
+    <!-- Over cap -->
+    <a class="budget-card">
+      <div class="budget-card__top">
+        <div class="budget-card__col1">
+          <p class="budget-card__name">Transport</p>
+          <div class="budget-card__chips">
+            <span class="chip">Car list</span>
+          </div>
+        </div>
+        <div class="budget-card__col2" tabindex="0">
+          <span class="budget-card__days budget-card__days--overdue">-3</span>
+          <span class="budget-card__period-caption">days overdue</span>
+          <span class="budget-card__end-date">Was due Jan 15 · archives in 4d</span>
+        </div>
+      </div>
+      <div class="budget-bar">
+        <div class="budget-bar__fill budget-bar__fill--full" style="--ratio: 100%; --fill-color: var(--owe);"></div>
+        <div class="budget-bar__label budget-bar__label--track">
+          <span>₡71,400</span><span>₡60,000</span>
+        </div>
+        <div class="budget-bar__label budget-bar__label--fill">
+          <span>₡71,400</span><span>₡60,000</span>
+        </div>
+      </div>
+    </a>
+
+    <!-- No end date set (open-ended, no auto-archive applies) -->
+    <a class="budget-card">
+      <div class="budget-card__top">
+        <div class="budget-card__col1">
+          <p class="budget-card__name">Subscriptions</p>
+          <div class="budget-card__chips">
+            <span class="chip">Household</span>
+          </div>
+        </div>
+        <div class="budget-card__col2" tabindex="0">
+          <span class="budget-card__days budget-card__days--infinite">∞</span>
+          <span class="budget-card__period-caption">open-ended</span>
+        </div>
+      </div>
+      <div class="budget-bar">
+        <div class="budget-bar__fill" style="--ratio: 30%; --fill-color: var(--owed);"></div>
+        <div class="budget-bar__label budget-bar__label--track">
+          <span>₡9,000</span><span>₡30,000</span>
+        </div>
+        <div class="budget-bar__label budget-bar__label--fill">
+          <span>₡9,000</span><span>₡30,000</span>
+        </div>
+      </div>
+    </a>
+
+  </div>
+  <p class="legend">Col 2 (days-left) is omitted entirely for open-ended budgets — no "∞" placeholder, matches the product rule of never inventing data that isn't there. Ended periods show "Ended" in owe-color instead of a countdown. The exact end date only appears as a tooltip on hover/focus/tap of the days-left number — try it above.</p>
+</div>
+
+<div class="theme-block" data-theme="dark">
+  <h2>Dark — same states</h2>
+  <div class="row">
+    <a class="budget-card">
+      <div class="budget-card__top">
+        <div class="budget-card__col1">
+          <p class="budget-card__name">Groceries</p>
+          <div class="budget-card__chips">
+            <span class="chip">Household</span>
+          </div>
+        </div>
+        <div class="budget-card__col2" tabindex="0">
+          <span class="budget-card__days">12</span>
+          <span class="budget-card__period-caption">days left</span>
+          <span class="budget-card__end-date">Ends Jan 31</span>
+        </div>
+      </div>
+      <div class="budget-bar">
+        <div class="budget-bar__fill" style="--ratio: 45%; --fill-color: var(--owed);"></div>
+        <div class="budget-bar__label budget-bar__label--track">
+          <span>₡27,000</span><span>₡60,000</span>
+        </div>
+        <div class="budget-bar__label budget-bar__label--fill">
+          <span>₡27,000</span><span>₡60,000</span>
+        </div>
+      </div>
+    </a>
+
+    <a class="budget-card">
+      <div class="budget-card__top">
+        <div class="budget-card__col1">
+          <p class="budget-card__name">Dining out</p>
+          <div class="budget-card__chips">
+            <span class="chip">Household</span>
+          </div>
+        </div>
+        <div class="budget-card__col2" tabindex="0">
+          <span class="budget-card__days">3</span>
+          <span class="budget-card__period-caption">days left</span>
+          <span class="budget-card__end-date">Ends Jan 22</span>
+        </div>
+      </div>
+      <div class="budget-bar">
+        <div class="budget-bar__fill" style="--ratio: 82%; --fill-color: var(--warn);"></div>
+        <div class="budget-bar__label budget-bar__label--track">
+          <span>₡49,200</span><span>₡60,000</span>
+        </div>
+        <div class="budget-bar__label budget-bar__label--fill">
+          <span>₡49,200</span><span>₡60,000</span>
+        </div>
+      </div>
+    </a>
+
+    <a class="budget-card">
+      <div class="budget-card__top">
+        <div class="budget-card__col1">
+          <p class="budget-card__name">Transport</p>
+          <div class="budget-card__chips">
+            <span class="chip">Car list</span>
+          </div>
+        </div>
+        <div class="budget-card__col2" tabindex="0">
+          <span class="budget-card__days budget-card__days--overdue">-3</span>
+          <span class="budget-card__period-caption">days overdue</span>
+          <span class="budget-card__end-date">Was due Jan 15 · archives in 4d</span>
+        </div>
+      </div>
+      <div class="budget-bar">
+        <div class="budget-bar__fill budget-bar__fill--full" style="--ratio: 100%; --fill-color: var(--owe);"></div>
+        <div class="budget-bar__label budget-bar__label--track">
+          <span>₡71,400</span><span>₡60,000</span>
+        </div>
+        <div class="budget-bar__label budget-bar__label--fill">
+          <span>₡71,400</span><span>₡60,000</span>
+        </div>
+      </div>
+    </a>
+  </div>
+</div>
+
+<div class="theme-block" data-theme="light">
+  <h2>Light — date-field + calendar-popover (replaces native &lt;input type="date"&gt;)</h2>
+  <div class="field-row">
+    <button class="field-btn">Jan 1, 2026</button>
+    <span class="field-row__divider"></span>
+    <button class="field-btn field-btn--placeholder">To (optional)</button>
+  </div>
+  <div class="repeats-row">
+    <span class="repeats-row__label">Repeats</span>
+    <span class="repeats-chip">None</span>
+    <span class="repeats-chip repeats-chip--selected">Monthly</span>
+    <span class="repeats-chip">Weekly</span>
+    <span class="repeats-chip">Yearly</span>
+  </div>
+  <p class="legend" style="margin-top:8px; margin-bottom: 0;">[ASSUMPTION] Frequency presets shown (None/Weekly/Monthly/Yearly) — confirm against the actual recurrence needs before this becomes a spine commitment. Recurrence only offers a next-period *creation* affordance in this pass; the archive-timing rule below is separate and applies regardless of whether a budget repeats.</p>
+  <div class="calendar-popover">
+    <div class="calendar-popover__header">
+      <button class="calendar-popover__nav">‹</button>
+      <span class="calendar-popover__month">January 2026</span>
+      <button class="calendar-popover__nav">›</button>
+    </div>
+    <div class="calendar-grid">
+      <span class="calendar-grid__dow">Su</span><span class="calendar-grid__dow">Mo</span><span class="calendar-grid__dow">Tu</span><span class="calendar-grid__dow">We</span><span class="calendar-grid__dow">Th</span><span class="calendar-grid__dow">Fr</span><span class="calendar-grid__dow">Sa</span>
+      <span class="calendar-grid__day calendar-grid__day--muted">28</span><span class="calendar-grid__day calendar-grid__day--muted">29</span><span class="calendar-grid__day calendar-grid__day--muted">30</span><span class="calendar-grid__day calendar-grid__day--muted">31</span>
+      <span class="calendar-grid__day calendar-grid__day--selected">1</span><span class="calendar-grid__day calendar-grid__day--in-range">2</span><span class="calendar-grid__day calendar-grid__day--in-range">3</span>
+      <span class="calendar-grid__day calendar-grid__day--in-range">4</span><span class="calendar-grid__day calendar-grid__day--in-range">5</span><span class="calendar-grid__day calendar-grid__day--in-range">6</span><span class="calendar-grid__day calendar-grid__day--in-range">7</span><span class="calendar-grid__day calendar-grid__day--in-range">8</span><span class="calendar-grid__day calendar-grid__day--in-range">9</span><span class="calendar-grid__day calendar-grid__day--in-range">10</span>
+      <span class="calendar-grid__day calendar-grid__day--in-range">11</span><span class="calendar-grid__day calendar-grid__day--in-range">12</span><span class="calendar-grid__day calendar-grid__day--in-range">13</span><span class="calendar-grid__day calendar-grid__day--in-range">14</span><span class="calendar-grid__day calendar-grid__day--in-range calendar-grid__day--today">15</span><span class="calendar-grid__day calendar-grid__day--in-range">16</span><span class="calendar-grid__day calendar-grid__day--in-range">17</span>
+      <span class="calendar-grid__day">18</span><span class="calendar-grid__day">19</span><span class="calendar-grid__day">20</span><span class="calendar-grid__day">21</span><span class="calendar-grid__day">22</span><span class="calendar-grid__day">23</span><span class="calendar-grid__day">24</span>
+      <span class="calendar-grid__day">25</span><span class="calendar-grid__day">26</span><span class="calendar-grid__day">27</span><span class="calendar-grid__day">28</span><span class="calendar-grid__day">29</span><span class="calendar-grid__day">30</span><span class="calendar-grid__day">31</span>
+    </div>
+    <div class="calendar-popover__footer">
+      <button class="calendar-popover__clear">Clear</button>
+    </div>
+  </div>
+  <p class="legend" style="margin-top:10px;">Field row reuses the exact bordered chip-row shell already in BudgetsCreateForm/BudgetUpdateForm (2px border, 8px radius) — only the calendar icon/native picker is replaced. Selecting "From" opens the popover anchored under the row; picking a day fills the range tint through to "To" if already set.</p>
+</div>
+
+<script>
+  // Days-left tooltip: hover/focus already show it via CSS. This adds a
+  // tap-to-toggle for touch devices (no hover state) — tapping col2 toggles
+  // `.is-open`; tapping elsewhere closes any open tooltip. Card navigation
+  // (the <a>) is prevented while the tooltip is being toggled so a tap
+  // reveals the date instead of immediately navigating to budget detail.
+  document.querySelectorAll('.budget-card__col2').forEach((col2) => {
+    col2.addEventListener('click', (e) => {
+      const wasOpen = col2.classList.contains('is-open');
+      document.querySelectorAll('.budget-card__col2.is-open').forEach((el) => el.classList.remove('is-open'));
+      if (!wasOpen) {
+        e.preventDefault();
+        col2.classList.add('is-open');
+      }
+    });
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.budget-card__col2')) {
+      document.querySelectorAll('.budget-card__col2.is-open').forEach((el) => el.classList.remove('is-open'));
+    }
+  });
+</script>
+
+</body>
+</html>
