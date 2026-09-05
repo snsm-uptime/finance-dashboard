@@ -90,6 +90,7 @@ class ListModel(Base):
     # means "use DEFAULT_SAME_PRICE_WINDOW_DAYS" — no settings UI ships yet
     # (deferred to Story 5.9), this column only carries the schema-level hook.
     same_price_window_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_archived: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -490,6 +491,7 @@ class CardModel(Base):
         nullable=True,
         index=True,
     )
+    is_archived: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

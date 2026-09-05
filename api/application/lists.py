@@ -63,6 +63,7 @@ class ListRecord:
     id: UUID
     name: str
     owner_id: UUID
+    is_archived: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,7 +130,13 @@ class ListRepository(Protocol):
 
     def delete_list(self, list_id: UUID) -> None: ...
 
-    def list_for_user(self, user_id: UUID) -> list[ListMembershipSummary]: ...
+    def archive_list(self, list_id: UUID) -> None: ...
+
+    def unarchive_list(self, list_id: UUID) -> None: ...
+
+    def list_for_user(
+        self, user_id: UUID, *, archived: bool = False
+    ) -> list[ListMembershipSummary]: ...
 
     def get_list_with_grant(self, grant: ListAccessGrant, list_id: UUID) -> ListRecord: ...
 
@@ -176,6 +183,19 @@ class DeleteListCommand:
 @dataclass(frozen=True, slots=True)
 class ListMembershipsCommand:
     actor_user_id: UUID
+    archived: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class ArchiveListCommand:
+    actor_user_id: UUID
+    list_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class UnarchiveListCommand:
+    actor_user_id: UUID
+    list_id: UUID
 
 
 @dataclass(frozen=True, slots=True)
@@ -371,6 +391,44 @@ class DeleteListService:
             raise NotListOwnerError()
 
         self._repo.delete_list(command.list_id)
+
+
+class ArchiveListService:
+    """Archive a list — owner-only; non-members and non-owner members rejected."""
+
+    def __init__(self, repo: ListRepository) -> None:
+        self._repo = repo
+
+    def execute(self, command: ArchiveListCommand) -> ListRecord:
+        existing = self._repo.get_list(command.list_id)
+        membership = self._repo.get_membership(command.list_id, command.actor_user_id)
+        if existing is None or membership is None:
+            raise NotListMemberError()
+
+        if existing.owner_id != command.actor_user_id:
+            raise NotListOwnerError()
+
+        self._repo.archive_list(command.list_id)
+        return self._repo.get_list(command.list_id)
+
+
+class UnarchiveListService:
+    """Unarchive a list — owner-only; non-members and non-owner members rejected."""
+
+    def __init__(self, repo: ListRepository) -> None:
+        self._repo = repo
+
+    def execute(self, command: UnarchiveListCommand) -> ListRecord:
+        existing = self._repo.get_list(command.list_id)
+        membership = self._repo.get_membership(command.list_id, command.actor_user_id)
+        if existing is None or membership is None:
+            raise NotListMemberError()
+
+        if existing.owner_id != command.actor_user_id:
+            raise NotListOwnerError()
+
+        self._repo.unarchive_list(command.list_id)
+        return self._repo.get_list(command.list_id)
 
 
 def _filter_entries_by_period(
@@ -595,7 +653,7 @@ class ListMembershipsService:
         self._repo = repo
 
     def execute(self, command: ListMembershipsCommand) -> list[ListMembershipSummary]:
-        items = self._repo.list_for_user(command.actor_user_id)
+        items = self._repo.list_for_user(command.actor_user_id, archived=command.archived)
         return [
             replace(
                 item,

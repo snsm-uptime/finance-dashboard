@@ -26,6 +26,7 @@ class ListResponse(BaseModel):
     id: UUID
     name: str
     owner_id: UUID
+    is_archived: bool = False
 
 
 class ListMemberItem(BaseModel):
@@ -45,6 +46,7 @@ class ListMembershipItem(BaseModel):
     members: list[ListMemberItem] = Field(default_factory=list)
     # Running total of all entries on the list, shown alongside balance_crc.
     total_crc: str = "0"
+    is_archived: bool = False
 
 
 class ListMembershipsResponse(BaseModel):
@@ -55,6 +57,7 @@ class ListDetailResponse(BaseModel):
     id: UUID
     name: str
     owner_id: UUID
+    is_archived: bool = False
 
 
 class PeriodResponse(BaseModel):

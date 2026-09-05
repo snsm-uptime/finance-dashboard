@@ -144,6 +144,100 @@ def test_non_member_and_non_owner_rename_denied(client: TestClient, db_session: 
     assert str(row.owner_id) == str(owner_id)
 
 
+def test_owner_archive_and_unarchive_round_trip(client: TestClient, db_session: Session) -> None:
+    _register(client, "archiver@example.com")
+    created = client.post("/lists", json={"name": "Trip"})
+    list_id = created.json()["id"]
+
+    archived = client.post(f"/lists/{list_id}/archive")
+    assert archived.status_code == 200, archived.text
+    assert archived.json()["is_archived"] is True
+
+    default_lists = client.get("/lists")
+    ids_default = {item["id"] for item in default_lists.json()["lists"]}
+    assert list_id not in ids_default
+
+    archived_lists = client.get("/lists", params={"archived": "true"})
+    ids_archived = {item["id"] for item in archived_lists.json()["lists"]}
+    assert list_id in ids_archived
+
+    unarchived = client.post(f"/lists/{list_id}/unarchive")
+    assert unarchived.status_code == 200, unarchived.text
+    assert unarchived.json()["is_archived"] is False
+
+    default_lists_again = client.get("/lists")
+    ids_default_again = {item["id"] for item in default_lists_again.json()["lists"]}
+    assert list_id in ids_default_again
+
+
+def test_non_owner_and_non_member_archive_denied(client: TestClient, db_session: Session) -> None:
+    _register(client, "archiveowner@example.com")
+    created = client.post("/lists", json={"name": "Household"})
+    list_id = created.json()["id"]
+
+    client.post("/auth/sign-out")
+    _register(client, "archivemember@example.com")
+    member_me = client.get("/auth/me")
+    member_id = UUID(member_me.json()["user_id"])
+    list_uuid = UUID(list_id)
+
+    db_session.add(
+        ListMembershipModel(
+            id=uuid4(),
+            list_id=list_uuid,
+            user_id=member_id,
+            role="member",
+        )
+    )
+    db_session.flush()
+
+    denied_member = client.post(f"/lists/{list_id}/archive")
+    assert denied_member.status_code == 403
+    assert denied_member.json()["code"] == "not_list_owner"
+
+    client.post("/auth/sign-out")
+    _register(client, "archivestranger@example.com")
+    denied_stranger = client.post(f"/lists/{list_id}/archive")
+    assert denied_stranger.status_code == 403
+    assert denied_stranger.json()["code"] == "not_list_member"
+
+
+def test_archive_unknown_list_same_as_non_member(client: TestClient) -> None:
+    _register(client, "archiveprober@example.com")
+    response = client.post(f"/lists/{uuid4()}/archive")
+    assert response.status_code == 403
+    assert response.json()["code"] == "not_list_member"
+
+
+def test_archiving_preserves_membership_and_balances(
+    client: TestClient, db_session: Session
+) -> None:
+    _register(client, "archivehistory@example.com")
+    created = client.post("/lists", json={"name": "Shared"})
+    list_id = created.json()["id"]
+
+    before_members = client.get(f"/lists/{list_id}/members")
+    assert before_members.status_code == 200
+    before_balances = client.get(f"/lists/{list_id}/balances")
+    assert before_balances.status_code == 200
+
+    archived = client.post(f"/lists/{list_id}/archive")
+    assert archived.status_code == 200, archived.text
+
+    after_members = client.get(f"/lists/{list_id}/members")
+    assert after_members.status_code == 200
+    assert after_members.json() == before_members.json()
+
+    after_balances = client.get(f"/lists/{list_id}/balances")
+    assert after_balances.status_code == 200
+    assert after_balances.json() == before_balances.json()
+
+    # Detail endpoint stays unfiltered by archive state (same rule as budgets).
+    detail = client.get(f"/lists/{list_id}")
+    assert detail.status_code == 200
+    assert detail.json()["is_archived"] is True
+
+
 def test_blank_name_rejected(client: TestClient) -> None:
     _register(client, "blank@example.com")
     for name in ("   ", ""):

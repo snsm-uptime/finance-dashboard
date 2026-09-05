@@ -13,6 +13,8 @@ import uuid
 from adapters.persistence.cards import SqlAlchemyCardRepository
 from adapters.persistence.repositories import SqlAlchemyListRepository
 from application.cards import (
+    ArchiveCardCommand,
+    ArchiveCardService,
     CardRecord,
     ListCardsCommand,
     ListCardsService,
@@ -20,6 +22,8 @@ from application.cards import (
     RegisterCardService,
     SetCardRoutingCommand,
     SetCardRoutingService,
+    UnarchiveCardCommand,
+    UnarchiveCardService,
 )
 from domain.errors import (
     CardIbanAlreadyRegisteredError,
@@ -29,7 +33,7 @@ from domain.errors import (
     InvalidCardRoutingModeError,
     NotListMemberError,
 )
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
@@ -54,16 +58,18 @@ def _card_response(card: CardRecord) -> CardResponse:
         created_at=card.created_at,
         routing_mode=card.routing_mode,
         fixed_list_id=card.fixed_list_id,
+        is_archived=card.is_archived,
     )
 
 
 @router.get("", response_model=CardsListResponse)
 def list_cards(
+    archived: bool = Query(default=False),
     user_id: uuid.UUID = Depends(require_authenticated_user),
     db: Session = Depends(get_db),
 ) -> CardsListResponse:
     service = ListCardsService(SqlAlchemyCardRepository(db))
-    cards = service.execute(ListCardsCommand(actor_user_id=user_id))
+    cards = service.execute(ListCardsCommand(actor_user_id=user_id, archived=archived))
     return CardsListResponse(cards=[_card_response(c) for c in cards])
 
 
@@ -135,4 +141,40 @@ def set_card_routing(
         user_id,
         result.routing_mode,
     )
+    return _card_response(result)
+
+
+@router.post("/{card_id}/archive", response_model=CardResponse)
+def archive_card(
+    card_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> CardResponse | JSONResponse:
+    service = ArchiveCardService(SqlAlchemyCardRepository(db))
+    try:
+        result = service.execute(ArchiveCardCommand(actor_user_id=user_id, card_id=card_id))
+    except CardNotFoundError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": str(exc), "code": "card_not_found"},
+        )
+    logger.info("card_archived card_id=%s user_id=%s", result.id, user_id)
+    return _card_response(result)
+
+
+@router.post("/{card_id}/unarchive", response_model=CardResponse)
+def unarchive_card(
+    card_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> CardResponse | JSONResponse:
+    service = UnarchiveCardService(SqlAlchemyCardRepository(db))
+    try:
+        result = service.execute(UnarchiveCardCommand(actor_user_id=user_id, card_id=card_id))
+    except CardNotFoundError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": str(exc), "code": "card_not_found"},
+        )
+    logger.info("card_unarchived card_id=%s user_id=%s", result.id, user_id)
     return _card_response(result)

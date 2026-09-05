@@ -22,6 +22,7 @@ def _card_record(row: CardModel) -> CardRecord:
         created_at=row.created_at,
         routing_mode=row.routing_mode,
         fixed_list_id=row.fixed_list_id,
+        is_archived=row.is_archived,
     )
 
 
@@ -52,10 +53,10 @@ class SqlAlchemyCardRepository:
             return None
         return _card_record(row)
 
-    def list_cards_for_user(self, user_id: UUID) -> list[CardRecord]:
+    def list_cards_for_user(self, user_id: UUID, *, archived: bool = False) -> list[CardRecord]:
         stmt = (
             select(CardModel)
-            .where(CardModel.user_id == user_id)
+            .where(CardModel.user_id == user_id, CardModel.is_archived == archived)
             .order_by(CardModel.created_at.desc(), CardModel.id.desc())
         )
         rows = self._session.scalars(stmt).all()
@@ -89,3 +90,23 @@ class SqlAlchemyCardRepository:
             .values(routing_mode="review", fixed_list_id=None)
         )
         self._session.flush()
+
+    def archive_card(self, card_id: UUID, user_id: UUID) -> CardRecord:
+        row = self._session.scalar(
+            select(CardModel).where(CardModel.id == card_id, CardModel.user_id == user_id).limit(1)
+        )
+        if row is None:
+            raise CardNotFoundError()
+        row.is_archived = True
+        self._session.flush()
+        return _card_record(row)
+
+    def unarchive_card(self, card_id: UUID, user_id: UUID) -> CardRecord:
+        row = self._session.scalar(
+            select(CardModel).where(CardModel.id == card_id, CardModel.user_id == user_id).limit(1)
+        )
+        if row is None:
+            raise CardNotFoundError()
+        row.is_archived = False
+        self._session.flush()
+        return _card_record(row)

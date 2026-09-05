@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
+import { SpinnerIcon } from "@/app/icons";
 
 const DEFAULT_WRAPPER_CLASS = "relative flex flex-col gap-2";
 const DEFAULT_LIST_CLASS = "list-none m-0 p-0 flex flex-col gap-2";
 const DEFAULT_ITEM_CLASS =
   "py-[0.6rem] px-[0.85rem] rounded-[8px] border border-border bg-surface";
-const DEFAULT_LOADING_CLASS = "text-muted text-[0.85rem]";
+const DEFAULT_LOADING_CLASS = "flex justify-center py-2 text-muted";
 const DEFAULT_ERROR_CLASS = "text-owe text-[0.9rem]";
 const DEFAULT_EMPTY_CLASS = "text-muted text-[0.85rem]";
 
@@ -66,7 +67,9 @@ export function StackedListPanel<T>({
       {input}
 
       {loading ? (
-        <p className={loadingClassName}>{loadingLabel}</p>
+        <div className={loadingClassName} role="status" aria-label={loadingLabel}>
+          <SpinnerIcon className="h-5 w-5 animate-spin" />
+        </div>
       ) : error ? (
         <p className={errorClassName} role="alert">
           {error}

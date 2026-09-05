@@ -26,6 +26,7 @@ class CardRecord:
     created_at: datetime
     routing_mode: str = "review"
     fixed_list_id: UUID | None = None
+    is_archived: bool = False
 
 
 class CardRepository(Protocol):
@@ -33,7 +34,7 @@ class CardRepository(Protocol):
 
     def get_card_by_iban(self, user_id: UUID, iban_normalized: str) -> CardRecord | None: ...
 
-    def list_cards_for_user(self, user_id: UUID) -> list[CardRecord]: ...
+    def list_cards_for_user(self, user_id: UUID, *, archived: bool = False) -> list[CardRecord]: ...
 
     def get_card(self, card_id: UUID, user_id: UUID) -> CardRecord | None: ...
 
@@ -42,6 +43,10 @@ class CardRepository(Protocol):
     ) -> CardRecord: ...
 
     def reset_routing_to_review_for_user(self, user_id: UUID) -> None: ...
+
+    def archive_card(self, card_id: UUID, user_id: UUID) -> CardRecord: ...
+
+    def unarchive_card(self, card_id: UUID, user_id: UUID) -> CardRecord: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +65,19 @@ class MatchCardByIbanCommand:
 @dataclass(frozen=True, slots=True)
 class ListCardsCommand:
     actor_user_id: UUID
+    archived: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class ArchiveCardCommand:
+    actor_user_id: UUID
+    card_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class UnarchiveCardCommand:
+    actor_user_id: UUID
+    card_id: UUID
 
 
 class RegisterCardService:
@@ -105,7 +123,7 @@ class ListCardsService:
         self._repo = repo
 
     def execute(self, command: ListCardsCommand) -> list[CardRecord]:
-        return self._repo.list_cards_for_user(command.actor_user_id)
+        return self._repo.list_cards_for_user(command.actor_user_id, archived=command.archived)
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,3 +167,31 @@ class SetCardRoutingService:
             routing_mode=mode,
             fixed_list_id=fixed_list_id,
         )
+
+
+class ArchiveCardService:
+    """Archive a card — registering user only; any other user's card is 404."""
+
+    def __init__(self, repo: CardRepository) -> None:
+        self._repo = repo
+
+    def execute(self, command: ArchiveCardCommand) -> CardRecord:
+        card = self._repo.get_card(command.card_id, command.actor_user_id)
+        if card is None:
+            raise CardNotFoundError()
+
+        return self._repo.archive_card(command.card_id, command.actor_user_id)
+
+
+class UnarchiveCardService:
+    """Unarchive a card — registering user only; any other user's card is 404."""
+
+    def __init__(self, repo: CardRepository) -> None:
+        self._repo = repo
+
+    def execute(self, command: UnarchiveCardCommand) -> CardRecord:
+        card = self._repo.get_card(command.card_id, command.actor_user_id)
+        if card is None:
+            raise CardNotFoundError()
+
+        return self._repo.unarchive_card(command.card_id, command.actor_user_id)

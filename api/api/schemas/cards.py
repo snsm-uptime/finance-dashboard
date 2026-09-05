@@ -28,6 +28,7 @@ class CardResponse(BaseModel):
     created_at: datetime
     routing_mode: str
     fixed_list_id: UUID | None = None
+    is_archived: bool = False
 
 
 class CardsListResponse(BaseModel):
