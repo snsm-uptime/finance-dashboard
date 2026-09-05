@@ -179,3 +179,54 @@ def test_set_card_routing_invalid_mode_rejected(client: TestClient) -> None:
 
     response = client.patch(f"/cards/{card_id}/routing", json={"routing_mode": "bogus"})
     assert response.status_code == 422
+
+
+def test_archive_and_unarchive_card_round_trip(client: TestClient) -> None:
+    _register(client, "cardarchive@example.com")
+    created = client.post("/cards", json={"label": "My Visa", "iban": "CR30"})
+    card_id = created.json()["id"]
+
+    archived = client.post(f"/cards/{card_id}/archive")
+    assert archived.status_code == 200, archived.text
+    assert archived.json()["is_archived"] is True
+
+    default_list = client.get("/cards")
+    assert [c["id"] for c in default_list.json()["cards"]] == []
+
+    archived_list = client.get("/cards", params={"archived": "true"})
+    assert [c["id"] for c in archived_list.json()["cards"]] == [card_id]
+
+    unarchived = client.post(f"/cards/{card_id}/unarchive")
+    assert unarchived.status_code == 200, unarchived.text
+    assert unarchived.json()["is_archived"] is False
+
+    default_list_again = client.get("/cards")
+    assert [c["id"] for c in default_list_again.json()["cards"]] == [card_id]
+
+
+def test_archive_card_preserves_routing(client: TestClient) -> None:
+    _register(client, "cardarchiveroute@example.com")
+    list_id = _own_list_id(client)
+    created = client.post("/cards", json={"label": "My Visa", "iban": "CR31"})
+    card_id = created.json()["id"]
+    client.patch(
+        f"/cards/{card_id}/routing",
+        json={"routing_mode": "fixed", "fixed_list_id": list_id},
+    )
+
+    archived = client.post(f"/cards/{card_id}/archive")
+    assert archived.status_code == 200, archived.text
+    assert archived.json()["routing_mode"] == "fixed"
+    assert archived.json()["fixed_list_id"] == list_id
+
+
+def test_archive_unowned_card_not_found(client: TestClient) -> None:
+    _register(client, "cardarchiveownera@example.com")
+    created = client.post("/cards", json={"label": "My Visa", "iban": "CR32"})
+    card_id = created.json()["id"]
+
+    client.post("/auth/sign-out")
+    _register(client, "cardarchiveownerb@example.com")
+    response = client.post(f"/cards/{card_id}/archive")
+    assert response.status_code == 404
+    assert response.json()["code"] == "card_not_found"

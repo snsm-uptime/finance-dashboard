@@ -269,7 +269,9 @@ class SqlAlchemyListRepository:
         row = self._session.get(ListModel, list_id)
         if row is None:
             return None
-        return ListRecord(id=row.id, name=row.name, owner_id=row.owner_id)
+        return ListRecord(
+            id=row.id, name=row.name, owner_id=row.owner_id, is_archived=row.is_archived
+        )
 
     def get_membership(self, list_id: UUID, user_id: UUID) -> MembershipRecord | None:
         row = self._session.scalar(
@@ -317,7 +319,9 @@ class SqlAlchemyListRepository:
             raise ListNotFoundError()
         row.name = name
         self._session.flush()
-        return ListRecord(id=row.id, name=row.name, owner_id=row.owner_id)
+        return ListRecord(
+            id=row.id, name=row.name, owner_id=row.owner_id, is_archived=row.is_archived
+        )
 
     def delete_list(self, list_id: UUID) -> None:
         row = self._session.get(ListModel, list_id)
@@ -326,14 +330,33 @@ class SqlAlchemyListRepository:
         self._session.delete(row)
         self._session.flush()
 
-    def list_for_user(self, user_id: UUID) -> list[ListMembershipSummary]:
+    def archive_list(self, list_id: UUID) -> None:
+        row = self._session.get(ListModel, list_id)
+        if row is None:
+            raise ListNotFoundError()
+        row.is_archived = True
+        self._session.flush()
+
+    def unarchive_list(self, list_id: UUID) -> None:
+        row = self._session.get(ListModel, list_id)
+        if row is None:
+            raise ListNotFoundError()
+        row.is_archived = False
+        self._session.flush()
+
+    def list_for_user(
+        self, user_id: UUID, *, archived: bool = False
+    ) -> list[ListMembershipSummary]:
         stmt = (
             select(ListModel, ListMembershipModel.role)
             .join(
                 ListMembershipModel,
                 ListMembershipModel.list_id == ListModel.id,
             )
-            .where(ListMembershipModel.user_id == user_id)
+            .where(
+                ListMembershipModel.user_id == user_id,
+                ListModel.is_archived == archived,
+            )
             .order_by(ListModel.created_at.asc())
         )
         rows = self._session.execute(stmt).all()
@@ -374,7 +397,9 @@ class SqlAlchemyListRepository:
         row = self._session.get(ListModel, list_id)
         if row is None:
             raise ListNotFoundError()
-        return ListRecord(id=row.id, name=row.name, owner_id=row.owner_id)
+        return ListRecord(
+            id=row.id, name=row.name, owner_id=row.owner_id, is_archived=row.is_archived
+        )
 
     def list_member_ids(self, list_id: UUID) -> list[UUID]:
         stmt = (

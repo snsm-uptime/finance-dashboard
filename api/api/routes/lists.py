@@ -31,6 +31,8 @@ from application.fx_service import MaterializeFxService
 from application.import_rollback import RollbackImportBatchCommand, RollbackImportBatchService
 from application.list_invite import InviteMemberToListCommand, InviteMemberToListService
 from application.lists import (
+    ArchiveListCommand,
+    ArchiveListService,
     CreateOwnedListCommand,
     CreateOwnedListService,
     DeleteListCommand,
@@ -55,6 +57,8 @@ from application.lists import (
     SettlePayablesService,
     SimplifyGroupPlanCommand,
     SimplifyGroupPlanService,
+    UnarchiveListCommand,
+    UnarchiveListService,
 )
 from application.reassign_statement import ReassignStatementCommand, ReassignStatementService
 from domain.errors import (
@@ -124,8 +128,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/lists", tags=["lists"])
 
 
-def _list_response(list_id: uuid.UUID, name: str, owner_id: uuid.UUID) -> ListResponse:
-    return ListResponse(id=list_id, name=name, owner_id=owner_id)
+def _list_response(
+    list_id: uuid.UUID, name: str, owner_id: uuid.UUID, is_archived: bool = False
+) -> ListResponse:
+    return ListResponse(id=list_id, name=name, owner_id=owner_id, is_archived=is_archived)
 
 
 def _access_denied() -> JSONResponse:
@@ -312,11 +318,12 @@ def _fx_error_response(
 
 @router.get("", response_model=ListMembershipsResponse)
 def list_memberships(
+    archived: bool = Query(default=False),
     user_id: uuid.UUID = Depends(require_authenticated_user),
     db: Session = Depends(get_db),
 ) -> ListMembershipsResponse:
     service = ListMembershipsService(SqlAlchemyListRepository(db))
-    items = service.execute(ListMembershipsCommand(actor_user_id=user_id))
+    items = service.execute(ListMembershipsCommand(actor_user_id=user_id, archived=archived))
     return ListMembershipsResponse(
         lists=[
             ListMembershipItem(
@@ -326,6 +333,7 @@ def list_memberships(
                 role=item.role,
                 balance_crc=item.balance_crc,
                 total_crc=item.total_crc,
+                is_archived=archived,
                 members=[
                     ListMemberItem(
                         user_id=member.user_id,
@@ -374,7 +382,9 @@ def get_list_detail(
         result = service.execute(GetListDetailCommand(actor_user_id=user_id, list_id=list_id))
     except ListNotFoundError:
         return _list_not_found()
-    return ListDetailResponse(id=result.id, name=result.name, owner_id=result.owner_id)
+    return ListDetailResponse(
+        id=result.id, name=result.name, owner_id=result.owner_id, is_archived=result.is_archived
+    )
 
 
 @router.get("/{list_id}/default-split", response_model=DefaultSplitResponse)
@@ -919,7 +929,47 @@ def rename_list(
             content={"detail": str(exc), "code": "not_list_owner"},
         )
     logger.info("list_renamed list_id=%s", result.id)
-    return _list_response(result.id, result.name, result.owner_id)
+    return _list_response(result.id, result.name, result.owner_id, result.is_archived)
+
+
+@router.post("/{list_id}/archive", response_model=ListResponse)
+def archive_list(
+    list_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> ListResponse | JSONResponse:
+    service = ArchiveListService(SqlAlchemyListRepository(db))
+    try:
+        result = service.execute(ArchiveListCommand(actor_user_id=user_id, list_id=list_id))
+    except (ListNotFoundError, NotListMemberError):
+        return _access_denied()
+    except NotListOwnerError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={"detail": str(exc), "code": "not_list_owner"},
+        )
+    logger.info("list_archived list_id=%s", result.id)
+    return _list_response(result.id, result.name, result.owner_id, result.is_archived)
+
+
+@router.post("/{list_id}/unarchive", response_model=ListResponse)
+def unarchive_list(
+    list_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> ListResponse | JSONResponse:
+    service = UnarchiveListService(SqlAlchemyListRepository(db))
+    try:
+        result = service.execute(UnarchiveListCommand(actor_user_id=user_id, list_id=list_id))
+    except (ListNotFoundError, NotListMemberError):
+        return _access_denied()
+    except NotListOwnerError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={"detail": str(exc), "code": "not_list_owner"},
+        )
+    logger.info("list_unarchived list_id=%s", result.id)
+    return _list_response(result.id, result.name, result.owner_id, result.is_archived)
 
 
 @router.post(

@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import pytest
 from application.cards import (
+    ArchiveCardCommand,
+    ArchiveCardService,
     CardRecord,
     ListCardsCommand,
     ListCardsService,
@@ -17,6 +19,8 @@ from application.cards import (
     RegisterCardService,
     SetCardRoutingCommand,
     SetCardRoutingService,
+    UnarchiveCardCommand,
+    UnarchiveCardService,
 )
 from domain.errors import (
     CardIbanAlreadyRegisteredError,
@@ -49,9 +53,9 @@ class _FakeCardRepo:
                 return card
         return None
 
-    def list_cards_for_user(self, user_id: UUID) -> list[CardRecord]:
+    def list_cards_for_user(self, user_id: UUID, *, archived: bool = False) -> list[CardRecord]:
         return sorted(
-            (c for c in self.cards if c.user_id == user_id),
+            (c for c in self.cards if c.user_id == user_id and c.is_archived == archived),
             key=lambda c: c.created_at,
             reverse=True,
         )
@@ -76,6 +80,22 @@ class _FakeCardRepo:
                     routing_mode=routing_mode,
                     fixed_list_id=fixed_list_id,
                 )
+                self.cards[i] = updated
+                return updated
+        raise CardNotFoundError()
+
+    def archive_card(self, card_id: UUID, user_id: UUID) -> CardRecord:
+        for i, card in enumerate(self.cards):
+            if card.id == card_id and card.user_id == user_id:
+                updated = replace(card, is_archived=True)
+                self.cards[i] = updated
+                return updated
+        raise CardNotFoundError()
+
+    def unarchive_card(self, card_id: UUID, user_id: UUID) -> CardRecord:
+        for i, card in enumerate(self.cards):
+            if card.id == card_id and card.user_id == user_id:
+                updated = replace(card, is_archived=False)
                 self.cards[i] = updated
                 return updated
         raise CardNotFoundError()
@@ -341,3 +361,80 @@ def test_set_card_routing_invalid_mode_rejected_before_any_io() -> None:
             SetCardRoutingCommand(actor_user_id=actor, card_id=card.id, routing_mode="bogus")
         )
     assert repo.cards[0].routing_mode == "review"
+
+
+def test_archive_card_own_card_succeeds() -> None:
+    repo = _FakeCardRepo()
+    actor = uuid4()
+    card = RegisterCardService(repo).execute(
+        RegisterCardCommand(actor_user_id=actor, label="My Visa", iban="CR05")
+    )
+
+    result = ArchiveCardService(repo).execute(
+        ArchiveCardCommand(actor_user_id=actor, card_id=card.id)
+    )
+
+    assert result.is_archived is True
+
+
+def test_archive_card_unowned_card_not_found() -> None:
+    repo = _FakeCardRepo()
+    owner = uuid4()
+    stranger = uuid4()
+    card = RegisterCardService(repo).execute(
+        RegisterCardCommand(actor_user_id=owner, label="My Visa", iban="CR05")
+    )
+
+    with pytest.raises(CardNotFoundError):
+        ArchiveCardService(repo).execute(
+            ArchiveCardCommand(actor_user_id=stranger, card_id=card.id)
+        )
+
+
+def test_unarchive_card_own_card_succeeds() -> None:
+    repo = _FakeCardRepo()
+    actor = uuid4()
+    card = RegisterCardService(repo).execute(
+        RegisterCardCommand(actor_user_id=actor, label="My Visa", iban="CR05")
+    )
+    ArchiveCardService(repo).execute(ArchiveCardCommand(actor_user_id=actor, card_id=card.id))
+
+    result = UnarchiveCardService(repo).execute(
+        UnarchiveCardCommand(actor_user_id=actor, card_id=card.id)
+    )
+
+    assert result.is_archived is False
+
+
+def test_unarchive_card_unowned_card_not_found() -> None:
+    repo = _FakeCardRepo()
+    owner = uuid4()
+    stranger = uuid4()
+    card = RegisterCardService(repo).execute(
+        RegisterCardCommand(actor_user_id=owner, label="My Visa", iban="CR05")
+    )
+
+    with pytest.raises(CardNotFoundError):
+        UnarchiveCardService(repo).execute(
+            UnarchiveCardCommand(actor_user_id=stranger, card_id=card.id)
+        )
+
+
+def test_list_cards_archived_filter() -> None:
+    repo = _FakeCardRepo()
+    actor = uuid4()
+    active = RegisterCardService(repo).execute(
+        RegisterCardCommand(actor_user_id=actor, label="Active", iban="CR01")
+    )
+    archived = RegisterCardService(repo).execute(
+        RegisterCardCommand(actor_user_id=actor, label="Archived", iban="CR02")
+    )
+    ArchiveCardService(repo).execute(ArchiveCardCommand(actor_user_id=actor, card_id=archived.id))
+
+    default_result = ListCardsService(repo).execute(ListCardsCommand(actor_user_id=actor))
+    archived_result = ListCardsService(repo).execute(
+        ListCardsCommand(actor_user_id=actor, archived=True)
+    )
+
+    assert [c.id for c in default_result] == [active.id]
+    assert [c.id for c in archived_result] == [archived.id]

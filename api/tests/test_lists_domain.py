@@ -75,12 +75,28 @@ class FakeListRepo:
         self.lists[list_id] = updated
         return updated
 
-    def list_for_user(self, user_id: UUID) -> list[ListMembershipSummary]:
+    def archive_list(self, list_id: UUID) -> None:
+        current = self.lists[list_id]
+        self.lists[list_id] = ListRecord(
+            id=current.id, name=current.name, owner_id=current.owner_id, is_archived=True
+        )
+
+    def unarchive_list(self, list_id: UUID) -> None:
+        current = self.lists[list_id]
+        self.lists[list_id] = ListRecord(
+            id=current.id, name=current.name, owner_id=current.owner_id, is_archived=False
+        )
+
+    def list_for_user(
+        self, user_id: UUID, *, archived: bool = False
+    ) -> list[ListMembershipSummary]:
         out: list[ListMembershipSummary] = []
         for m in self.memberships:
             if m.user_id != user_id:
                 continue
             lst = self.lists[m.list_id]
+            if lst.is_archived != archived:
+                continue
             out.append(
                 ListMembershipSummary(
                     id=lst.id,
