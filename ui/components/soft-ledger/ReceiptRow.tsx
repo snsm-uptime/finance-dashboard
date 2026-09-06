@@ -40,6 +40,8 @@ export type ReceiptRowProps = {
   rollback?: ReceiptRowRollback;
   /** Localized "New" chip text for freshly imported parser rows (Story 4.15). */
   newBadgeLabel?: string;
+  /** Independent chip alongside the meta row (e.g. rule vs. manual attribution) — separate from origin, which is reserved for payer identity. */
+  secondaryChip?: { label: string; tone?: ChipTone };
   /** Empty settle surface — muted placeholder, no invented totals. */
   emptyLabel?: string;
   /** FX audit detail (Story 3.5 AC #3) — rate/date, keyboard-accessible via <details>. */
@@ -166,6 +168,7 @@ export function ReceiptRow({
   menuSlot,
   rollback,
   newBadgeLabel,
+  secondaryChip,
   emptyLabel,
   fxSummary,
   fxDetail,
@@ -227,6 +230,7 @@ export function ReceiptRow({
     originUnknown,
     originPanel,
     newBadgeLabel,
+    secondaryChip,
     netLabel,
     directionLabel,
     menu,
@@ -320,6 +324,9 @@ export function ReceiptRow({
             </span>
           ) : null}
           {newBadgeLabel ? <Chip tone="accent">{newBadgeLabel}</Chip> : null}
+          {secondaryChip ? (
+            <Chip tone={secondaryChip.tone ?? "muted"}>{secondaryChip.label}</Chip>
+          ) : null}
         </div>
 
         {netLabel ? (

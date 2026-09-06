@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { asBudgetDetail, historyRowAttribution, resolveSourceListChips } from "./page";
+import {
+  asBudgetDetail,
+  historyRowAttribution,
+  historyRowSplit,
+  resolveSourceListChips,
+} from "./page";
 
 describe("asBudgetDetail", () => {
   it("parses a well-formed response with empty history and rules", () => {
@@ -53,6 +58,8 @@ describe("asBudgetDetail", () => {
           posted_date: "2026-08-10",
           amount_crc: "10.00",
           attributed_via: "manual",
+          payer_id: "u1",
+          viewer_share_crc: "10.00",
         },
       ],
       rules: [{ id: "r1", match_text: "automercado", created_at: "2026-08-01T00:00:00Z" }],
@@ -65,6 +72,8 @@ describe("asBudgetDetail", () => {
         posted_date: "2026-08-10",
         amount_crc: "10.00",
         attributed_via: "manual",
+        payer_id: "u1",
+        viewer_share_crc: "10.00",
       },
     ]);
     expect(parsed?.rules).toEqual([
@@ -207,6 +216,8 @@ describe("asBudgetDetail", () => {
           posted_date: "2026-08-10",
           amount_crc: "10.00",
           attributed_via: "manual",
+          payer_id: "u1",
+          viewer_share_crc: "10.00",
         },
         // Missing amount_crc — dropped, not defaulted to a fabricated value.
         {
@@ -214,6 +225,8 @@ describe("asBudgetDetail", () => {
           description: "Bad row",
           posted_date: "2026-08-11",
           attributed_via: "rule",
+          payer_id: "u1",
+          viewer_share_crc: "5.00",
         },
         // Invalid attributed_via — dropped.
         {
@@ -222,6 +235,8 @@ describe("asBudgetDetail", () => {
           posted_date: "2026-08-12",
           amount_crc: "5.00",
           attributed_via: "bogus",
+          payer_id: "u1",
+          viewer_share_crc: "5.00",
         },
       ],
     });
@@ -233,6 +248,8 @@ describe("asBudgetDetail", () => {
         posted_date: "2026-08-10",
         amount_crc: "10.00",
         attributed_via: "manual",
+        payer_id: "u1",
+        viewer_share_crc: "10.00",
       },
     ]);
   });
@@ -247,6 +264,8 @@ describe("historyRowAttribution", () => {
         posted_date: "2026-08-10",
         amount_crc: "10.00",
         attributed_via: "rule",
+        payer_id: "u1",
+        viewer_share_crc: "10.00",
       }),
     ).toEqual({ viaLabelKey: "budgetsHistoryViaRule", showUnassign: false });
   });
@@ -259,8 +278,47 @@ describe("historyRowAttribution", () => {
         posted_date: "2026-08-10",
         amount_crc: "10.00",
         attributed_via: "manual",
+        payer_id: "u1",
+        viewer_share_crc: "10.00",
       }),
     ).toEqual({ viaLabelKey: "budgetsHistoryViaManual", showUnassign: true });
+  });
+});
+
+describe("historyRowSplit", () => {
+  const base = {
+    id: "e1",
+    description: "Automercado",
+    posted_date: "2026-08-10",
+    amount_crc: "10.00",
+    attributed_via: "manual" as const,
+  };
+
+  it("viewer paid solo — no split shown", () => {
+    expect(
+      historyRowSplit(
+        { ...base, payer_id: "viewer", viewer_share_crc: "10.00" },
+        "viewer",
+      ),
+    ).toEqual({ polarity: undefined, isSplit: false });
+  });
+
+  it("someone else paid, viewer owes their share", () => {
+    expect(
+      historyRowSplit(
+        { ...base, payer_id: "other", viewer_share_crc: "4.00" },
+        "viewer",
+      ),
+    ).toEqual({ polarity: "owe", isSplit: true });
+  });
+
+  it("viewer paid for others, viewer is owed", () => {
+    expect(
+      historyRowSplit(
+        { ...base, payer_id: "viewer", viewer_share_crc: "4.00" },
+        "viewer",
+      ),
+    ).toEqual({ polarity: "owed", isSplit: true });
   });
 });
 
