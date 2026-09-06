@@ -95,7 +95,6 @@ export const uploadMessages = {
     individualReviewCommitting: "Committing…",
     individualReviewNoLists: "You don't belong to any list yet.",
     individualReviewErrorEmptyTitle: "Enter a description.",
-    individualReviewAllCaughtUp: "All caught up for now.",
     individualReviewTitleFieldLabel: "Transaction description",
     individualReviewErrorForbidden: "You don't have access to that list.",
     individualReviewErrorSessionNotFound: "This import session could not be found.",
@@ -126,7 +125,6 @@ export const uploadMessages = {
     importReviewSheetClose: "Close",
     // Card identification (Story 4.8.1)
     cardIdentificationTitle: "Identify card",
-    cardIdentificationIban: "IBAN",
     cardIdentificationLabel: "Card name",
     cardIdentificationRegister: "Register",
     cardIdentificationRegistering: "Registering…",
@@ -234,7 +232,6 @@ export const uploadMessages = {
     individualReviewCommitting: "Confirmando…",
     individualReviewNoLists: "Todavía no perteneces a ninguna lista.",
     individualReviewErrorEmptyTitle: "Ingresa una descripción.",
-    individualReviewAllCaughtUp: "Por ahora no hay más transacciones.",
     individualReviewTitleFieldLabel: "Descripción de la transacción",
     individualReviewErrorForbidden: "No tienes acceso a esa lista.",
     individualReviewErrorSessionNotFound: "No se encontró esta sesión de importación.",
@@ -265,7 +262,6 @@ export const uploadMessages = {
     importReviewSheetClose: "Cerrar",
     // Card identification (Story 4.8.1)
     cardIdentificationTitle: "Identificar tarjeta",
-    cardIdentificationIban: "IBAN",
     cardIdentificationLabel: "Nombre de la tarjeta",
     cardIdentificationRegister: "Registrar",
     cardIdentificationRegistering: "Registrando…",

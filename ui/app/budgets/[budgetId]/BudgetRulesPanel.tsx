@@ -10,7 +10,6 @@ import { PlusIcon, TrashIcon } from "@/app/icons";
 
 import { createRule, deleteRule, type BudgetDetailClientMessages, type BudgetRule } from "./budgetDetailClient";
 import { Disclosure } from "@/components/Disclosure";
-import { headers } from "next/headers";
 
 export type BudgetRulesPanelMessages = BudgetDetailClientMessages & {
   budgetsRulesTitle: string;
