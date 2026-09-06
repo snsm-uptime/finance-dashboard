@@ -247,7 +247,7 @@ export function DateRangeField({
       )}
       {open ? (
         <div
-          className={`absolute z-10 w-[248px] rounded-[10px] border border-border bg-surface p-[10px] shadow-lg ${align === "right" ? "right-0" : "left-0"} ${vAlign === "above" ? "bottom-full mb-2" : "mt-2"}`}
+          className={`absolute z-100 w-[248px] rounded-[10px] border border-border bg-surface p-[10px] shadow-lg ${align === "right" ? "right-0" : "left-0"} ${vAlign === "above" ? "bottom-full mb-2" : "mt-2"}`}
         >
           <div className="mb-2 flex items-center justify-between">
             <button

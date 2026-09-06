@@ -1,5 +1,8 @@
 "use client";
 
+// TODO; the focus ref being on by default is messing up the experience of writing to an input,
+// after every letter it focuses back. That should only be for the sheets containing a multi select
+// and should be used to focus items correctly using tab and shift tab.
 import {
   useEffect,
   useId,
@@ -159,18 +162,16 @@ export function Sheet({
     <>
       <button
         type="button"
-        className={`${styles.backdrop} ${isVisible ? styles.backdropOpen : ""} ${
-          fillBelowChrome ? styles.backdropFillBelowChrome : ""
-        }`}
+        className={`${styles.backdrop} ${isVisible ? styles.backdropOpen : ""} ${fillBelowChrome ? styles.backdropFillBelowChrome : ""
+          }`}
         aria-label={closeLabel}
         disabled={phase === "closing"}
         onClick={onClose}
       />
       <div
         ref={panelRef}
-        className={`${styles.sheet} ${isVisible ? styles.sheetOpen : ""} ${
-          fillBelowChrome ? styles.sheetFillBelowChrome : ""
-        }`}
+        className={`${styles.sheet} ${isVisible ? styles.sheetOpen : ""} ${fillBelowChrome ? styles.sheetFillBelowChrome : ""
+          }`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

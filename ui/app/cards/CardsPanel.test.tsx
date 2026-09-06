@@ -10,6 +10,8 @@ import type { ListItem } from "../lists/listsClient";
 
 const fetchCards = vi.fn();
 const fetchLists = vi.fn();
+const archiveCard = vi.fn();
+const unarchiveCard = vi.fn();
 const push = vi.fn();
 
 vi.mock("next/navigation", () => ({
@@ -26,6 +28,8 @@ vi.mock("./cardsClient", async () => {
   return {
     ...actual,
     fetchCards: (...args: unknown[]) => fetchCards(...args),
+    archiveCard: (...args: unknown[]) => archiveCard(...args),
+    unarchiveCard: (...args: unknown[]) => unarchiveCard(...args),
   };
 });
 
@@ -52,6 +56,14 @@ const card: CardItem = {
   created_at: "2026-08-01T00:00:00Z",
   routing_mode: "review",
   fixed_list_id: null,
+  is_archived: false,
+};
+
+const archivedCard: CardItem = {
+  ...card,
+  id: "card-2",
+  label: "Archived Card",
+  is_archived: true,
 };
 
 const lists: ListItem[] = [
@@ -82,6 +94,8 @@ describe("CardsPanel", () => {
   beforeEach(() => {
     fetchCards.mockReset();
     fetchLists.mockReset();
+    archiveCard.mockReset();
+    unarchiveCard.mockReset();
     fetchCards.mockResolvedValue({ ok: true, cards: [card] });
     fetchLists.mockResolvedValue({ ok: true, lists });
     container = document.createElement("div");
@@ -182,5 +196,159 @@ describe("CardsPanel", () => {
       helpButton.click();
     });
     expect(push).toHaveBeenCalledWith("/docs?from=%2Fcards#cards-imports");
+  });
+
+  it("defaults to showing the register form and non-archived cards", async () => {
+    await act(async () => {
+      root.render(
+        <AppShell>
+          <CardsPanel />
+        </AppShell>,
+      );
+    });
+    await waitForDom(() => container.textContent?.includes(card.label));
+
+    const toggle = container.querySelector(
+      `button[aria-label="${t.cardsShowArchived}"]`,
+    ) as HTMLButtonElement;
+    expect(toggle).toBeTruthy();
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    expect(container.querySelector("form")).not.toBeNull();
+  });
+
+  it("toggling to archived hides the form and fetches/renders archived cards", async () => {
+    fetchCards.mockImplementation((_messages: unknown, options?: { archived?: boolean }) =>
+      Promise.resolve(
+        options?.archived
+          ? { ok: true, cards: [archivedCard] }
+          : { ok: true, cards: [card] },
+      ),
+    );
+
+    await act(async () => {
+      root.render(
+        <AppShell>
+          <CardsPanel />
+        </AppShell>,
+      );
+    });
+    await waitForDom(() => container.textContent?.includes(card.label));
+
+    const toggle = container.querySelector(
+      `button[aria-label="${t.cardsShowArchived}"]`,
+    ) as HTMLButtonElement;
+    await act(async () => {
+      toggle.click();
+    });
+    await waitForDom(() => container.textContent?.includes(archivedCard.label));
+
+    expect(container.querySelector("form")).toBeNull();
+    expect(container.textContent?.includes(card.label)).toBe(false);
+    const toggledOn = container.querySelector(
+      `button[aria-label="${t.cardsShowActive}"]`,
+    ) as HTMLButtonElement;
+    expect(toggledOn.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("archives a card from the active view via the per-card control", async () => {
+    archiveCard.mockResolvedValue({ ok: true, card: { ...card, is_archived: true } });
+
+    await act(async () => {
+      root.render(<CardsPanel />);
+    });
+    await waitForDom(() => container.textContent?.includes(card.label));
+
+    const archiveButton = container.querySelector(
+      `button[aria-label="${t.cardsArchive}"]`,
+    ) as HTMLButtonElement;
+    expect(archiveButton).toBeTruthy();
+    await act(async () => {
+      archiveButton.click();
+    });
+    await waitForDom(() => !container.textContent?.includes(card.label));
+
+    expect(archiveCard).toHaveBeenCalledWith(card.id, expect.anything());
+  });
+
+  it("unarchives a card from the archived view via the per-card control", async () => {
+    fetchCards.mockImplementation((_messages: unknown, options?: { archived?: boolean }) =>
+      Promise.resolve(
+        options?.archived
+          ? { ok: true, cards: [archivedCard] }
+          : { ok: true, cards: [card] },
+      ),
+    );
+    unarchiveCard.mockResolvedValue({ ok: true, card: { ...archivedCard, is_archived: false } });
+
+    await act(async () => {
+      root.render(
+        <AppShell>
+          <CardsPanel />
+        </AppShell>,
+      );
+    });
+    await waitForDom(() => container.textContent?.includes(card.label));
+
+    const toggle = container.querySelector(
+      `button[aria-label="${t.cardsShowArchived}"]`,
+    ) as HTMLButtonElement;
+    await act(async () => {
+      toggle.click();
+    });
+    await waitForDom(() => container.textContent?.includes(archivedCard.label));
+
+    const unarchiveButton = container.querySelector(
+      `button[aria-label="${t.cardsUnarchive}"]`,
+    ) as HTMLButtonElement;
+    expect(unarchiveButton).toBeTruthy();
+    await act(async () => {
+      unarchiveButton.click();
+    });
+    await waitForDom(() => !container.textContent?.includes(archivedCard.label));
+
+    expect(unarchiveCard).toHaveBeenCalledWith(archivedCard.id, expect.anything());
+  });
+
+  it("reverts to OFF (active, non-archived) on remount, simulating navigation away", async () => {
+    fetchCards.mockResolvedValue({ ok: true, cards: [card] });
+
+    await act(async () => {
+      root.render(
+        <AppShell>
+          <CardsPanel />
+        </AppShell>,
+      );
+    });
+    await waitForDom(() => container.textContent?.includes(card.label));
+
+    const toggle = container.querySelector(
+      `button[aria-label="${t.cardsShowArchived}"]`,
+    ) as HTMLButtonElement;
+    await act(async () => {
+      toggle.click();
+    });
+    await waitForDom(() =>
+      container.querySelector(`button[aria-label="${t.cardsShowActive}"]`) !== null,
+    );
+
+    act(() => {
+      root.unmount();
+    });
+    root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <AppShell>
+          <CardsPanel />
+        </AppShell>,
+      );
+    });
+    await waitForDom(() => container.textContent?.includes(card.label));
+
+    const toggleAgain = container.querySelector(
+      `button[aria-label="${t.cardsShowArchived}"]`,
+    ) as HTMLButtonElement;
+    expect(toggleAgain).toBeTruthy();
+    expect(toggleAgain.getAttribute("aria-pressed")).toBe("false");
+    expect(container.querySelector("form")).not.toBeNull();
   });
 });

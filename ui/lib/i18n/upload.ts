@@ -133,6 +133,10 @@ export const uploadMessages = {
     cardPeriodLabel: "Period",
     errorCardAlreadyRegistered: "This IBAN is already registered to another card.",
     errorInvalidCardLabel: "Card name is invalid.",
+    // Archived-card match during import (Story 9.3, AC #6)
+    cardIdentificationArchivedNotice: "This card is archived.",
+    cardIdentificationUnarchive: "Unarchive card",
+    cardIdentificationUnarchiving: "Unarchiving…",
   },
   es: {
     title: "Subir",
@@ -268,6 +272,9 @@ export const uploadMessages = {
     cardPeriodLabel: "Periodo",
     errorCardAlreadyRegistered: "Este IBAN ya está registrado en otra tarjeta.",
     errorInvalidCardLabel: "El nombre de la tarjeta es inválido.",
+    cardIdentificationArchivedNotice: "Esta tarjeta está archivada.",
+    cardIdentificationUnarchive: "Desarchivar tarjeta",
+    cardIdentificationUnarchiving: "Desarchivando…",
   },
 } as const;
 

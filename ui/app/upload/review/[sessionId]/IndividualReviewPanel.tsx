@@ -20,6 +20,7 @@ import { IconButton } from "@/components/IconButton";
 import { useChromeHeader } from "@/components/ChromeBack";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { useFormSubmission } from "@/hooks";
+import { unarchiveCard } from "@/app/cards/cardsClient";
 import { fetchLists } from "@/app/lists/listsClient";
 import { replaceMembershipLists, useMembershipLists } from "@/app/lists/membershipListsStore";
 import { ArrowIcon, SaveIcon, SpinnerIcon, TrashIcon } from "@/app/icons";
@@ -329,6 +330,8 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   );
   const [cardLabelInput, setCardLabelInput] = useState<string>("");
   const [registering, setRegistering] = useState(false);
+  const [unarchiving, setUnarchiving] = useState(false);
+  const [unarchiveError, setUnarchiveError] = useState<string | null>(null);
   // Left/right throw animation: live drag offset (1:1 finger-follow, no
   // transition) or the final thrown/snap-back offset (transition applies).
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null);
@@ -911,6 +914,28 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     if (result.ok) setCardLabelInput("");
   }
 
+  // Additive to the needsRegistration flow above — offers unarchiving a
+  // matched-but-archived card (Story 9.3, AC #6) without blocking the row's
+  // swipe/assign actions.
+  async function handleUnarchiveCard() {
+    if (!card.cardId) return;
+    setUnarchiving(true);
+    setUnarchiveError(null);
+    const result = await unarchiveCard(card.cardId, {
+      errorGeneric: t.errorGeneric,
+      errorUnauthorized: t.errorUnauthorized,
+      errorInvalidLabel: t.errorGeneric,
+      errorInvalidIban: t.errorGeneric,
+      errorDuplicateIban: t.errorGeneric,
+    });
+    setUnarchiving(false);
+    if (!result.ok) {
+      setUnarchiveError(result.error);
+      return;
+    }
+    card.clearCardArchived();
+  }
+
   return (
     <main
       className="min-h-full flex flex-col gap-4 overflow-x-hidden pb-[2.5rem] pt-3"
@@ -1203,6 +1228,28 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
               </div>
             ) : null}
             {card.error ? <p className="m-0 text-owe text-[0.85rem]">{card.error}</p> : null}
+            {card.cardMatched && card.cardArchived ? (
+              <div className="flex items-center justify-between gap-2 rounded-[8px] border border-border bg-surface px-3 py-2">
+                <p className="m-0 text-muted text-[0.8rem]">
+                  {t.cardIdentificationArchivedNotice}
+                </p>
+                <button
+                  type="button"
+                  className="shrink-0 border-0 bg-transparent p-0 text-accent text-[0.8rem] font-[550] underline underline-offset-2 disabled:opacity-55"
+                  onClick={() => void handleUnarchiveCard()}
+                  disabled={unarchiving}
+                >
+                  {unarchiving
+                    ? t.cardIdentificationUnarchiving
+                    : t.cardIdentificationUnarchive}
+                </button>
+              </div>
+            ) : null}
+            {unarchiveError ? (
+              <p className="m-0 text-owe text-[0.85rem]" role="alert">
+                {unarchiveError}
+              </p>
+            ) : null}
 
             <div aria-live="polite">
               {action.error ? (

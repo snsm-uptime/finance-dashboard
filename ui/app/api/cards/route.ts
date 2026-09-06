@@ -21,9 +21,14 @@ function forwardCookie(request: NextRequest): Headers {
  * Forwards session cookie; api is the auth authority.
  */
 export async function GET(request: NextRequest) {
+  const archived = new URL(request.url).searchParams.get("archived");
+  const upstreamUrl =
+    archived === "true"
+      ? `${getApiInternalUrl()}/cards?archived=true`
+      : `${getApiInternalUrl()}/cards`;
   let upstream: Response;
   try {
-    upstream = await fetch(`${getApiInternalUrl()}/cards`, {
+    upstream = await fetch(upstreamUrl, {
       method: "GET",
       headers: forwardCookie(request),
       cache: "no-store",

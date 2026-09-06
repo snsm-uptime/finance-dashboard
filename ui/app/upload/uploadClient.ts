@@ -744,6 +744,7 @@ export type CardIdentificationResponse = {
   card_id?: string;
   card_label?: string;
   iban?: string | null;
+  archived?: boolean;
 };
 
 export type CardIdentificationMessages = {
@@ -774,6 +775,7 @@ function asCardIdentificationResponse(data: unknown): CardIdentificationResponse
     card_id: typeof resp.card_id === "string" ? resp.card_id : undefined,
     card_label: typeof resp.card_label === "string" ? resp.card_label : undefined,
     iban: typeof resp.iban === "string" ? resp.iban : null,
+    archived: typeof resp.archived === "boolean" ? resp.archived : false,
   };
 }
 
@@ -783,7 +785,14 @@ export async function identifyCardForStatement(
   label: string | undefined,
   messages: CardIdentificationMessages,
 ): Promise<
-  | { ok: true; matched: boolean; cardId?: string; cardLabel?: string; iban?: string | null }
+  | {
+      ok: true;
+      matched: boolean;
+      cardId?: string;
+      cardLabel?: string;
+      iban?: string | null;
+      archived?: boolean;
+    }
   | { ok: false; error: string }
 > {
   let response: Response;
@@ -824,5 +833,6 @@ export async function identifyCardForStatement(
     cardId: identified.card_id,
     cardLabel: identified.card_label,
     iban: identified.iban,
+    archived: identified.archived,
   };
 }

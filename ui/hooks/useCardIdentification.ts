@@ -17,6 +17,7 @@ export function useCardIdentification(
   const [cardMatched, setCardMatched] = useState(false);
   const [cardId, setCardId] = useState<string | undefined>();
   const [cardLabel, setCardLabel] = useState<string | undefined>();
+  const [cardArchived, setCardArchived] = useState(false);
   const [iban, setIban] = useState<string | null | undefined>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +61,7 @@ export function useCardIdentification(
         setCardMatched(false);
         setCardId(undefined);
         setCardLabel(undefined);
+        setCardArchived(false);
         setIban(result.error.includes("unauthorized") ? undefined : statement?.iban || null);
         setNeedsRegistration(true);
         return;
@@ -70,11 +72,13 @@ export function useCardIdentification(
         setCardMatched(true);
         setCardId(result.cardId);
         setCardLabel(result.cardLabel);
+        setCardArchived(Boolean(result.archived));
         setNeedsRegistration(false);
       } else {
         setCardMatched(false);
         setCardId(undefined);
         setCardLabel(undefined);
+        setCardArchived(false);
         setNeedsRegistration(true);
       }
     }
@@ -105,8 +109,15 @@ export function useCardIdentification(
     setCardMatched(result.matched);
     setCardId(result.cardId);
     setCardLabel(result.cardLabel);
+    setCardArchived(Boolean(result.archived));
     setNeedsRegistration(!result.matched);
     return { ok: result.matched };
+  }
+
+  // Optimistic flip after a successful unarchive action (Story 9.3, AC #6) —
+  // avoids a redundant re-identify round-trip just to clear the notice.
+  function clearCardArchived() {
+    setCardArchived(false);
   }
 
   if (!identifiable) {
@@ -114,11 +125,13 @@ export function useCardIdentification(
       cardMatched: false,
       cardId: undefined,
       cardLabel: undefined,
+      cardArchived: false,
       iban: undefined,
       loading: false,
       error: null,
       needsRegistration: false,
       registerCard,
+      clearCardArchived,
     };
   }
 
@@ -126,10 +139,12 @@ export function useCardIdentification(
     cardMatched,
     cardId,
     cardLabel,
+    cardArchived,
     iban,
     loading,
     error,
     needsRegistration,
     registerCard,
+    clearCardArchived,
   };
 }

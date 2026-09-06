@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { fetchCards, registerCard, setCardRouting } from "./cardsClient";
+import { archiveCard, fetchCards, registerCard, setCardRouting, unarchiveCard } from "./cardsClient";
 
 const messages = {
   errorGeneric: "generic",
@@ -42,6 +42,7 @@ describe("cardsClient", () => {
         created_at: "2026-08-14T00:00:00Z",
         routing_mode: "review",
         fixed_list_id: null,
+        is_archived: false,
       },
     });
   });
@@ -144,11 +145,41 @@ describe("cardsClient", () => {
           created_at: "2026-08-14T00:00:00Z",
           routing_mode: "review",
           fixed_list_id: null,
+          is_archived: false,
         },
       ],
     });
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/cards",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("fetchCards({ archived: true }) hits /api/cards?archived=true", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        cards: [
+          {
+            id: "c1",
+            label: "My Visa",
+            iban: "CR05",
+            created_at: "2026-08-14T00:00:00Z",
+            is_archived: true,
+          },
+        ],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await fetchCards(messages, { archived: true });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.cards[0].is_archived).toBe(true);
+    }
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/cards?archived=true",
       expect.objectContaining({ method: "GET" }),
     );
   });
@@ -202,6 +233,7 @@ describe("cardsClient", () => {
         created_at: "2026-08-14T00:00:00Z",
         routing_mode: "fixed",
         fixed_list_id: "list-1",
+        is_archived: false,
       },
     });
     expect(fetchMock).toHaveBeenCalledWith(
@@ -268,5 +300,55 @@ describe("cardsClient", () => {
 
     const result = await setCardRouting("c1", { routing_mode: "review", fixed_list_id: null }, messages);
     expect(result).toEqual({ ok: false, error: "not-found" });
+  });
+
+  it("archiveCard posts to /api/cards/{id}/archive and returns the updated card", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        id: "c1",
+        label: "My Visa",
+        iban: "CR05",
+        created_at: "2026-08-14T00:00:00Z",
+        routing_mode: "review",
+        fixed_list_id: null,
+        is_archived: true,
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await archiveCard("c1", messages);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.card.is_archived).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/cards/c1/archive",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("unarchiveCard posts to /api/cards/{id}/unarchive and returns the updated card", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        id: "c1",
+        label: "My Visa",
+        iban: "CR05",
+        created_at: "2026-08-14T00:00:00Z",
+        routing_mode: "review",
+        fixed_list_id: null,
+        is_archived: false,
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await unarchiveCard("c1", messages);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.card.is_archived).toBe(false);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/cards/c1/unarchive",
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 });
