@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useId, useState } from "react";
+import { FormEvent, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import styles from "./BudgetUpdateForm.module.scss";
 
 import { chipClassName } from "@/components/Chip";
 import { DateRangeField } from "@/components/DateRangeField";
@@ -11,11 +12,11 @@ import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
 import { PencilIcon } from "@/app/icons/PencilIcon";
 import { Sheet } from "@/app/lists/Sheet";
 import {
-  periodChangeConfirmBodyFrom,
+  // periodChangeConfirmBodyFrom,
   updateBudget,
   type BudgetItem,
   type BudgetsClientMessages,
-  type PeriodChangeLine,
+  // type PeriodChangeLine,
 } from "../budgetsClient";
 
 export type BudgetUpdateFormMessages = BudgetsClientMessages & {
@@ -93,9 +94,9 @@ export function BudgetUpdateForm({ budget, lists, messages, locale }: Props) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [excludedLines, setExcludedLines] = useState<PeriodChangeLine[]>([]);
-  const [confirming, setConfirming] = useState(false);
+  // const [confirmOpen, setConfirmOpen] = useState(false);
+  // const [excludedLines, setExcludedLines] = useState<PeriodChangeLine[]>([]);
+  // const [confirming, setConfirming] = useState(false);
 
   function openEditor() {
     setName(budget.name);
@@ -105,8 +106,8 @@ export function BudgetUpdateForm({ budget, lists, messages, locale }: Props) {
     setPeriodStart(budget.period_start ?? "");
     setPeriodEnd(budget.period_end ?? "");
     setError(null);
-    setConfirmOpen(false);
-    setExcludedLines([]);
+    // setConfirmOpen(false);
+    // setExcludedLines([]);
     setOpen(true);
   }
 
@@ -132,23 +133,23 @@ export function BudgetUpdateForm({ budget, lists, messages, locale }: Props) {
   async function submit(confirmPeriodChange: boolean) {
     const result = await updateBudget(budget.id, buildPayload(confirmPeriodChange), messages);
     if (result.ok) {
-      setConfirmOpen(false);
+      // setConfirmOpen(false);
       setOpen(false);
       router.refresh();
       return;
     }
     if ("requiresConfirmation" in result && result.requiresConfirmation) {
-      setExcludedLines(result.excludedLines);
+      // setExcludedLines(result.excludedLines);
       if (confirmPeriodChange) {
         // Excluded lines changed between the first submit and this confirm — re-show
         // the confirmation with the fresh diff instead of silently applying the stale one.
         setError(messages.errorGeneric);
       } else {
-        setConfirmOpen(true);
+        // setConfirmOpen(true);
       }
       return;
     }
-    setConfirmOpen(false);
+    // setConfirmOpen(false);
     setError(result.error);
   }
 
@@ -161,26 +162,26 @@ export function BudgetUpdateForm({ budget, lists, messages, locale }: Props) {
     setPending(false);
   }
 
-  async function onConfirmPeriodChange() {
-    setConfirming(true);
-    await submit(true);
-    setConfirming(false);
-  }
-
+  // async function onConfirmPeriodChange() {
+  //   setConfirming(true);
+  //   await submit(true);
+  //   setConfirming(false);
+  // }
+  //
   const canSubmit =
     name.trim().length > 0 && cap.trim().length > 0 && selectedListIds.length > 0 && !pending;
 
   return (
     <>
       <IconButton
-        icon={<PencilIcon />}
+        icon={<PencilIcon className={styles.icon} />}
         label={messages.budgetsEditAria}
         onClick={openEditor}
-        className="size-5"
       />
       <Sheet
         open={open}
         onClose={() => setOpen(false)}
+        fillBelowChrome={true}
         closeLabel={messages.cancelLabel}
         title={messages.budgetsEditTitle}
         cornerAction={
@@ -196,76 +197,78 @@ export function BudgetUpdateForm({ budget, lists, messages, locale }: Props) {
         body={
           <form
             id={formId}
-            className="flex w-full flex-col gap-[var(--space-2)]"
+            className="flex w-full flex-col gap-(--space-2) h-full"
             onSubmit={onSubmit}
           >
-            <div className="flex items-center gap-2 rounded-[8px] border-2 border-border bg-background px-[0.65rem] py-[0.5rem]">
-              <span className="sr-only" id={currencyLabelId}>
-                {messages.budgetsCurrencyLabel}
-              </span>
-              <div className="w-fit shrink-0">
-                <SoftLedgerSelect
-                  id={currencyId}
-                  ghost
-                  value={currency}
-                  options={CURRENCY_OPTIONS}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 rounded-[8px] border-2 border-border bg-background px-[0.65rem] py-2">
+                <span className="sr-only" id={currencyLabelId}>
+                  {messages.budgetsCurrencyLabel}
+                </span>
+                <div className="w-fit shrink-0">
+                  <SoftLedgerSelect
+                    id={currencyId}
+                    ghost
+                    value={currency}
+                    options={CURRENCY_OPTIONS}
+                    disabled={pending}
+                    aria-labelledby={currencyLabelId}
+                    onChange={(value) => {
+                      setCurrency(value);
+                      setError(null);
+                    }}
+                  />
+                </div>
+                <span className="h-5 w-px shrink-0 bg-border" aria-hidden="true" />
+                <label htmlFor={capId} className="sr-only">
+                  {messages.budgetsCapLabel}
+                </label>
+                <input
+                  id={capId}
+                  className={`${fieldInputClass} basis-[30%] flex-none`}
+                  inputMode="decimal"
+                  value={cap}
+                  placeholder={messages.budgetsCapLabel}
+                  required
                   disabled={pending}
-                  aria-labelledby={currencyLabelId}
-                  onChange={(value) => {
-                    setCurrency(value);
+                  onChange={(e) => {
+                    setCap(e.target.value);
+                    setError(null);
+                  }}
+                />
+                <span className="h-5 w-px shrink-0 bg-border" aria-hidden="true" />
+                <label htmlFor={nameId} className="sr-only">
+                  {messages.budgetsNameLabel}
+                </label>
+                <input
+                  id={nameId}
+                  className={fieldInputClass}
+                  type="text"
+                  value={name}
+                  placeholder={messages.budgetsNameLabel}
+                  required
+                  disabled={pending}
+                  onChange={(e) => {
+                    setName(e.target.value);
                     setError(null);
                   }}
                 />
               </div>
-              <span className="h-5 w-px shrink-0 bg-border" aria-hidden="true" />
-              <label htmlFor={capId} className="sr-only">
-                {messages.budgetsCapLabel}
-              </label>
-              <input
-                id={capId}
-                className={`${fieldInputClass} basis-[30%] flex-none`}
-                inputMode="decimal"
-                value={cap}
-                placeholder={messages.budgetsCapLabel}
-                required
-                disabled={pending}
-                onChange={(e) => {
-                  setCap(e.target.value);
+              <DateRangeField
+                start={periodStart || null}
+                end={periodEnd || null}
+                onChange={(newStart, newEnd) => {
+                  setPeriodStart(newStart ?? "");
+                  setPeriodEnd(newEnd ?? "");
                   setError(null);
                 }}
-              />
-              <span className="h-5 w-px shrink-0 bg-border" aria-hidden="true" />
-              <label htmlFor={nameId} className="sr-only">
-                {messages.budgetsNameLabel}
-              </label>
-              <input
-                id={nameId}
-                className={fieldInputClass}
-                type="text"
-                value={name}
-                placeholder={messages.budgetsNameLabel}
-                required
+                fromLabel={messages.budgetsPeriodStartLabel}
+                toLabel={messages.budgetsPeriodEndLabel}
+                clearLabel={messages.budgetsDateClear}
+                locale={locale}
                 disabled={pending}
-                onChange={(e) => {
-                  setName(e.target.value);
-                  setError(null);
-                }}
               />
             </div>
-            <DateRangeField
-              start={periodStart || null}
-              end={periodEnd || null}
-              onChange={(newStart, newEnd) => {
-                setPeriodStart(newStart ?? "");
-                setPeriodEnd(newEnd ?? "");
-                setError(null);
-              }}
-              fromLabel={messages.budgetsPeriodStartLabel}
-              toLabel={messages.budgetsPeriodEndLabel}
-              clearLabel={messages.budgetsDateClear}
-              locale={locale}
-              disabled={pending}
-            />
             <div
               className="flex flex-wrap gap-2"
               role="group"
@@ -297,46 +300,47 @@ export function BudgetUpdateForm({ budget, lists, messages, locale }: Props) {
           </form>
         }
       />
-      <Sheet
-        open={confirmOpen}
-        onClose={() => setConfirmOpen(false)}
-        closeLabel={messages.budgetsPeriodChangeCancel}
-        title={messages.budgetsPeriodChangeConfirmTitle}
-        cornerAction={
-          <FormIconSubmit
-            type="button"
-            variant="save"
-            label={
-              confirming
-                ? messages.budgetsSaving
-                : messages.budgetsPeriodChangeConfirmAction
-            }
-            disabled={confirming}
-            onClick={onConfirmPeriodChange}
-          />
-        }
-        body={
-          <div className="flex flex-col gap-[var(--space-3)]">
-            <p className="m-0 text-foreground">
-              {periodChangeConfirmBodyFrom(excludedLines, messages)}
-            </p>
-            <ul className="m-0 list-none p-0 flex flex-col gap-[var(--space-2)]">
-              {excludedLines.map((line) => (
-                <li
-                  key={line.id}
-                  className="flex items-center justify-between gap-[var(--space-3)] px-[var(--space-3)] py-[var(--space-2)] bg-surface border border-border rounded-sm"
-                >
-                  <span className="flex flex-col">
-                    <span className="text-foreground">{line.description}</span>
-                    <span className="tabular-nums text-muted text-[0.8rem]">{line.posted_date}</span>
-                  </span>
-                  <span className="tabular-nums text-muted">{line.amount_crc}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        }
-      />
+      {/* TODO: I want to reconsider the commented implementation for user aknowledgment when the period changes */}
+      {/* <Sheet */}
+      {/*   open={confirmOpen} */}
+      {/*   onClose={() => setConfirmOpen(false)} */}
+      {/*   closeLabel={messages.budgetsPeriodChangeCancel} */}
+      {/*   title={messages.budgetsPeriodChangeConfirmTitle} */}
+      {/*   cornerAction={ */}
+      {/*     <FormIconSubmit */}
+      {/*       type="button" */}
+      {/*       variant="save" */}
+      {/*       label={ */}
+      {/*         confirming */}
+      {/*           ? messages.budgetsSaving */}
+      {/*           : messages.budgetsPeriodChangeConfirmAction */}
+      {/*       } */}
+      {/*       disabled={confirming} */}
+      {/*       onClick={onConfirmPeriodChange} */}
+      {/*     /> */}
+      {/*   } */}
+      {/*   body={ */}
+      {/*     <div className="flex flex-col gap-(--space-3)"> */}
+      {/*       <p className="m-0 text-foreground"> */}
+      {/*         {periodChangeConfirmBodyFrom(excludedLines, messages)} */}
+      {/*       </p> */}
+      {/*       <ul className="m-0 list-none p-0 flex flex-col gap-(--space-2)"> */}
+      {/*         {excludedLines.map((line) => ( */}
+      {/*           <li */}
+      {/*             key={line.id} */}
+      {/*             className="flex items-center justify-between gap-(--space-3) px-(--space-3) py-(--space-2) bg-surface border border-border rounded-sm" */}
+      {/*           > */}
+      {/*             <span className="flex flex-col"> */}
+      {/*               <span className="text-foreground">{line.description}</span> */}
+      {/*               <span className="tabular-nums text-muted text-[0.8rem]">{line.posted_date}</span> */}
+      {/*             </span> */}
+      {/*             <span className="tabular-nums text-muted">{line.amount_crc}</span> */}
+      {/*           </li> */}
+      {/*         ))} */}
+      {/*       </ul> */}
+      {/*     </div> */}
+      {/*   } */}
+      {/* /> */}
     </>
   );
 }
