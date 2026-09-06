@@ -106,8 +106,8 @@ describe("BudgetRulesPanel", () => {
       );
     });
 
-    const del = Array.from(container.querySelectorAll("button")).find(
-      (el) => el.textContent === messages.budgetsRuleDelete,
+    const del = container.querySelector(
+      `button[aria-label="${messages.budgetsRuleDelete}"]`,
     ) as HTMLButtonElement;
     await act(async () => {
       del.click();

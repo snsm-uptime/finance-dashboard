@@ -21,6 +21,8 @@ export type ReceiptRowProps = {
   /** Payer's base64 photo, when set — falls back to the initials circle. */
   payerPhoto?: string | null;
   amount?: string;
+  /** Renders `amount` right-aligned in the net column, sized to match owe/owed net labels, instead of inline in the meta row (used on the budget detail page for solo-paid entries). */
+  amountInNetColumn?: boolean;
   originChip?: string;
   originChipTone?: ChipTone;
   /** Disabled look for origin chips the viewer cannot assign. */
@@ -69,6 +71,11 @@ const typeStyle = {
   amount: {
     fontFamily: "var(--type-amount-inline-face)",
     fontSize: "var(--type-amount-inline-size)",
+    fontWeight: "var(--type-amount-inline-weight)",
+  },
+  amountNetSized: {
+    fontFamily: "var(--type-amount-inline-face)",
+    fontSize: "var(--type-strip-amount-size)",
     fontWeight: "var(--type-amount-inline-weight)",
   },
   net: {
@@ -155,6 +162,7 @@ export function ReceiptRow({
   payerSeed,
   payerPhoto,
   amount,
+  amountInNetColumn = false,
   originChip,
   originChipTone = "muted",
   originDisabled = false,
@@ -318,7 +326,7 @@ export function ReceiptRow({
             originUnknown={originUnknown}
             originAction={originAction}
           />
-          {amount ? (
+          {amount && !amountInNetColumn ? (
             <span style={typeStyle.amount} className="shrink-0 tabular-nums text-muted">
               {amount}
             </span>
@@ -336,6 +344,22 @@ export function ReceiptRow({
             className={`text-right tabular-nums ${netClass}`}
           >
             {netLabel}
+          </span>
+        ) : amount && amountInNetColumn ? (
+          // Solo (non-split) rows have no "direction" row-1 content, so the
+          // amount only occupies the row-2 "net" cell by default — centering
+          // it there sits lower than the menu button, which (like "icon")
+          // spans both grid rows. Spanning rows here too keeps the two
+          // aligned.
+          <span
+            style={{
+              ...typeStyle.amountNetSized,
+              gridColumn: "net-start / net-end",
+              gridRow: "menu-start / menu-end",
+            }}
+            className="self-center text-right tabular-nums text-muted"
+          >
+            {amount}
           </span>
         ) : null}
 

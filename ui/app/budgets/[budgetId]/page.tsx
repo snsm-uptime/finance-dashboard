@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import { Avatar } from "@/components/Avatar";
 import { Chip } from "@/components/Chip";
 import { ReceiptRow } from "@/components/soft-ledger/ReceiptRow";
-import { SectionLabel } from "@/components/soft-ledger/SectionLabel";
 import { TopProgressBar } from "@/components/TopProgressBar";
 import { requireAlias } from "@/lib/alias";
 import { getApiInternalUrl } from "@/lib/api";
@@ -17,11 +16,11 @@ import {
   budgetSeverityColorClass,
   budgetStateLabel,
   budgetUsageRatio,
+  formatPeriodBoundShort,
   type BudgetItem,
 } from "../budgetsClient";
 import { BudgetAssignPanel } from "./BudgetAssignPanel";
 import { BudgetDetailChrome } from "./BudgetDetailChrome";
-import { BudgetRulesPanel } from "./BudgetRulesPanel";
 import { BudgetUpdateForm } from "./BudgetUpdateForm";
 import { UnassignButton } from "./UnassignButton";
 
@@ -340,18 +339,18 @@ export default async function BudgetDetailPage({
   const ratio = budget ? budgetUsageRatio(budget) : null;
 
   return (
-    <main className="flex flex-col gap-[var(--space-4)] py-[var(--space-4)]">
+    <main className="flex flex-col gap-(--space-4) py-(--space-4)">
       {budgetNotFound ? (
-        <p role="alert" className="px-[var(--page-gutter)]">
+        <p role="alert" className="px-(--page-gutter)">
           {t.budgetNotFound}
         </p>
       ) : loadError || !budget ? (
-        <p role="alert" className="px-[var(--page-gutter)]">
+        <p role="alert" className="px-(--page-gutter)">
           {t.loadError}
         </p>
       ) : (
         <>
-          <div className="flex flex-col gap-[var(--space-4)] px-[var(--page-gutter)]">
+          <div className="flex flex-col gap-(--space-4) px-(--page-gutter)">
             <BudgetDetailChrome
               title={budget.name}
               progressBar={
@@ -384,18 +383,28 @@ export default async function BudgetDetailPage({
                   lists={sourceLists}
                   messages={{ ...t, cancelLabel: t.receiptMoveCancel }}
                   locale={locale}
+                  rules={budget.rules}
                 />
               }
             />
 
-            <section className="flex flex-col gap-[var(--space-1)]">
+            <section className="flex items-center justify-start gap-(--space-2)">
               <Chip className={budgetStatusChipClassName(budget.state)}>
                 {budgetStateLabel(budget.state, t)}
               </Chip>
-            </section>
-
-            <section className="flex flex-col gap-[var(--space-2)]">
-              <SectionLabel>{t.budgetsSourcesHeading}</SectionLabel>
+              {budget.period_start || budget.period_end ? (
+                <span className="text-[0.75rem] font-[550] text-muted">
+                  {budget.period_start
+                    ? formatPeriodBoundShort(budget.period_start, locale)
+                    : ""}
+                  {budget.period_start && budget.period_end ? " – " : ""}
+                  {budget.period_end
+                    ? formatPeriodBoundShort(budget.period_end, locale)
+                    : ""}
+                </span>
+              ) : (
+                <span />
+              )}
               <div className="flex flex-wrap items-center gap-1.5">
                 {resolveSourceListChips(budget.source_list_ids, sourceLists).map((list) => (
                   <Chip key={list.id} tone="muted">
@@ -405,15 +414,10 @@ export default async function BudgetDetailPage({
               </div>
             </section>
 
-            <section className="flex flex-col gap-[var(--space-3)]">
-              <BudgetRulesPanel
-                budgetId={budgetId}
-                rules={budget.rules}
-                messages={t}
-              />
+            <section className="flex flex-col gap-(--space-3)">
               {budget.history.length === 0 ? (
                 <div
-                  className="flex flex-col items-start gap-[var(--space-3)] px-[var(--space-4)] py-[var(--space-5)] bg-surface border border-border rounded-md"
+                  className="flex flex-col items-start gap-(--space-3) px-(--space-4) py-(--space-5) bg-surface border border-border rounded-md"
                   role="status"
                 >
                   <p className="m-0 text-muted">{t.budgetsHistoryEmpty}</p>
@@ -428,7 +432,7 @@ export default async function BudgetDetailPage({
                     budgetId={budgetId}
                     messages={{ ...t, cancelLabel: t.receiptMoveCancel }}
                   />
-                  <ul className="m-0 list-none p-0 flex flex-col gap-[var(--space-2)]">
+                  <ul className="m-0 list-none p-0 flex flex-col gap-(--space-2)">
                     {budget.history.map((line) => {
                       const { viaLabelKey, showUnassign } =
                         historyRowAttribution(line);
@@ -462,6 +466,7 @@ export default async function BudgetDetailPage({
                             amount={
                               isSplit ? undefined : formatMoneyAmount(line.viewer_share_crc, "CRC")
                             }
+                            amountInNetColumn
                             directionLabel={
                               polarity === "owe"
                                 ? t.balanceOwe

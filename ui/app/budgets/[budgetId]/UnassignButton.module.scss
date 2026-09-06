@@ -1,0 +1,10 @@
+/* Unassign is a destructive action — hover should read red (--owe), not the
+ * shared ghost variant's accent green. CSS Modules scope `.ghost` per-file,
+ * so it can't be referenced here to raise specificity — instead the `button`
+ * tag qualifier raises this rule's specificity (0,3,1) above the shared
+ * `.ghost:not(:disabled):hover` rule in IconButton.module.scss (0,3,0), which
+ * is required since that rule is also `!important`.
+ */
+button.destructive:not(:disabled):hover {
+  color: var(--owe) !important;
+}

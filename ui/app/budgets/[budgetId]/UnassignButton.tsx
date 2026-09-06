@@ -7,6 +7,7 @@ import { CloseIcon } from "@/app/icons/CloseIcon";
 import { IconButton } from "@/components/IconButton/IconButton";
 
 import { unassignEntry, type BudgetDetailClientMessages } from "./budgetDetailClient";
+import styles from "./UnassignButton.module.scss";
 
 type Props = {
   budgetId: string;
@@ -35,6 +36,7 @@ export function UnassignButton({ budgetId, entryId, label, messages }: Props) {
   return (
     <span className="flex flex-col items-end gap-1">
       <IconButton
+        className={styles.destructive}
         icon={<CloseIcon />}
         label={label}
         variant="ghost"

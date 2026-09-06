@@ -28,6 +28,7 @@ import {
   budgetStateLabel,
   budgetUsageRatio,
   fetchBudgets,
+  formatPeriodBoundNumeric,
   formatPeriodBoundShort,
   type BudgetItem,
   type BudgetsClientMessages,
@@ -302,9 +303,9 @@ export function BudgetsPanel() {
                   key={budget.id}
                   ref={registerCard(budget.id)}
                   href={`/budgets/${budget.id}`}
-                  className="relative flex flex-col gap-[var(--space-3)] overflow-hidden rounded-[10px] border border-border bg-surface pt-[var(--space-4)] px-[var(--space-3)] no-underline text-inherit"
+                  className="relative flex flex-col gap-(--space-3) overflow-hidden rounded-[10px] border border-border bg-surface pt-(--space-4) px-(--space-3) no-underline text-inherit"
                 >
-                  <div className="flex items-center justify-between gap-[var(--space-3)] pb-[var(--space-3)]">
+                  <div className="flex items-start justify-between gap-(--space-3) pb-(--space-3)">
                     <div className="flex min-w-0 flex-col gap-1.5">
                       <p className="m-0 min-w-0 flex-1 truncate text-[0.85rem] text-foreground">
                         {budget.name}
@@ -322,33 +323,49 @@ export function BudgetsPanel() {
                       </div>
                     </div>
                     {daysLeft === null ? null : (
-                      <Tooltip
-                        label={
-                          budget.period_end
-                            ? (overdue ? t.budgetsWasDueOn : t.budgetsEndsOn).replace(
-                              "{date}",
-                              formatPeriodBoundShort(budget.period_end, locale),
-                            )
-                            : ""
-                        }
-                      >
-                        <div
-                          tabIndex={0}
-                          className="flex shrink-0 flex-col items-center outline-none border border-solid border-border p-1 rounded-[8px]"
+                      <div className="flex shrink-0 flex-col items-stretch gap-1">
+                        <Tooltip
+                          label={
+                            budget.period_end
+                              ? (overdue ? t.budgetsWasDueOn : t.budgetsEndsOn).replace(
+                                "{date}",
+                                formatPeriodBoundShort(budget.period_end, locale),
+                              )
+                              : ""
+                          }
                         >
-                          <span
-                            className={`font-serif text-[1.7rem] leading-[2.25rem] tracking-[-0.02em] ${overdue ? "text-owe" : "text-foreground"}`}
+                          <div
+                            tabIndex={0}
+                            className="flex shrink-0 flex-col items-center outline-none border border-solid border-border p-1 rounded-[8px]"
                           >
-                            {daysLeft}
-                          </span>
-                          <span className="whitespace-nowrap text-[0.56rem] font-[550] uppercase tracking-[0.04em] text-muted">
-                            {overdue ? t.budgetsDaysOverdue : t.budgetsDaysLeft}
-                          </span>
-                        </div>
-                      </Tooltip>
+                            <span
+                              className={`font-serif text-[1.7rem] leading-9 tracking-[-0.02em] ${overdue ? "text-owe" : "text-foreground"}`}
+                            >
+                              {daysLeft}
+                            </span>
+                            <span className="whitespace-nowrap text-[0.56rem] font-[550] uppercase tracking-[0.04em] text-muted">
+                              {overdue ? t.budgetsDaysOverdue : t.budgetsDaysLeft}
+                            </span>
+                          </div>
+                        </Tooltip>
+                        {budget.period_start || budget.period_end ? (
+                          <div className="flex justify-between gap-1 text-[0.56rem] font-[550] text-muted">
+                            <span>
+                              {budget.period_start
+                                ? formatPeriodBoundNumeric(budget.period_start, locale)
+                                : ""}
+                            </span>
+                            <span>
+                              {budget.period_end
+                                ? formatPeriodBoundNumeric(budget.period_end, locale)
+                                : ""}
+                            </span>
+                          </div>
+                        ) : null}
+                      </div>
                     )}
                   </div>
-                  <div className="-mx-[var(--space-3)] -mb-px">
+                  <div className="-mx-(--space-3) -mb-px">
                     <TopProgressBar
                       variant="thick"
                       ratio={ratio}

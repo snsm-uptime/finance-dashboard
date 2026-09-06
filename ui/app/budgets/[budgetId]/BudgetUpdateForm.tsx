@@ -12,14 +12,17 @@ import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
 import { PencilIcon } from "@/app/icons/PencilIcon";
 import { Sheet } from "@/app/lists/Sheet";
 import {
-  // periodChangeConfirmBodyFrom,
+  periodChangeConfirmBodyFrom,
   updateBudget,
   type BudgetItem,
   type BudgetsClientMessages,
-  // type PeriodChangeLine,
+  type PeriodChangeLine,
 } from "../budgetsClient";
+import { BudgetRulesPanel, type BudgetRulesPanelMessages } from "./BudgetRulesPanel";
+import type { BudgetRule } from "./budgetDetailClient";
 
-export type BudgetUpdateFormMessages = BudgetsClientMessages & {
+export type BudgetUpdateFormMessages = BudgetsClientMessages &
+  BudgetRulesPanelMessages & {
   budgetsEditAria: string;
   budgetsEditTitle: string;
   budgetsNameLabel: string;
@@ -44,6 +47,7 @@ export type BudgetUpdateFormMessages = BudgetsClientMessages & {
 type Props = {
   budget: BudgetItem;
   lists: { id: string; name: string }[];
+  rules: BudgetRule[];
   messages: BudgetUpdateFormMessages;
   locale: "en" | "es";
 };
@@ -75,7 +79,7 @@ function sourceListChipClassName(selected: boolean): string {
  * that response drives the confirmation Sheet directly, no separate preview
  * round-trip needed before the first submit attempt.
  */
-export function BudgetUpdateForm({ budget, lists, messages, locale }: Props) {
+export function BudgetUpdateForm({ budget, lists, rules, messages, locale }: Props) {
   const router = useRouter();
   const baseId = useId();
   const formId = `${baseId}-form`;
@@ -94,9 +98,9 @@ export function BudgetUpdateForm({ budget, lists, messages, locale }: Props) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // const [confirmOpen, setConfirmOpen] = useState(false);
-  // const [excludedLines, setExcludedLines] = useState<PeriodChangeLine[]>([]);
-  // const [confirming, setConfirming] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [excludedLines, setExcludedLines] = useState<PeriodChangeLine[]>([]);
+  const [confirming, setConfirming] = useState(false);
 
   function openEditor() {
     setName(budget.name);
@@ -106,8 +110,8 @@ export function BudgetUpdateForm({ budget, lists, messages, locale }: Props) {
     setPeriodStart(budget.period_start ?? "");
     setPeriodEnd(budget.period_end ?? "");
     setError(null);
-    // setConfirmOpen(false);
-    // setExcludedLines([]);
+    setConfirmOpen(false);
+    setExcludedLines([]);
     setOpen(true);
   }
 
@@ -133,23 +137,23 @@ export function BudgetUpdateForm({ budget, lists, messages, locale }: Props) {
   async function submit(confirmPeriodChange: boolean) {
     const result = await updateBudget(budget.id, buildPayload(confirmPeriodChange), messages);
     if (result.ok) {
-      // setConfirmOpen(false);
+      setConfirmOpen(false);
       setOpen(false);
       router.refresh();
       return;
     }
     if ("requiresConfirmation" in result && result.requiresConfirmation) {
-      // setExcludedLines(result.excludedLines);
+      setExcludedLines(result.excludedLines);
       if (confirmPeriodChange) {
         // Excluded lines changed between the first submit and this confirm — re-show
         // the confirmation with the fresh diff instead of silently applying the stale one.
         setError(messages.errorGeneric);
       } else {
-        // setConfirmOpen(true);
+        setConfirmOpen(true);
       }
       return;
     }
-    // setConfirmOpen(false);
+    setConfirmOpen(false);
     if (!("requiresConfirmation" in result)) {
       setError(result.error);
     }
@@ -164,12 +168,12 @@ export function BudgetUpdateForm({ budget, lists, messages, locale }: Props) {
     setPending(false);
   }
 
-  // async function onConfirmPeriodChange() {
-  //   setConfirming(true);
-  //   await submit(true);
-  //   setConfirming(false);
-  // }
-  //
+  async function onConfirmPeriodChange() {
+    setConfirming(true);
+    await submit(true);
+    setConfirming(false);
+  }
+
   const canSubmit =
     name.trim().length > 0 && cap.trim().length > 0 && selectedListIds.length > 0 && !pending;
 
@@ -182,21 +186,52 @@ export function BudgetUpdateForm({ budget, lists, messages, locale }: Props) {
       />
       <Sheet
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={() => (confirmOpen ? setConfirmOpen(false) : setOpen(false))}
         fillBelowChrome={true}
-        closeLabel={messages.cancelLabel}
-        title={messages.budgetsEditTitle}
+        closeLabel={confirmOpen ? messages.budgetsPeriodChangeCancel : messages.cancelLabel}
+        title={confirmOpen ? messages.budgetsPeriodChangeConfirmTitle : messages.budgetsEditTitle}
         cornerAction={
-          <FormIconSubmit
-            type="submit"
-            form={formId}
-            tabIndex={0}
-            variant="save"
-            label={pending ? messages.budgetsSaving : messages.budgetsEditSubmit}
-            disabled={!canSubmit}
-          />
+          confirmOpen ? (
+            <FormIconSubmit
+              type="button"
+              variant="save"
+              label={confirming ? messages.budgetsSaving : messages.budgetsPeriodChangeConfirmAction}
+              disabled={confirming}
+              onClick={onConfirmPeriodChange}
+            />
+          ) : (
+            <FormIconSubmit
+              type="submit"
+              form={formId}
+              tabIndex={0}
+              variant="save"
+              label={pending ? messages.budgetsSaving : messages.budgetsEditSubmit}
+              disabled={!canSubmit}
+            />
+          )
         }
         body={
+          confirmOpen ? (
+            <div className="flex flex-col gap-(--space-3)">
+              <p className="m-0 text-foreground">
+                {periodChangeConfirmBodyFrom(excludedLines, messages)}
+              </p>
+              <ul className="m-0 list-none p-0 flex flex-col gap-(--space-2)">
+                {excludedLines.map((line) => (
+                  <li
+                    key={line.id}
+                    className="flex items-center justify-between gap-(--space-3) px-(--space-3) py-(--space-2) bg-surface border border-border rounded-sm"
+                  >
+                    <span className="flex flex-col">
+                      <span className="text-foreground">{line.description}</span>
+                      <span className="tabular-nums text-muted text-[0.8rem]">{line.posted_date}</span>
+                    </span>
+                    <span className="tabular-nums text-muted">{line.amount_crc}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
           <form
             id={formId}
             className="flex w-full flex-col gap-(--space-2) h-full"
@@ -292,6 +327,7 @@ export function BudgetUpdateForm({ budget, lists, messages, locale }: Props) {
                 );
               })}
             </div>
+            <BudgetRulesPanel budgetId={budget.id} rules={rules} messages={messages} />
             <div aria-live="polite">
               {error ? (
                 <p className="m-0 text-[0.85rem] text-owe" role="alert">
@@ -300,49 +336,9 @@ export function BudgetUpdateForm({ budget, lists, messages, locale }: Props) {
               ) : null}
             </div>
           </form>
+          )
         }
       />
-      {/* TODO: I want to reconsider the commented implementation for user aknowledgment when the period changes */}
-      {/* <Sheet */}
-      {/*   open={confirmOpen} */}
-      {/*   onClose={() => setConfirmOpen(false)} */}
-      {/*   closeLabel={messages.budgetsPeriodChangeCancel} */}
-      {/*   title={messages.budgetsPeriodChangeConfirmTitle} */}
-      {/*   cornerAction={ */}
-      {/*     <FormIconSubmit */}
-      {/*       type="button" */}
-      {/*       variant="save" */}
-      {/*       label={ */}
-      {/*         confirming */}
-      {/*           ? messages.budgetsSaving */}
-      {/*           : messages.budgetsPeriodChangeConfirmAction */}
-      {/*       } */}
-      {/*       disabled={confirming} */}
-      {/*       onClick={onConfirmPeriodChange} */}
-      {/*     /> */}
-      {/*   } */}
-      {/*   body={ */}
-      {/*     <div className="flex flex-col gap-(--space-3)"> */}
-      {/*       <p className="m-0 text-foreground"> */}
-      {/*         {periodChangeConfirmBodyFrom(excludedLines, messages)} */}
-      {/*       </p> */}
-      {/*       <ul className="m-0 list-none p-0 flex flex-col gap-(--space-2)"> */}
-      {/*         {excludedLines.map((line) => ( */}
-      {/*           <li */}
-      {/*             key={line.id} */}
-      {/*             className="flex items-center justify-between gap-(--space-3) px-(--space-3) py-(--space-2) bg-surface border border-border rounded-sm" */}
-      {/*           > */}
-      {/*             <span className="flex flex-col"> */}
-      {/*               <span className="text-foreground">{line.description}</span> */}
-      {/*               <span className="tabular-nums text-muted text-[0.8rem]">{line.posted_date}</span> */}
-      {/*             </span> */}
-      {/*             <span className="tabular-nums text-muted">{line.amount_crc}</span> */}
-      {/*           </li> */}
-      {/*         ))} */}
-      {/*       </ul> */}
-      {/*     </div> */}
-      {/*   } */}
-      {/* /> */}
     </>
   );
 }
