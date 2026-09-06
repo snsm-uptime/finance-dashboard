@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { IconButton } from "@/components/IconButton";
-import { BoxIcon } from "@/app/icons";
+import { BoxIcon, OpenBoxIcon } from "@/app/icons";
 import {
   archiveBudget,
   unarchiveBudget,
@@ -38,10 +38,13 @@ export function ArchiveBudgetButton({
     setPending(false);
     if (result.ok) router.refresh();
   }
-
+  const iconProps = {
+    "active": isArchived,
+    "className": "size-5"
+  }
   return (
     <IconButton
-      icon={<BoxIcon active={isArchived} className="size-5" />}
+      icon={isArchived ? <OpenBoxIcon {...iconProps} /> : <BoxIcon {...iconProps} />}
       label={isArchived ? unarchiveLabel : archiveLabel}
       disabled={pending}
       onClick={onClick}

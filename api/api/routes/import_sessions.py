@@ -843,6 +843,7 @@ def identify_card_for_statement(
             card_id=match_result.matched_card.id,
             card_label=match_result.matched_card.label,
             iban=statement.iban,
+            archived=match_result.matched_card.is_archived,
         )
 
     # Unknown IBAN

@@ -164,3 +164,4 @@ class CardIdentificationResponse(BaseModel):
     card_id: UUID | None = None
     card_label: str | None = None
     iban: str | None = None
+    archived: bool = False

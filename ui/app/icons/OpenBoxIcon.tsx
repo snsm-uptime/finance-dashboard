@@ -17,10 +17,10 @@ type Props = SVGProps<SVGSVGElement> & {
 export function OpenBoxIcon({ active = false, className, ...props }: Props) {
   const stroke = {
     stroke: "currentColor",
-    strokeWidth: ICON_STROKE,
     strokeLinecap: "round" as const,
     strokeLinejoin: "round" as const,
   };
+  const strokeWidth = ICON_STROKE;
   return (
     <svg
       className={["box-icon", className].filter(Boolean).join(" ")}

@@ -948,6 +948,49 @@ def test_identify_card_match_persists_existing_card_id(
     assert fetched.json()["statements"][0]["card_id"] == card_id
 
 
+def test_identify_card_match_against_archived_card_discloses_archived_flag(
+    client: TestClient, db_session: Session
+) -> None:
+    _register(client, "originarchived@example.com")
+    user_id = UUID(client.get("/auth/me").json()["user_id"])
+    created = client.post("/cards", json={"label": "My Visa", "iban": _IDENTIFY_IBAN})
+    assert created.status_code == 201, created.text
+    card_id = created.json()["id"]
+    archived = client.post(f"/cards/{card_id}/archive")
+    assert archived.status_code == 200, archived.text
+
+    repo = SqlAlchemyImportSessionRepository(db_session)
+    record = repo.create_session(
+        session_id=uuid4(),
+        user_id=user_id,
+        statements=[
+            DetectedStatement(
+                product_id="fake_product",
+                status=STATEMENT_STATUS_STAGED,
+                candidate_rows=[_crc_line()],
+                iban=_IDENTIFY_IBAN,
+            )
+        ],
+        pdf_paths={0: "/data/pdfs/origin-archived.pdf"},
+    )
+    statement_id = record.statements[0].id
+
+    identified = client.post(
+        f"/import/sessions/{record.id}/statements/{statement_id}/identify-card",
+        json={},
+    )
+    assert identified.status_code == 200, identified.text
+    body = identified.json()
+    assert body["matched"] is True
+    assert body["card_id"] == card_id
+    assert body["archived"] is True
+
+    # The statement assignment itself is unaffected — still auto-assigned.
+    fetched = client.get(f"/import/sessions/{record.id}")
+    assert fetched.status_code == 200, fetched.text
+    assert fetched.json()["statements"][0]["card_id"] == card_id
+
+
 def _pending_rows(payload: dict) -> list[dict]:
     return list(payload["statements"][0]["rows"])
 

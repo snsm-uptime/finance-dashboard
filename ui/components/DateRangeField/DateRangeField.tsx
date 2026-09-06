@@ -25,8 +25,35 @@ type Cell = { dateStr: string; day: number; inMonth: boolean; isToday: boolean }
 
 const WEEKDAY_KEYS = [0, 1, 2, 3, 4, 5, 6];
 const POPOVER_WIDTH_PX = 248;
+/**
+ * Rough popover height (header + weekday row + 6 day rows + footer) used to
+ * decide whether it should open upward instead — the calendar isn't
+ * rendered yet when this check runs, so an exact measurement isn't
+ * available.
+ */
+const POPOVER_HEIGHT_PX = 320;
 /** Extra margin so the popover doesn't sit flush against the viewport edge. */
 const VIEWPORT_MARGIN_PX = 8;
+
+/**
+ * Nearest scrollable ancestor's viewport-relative bounds, or the window's
+ * if none — e.g. a sheet's scrolling body clips the popover well before the
+ * window edge does, so measuring against `window.innerHeight` alone would
+ * flip the popover "above" straight under the sheet's fixed title, where
+ * it's just as clipped.
+ */
+function getClipRect(node: HTMLElement | null): { top: number; bottom: number } {
+  let el = node?.parentElement ?? null;
+  while (el) {
+    const style = getComputedStyle(el);
+    if (/(auto|scroll|hidden)/.test(style.overflowY)) {
+      const rect = el.getBoundingClientRect();
+      return { top: rect.top, bottom: rect.bottom };
+    }
+    el = el.parentElement;
+  }
+  return { top: 0, bottom: window.innerHeight };
+}
 
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
@@ -88,6 +115,10 @@ export function DateRangeField({
   // right edge, e.g. the ghost budget card's calendar-icon trigger sitting
   // near the right edge of a narrow masonry column.
   const [align, setAlign] = useState<"left" | "right">("left");
+  // Flipped to "above" when opening below (the default) would push the
+  // popover past the viewport's bottom edge, e.g. a field near the bottom
+  // of the page.
+  const [vAlign, setVAlign] = useState<"below" | "above">("below");
   const rootRef = useRef<HTMLDivElement>(null);
   const now = new Date();
   const todayStr = toDateStr(now.getFullYear(), now.getMonth(), now.getDate());
@@ -145,6 +176,12 @@ export function DateRangeField({
     const wouldOverflowRight =
       rect !== undefined && rect.left + POPOVER_WIDTH_PX > window.innerWidth - VIEWPORT_MARGIN_PX;
     setAlign(wouldOverflowRight ? "right" : "left");
+    if (rect !== undefined) {
+      const clip = getClipRect(rootRef.current);
+      const spaceBelow = clip.bottom - VIEWPORT_MARGIN_PX - rect.bottom;
+      const spaceAbove = rect.top - VIEWPORT_MARGIN_PX - clip.top;
+      setVAlign(spaceBelow < POPOVER_HEIGHT_PX && spaceAbove > spaceBelow ? "above" : "below");
+    }
     setOpen(true);
   }
 
@@ -210,7 +247,7 @@ export function DateRangeField({
       )}
       {open ? (
         <div
-          className={`absolute z-10 mt-2 w-[248px] rounded-[10px] border border-border bg-surface p-[10px] shadow-lg ${align === "right" ? "right-0" : "left-0"}`}
+          className={`absolute z-10 w-[248px] rounded-[10px] border border-border bg-surface p-[10px] shadow-lg ${align === "right" ? "right-0" : "left-0"} ${vAlign === "above" ? "bottom-full mb-2" : "mt-2"}`}
         >
           <div className="mb-2 flex items-center justify-between">
             <button
