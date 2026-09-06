@@ -205,6 +205,7 @@ export function GhostBudgetCard({ lists, messages, locale, onCreated, cardRef }:
                 icon={<CalendarIcon className="h-[1.5rem] w-[1.5rem]" />}
                 label="Date Picker"
                 disabled={triggerDisabled}
+                variant="muted"
                 onClick={open}
                 aria-expanded={popoverOpen}
                 aria-label={messages.budgetsPeriodTriggerLabel}

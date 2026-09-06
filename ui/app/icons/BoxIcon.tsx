@@ -1,5 +1,4 @@
 import type { SVGProps } from "react";
-
 import { ICON_STROKE } from "./stroke";
 
 type Props = SVGProps<SVGSVGElement> & {
@@ -7,21 +6,14 @@ type Props = SVGProps<SVGSVGElement> & {
   active?: boolean;
 };
 
-/**
- * Closed/open storage-box glyph used as the archived-view toggle (Story 7.6).
- * The lid rotates open around its back edge via a CSS `transform` on
- * `.box-icon-lid` (see globals.css) — `prefers-reduced-motion` disables the
- * transition there, so the lid still ends in the right state, just without
- * the animated travel.
- */
-export function BoxIcon({ active = false, className, ...props }: Props) {
-  const stroke = {
-    stroke: "currentColor",
-    strokeWidth: ICON_STROKE,
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-  };
+const stroke = {
+  stroke: "currentColor",
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+};
+const strokeWidth = ICON_STROKE - 0.5;
 
+export function BoxIcon({ active = false, className, ...props }: Props) {
   return (
     <svg
       className={["box-icon", className].filter(Boolean).join(" ")}
@@ -32,16 +24,13 @@ export function BoxIcon({ active = false, className, ...props }: Props) {
       data-active={active || undefined}
       {...props}
     >
-      <path d="M4 10.5h16V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-8.5Z" {...stroke} />
-      <path
-        className="box-icon-lid"
-        d="M3.5 8a1 1 0 0 1 1-1h15a1 1 0 0 1 1 1v2.5h-17V8Z"
-        {...stroke}
-        style={{
-          transformOrigin: "3.5px 8px",
-          transform: active ? "rotate(-28deg) translate(0.5px, -1.5px)" : "none",
-        }}
-      />
+      <g transform="translate(12,12) scale(0.08)" fill="none" strokeLinecap="round" strokeLinejoin="round">
+        <polygon points="0,-120 104,-60 0,0 -104,-60" {...stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />
+        <polygon points="-104,-60 0,0 0,120 -104,60" {...stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />
+        <polygon points="104,-60 0,0 0,120 104,60" {...stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />
+        <line x1="-52" y1="-90" x2="52" y2="-30" {...stroke} strokeWidth={strokeWidth + 0.35} vectorEffect="non-scaling-stroke" />
+      </g>
     </svg>
   );
 }
+

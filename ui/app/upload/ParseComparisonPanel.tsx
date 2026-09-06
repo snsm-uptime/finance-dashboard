@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 
+import { SpinnerIcon } from "@/app/icons";
 import { GhostButton } from "@/components/soft-ledger/GhostButton";
 import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 import { uploadCopy } from "@/lib/i18n/upload";
@@ -214,13 +215,27 @@ export function ParseComparisonPanel({
         {pdfError ? (
           <p className="m-0 px-[var(--space-3)] text-muted">{t.parseFailurePdfError}</p>
         ) : !file ? (
-          <p className="m-0 px-[var(--space-3)] text-muted">{t.parseFailurePdfLoading}</p>
+          <div
+            className="flex justify-center px-[var(--space-3)] py-[var(--space-2)] text-muted"
+            role="status"
+            aria-label={t.parseFailurePdfLoading}
+          >
+            <SpinnerIcon className="h-5 w-5 animate-spin" />
+          </div>
         ) : (
           <Document
             file={file}
             onLoadSuccess={({ numPages: count }) => setNumPages(count)}
             onLoadError={() => setPdfError(true)}
-            loading={t.parseFailurePdfLoading}
+            loading={
+              <div
+                className="flex justify-center px-[var(--space-3)] py-[var(--space-2)] text-muted"
+                role="status"
+                aria-label={t.parseFailurePdfLoading}
+              >
+                <SpinnerIcon className="h-5 w-5 animate-spin" />
+              </div>
+            }
           >
             {Array.from({ length: numPages }, (_, page) => (
               <Page key={page + 1} pageNumber={page + 1} width={pageWidth} />

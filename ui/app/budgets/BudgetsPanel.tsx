@@ -23,14 +23,12 @@ import {
 } from "@/app/lists/membershipListsStore";
 import { GhostBudgetCard } from "./GhostBudgetCard";
 import {
-  archiveBudget,
   budgetDaysLeft,
   budgetSeverityColorClass,
   budgetStateLabel,
   budgetUsageRatio,
   fetchBudgets,
   formatPeriodBoundShort,
-  unarchiveBudget,
   type BudgetItem,
   type BudgetsClientMessages,
 } from "./budgetsClient";
@@ -248,15 +246,6 @@ export function BudgetsPanel() {
     setBudgets((prev) => [budget, ...prev]);
   }
 
-  async function onToggleArchive(budget: BudgetItem) {
-    const result = budget.is_archived
-      ? await unarchiveBudget(budget.id, messages)
-      : await archiveBudget(budget.id, messages);
-    if (result.ok) {
-      setBudgets((prev) => prev.filter((b) => b.id !== budget.id));
-    }
-  }
-
   return (
     <div className="flex flex-col gap-(--space-3)">
       <StackedListPanel
@@ -337,18 +326,18 @@ export function BudgetsPanel() {
                         label={
                           budget.period_end
                             ? (overdue ? t.budgetsWasDueOn : t.budgetsEndsOn).replace(
-                                "{date}",
-                                formatPeriodBoundShort(budget.period_end, locale),
-                              )
+                              "{date}",
+                              formatPeriodBoundShort(budget.period_end, locale),
+                            )
                             : ""
                         }
                       >
                         <div
                           tabIndex={0}
-                          className="flex shrink-0 flex-col items-center outline-none"
+                          className="flex shrink-0 flex-col items-center outline-none border border-solid border-border p-1 rounded-[8px]"
                         >
                           <span
-                            className={`font-serif text-[2.3rem] leading-[0.95] tracking-[-0.02em] ${overdue ? "text-owe" : "text-foreground"}`}
+                            className={`font-serif text-[1.7rem] leading-[2.25rem] tracking-[-0.02em] ${overdue ? "text-owe" : "text-foreground"}`}
                           >
                             {daysLeft}
                           </span>
@@ -367,17 +356,6 @@ export function BudgetsPanel() {
                       startLabel={formatMoneyAmount(budget.spent, budget.currency)}
                       endLabel={formatMoneyAmount(budget.cap, budget.currency)}
                       ariaLabel={budgetStateLabel(budget.state, t)}
-                    />
-                  </div>
-                  <div className="absolute top-1 right-1">
-                    <IconButton
-                      icon={<BoxIcon active={budget.is_archived} className="size-4" />}
-                      label={budget.is_archived ? t.budgetsUnarchive : t.budgetsArchive}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        void onToggleArchive(budget);
-                      }}
                     />
                   </div>
                 </Link>
