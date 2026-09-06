@@ -162,3 +162,102 @@ describe("ListsPanel roster chips", () => {
     expect(balanceCol?.textContent).toContain("₡88");
   });
 });
+
+function openMenu(container: HTMLDivElement, listName: string) {
+  const card = container.querySelector(`[aria-label="Open list: ${listName}"]`);
+  const menuButton = card?.parentElement?.querySelector(
+    `[aria-label="${t.menuAria}"]`,
+  ) as HTMLButtonElement | null;
+  act(() => {
+    menuButton?.click();
+  });
+}
+
+describe("ListsPanel archive toggle", () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+    resetMembershipListsStore();
+    vi.unstubAllGlobals();
+  });
+
+  it("shows the create input and an Archive menu item for the owner when showArchived is false", () => {
+    act(() => {
+      root.render(<ListsPanel initialLists={[solo]} currentUserId="owner-1" />);
+    });
+    expect(container.querySelector(`[placeholder="${t.createLabel}"]`)).not.toBeNull();
+    openMenu(container, "Personal");
+    const items = Array.from(container.querySelectorAll('[role="menuitem"]')).map(
+      (el) => el.textContent,
+    );
+    expect(items).toContain(t.listsArchive);
+    expect(items).not.toContain(t.listsUnarchive);
+  });
+
+  it("hides the Archive control for a non-owner member", () => {
+    act(() => {
+      root.render(
+        <ListsPanel initialLists={[{ ...shared, role: "member" }]} currentUserId="member-2" />,
+      );
+    });
+    const card = container.querySelector('[aria-label="Open list: Home"]');
+    expect(card?.parentElement?.querySelector(`[aria-label="${t.menuAria}"]`)).toBeNull();
+  });
+
+  it("hides the create input and fetches archived lists when showArchived is true", async () => {
+    const archived: ListItem = { ...solo, id: "archived-1", name: "Old list", is_archived: true };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ lists: [archived] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(
+        <ListsPanel initialLists={[solo]} currentUserId="owner-1" showArchived />,
+      );
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/lists?archived=true",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(container.querySelector(`[placeholder="${t.createLabel}"]`)).toBeNull();
+    expect(container.textContent).toContain("Old list");
+    expect(container.textContent).not.toContain("Personal");
+  });
+
+  it("shows Unarchive (not the full owner menu) for an owned list in the archived view", async () => {
+    const archived: ListItem = { ...solo, id: "archived-1", name: "Old list", is_archived: true };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ lists: [archived] }),
+      }),
+    );
+
+    await act(async () => {
+      root.render(<ListsPanel initialLists={[]} currentUserId="owner-1" showArchived />);
+    });
+
+    openMenu(container, "Old list");
+    const items = Array.from(container.querySelectorAll('[role="menuitem"]')).map(
+      (el) => el.textContent,
+    );
+    expect(items).toEqual([t.listsUnarchive]);
+  });
+});

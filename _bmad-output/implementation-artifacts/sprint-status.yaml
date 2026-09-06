@@ -1,5 +1,5 @@
 # generated: 2026-08-03T22:46:31
-# last_updated: 2026-09-05 (story 9-1: archive flag + endpoints for lists/cards, review)
+# last_updated: 2026-09-05 (story 9-2: archive toggle lists homepage, done)
 
 # project: finance-dashboard
 # project_key: NOKEY
@@ -42,7 +42,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-03T22:46:31
-last_updated: 2026-09-04
+last_updated: 2026-09-05 (story 9-2: archive toggle lists homepage, done)
 
 project: finance-dashboard
 project_key: NOKEY
@@ -172,7 +172,7 @@ development_status:
   # to lists and cards. 9.1 is backend/non-lite; 9.2/9.3 are --lite UI.
   epic-9: in-progress
   9-1-archive-flag-endpoints-lists-cards: review
-  9-2-archive-toggle-lists-homepage: backlog
+  9-2-archive-toggle-lists-homepage: done
   9-3-archive-toggle-cards-panel: backlog
   epic-9-retrospective: optional
 

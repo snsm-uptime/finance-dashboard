@@ -288,8 +288,8 @@ export default async function BudgetDetailPage({
                   ratio={ratio}
                   variant="thick"
                   colorClassName={budgetSeverityColorClass(ratio)}
-                  startLabel={formatMoneyAmount(budget.spent, budget.currency)}
-                  endLabel={formatMoneyAmount(budget.cap, budget.currency)}
+                  startLabel={`${t.budgetsSpentCaption}: ${formatMoneyAmount(budget.spent, budget.currency)}`}
+                  endLabel={`${t.budgetsCapCaption}: ${formatMoneyAmount(budget.cap, budget.currency)}`}
                   ariaLabel={budgetStateLabel(budget.state, t)}
                 />
               }
@@ -318,19 +318,9 @@ export default async function BudgetDetailPage({
             />
 
             <section className="flex flex-col gap-[var(--space-1)]">
-              <div className="flex items-center justify-between px-[var(--space-1)]">
-                <span className="text-[0.7rem] text-muted">
-                  {t.budgetsSpentCaption} · {formatMoneyAmount(budget.spent, budget.currency)}
-                </span>
-                <span className="text-[0.7rem] text-muted">
-                  {t.budgetsCapCaption} · {formatMoneyAmount(budget.cap, budget.currency)}
-                </span>
-              </div>
-              <div>
-                <Chip className={budgetStatusChipClassName(budget.state)}>
-                  {budgetStateLabel(budget.state, t)}
-                </Chip>
-              </div>
+              <Chip className={budgetStatusChipClassName(budget.state)}>
+                {budgetStateLabel(budget.state, t)}
+              </Chip>
             </section>
 
             <section className="flex flex-col gap-[var(--space-2)]">
@@ -369,35 +359,35 @@ export default async function BudgetDetailPage({
                   />
                   <ul className="m-0 list-none p-0 flex flex-col gap-[var(--space-2)]">
                     {budget.history.map((line) => {
-                    const { viaLabelKey, showUnassign } =
-                      historyRowAttribution(line);
-                    return (
-                      <li
-                        key={line.id}
-                        className="flex items-center justify-between gap-[var(--space-3)] px-[var(--space-3)] py-[var(--space-2)] bg-surface border border-border rounded-sm"
-                      >
-                        <span className="flex flex-col">
-                          <span className="text-foreground">
-                            {line.description}
+                      const { viaLabelKey, showUnassign } =
+                        historyRowAttribution(line);
+                      return (
+                        <li
+                          key={line.id}
+                          className="flex items-center justify-between gap-[var(--space-3)] px-[var(--space-3)] py-[var(--space-2)] bg-surface border border-border rounded-sm"
+                        >
+                          <span className="flex flex-col">
+                            <span className="text-foreground">
+                              {line.description}
+                            </span>
+                            <span className="text-muted">{t[viaLabelKey]}</span>
                           </span>
-                          <span className="text-muted">{t[viaLabelKey]}</span>
-                        </span>
-                        <span className="flex items-center gap-[var(--space-2)]">
-                          <span className="tabular-nums text-foreground">
-                            {formatMoneyAmount(line.amount_crc, "CRC")}
+                          <span className="flex items-center gap-[var(--space-2)]">
+                            <span className="tabular-nums text-foreground">
+                              {formatMoneyAmount(line.amount_crc, "CRC")}
+                            </span>
+                            {showUnassign ? (
+                              <UnassignButton
+                                budgetId={budgetId}
+                                entryId={line.id}
+                                label={t.budgetsUnassign}
+                                messages={t}
+                              />
+                            ) : null}
                           </span>
-                          {showUnassign ? (
-                            <UnassignButton
-                              budgetId={budgetId}
-                              entryId={line.id}
-                              label={t.budgetsUnassign}
-                              messages={t}
-                            />
-                          ) : null}
-                        </span>
-                      </li>
-                    );
-                  })}
+                        </li>
+                      );
+                    })}
                   </ul>
                 </>
               )}

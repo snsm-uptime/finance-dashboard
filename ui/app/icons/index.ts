@@ -31,3 +31,4 @@ export { FolderIcon } from "./FolderIcon";
 export { PencilIcon } from "./PencilIcon";
 export { HelpIcon } from "./HelpIcon";
 export { BoxIcon } from "./BoxIcon";
+export { OpenBoxIcon } from "./OpenBoxIcon";

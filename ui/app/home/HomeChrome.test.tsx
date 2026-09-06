@@ -67,4 +67,73 @@ describe("HomeChrome", () => {
     });
     expect(push).toHaveBeenCalledWith("/docs?from=%2Fhome#lists");
   });
+
+  it("renders no archive toggle when onToggleArchived is omitted", () => {
+    act(() => {
+      root.render(
+        <AppShell>
+          <HomeChrome title="Lists" alias="sebas" userId="owner-1" photoBase64={null} />
+        </AppShell>,
+      );
+    });
+    const header = container.querySelector('[data-app-chrome="header"]') as HTMLElement;
+    expect(header.querySelector('[aria-pressed]')).toBeNull();
+  });
+
+  it("renders the archive toggle before the Docs help button and invokes onToggleArchived on click", () => {
+    const onToggleArchived = vi.fn();
+    act(() => {
+      root.render(
+        <AppShell>
+          <HomeChrome
+            title="Lists"
+            alias="sebas"
+            userId="owner-1"
+            photoBase64={null}
+            showArchived={false}
+            onToggleArchived={onToggleArchived}
+          />
+        </AppShell>,
+      );
+    });
+
+    const header = container.querySelector('[data-app-chrome="header"]') as HTMLElement;
+    const toggle = header.querySelector('[aria-pressed]') as HTMLButtonElement;
+    expect(toggle).toBeTruthy();
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    expect(toggle.getAttribute("aria-label")).toBe("Show archived lists");
+
+    const helpButton = header.querySelector(
+      'button[aria-label="Learn more about Lists"]',
+    ) as HTMLButtonElement;
+    expect(
+      toggle.compareDocumentPosition(helpButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    act(() => {
+      toggle.click();
+    });
+    expect(onToggleArchived).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the active-view label and pressed state when showArchived is true", () => {
+    act(() => {
+      root.render(
+        <AppShell>
+          <HomeChrome
+            title="Lists"
+            alias="sebas"
+            userId="owner-1"
+            photoBase64={null}
+            showArchived
+            onToggleArchived={() => {}}
+          />
+        </AppShell>,
+      );
+    });
+    const header = container.querySelector('[data-app-chrome="header"]') as HTMLElement;
+    const toggle = header.querySelector('[aria-pressed]') as HTMLButtonElement;
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    expect(toggle.getAttribute("aria-label")).toBe("Show active lists");
+  });
 });

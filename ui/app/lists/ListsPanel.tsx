@@ -31,16 +31,20 @@ import type { InviteFormMessages } from "./InviteForm";
 import { InviteForm } from "./InviteForm";
 import { Sheet } from "./Sheet";
 import {
+  archiveList,
   balanceTone,
   createList,
   formatCardBalance,
   deleteList,
+  fetchLists,
   memberLabel,
   renameList,
   setLastOpenedList,
+  unarchiveList,
   type ListItem,
 } from "./listsClient";
 import {
+  patchMembershipLists,
   replaceMembershipLists,
   useMembershipLists,
 } from "./membershipListsStore";
@@ -121,12 +125,17 @@ function ListCardFace({
 type Props = {
   initialLists: ListItem[];
   currentUserId: string;
+  showArchived?: boolean;
 };
 
-export function ListsPanel({ initialLists, currentUserId }: Props) {
+export function ListsPanel({ initialLists, currentUserId, showArchived = false }: Props) {
   const { locale } = usePreferences();
   const t = listsMessages[locale];
   const router = useRouter();
+  const [archivedLists, setArchivedLists] = useState<ListItem[]>([]);
+  const [archivedLoadError, setArchivedLoadError] = useState<string | null>(null);
+  const [archiveActionError, setArchiveActionError] = useState<string | null>(null);
+  const [archivingId, setArchivingId] = useState<string | null>(null);
   const createNameId = useId();
   const [newName, setNewName] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
@@ -167,7 +176,29 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
     replaceMembershipLists(initialLists);
   }, [initialLists]);
 
-  const lists = useMembershipLists() ?? initialLists;
+  const membershipLists = useMembershipLists() ?? initialLists;
+  const lists = showArchived ? archivedLists : membershipLists;
+
+  useEffect(() => {
+    if (!showArchived) return;
+    let cancelled = false;
+    async function loadArchived() {
+      const result = await fetchLists(messages, { archived: true });
+      if (cancelled) return;
+      if (result.ok) {
+        setArchivedLoadError(null);
+        setArchivedLists(result.lists);
+      } else {
+        setArchivedLoadError(result.error);
+        setArchivedLists([]);
+      }
+    }
+    void loadArchived();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showArchived]);
 
   useEffect(() => {
     if (!editingId) return;
@@ -333,6 +364,46 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
     }
   }
 
+  async function onArchive(list: ListItem) {
+    if (archivingId) return;
+    setArchivingId(list.id);
+    setOpenMenuId(null);
+    try {
+      const result = await archiveList(list.id, messages);
+      if (!result.ok) {
+        setArchiveActionError(result.error);
+      } else {
+        setArchiveActionError(null);
+      }
+      // archiveList already removes the list from the shared membership
+      // store on success — useMembershipLists() re-renders this row away.
+    } finally {
+      setArchivingId(null);
+    }
+  }
+
+  async function onUnarchive(list: ListItem) {
+    if (archivingId) return;
+    setArchivingId(list.id);
+    setOpenMenuId(null);
+    try {
+      const result = await unarchiveList(list.id, messages);
+      if (!result.ok) {
+        setArchiveActionError(result.error);
+        return;
+      }
+      setArchiveActionError(null);
+      setArchivedLists((prev) => prev.filter((item) => item.id !== list.id));
+      patchMembershipLists((prev) =>
+        prev.some((item) => item.id === list.id)
+          ? prev
+          : [...prev, { ...list, is_archived: false }],
+      );
+    } finally {
+      setArchivingId(null);
+    }
+  }
+
   const anyOpening = openingId !== null;
 
   const startInvite = useCallback((listId: string) => {
@@ -479,6 +550,13 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
                           </button>
                         </div>
                       </>
+                    ) : showArchived ? (
+                      <IconButtonPopupItem
+                        onClick={() => void onUnarchive(list)}
+                        disabled={anyOpening || archivingId !== null}
+                      >
+                        {t.listsUnarchive}
+                      </IconButtonPopupItem>
                     ) : (
                       <>
                         <IconButtonPopupItem
@@ -501,6 +579,12 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
                         >
                           {t.deleteAria}
                         </IconButtonPopupItem>
+                        <IconButtonPopupItem
+                          onClick={() => void onArchive(list)}
+                          disabled={anyOpening || archivingId !== null}
+                        >
+                          {t.listsArchive}
+                        </IconButtonPopupItem>
                       </>
                     )}
                   </IconButtonPopup>
@@ -520,60 +604,69 @@ export function ListsPanel({ initialLists, currentUserId }: Props) {
 
   return (
     <>
+      {archiveActionError ? (
+        <p className={styles.error} role="alert">
+          {archiveActionError}
+        </p>
+      ) : null}
       <StackedListPanel
         wrapperClassName={styles.panel}
         input={
-          <form className="flex w-full flex-col" onSubmit={onCreate}>
-            <div className="flex items-stretch gap-2">
-              <div className="flex flex-1 items-center gap-2 rounded-[8px] border-2 border-border bg-background px-[0.65rem] py-[0.5rem]">
-                <label htmlFor={createNameId} className="sr-only">
-                  {t.createLabel}
-                </label>
-                <input
-                  id={createNameId}
-                  className="min-w-0 flex-1 font-inherit text-[0.9rem] bg-transparent text-foreground placeholder:text-muted outline-none"
-                  type="text"
-                  name="name"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  maxLength={200}
-                  autoComplete="off"
-                  disabled={creating}
-                  placeholder={t.createLabel}
-                />
-                <IconButton
-                  className="h-7 w-7 shrink-0 !p-0 !rounded-[4px]"
-                  type="submit"
-                  disabled={!canCreate}
-                  label={creating ? t.creating : t.createSubmit}
-                  icon={<PlusIcon />}
-                />
+          showArchived ? null : (
+            <form className="flex w-full flex-col" onSubmit={onCreate}>
+              <div className="flex items-stretch gap-2">
+                <div className="flex flex-1 items-center gap-2 rounded-[8px] border-2 border-border bg-background px-[0.65rem] py-[0.5rem]">
+                  <label htmlFor={createNameId} className="sr-only">
+                    {t.createLabel}
+                  </label>
+                  <input
+                    id={createNameId}
+                    className="min-w-0 flex-1 font-inherit text-[0.9rem] bg-transparent text-foreground placeholder:text-muted outline-none"
+                    type="text"
+                    name="name"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    maxLength={200}
+                    autoComplete="off"
+                    disabled={creating}
+                    placeholder={t.createLabel}
+                  />
+                  <IconButton
+                    className="h-7 w-7 shrink-0 !p-0 !rounded-[4px]"
+                    type="submit"
+                    disabled={!canCreate}
+                    label={creating ? t.creating : t.createSubmit}
+                    icon={<PlusIcon />}
+                  />
+                </div>
+                {/* Same chrome as FormIconSubmit (bordered surface + accent
+                    glyph, shared hover/focus rules), stretched to the input
+                    row's height instead of FormIconSubmit's own fixed 2.5rem —
+                    a Link (not IconButton) since this navigates, it doesn't submit. */}
+                <Link
+                  href="/upload"
+                  aria-label={t.uploadLink}
+                  title={t.uploadLink}
+                  className={`inline-flex w-10 shrink-0 items-center justify-center self-stretch rounded-[8px] border border-border bg-surface text-accent no-underline transition-all duration-150 ${formIconSubmitStyles.button}`}
+                >
+                  <UploadIcon className="block h-[1.2rem] w-[1.2rem]" />
+                </Link>
               </div>
-              {/* Same chrome as FormIconSubmit (bordered surface + accent
-                  glyph, shared hover/focus rules), stretched to the input
-                  row's height instead of FormIconSubmit's own fixed 2.5rem —
-                  a Link (not IconButton) since this navigates, it doesn't submit. */}
-              <Link
-                href="/upload"
-                aria-label={t.uploadLink}
-                title={t.uploadLink}
-                className={`inline-flex w-10 shrink-0 items-center justify-center self-stretch rounded-[8px] border border-border bg-surface text-accent no-underline transition-all duration-150 ${formIconSubmitStyles.button}`}
-              >
-                <UploadIcon className="block h-[1.2rem] w-[1.2rem]" />
-              </Link>
-            </div>
-            {createError ? (
-              <p className={styles.error} role="alert">
-                {createError}
-              </p>
-            ) : null}
-          </form>
+              {createError ? (
+                <p className={styles.error} role="alert">
+                  {createError}
+                </p>
+              ) : null}
+            </form>
+          )
         }
         items={lists}
         itemKey={(list) => list.id}
         itemClassName={styles.row}
         listClassName={styles.list}
-        emptyLabel={t.emptyHint}
+        error={showArchived ? archivedLoadError : null}
+        errorClassName={styles.error}
+        emptyLabel={showArchived ? t.listsArchivedEmpty : t.emptyHint}
         emptyClassName={styles.copy}
         renderItem={renderListRow}
       />

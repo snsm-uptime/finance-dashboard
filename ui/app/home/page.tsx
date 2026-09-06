@@ -6,10 +6,10 @@ import { getApiInternalUrl } from "@/lib/api";
 import { listsMessages } from "@/lib/i18n/lists";
 import type { Locale } from "@/lib/i18n/locale";
 import { fetchSession } from "@/lib/session";
-import { ListsPanel } from "@/app/lists/ListsPanel";
 import type { ListItem } from "@/app/lists/listsClient";
 import listsStyles from "@/app/lists/lists.module.scss";
 import { HomeChrome } from "./HomeChrome";
+import { HomeListsSection } from "./HomeListsSection";
 
 export const dynamic = "force-dynamic";
 
@@ -61,22 +61,32 @@ export default async function Home() {
   const t = listsMessages[locale];
   const loaded = await fetchMembershipLists();
 
+  if (!loaded.ok) {
+    return (
+      <main className={listsStyles.main}>
+        <HomeChrome
+          title={t.title}
+          alias={me.alias}
+          userId={me.user_id}
+          photoBase64={me.photo_base64}
+        />
+        <p className={listsStyles.error} role="alert">
+          {t.loadError}
+        </p>
+      </main>
+    );
+  }
+
   return (
     <main className={listsStyles.main}>
-      <HomeChrome
+      <HomeListsSection
         title={t.title}
         alias={me.alias}
         userId={me.user_id}
         photoBase64={me.photo_base64}
+        initialLists={loaded.lists}
+        currentUserId={session.user_id}
       />
-
-      {loaded.ok ? (
-        <ListsPanel initialLists={loaded.lists} currentUserId={session.user_id} />
-      ) : (
-        <p className={listsStyles.error} role="alert">
-          {t.loadError}
-        </p>
-      )}
     </main>
   );
 }

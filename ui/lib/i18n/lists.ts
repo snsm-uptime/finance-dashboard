@@ -197,6 +197,11 @@ export const listsMessages = {
     budgetsDateClear: "Clear",
     budgetsAddListTrigger: "+ Add list",
     budgetsPeriodTriggerLabel: "Set budget period",
+    listsShowArchived: "Show archived lists",
+    listsShowActive: "Show active lists",
+    listsArchivedEmpty: "No archived lists.",
+    listsArchive: "Archive",
+    listsUnarchive: "Unarchive",
   },
   es: {
     title: "Listas",
@@ -395,6 +400,11 @@ export const listsMessages = {
     budgetsDateClear: "Borrar",
     budgetsAddListTrigger: "+ Agregar lista",
     budgetsPeriodTriggerLabel: "Definir período del presupuesto",
+    listsShowArchived: "Mostrar listas archivadas",
+    listsShowActive: "Mostrar listas activas",
+    listsArchivedEmpty: "No hay listas archivadas.",
+    listsArchive: "Archivar",
+    listsUnarchive: "Desarchivar",
   },
 } as const;
 
