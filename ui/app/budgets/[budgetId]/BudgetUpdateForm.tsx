@@ -150,7 +150,9 @@ export function BudgetUpdateForm({ budget, lists, messages, locale }: Props) {
       return;
     }
     // setConfirmOpen(false);
-    setError(result.error);
+    if (!("requiresConfirmation" in result)) {
+      setError(result.error);
+    }
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
