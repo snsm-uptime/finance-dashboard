@@ -7,9 +7,15 @@
 services:
   db:
     restart: unless-stopped
+    healthcheck:
+      start_period: 30s
+      start_interval: 5s
 
   api:
     restart: unless-stopped
+    healthcheck:
+      start_period: 120s
+      start_interval: 5s
     environment:
       ENVIRONMENT: production
       # HTTPS / reverse-proxy: require Secure cookies in prod.
@@ -28,6 +34,9 @@ services:
 
   ui:
     restart: unless-stopped
+    healthcheck:
+      start_period: 30s
+      start_interval: 5s
     environment:
       NODE_ENV: production
       AUTH_CLIENT_IP_HEADER: ${AUTH_CLIENT_IP_HEADER:-X-FH-Client-IP}
