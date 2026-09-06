@@ -5,9 +5,11 @@ import { useEffect, useMemo, useState } from "react";
 import { CopyButton } from "@/components/CopyButton";
 import { useChromeHeader } from "@/components/ChromeBack";
 import { ChromeAvatarLink } from "@/components/ChromeAvatarLink";
+import { IconButton } from "@/components/IconButton";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { StackedListPanel } from "@/components/StackedListPanel";
 import { cardsCopy } from "@/lib/i18n/cards";
+import { BoxIcon } from "@/app/icons";
 import { DocsHelpButton } from "@/app/docs/DocsHelpButton";
 import { fetchLists } from "../lists/listsClient";
 import {
@@ -15,7 +17,13 @@ import {
   replaceMembershipLists,
   useMembershipLists,
 } from "../lists/membershipListsStore";
-import { fetchCards, type CardItem, type CardsClientMessages } from "./cardsClient";
+import {
+  archiveCard,
+  fetchCards,
+  unarchiveCard,
+  type CardItem,
+  type CardsClientMessages,
+} from "./cardsClient";
 import { CardRoutingControl } from "./CardRoutingControl";
 import { RegisterCardForm } from "./RegisterCardForm";
 
@@ -32,7 +40,9 @@ type Props = {
 export function CardsPanel({ refreshToken = 0 }: Props = {}) {
   const { locale, me } = usePreferences();
   const t = cardsCopy(locale);
+  const [showArchived, setShowArchived] = useState(false);
   const [cards, setCards] = useState<CardItem[]>([]);
+  const [archivedCards, setArchivedCards] = useState<CardItem[]>([]);
   const membershipLists = useMembershipLists();
   const lists = useMemo(() => membershipLists ?? [], [membershipLists]);
   const [loading, setLoading] = useState(true);
@@ -45,7 +55,15 @@ export function CardsPanel({ refreshToken = 0 }: Props = {}) {
     ) : null,
     title: t.title,
     trailing: (
-      <DocsHelpButton pageName="Cards" docsAnchor="/docs#cards-imports" />
+      <>
+        <IconButton
+          icon={<BoxIcon active={showArchived} className="size-5" />}
+          label={showArchived ? t.cardsShowActive : t.cardsShowArchived}
+          aria-pressed={showArchived}
+          onClick={() => setShowArchived((prev) => !prev)}
+        />
+        <DocsHelpButton pageName="Cards" docsAnchor="/docs#cards-imports" />
+      </>
     ),
   });
 
@@ -101,6 +119,29 @@ export function CardsPanel({ refreshToken = 0 }: Props = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshToken]);
 
+  useEffect(() => {
+    if (!showArchived) return;
+    let cancelled = false;
+    async function loadArchived() {
+      const result = await fetchCards(messages, { archived: true });
+      if (cancelled) return;
+      if (result.ok) {
+        setLoadError(null);
+        setArchivedCards(result.cards);
+      } else {
+        setLoadError(result.error);
+        setArchivedCards([]);
+      }
+    }
+    void loadArchived();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showArchived]);
+
+  const visibleCards = showArchived ? archivedCards : cards;
+
   function onRegistered(card: CardItem) {
     setCards((prev) => [card, ...prev]);
     setRegisteredStatus(t.cardRegistered);
@@ -110,39 +151,70 @@ export function CardsPanel({ refreshToken = 0 }: Props = {}) {
     setCards((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
   }
 
+  async function onArchive(card: CardItem) {
+    const result = await archiveCard(card.id, messages);
+    if (!result.ok) {
+      setLoadError(result.error);
+      return;
+    }
+    setLoadError(null);
+    setCards((prev) => prev.filter((c) => c.id !== card.id));
+  }
+
+  async function onUnarchive(card: CardItem) {
+    const result = await unarchiveCard(card.id, messages);
+    if (!result.ok) {
+      setLoadError(result.error);
+      return;
+    }
+    setLoadError(null);
+    setArchivedCards((prev) => prev.filter((c) => c.id !== card.id));
+  }
+
   return (
     <StackedListPanel
       ariaLabel={t.title}
       liveRegionText={registeredStatus}
       input={
-        <RegisterCardForm
-          messages={{
-            ...messages,
-            labelField: t.labelField,
-            ibanField: t.ibanField,
-            submit: t.submit,
-            submitting: t.submitting,
-          }}
-          onRegistered={onRegistered}
-        />
+        showArchived ? null : (
+          <RegisterCardForm
+            messages={{
+              ...messages,
+              labelField: t.labelField,
+              ibanField: t.ibanField,
+              submit: t.submit,
+              submitting: t.submitting,
+            }}
+            onRegistered={onRegistered}
+          />
+        )
       }
-      items={cards}
+      items={visibleCards}
       itemKey={(card) => card.id}
       loading={loading}
       loadingLabel={t.loading}
       error={loadError}
-      emptyLabel={t.emptyState}
+      emptyLabel={showArchived ? t.cardsArchivedEmpty : t.emptyState}
       renderItem={(card) => (
         <CardRoutingControl
           card={card}
           lists={lists}
           routingLists={routingLists}
           trailing={
-            <CopyButton value={card.iban} label={t.copyIban} copiedLabel={t.ibanCopied}>
-              <span className="text-muted text-[0.85rem] tracking-[0.02rem]">
-                {maskIban(card.iban)}
-              </span>
-            </CopyButton>
+            <>
+              <CopyButton value={card.iban} label={t.copyIban} copiedLabel={t.ibanCopied}>
+                <span className="text-muted text-[0.85rem] tracking-[0.02rem]">
+                  {maskIban(card.iban)}
+                </span>
+              </CopyButton>
+              <IconButton
+                icon={<BoxIcon active={showArchived} className="size-5" />}
+                label={showArchived ? t.cardsUnarchive : t.cardsArchive}
+                onClick={() =>
+                  void (showArchived ? onUnarchive(card) : onArchive(card))
+                }
+              />
+            </>
           }
           messages={{
             ...messages,

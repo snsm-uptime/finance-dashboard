@@ -176,6 +176,7 @@ export function BudgetUpdateForm({ budget, lists, messages, locale }: Props) {
         icon={<PencilIcon />}
         label={messages.budgetsEditAria}
         onClick={openEditor}
+        className="size-5"
       />
       <Sheet
         open={open}

@@ -8,6 +8,8 @@ export type CardItem = {
   /** Routing mode (Story 4.3) — defaults to "review" when a response omits it. */
   routing_mode: "fixed" | "review";
   fixed_list_id: string | null;
+  /** Archive flag (Story 9.1) — defaults to false when a response omits it. */
+  is_archived: boolean;
 };
 
 export type CardsClientMessages = {
@@ -72,15 +74,18 @@ function asCard(data: unknown): CardItem | null {
     created_at: row.created_at,
     routing_mode: row.routing_mode === "fixed" ? "fixed" : "review",
     fixed_list_id: typeof row.fixed_list_id === "string" ? row.fixed_list_id : null,
+    is_archived: typeof row.is_archived === "boolean" ? row.is_archived : false,
   };
 }
 
 export async function fetchCards(
   messages: CardsClientMessages,
+  options: { archived?: boolean } = {},
 ): Promise<OkCards | ErrorResult> {
+  const url = options.archived ? "/api/cards?archived=true" : "/api/cards";
   let response: Response;
   try {
-    response = await fetch("/api/cards", {
+    response = await fetch(url, {
       method: "GET",
       headers: { Accept: "application/json" },
       credentials: "same-origin",
@@ -152,4 +157,42 @@ export async function setCardRouting(
   const card = asCard(await parseJson(response));
   if (!card) return { ok: false, error: messages.errorGeneric };
   return { ok: true, card };
+}
+
+async function postCardAction(
+  cardId: string,
+  action: "archive" | "unarchive",
+  messages: CardsClientMessages,
+): Promise<OkCard | ErrorResult> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/cards/${encodeURIComponent(cardId)}/${action}`, {
+      method: "POST",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+    });
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  if (!response.ok) {
+    const parsed = (await parseJson(response)) as { detail?: unknown; code?: unknown } | null;
+    return { ok: false, error: mapError(response.status, parsed, messages) };
+  }
+  const card = asCard(await parseJson(response));
+  if (!card) return { ok: false, error: messages.errorGeneric };
+  return { ok: true, card };
+}
+
+export async function archiveCard(
+  cardId: string,
+  messages: CardsClientMessages,
+): Promise<OkCard | ErrorResult> {
+  return postCardAction(cardId, "archive", messages);
+}
+
+export async function unarchiveCard(
+  cardId: string,
+  messages: CardsClientMessages,
+): Promise<OkCard | ErrorResult> {
+  return postCardAction(cardId, "unarchive", messages);
 }

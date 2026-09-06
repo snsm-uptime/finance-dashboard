@@ -47,6 +47,7 @@ function card(overrides: Partial<CardItem> = {}): CardItem {
     created_at: "2026-08-06T12:00:00Z",
     routing_mode: "review",
     fixed_list_id: null,
+    is_archived: false,
     ...overrides,
   };
 }

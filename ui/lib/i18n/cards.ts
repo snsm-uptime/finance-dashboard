@@ -30,6 +30,11 @@ export const cardsMessages = {
     routingSaving: "Saving…",
     errorForbidden: "You don't have access to that list.",
     errorCardNotFound: "Card not found.",
+    cardsShowArchived: "Show archived cards",
+    cardsShowActive: "Show active cards",
+    cardsArchivedEmpty: "No archived cards.",
+    cardsArchive: "Archive card",
+    cardsUnarchive: "Unarchive card",
   },
   es: {
     title: "Tarjetas",
@@ -59,6 +64,11 @@ export const cardsMessages = {
     routingSaving: "Guardando…",
     errorForbidden: "No tienes acceso a esa lista.",
     errorCardNotFound: "Tarjeta no encontrada.",
+    cardsShowArchived: "Mostrar tarjetas archivadas",
+    cardsShowActive: "Mostrar tarjetas activas",
+    cardsArchivedEmpty: "No hay tarjetas archivadas.",
+    cardsArchive: "Archivar tarjeta",
+    cardsUnarchive: "Desarchivar tarjeta",
   },
 } as const;
 

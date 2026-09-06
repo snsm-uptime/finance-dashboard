@@ -44,6 +44,7 @@ const card: CardItem = {
   created_at: "2026-08-14T00:00:00Z",
   routing_mode: "review",
   fixed_list_id: null,
+  is_archived: false,
 };
 
 const lists: ListItem[] = [

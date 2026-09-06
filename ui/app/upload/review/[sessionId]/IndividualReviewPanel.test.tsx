@@ -944,6 +944,80 @@ describe("IndividualReviewPanel", () => {
     expect(container.querySelector('button[aria-haspopup="listbox"]')).toBeNull();
   });
 
+  it("shows an archived-card notice when the matched card is archived, and unarchiving clears it", async () => {
+    const statement = makeStatement({ iban: "CR00000000000000000000" });
+    const session = makeSession({ statements: [statement] });
+    fetchImportSession.mockResolvedValue({ ok: true, session });
+    fetchLists.mockResolvedValue({ ok: true, lists: [] });
+
+    let archived = true;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((input: RequestInfo) => {
+        const url = String(input);
+        if (url.includes("/api/auth/me")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ default_import_list_id: null }),
+          });
+        }
+        if (url.includes("identify-card")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              matched: true,
+              card_id: "card-1",
+              card_label: "My Visa",
+              iban: statement.iban,
+              archived,
+            }),
+          });
+        }
+        if (url.includes("/api/cards/card-1/unarchive")) {
+          archived = false;
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              id: "card-1",
+              label: "My Visa",
+              iban: statement.iban,
+              created_at: "2026-08-01T00:00:00Z",
+              routing_mode: "review",
+              fixed_list_id: null,
+              is_archived: false,
+            }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      }),
+    );
+
+    await act(async () => {
+      root.render(<IndividualReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("This card is archived.");
+    const unarchiveButton = [...container.querySelectorAll("button")].find(
+      (btn) => btn.textContent === "Unarchive card",
+    ) as HTMLButtonElement;
+    expect(unarchiveButton).toBeTruthy();
+
+    await act(async () => {
+      unarchiveButton.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).not.toContain("This card is archived.");
+  });
+
   it("chrome back returns to /upload without discarding the session", async () => {
     fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
     fetchLists.mockResolvedValue({ ok: true, lists: [] });
