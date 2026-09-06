@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 
 import {
+  archiveList,
   createList,
   fetchLists,
   inviteMember,
@@ -8,8 +9,13 @@ import {
   rollbackImportBatch,
   saveDefaultSplit,
   setDefaultImportList,
+  unarchiveList,
 } from "./listsClient";
-import { resetMembershipListsStore } from "./membershipListsStore";
+import {
+  getMembershipListsSnapshot,
+  replaceMembershipLists,
+  resetMembershipListsStore,
+} from "./membershipListsStore";
 
 const messages = {
   errorGeneric: "generic",
@@ -195,6 +201,125 @@ describe("listsClient", () => {
   });
 });
 
+describe("listsClient archive (Story 9.2)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    resetMembershipListsStore();
+  });
+
+  it("fetchLists({ archived: true }) hits the archived query param and does not replace the membership store", async () => {
+    replaceMembershipLists([{ id: "l1", name: "Household", owner_id: "u1", role: "owner" }]);
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        lists: [{ id: "l2", name: "Archived list", owner_id: "u1", role: "owner", is_archived: true }],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await fetchLists(messages, { archived: true });
+    expect(result.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/lists?archived=true",
+      expect.objectContaining({ method: "GET" }),
+    );
+    // Store must still hold the non-archived snapshot seeded above.
+    expect(getMembershipListsSnapshot()).toEqual([
+      { id: "l1", name: "Household", owner_id: "u1", role: "owner" },
+    ]);
+  });
+
+  it("fetchLists() without options still hits plain /api/lists and replaces the store", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        lists: [{ id: "l1", name: "Household", owner_id: "u1", role: "owner" }],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchLists(messages);
+    expect(fetchMock).toHaveBeenCalledWith("/api/lists", expect.objectContaining({ method: "GET" }));
+    expect(getMembershipListsSnapshot()).toEqual([
+      { id: "l1", name: "Household", owner_id: "u1", role: "owner" },
+    ]);
+  });
+
+  it("archiveList posts to /api/lists/{id}/archive and removes the list from the membership store", async () => {
+    replaceMembershipLists([
+      { id: "l1", name: "Household", owner_id: "u1", role: "owner" },
+      { id: "l2", name: "Other", owner_id: "u1", role: "owner" },
+    ]);
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: "l1", name: "Household", owner_id: "u1", is_archived: true }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await archiveList("l1", messages);
+    expect(result).toEqual({
+      ok: true,
+      list: { id: "l1", name: "Household", owner_id: "u1", is_archived: true },
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/lists/l1/archive",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(getMembershipListsSnapshot()).toEqual([
+      { id: "l2", name: "Other", owner_id: "u1", role: "owner" },
+    ]);
+  });
+
+  it("archiveList maps a 403 (non-owner) response to the forbidden message", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 403,
+        json: async () => ({ code: "not_list_owner", detail: "nope" }),
+      }),
+    );
+
+    const result = await archiveList("l1", messages);
+    expect(result).toEqual({ ok: false, error: "forbidden" });
+  });
+
+  it("unarchiveList posts to /api/lists/{id}/unarchive", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: "l1", name: "Household", owner_id: "u1", is_archived: false }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await unarchiveList("l1", messages);
+    expect(result).toEqual({
+      ok: true,
+      list: { id: "l1", name: "Household", owner_id: "u1", is_archived: false },
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/lists/l1/unarchive",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("unarchiveList maps a 403 response to the forbidden message", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 403,
+        json: async () => ({ code: "not_list_owner", detail: "nope" }),
+      }),
+    );
+
+    const result = await unarchiveList("l1", messages);
+    expect(result).toEqual({ ok: false, error: "forbidden" });
+  });
+});
 
 describe("default split client", () => {
   it("maps 422 invalid_default_split to invalid message", async () => {

@@ -29,6 +29,8 @@ export type ListItem = {
   /** Running total of all entries on the list — shown alongside balance_crc. */
   total_crc?: string;
   members?: ListMember[];
+  /** Archive state (Story 9.1's API always includes this field). */
+  is_archived?: boolean;
 };
 
 export type ListsClientMessages = {
@@ -44,13 +46,17 @@ export type ListsClientMessages = {
 
 type ErrorResult = { ok: false; error: string };
 type OkCreate = { ok: true; list: { id: string; name: string; owner_id: string } };
-type OkRename = { ok: true; list: { id: string; name: string; owner_id: string } };
+type OkRename = {
+  ok: true;
+  list: { id: string; name: string; owner_id: string; is_archived?: boolean };
+};
 type OkSimple = { ok: true };
 
 type ListPayload = {
   id?: string;
   name?: string;
   owner_id?: string;
+  is_archived?: boolean;
 };
 
 function mapError(
@@ -90,10 +96,12 @@ type OkLists = { ok: true; lists: ListItem[] };
 
 export async function fetchLists(
   messages: ListsClientMessages,
+  options: { archived?: boolean } = {},
 ): Promise<OkLists | ErrorResult> {
+  const url = options.archived ? "/api/lists?archived=true" : "/api/lists";
   let response: Response;
   try {
-    response = await fetch("/api/lists", {
+    response = await fetch(url, {
       method: "GET",
       headers: { Accept: "application/json" },
       credentials: "same-origin",
@@ -110,7 +118,9 @@ export async function fetchLists(
     return { ok: false, error: messages.errorGeneric };
   }
   const lists = data.lists as ListItem[];
-  replaceMembershipLists(lists);
+  // Only the non-archived fetch feeds the shared membership store — source-list
+  // pickers elsewhere (Budgets, InviteForm) must never see archived-only data.
+  if (!options.archived) replaceMembershipLists(lists);
   return { ok: true, lists };
 }
 
@@ -215,6 +225,62 @@ export async function deleteList(
   }
   patchMembershipLists((prev) => prev.filter((item) => item.id !== listId));
   return { ok: true };
+}
+
+async function postListAction(
+  listId: string,
+  action: "archive" | "unarchive",
+  messages: ListsClientMessages,
+): Promise<OkRename | ErrorResult> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/lists/${encodeURIComponent(listId)}/${action}`, {
+      method: "POST",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+    });
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  if (!response.ok) {
+    const body = (await parseJson(response)) as {
+      detail?: unknown;
+      code?: unknown;
+    } | null;
+    return { ok: false, error: mapError(response.status, body, messages) };
+  }
+  const data = asListPayload(await parseJson(response));
+  if (!data?.id || !data.name || !data.owner_id) {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  return {
+    ok: true,
+    list: { id: data.id, name: data.name, owner_id: data.owner_id, is_archived: data.is_archived },
+  };
+}
+
+/**
+ * Archives a list the caller owns (Story 9.1's `POST /lists/{id}/archive`).
+ * Removes it from the shared non-archived membership store immediately —
+ * same removal shape `deleteList` already uses.
+ */
+export async function archiveList(
+  listId: string,
+  messages: ListsClientMessages,
+): Promise<OkRename | ErrorResult> {
+  const result = await postListAction(listId, "archive", messages);
+  if (result.ok) {
+    patchMembershipLists((prev) => prev.filter((item) => item.id !== listId));
+  }
+  return result;
+}
+
+/** Unarchives a list the caller owns (Story 9.1's `POST /lists/{id}/unarchive`). */
+export async function unarchiveList(
+  listId: string,
+  messages: ListsClientMessages,
+): Promise<OkRename | ErrorResult> {
+  return postListAction(listId, "unarchive", messages);
 }
 
 /** Persist last-opened via /auth/me (account column) after ACL on the API. */

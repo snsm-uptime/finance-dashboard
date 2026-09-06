@@ -129,30 +129,8 @@ export function BudgetUpdateForm({ budget, lists, messages, locale }: Props) {
     };
   }
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (pending) return;
-    setPending(true);
-    setError(null);
-    const result = await updateBudget(budget.id, buildPayload(false), messages);
-    setPending(false);
-    if (result.ok) {
-      setOpen(false);
-      router.refresh();
-      return;
-    }
-    if ("requiresConfirmation" in result && result.requiresConfirmation) {
-      setExcludedLines(result.excludedLines);
-      setConfirmOpen(true);
-      return;
-    }
-    if ("error" in result) setError(result.error);
-  }
-
-  async function onConfirmPeriodChange() {
-    setConfirming(true);
-    const result = await updateBudget(budget.id, buildPayload(true), messages);
-    setConfirming(false);
+  async function submit(confirmPeriodChange: boolean) {
+    const result = await updateBudget(budget.id, buildPayload(confirmPeriodChange), messages);
     if (result.ok) {
       setConfirmOpen(false);
       setOpen(false);
@@ -161,11 +139,32 @@ export function BudgetUpdateForm({ budget, lists, messages, locale }: Props) {
     }
     if ("requiresConfirmation" in result && result.requiresConfirmation) {
       setExcludedLines(result.excludedLines);
-      setError(messages.errorGeneric);
+      if (confirmPeriodChange) {
+        // Excluded lines changed between the first submit and this confirm — re-show
+        // the confirmation with the fresh diff instead of silently applying the stale one.
+        setError(messages.errorGeneric);
+      } else {
+        setConfirmOpen(true);
+      }
       return;
     }
-    if ("error" in result) setError(result.error);
     setConfirmOpen(false);
+    setError(result.error);
+  }
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (pending) return;
+    setPending(true);
+    setError(null);
+    await submit(false);
+    setPending(false);
+  }
+
+  async function onConfirmPeriodChange() {
+    setConfirming(true);
+    await submit(true);
+    setConfirming(false);
   }
 
   const canSubmit =
