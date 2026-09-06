@@ -1,8 +1,9 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { Avatar } from "@/components/Avatar";
 import { Chip } from "@/components/Chip";
-import { SectionLabel } from "@/components/soft-ledger/SectionLabel";
+import { ReceiptRow } from "@/components/soft-ledger/ReceiptRow";
 import { TopProgressBar } from "@/components/TopProgressBar";
 import { requireAlias } from "@/lib/alias";
 import { getApiInternalUrl } from "@/lib/api";
@@ -10,15 +11,16 @@ import { formatMoneyAmount } from "@/lib/currency";
 import { listsMessages } from "@/lib/i18n/lists";
 import type { Locale } from "@/lib/i18n/locale";
 import { fetchSession } from "@/lib/session";
+import { memberLabel, type ListMember } from "../../lists/listsClient";
 import {
   budgetSeverityColorClass,
   budgetStateLabel,
   budgetUsageRatio,
+  formatPeriodBoundShort,
   type BudgetItem,
 } from "../budgetsClient";
 import { BudgetAssignPanel } from "./BudgetAssignPanel";
 import { BudgetDetailChrome } from "./BudgetDetailChrome";
-import { BudgetRulesPanel } from "./BudgetRulesPanel";
 import { BudgetUpdateForm } from "./BudgetUpdateForm";
 import { UnassignButton } from "./UnassignButton";
 
@@ -43,6 +45,8 @@ export type BudgetHistoryLine = {
   posted_date: string;
   amount_crc: string;
   attributed_via: "manual" | "rule";
+  payer_id: string;
+  viewer_share_crc: string;
 };
 
 export type BudgetRuleRow = {
@@ -65,7 +69,9 @@ function asHistoryLine(data: unknown): BudgetHistoryLine | null {
     typeof row.description !== "string" ||
     typeof row.posted_date !== "string" ||
     typeof row.amount_crc !== "string" ||
-    (row.attributed_via !== "manual" && row.attributed_via !== "rule")
+    (row.attributed_via !== "manual" && row.attributed_via !== "rule") ||
+    typeof row.payer_id !== "string" ||
+    typeof row.viewer_share_crc !== "string"
   ) {
     return null;
   }
@@ -75,6 +81,8 @@ function asHistoryLine(data: unknown): BudgetHistoryLine | null {
     posted_date: row.posted_date,
     amount_crc: row.amount_crc,
     attributed_via: row.attributed_via,
+    payer_id: row.payer_id,
+    viewer_share_crc: row.viewer_share_crc,
   };
 }
 
@@ -95,6 +103,22 @@ export function historyRowAttribution(line: BudgetHistoryLine): {
 }
 
 /**
+ * Split-ownership signal for a history line, extracted as a pure function so
+ * it can be unit-tested without rendering the async server component (see
+ * project-context.md's "never rendered directly in tests" precedent).
+ * `viewer_share_crc === amount_crc` means the viewer paid the whole thing
+ * solo — no split UI shown, matching a plain ReceiptRow amount.
+ */
+export function historyRowSplit(
+  line: BudgetHistoryLine,
+  viewerId: string,
+): { polarity: "owe" | "owed" | undefined; isSplit: boolean } {
+  const isSplit = line.viewer_share_crc !== line.amount_crc;
+  if (!isSplit) return { polarity: undefined, isSplit: false };
+  return { polarity: line.payer_id === viewerId ? "owed" : "owe", isSplit: true };
+}
+
+/**
  * Matches a budget's source-list ids against the caller's lists, dropping
  * any id with no match (a list the user left, or that was deleted) rather
  * than crashing — mirrors BudgetsPanel's `if (!list) return null;`.
@@ -109,6 +133,24 @@ export function resolveSourceListChips(
   return sourceListIds
     .map((listId) => lists.find((l) => l.id === listId))
     .filter((list): list is { id: string; name: string } => list !== undefined);
+}
+
+function asMembers(data: unknown): ListMember[] {
+  if (!data || typeof data !== "object") return [];
+  const rows = (data as { members?: unknown }).members;
+  if (!Array.isArray(rows)) return [];
+  const out: ListMember[] = [];
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const m = row as { user_id?: unknown; alias?: unknown; photo_base64?: unknown };
+    if (typeof m.user_id !== "string") continue;
+    out.push({
+      user_id: m.user_id,
+      alias: typeof m.alias === "string" && m.alias ? m.alias : null,
+      photo_base64: typeof m.photo_base64 === "string" ? m.photo_base64 : null,
+    });
+  }
+  return out;
 }
 
 /** Border/text color for the status badge below the progress bar — mirrors the bar's own severity tiers. */
@@ -266,21 +308,49 @@ export default async function BudgetDetailPage({
     }
   }
 
+  let members: ListMember[] = [];
+  if (budget && budget.source_list_ids.length > 0) {
+    try {
+      const memberLists = await Promise.all(
+        budget.source_list_ids.map((listId) =>
+          fetch(`${getApiInternalUrl()}/lists/${encodeURIComponent(listId)}/members`, {
+            method: "GET",
+            headers: {
+              Accept: "application/json",
+              ...(header ? { Cookie: header } : {}),
+            },
+            cache: "no-store",
+          })
+            .then((res) => (res.ok ? res.json().catch(() => null) : null))
+            .then(asMembers)
+            .catch(() => []),
+        ),
+      );
+      const byId = new Map<string, ListMember>();
+      for (const list of memberLists) {
+        for (const member of list) byId.set(member.user_id, member);
+      }
+      members = [...byId.values()];
+    } catch {
+      // Payer identity is supplementary — a members-fetch failure silently renders none.
+    }
+  }
+
   const ratio = budget ? budgetUsageRatio(budget) : null;
 
   return (
-    <main className="flex flex-col gap-[var(--space-4)] py-[var(--space-4)]">
+    <main className="flex flex-col gap-(--space-4) py-(--space-4)">
       {budgetNotFound ? (
-        <p role="alert" className="px-[var(--page-gutter)]">
+        <p role="alert" className="px-(--page-gutter)">
           {t.budgetNotFound}
         </p>
       ) : loadError || !budget ? (
-        <p role="alert" className="px-[var(--page-gutter)]">
+        <p role="alert" className="px-(--page-gutter)">
           {t.loadError}
         </p>
       ) : (
         <>
-          <div className="flex flex-col gap-[var(--space-4)] px-[var(--page-gutter)]">
+          <div className="flex flex-col gap-(--space-4) px-(--page-gutter)">
             <BudgetDetailChrome
               title={budget.name}
               progressBar={
@@ -313,18 +383,28 @@ export default async function BudgetDetailPage({
                   lists={sourceLists}
                   messages={{ ...t, cancelLabel: t.receiptMoveCancel }}
                   locale={locale}
+                  rules={budget.rules}
                 />
               }
             />
 
-            <section className="flex flex-col gap-[var(--space-1)]">
+            <section className="flex items-center justify-start gap-(--space-2)">
               <Chip className={budgetStatusChipClassName(budget.state)}>
                 {budgetStateLabel(budget.state, t)}
               </Chip>
-            </section>
-
-            <section className="flex flex-col gap-[var(--space-2)]">
-              <SectionLabel>{t.budgetsSourcesHeading}</SectionLabel>
+              {budget.period_start || budget.period_end ? (
+                <span className="text-[0.75rem] font-[550] text-muted">
+                  {budget.period_start
+                    ? formatPeriodBoundShort(budget.period_start, locale)
+                    : ""}
+                  {budget.period_start && budget.period_end ? " – " : ""}
+                  {budget.period_end
+                    ? formatPeriodBoundShort(budget.period_end, locale)
+                    : ""}
+                </span>
+              ) : (
+                <span />
+              )}
               <div className="flex flex-wrap items-center gap-1.5">
                 {resolveSourceListChips(budget.source_list_ids, sourceLists).map((list) => (
                   <Chip key={list.id} tone="muted">
@@ -334,15 +414,10 @@ export default async function BudgetDetailPage({
               </div>
             </section>
 
-            <section className="flex flex-col gap-[var(--space-3)]">
-              <BudgetRulesPanel
-                budgetId={budgetId}
-                rules={budget.rules}
-                messages={t}
-              />
+            <section className="flex flex-col gap-(--space-3)">
               {budget.history.length === 0 ? (
                 <div
-                  className="flex flex-col items-start gap-[var(--space-3)] px-[var(--space-4)] py-[var(--space-5)] bg-surface border border-border rounded-md"
+                  className="flex flex-col items-start gap-(--space-3) px-(--space-4) py-(--space-5) bg-surface border border-border rounded-md"
                   role="status"
                 >
                   <p className="m-0 text-muted">{t.budgetsHistoryEmpty}</p>
@@ -357,34 +432,63 @@ export default async function BudgetDetailPage({
                     budgetId={budgetId}
                     messages={{ ...t, cancelLabel: t.receiptMoveCancel }}
                   />
-                  <ul className="m-0 list-none p-0 flex flex-col gap-[var(--space-2)]">
+                  <ul className="m-0 list-none p-0 flex flex-col gap-(--space-2)">
                     {budget.history.map((line) => {
                       const { viaLabelKey, showUnassign } =
                         historyRowAttribution(line);
+                      const { polarity, isSplit } = historyRowSplit(
+                        line,
+                        session.user_id,
+                      );
+                      const payer =
+                        isSplit && line.payer_id !== session.user_id
+                          ? members.find((m) => m.user_id === line.payer_id)
+                          : undefined;
                       return (
-                        <li
-                          key={line.id}
-                          className="flex items-center justify-between gap-[var(--space-3)] px-[var(--space-3)] py-[var(--space-2)] bg-surface border border-border rounded-sm"
-                        >
-                          <span className="flex flex-col">
-                            <span className="text-foreground">
-                              {line.description}
-                            </span>
-                            <span className="text-muted">{t[viaLabelKey]}</span>
-                          </span>
-                          <span className="flex items-center gap-[var(--space-2)]">
-                            <span className="tabular-nums text-foreground">
-                              {formatMoneyAmount(line.amount_crc, "CRC")}
-                            </span>
-                            {showUnassign ? (
-                              <UnassignButton
-                                budgetId={budgetId}
-                                entryId={line.id}
-                                label={t.budgetsUnassign}
-                                messages={t}
-                              />
-                            ) : null}
-                          </span>
+                        <li key={line.id} className="list-none">
+                          <ReceiptRow
+                            title={line.description}
+                            when={line.posted_date}
+                            secondaryChip={{
+                              label: t[viaLabelKey],
+                              tone: line.attributed_via === "rule" ? "accent" : "muted",
+                            }}
+                            originAction={
+                              payer ? (
+                                <Avatar
+                                  alias={memberLabel(payer)}
+                                  seed={payer.user_id}
+                                  photoBase64={payer.photo_base64}
+                                  size="xs"
+                                />
+                              ) : undefined
+                            }
+                            amount={
+                              isSplit ? undefined : formatMoneyAmount(line.viewer_share_crc, "CRC")
+                            }
+                            amountInNetColumn
+                            directionLabel={
+                              polarity === "owe"
+                                ? t.balanceOwe
+                                : polarity === "owed"
+                                  ? t.balanceOwed
+                                  : undefined
+                            }
+                            netLabel={
+                              isSplit ? formatMoneyAmount(line.viewer_share_crc, "CRC") : undefined
+                            }
+                            netPolarity={polarity}
+                            menuSlot={
+                              showUnassign ? (
+                                <UnassignButton
+                                  budgetId={budgetId}
+                                  entryId={line.id}
+                                  label={t.budgetsUnassign}
+                                  messages={t}
+                                />
+                              ) : null
+                            }
+                          />
                         </li>
                       );
                     })}

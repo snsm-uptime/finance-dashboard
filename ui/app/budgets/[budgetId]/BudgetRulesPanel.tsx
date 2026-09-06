@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useFormSubmission } from "@/hooks";
 import { IconButton } from "@/components/IconButton";
 import { StackedListPanel } from "@/components/StackedListPanel/StackedListPanel";
-import { PlusIcon } from "@/app/icons";
+import { PlusIcon, TrashIcon } from "@/app/icons";
 
 import { createRule, deleteRule, type BudgetDetailClientMessages, type BudgetRule } from "./budgetDetailClient";
 import { Disclosure } from "@/components/Disclosure";
@@ -113,14 +113,13 @@ export function BudgetRulesPanel({ budgetId, rules, messages }: Props) {
         renderItem={(rule) => (
           <div className="flex items-center justify-between gap-[var(--space-2)]">
             <span className="text-foreground">{rule.match_text}</span>
-            <button
-              type="button"
-              className="cursor-pointer border-none bg-transparent text-owe disabled:opacity-55"
+            <IconButton
+              className="text-owe"
+              icon={<TrashIcon className="w-4 h-4" />}
+              label={messages.budgetsRuleDelete}
               disabled={deletingId === rule.id}
               onClick={() => onDelete(rule.id)}
-            >
-              {messages.budgetsRuleDelete}
-            </button>
+            />
           </div>
         )}
       />

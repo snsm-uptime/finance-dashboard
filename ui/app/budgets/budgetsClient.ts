@@ -90,6 +90,17 @@ export function formatPeriodBoundShort(dateStr: string, locale: "en" | "es"): st
   }).format(date);
 }
 
+/** `YYYY-MM-DD` → locale-formatted all-numeric date (e.g. "8/10"), compact enough for tight card captions. */
+export function formatPeriodBoundNumeric(dateStr: string, locale: "en" | "es"): string {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  if (!year || !month || !day) return dateStr;
+  const date = new Date(year, month - 1, day);
+  return new Intl.DateTimeFormat(locale === "es" ? "es-CR" : "en-US", {
+    month: "numeric",
+    day: "numeric",
+  }).format(date);
+}
+
 type ErrorResult = { ok: false; error: string };
 type OkBudgets = { ok: true; budgets: BudgetItem[] };
 type OkBudget = { ok: true; budget: BudgetItem };

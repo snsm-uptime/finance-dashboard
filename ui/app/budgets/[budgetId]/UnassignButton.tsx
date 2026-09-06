@@ -3,7 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { CloseIcon } from "@/app/icons/CloseIcon";
+import { IconButton } from "@/components/IconButton/IconButton";
+
 import { unassignEntry, type BudgetDetailClientMessages } from "./budgetDetailClient";
+import styles from "./UnassignButton.module.scss";
 
 type Props = {
   budgetId: string;
@@ -31,14 +35,14 @@ export function UnassignButton({ budgetId, entryId, label, messages }: Props) {
 
   return (
     <span className="flex flex-col items-end gap-1">
-      <button
-        type="button"
-        className="cursor-pointer border-none bg-transparent text-muted disabled:opacity-55"
+      <IconButton
+        className={styles.destructive}
+        icon={<CloseIcon />}
+        label={label}
+        variant="ghost"
         disabled={pending}
         onClick={onClick}
-      >
-        {label}
-      </button>
+      />
       {error ? (
         <span role="alert" className="text-owe">
           {error}
