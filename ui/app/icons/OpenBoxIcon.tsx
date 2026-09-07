@@ -8,11 +8,8 @@ type Props = SVGProps<SVGSVGElement> & {
 };
 
 /**
- * Closed/open storage-box glyph used as the archived-view toggle (Story 7.6).
- * The lid rotates open around its back edge via a CSS `transform` on
- * `.box-icon-lid` (see globals.css) — `prefers-reduced-motion` disables the
- * transition there, so the lid still ends in the right state, just without
- * the animated travel.
+ * Open storage-box glyph used as the archived-view toggle (Story 7.6),
+ * paired with the closed variant in `BoxIcon`.
  */
 export function OpenBoxIcon({ active = false, className, ...props }: Props) {
   const stroke = {
@@ -31,16 +28,15 @@ export function OpenBoxIcon({ active = false, className, ...props }: Props) {
       data-active={active || undefined}
       {...props}
     >
-      <g transform="translate(12,12) scale(0.08)" fill="none" strokeLinecap="round" strokeLinejoin="round">
-        {/* Box body: unchanged, walls stay put while the lid opens */}
+      <g transform="translate(12,14.5) scale(0.075)" fill="none" strokeLinecap="round" strokeLinejoin="round">
+        {/* Box body: same dimensions as BoxIcon */}
         <polygon points="-104,-60 0,0 0,120 -104,60" {...stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />
         <polygon points="104,-60 0,0 0,120 104,60" {...stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />
 
-        {/* Back flap: upper half of the original top rhombus, translated up-right */}
-        <polygon points="39,-142.5 143,-82.5 91,-52.5 -13,-112.5" {...stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />
-
-        {/* Front flap: lower half of the original top rhombus, translated down-left */}
-        <polygon points="-91,-67.5 -143,-37.5 -39,22.5 13,-7.5" {...stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />
+        {/* Open flaps */}
+        <polyline points="104,-60 0,-120 -85,-71" {...stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />
+        <polyline points="104,-60 130,-127 26,-187 0,-120" {...stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />
+        <polyline points="0,0 -26,-37 -130,-97 -104,-60" {...stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />
       </g>
     </svg>
   );
