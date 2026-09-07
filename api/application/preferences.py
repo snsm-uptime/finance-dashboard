@@ -167,9 +167,11 @@ class UpdatePreferencesService:
                     raise InvalidPreferencesError(
                         "default_origin_card_id is required when default_origin_kind is 'card'"
                     )
-                if self._card_repo is None or self._card_repo.get_card(
-                    command.default_origin_card_id, command.user_id
-                ) is None:
+                if (
+                    self._card_repo is None
+                    or self._card_repo.get_card(command.default_origin_card_id, command.user_id)
+                    is None
+                ):
                     raise CardNotFoundError()
                 default_origin_card_id = command.default_origin_card_id
             else:

@@ -27,9 +27,7 @@ def upgrade() -> None:
         "users",
         sa.Column("default_origin_card_id", postgresql.UUID(as_uuid=True), nullable=True),
     )
-    op.create_index(
-        "ix_users_default_origin_card_id", "users", ["default_origin_card_id"]
-    )
+    op.create_index("ix_users_default_origin_card_id", "users", ["default_origin_card_id"])
     op.create_foreign_key(
         "fk_users_default_origin_card_id_cards",
         "users",

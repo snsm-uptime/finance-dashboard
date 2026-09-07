@@ -505,9 +505,7 @@ class CardModel(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    owner: Mapped[UserModel] = relationship(
-        back_populates="cards", foreign_keys=[user_id]
-    )
+    owner: Mapped[UserModel] = relationship(back_populates="cards", foreign_keys=[user_id])
 
 
 class BudgetModel(Base):
