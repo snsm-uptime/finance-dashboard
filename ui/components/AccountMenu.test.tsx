@@ -350,15 +350,21 @@ describe("AccountMenu", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { host, unmount } = renderAccount();
-    await waitForDom(() => {
-      const btn = findButton(host, "None");
-      return Boolean(btn && !btn.disabled);
+    await waitForDom(() =>
+      Boolean(host.querySelector('[aria-label="Default expense origin"]')),
+    );
+    const trigger = host.querySelector(
+      '[aria-label="Default expense origin"]',
+    ) as HTMLButtonElement;
+    await act(async () => {
+      trigger.click();
     });
+    await waitForDom(() => Boolean(findButton(host, "None")));
     const noneBtn = findButton(host, "None");
     await act(async () => {
       noneBtn!.click();
     });
-    await waitForDom(() => noneBtn?.getAttribute("aria-pressed") === "true");
+    await waitForDom(() => trigger.textContent?.includes("None") ?? false);
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/auth/me",
       expect.objectContaining({

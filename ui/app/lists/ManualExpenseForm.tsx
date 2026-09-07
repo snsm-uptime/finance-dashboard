@@ -8,7 +8,7 @@ import { HashtagIcon, PercentageIcon, UserIcon } from "@/app/icons";
 import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
 import { FormIconSubmit } from "@/components/FormIconSubmit";
 import { TriSwitch } from "@/components/TriSwitch";
-import { useOptionalPreferences } from "@/components/PreferencesProvider";
+import { useOptionalPreferences, type MePreferences } from "@/components/PreferencesProvider";
 
 import { fetchCards, type CardItem } from "../cards/cardsClient";
 import { PercentageSplitTrack } from "./PercentageSplitTrack";
@@ -22,6 +22,16 @@ import {
   type ListsClientMessages,
 } from "./listsClient";
 import styles from "./ManualExpenseForm.module.scss";
+
+/** SoftLedgerSelect origin value from the account default: "" (blank), "cash", or a card id. */
+function resolveDefaultOrigin(preferences: MePreferences | null): string {
+  if (!preferences) return "cash";
+  if (preferences.default_origin_kind === "blank") return "";
+  if (preferences.default_origin_kind === "card") {
+    return preferences.default_origin_card_id ?? "cash";
+  }
+  return "cash";
+}
 
 export type ManualExpenseMessages = ListsClientMessages & {
   expenseTitle: string;
@@ -139,17 +149,15 @@ export function ManualExpenseForm({
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [payerId, setPayerId] = useState(currentUserId);
-  // Preselects the account's default origin (Cash unless the account was set
-  // to "None") — the user can still change or clear it before submitting.
-  const [originValue, setOriginValue] = useState(() =>
-    preferences?.default_origin_kind === "blank" ? "" : "cash",
-  );
+  // Preselects the account's default origin (Cash, "None", or a specific
+  // card) — the user can still change or clear it before submitting.
+  const [originValue, setOriginValue] = useState(() => resolveDefaultOrigin(preferences));
   const originTouchedRef = useRef(false);
   useEffect(() => {
     if (originTouchedRef.current || !preferences) return;
-    setOriginValue(preferences.default_origin_kind === "blank" ? "" : "cash");
+    setOriginValue(resolveDefaultOrigin(preferences));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preferences?.default_origin_kind]);
+  }, [preferences?.default_origin_kind, preferences?.default_origin_card_id]);
   const [cards, setCards] = useState<CardItem[]>([]);
   const [mode, setMode] = useState<SplitMode>("percentage");
   const [assigneeId, setAssigneeId] = useState(currentUserId);

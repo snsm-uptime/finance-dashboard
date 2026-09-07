@@ -43,7 +43,8 @@ export type MePreferences = {
   alias: string | null;
   photo_base64: string | null;
   default_import_list_id: string | null;
-  default_origin_kind: "cash" | "blank";
+  default_origin_kind: "cash" | "blank" | "card";
+  default_origin_card_id: string | null;
 };
 
 type PreferencesContextValue = {
@@ -53,7 +54,7 @@ type PreferencesContextValue = {
   me: MePreferences | null;
   setLanguage: (language: Locale) => Promise<void>;
   setTheme: (theme: ThemePreference) => Promise<void>;
-  setDefaultOriginKind: (kind: "cash" | "blank") => Promise<void>;
+  setDefaultOriginKind: (kind: "cash" | "blank" | "card", cardId?: string) => Promise<void>;
   refresh: () => Promise<void>;
 };
 
@@ -97,8 +98,16 @@ function resolveTheme(raw: string | null | undefined): ThemePreference {
   return "system";
 }
 
-function resolveDefaultOriginKind(raw: string | null | undefined): "cash" | "blank" {
-  return raw === "blank" ? "blank" : "cash";
+function resolveDefaultOriginKind(raw: string | null | undefined): "cash" | "blank" | "card" {
+  if (raw === "blank" || raw === "card") return raw;
+  return "cash";
+}
+
+function resolveDefaultOriginCardId(
+  kind: "cash" | "blank" | "card",
+  raw: string | null | undefined,
+): string | null {
+  return kind === "card" && typeof raw === "string" && raw ? raw : null;
 }
 
 export function PreferencesProvider({ children }: { children: ReactNode }) {
@@ -138,6 +147,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
         photo_base64?: string | null;
         default_import_list_id?: string | null;
         default_origin_kind?: string | null;
+        default_origin_card_id?: string | null;
       };
       if (gen !== refreshGen.current || epoch !== prefsSessionEpoch) return;
       const nextLocale = resolveLocale(data.language);
@@ -160,6 +170,10 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
         default_import_list_id:
           typeof data.default_import_list_id === "string" ? data.default_import_list_id : null,
         default_origin_kind: resolveDefaultOriginKind(data.default_origin_kind),
+        default_origin_card_id: resolveDefaultOriginCardId(
+          resolveDefaultOriginKind(data.default_origin_kind),
+          data.default_origin_card_id,
+        ),
       });
       setLocale(nextLocale);
       setThemeState(nextTheme);
@@ -221,6 +235,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       photo_base64?: string | null;
       default_import_list_id?: string | null;
       default_origin_kind?: string | null;
+      default_origin_card_id?: string | null;
     };
     const nextLocale = resolveLocale(data.language);
     const nextTheme = resolveTheme(data.theme);
@@ -243,6 +258,10 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       default_import_list_id:
         typeof data.default_import_list_id === "string" ? data.default_import_list_id : null,
       default_origin_kind: resolveDefaultOriginKind(data.default_origin_kind),
+      default_origin_card_id: resolveDefaultOriginCardId(
+        resolveDefaultOriginKind(data.default_origin_kind),
+        data.default_origin_card_id,
+      ),
     });
     applyDom(nextLocale, nextTheme);
   }, []);
@@ -271,6 +290,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       photo_base64?: string | null;
       default_import_list_id?: string | null;
       default_origin_kind?: string | null;
+      default_origin_card_id?: string | null;
     };
     const nextLocale = resolveLocale(data.language);
     const nextTheme = resolveTheme(data.theme);
@@ -293,11 +313,15 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       default_import_list_id:
         typeof data.default_import_list_id === "string" ? data.default_import_list_id : null,
       default_origin_kind: resolveDefaultOriginKind(data.default_origin_kind),
+      default_origin_card_id: resolveDefaultOriginCardId(
+        resolveDefaultOriginKind(data.default_origin_kind),
+        data.default_origin_card_id,
+      ),
     });
     applyDom(nextLocale, nextTheme);
   }, []);
 
-  const setDefaultOriginKind = useCallback(async (kind: "cash" | "blank") => {
+  const setDefaultOriginKind = useCallback(async (kind: "cash" | "blank" | "card", cardId?: string) => {
     const response = await fetch("/api/auth/me", {
       method: "PATCH",
       credentials: "same-origin",
@@ -306,13 +330,28 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
         Accept: "application/json",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ default_origin_kind: kind }),
+      body: JSON.stringify({
+        default_origin_kind: kind,
+        ...(kind === "card" ? { default_origin_card_id: cardId } : {}),
+      }),
     });
     if (!response.ok) {
       throw new Error("Failed to save default origin");
     }
-    const data = (await response.json()) as { default_origin_kind?: string | null };
-    setMe((prev) => (prev ? { ...prev, default_origin_kind: resolveDefaultOriginKind(data.default_origin_kind) } : prev));
+    const data = (await response.json()) as {
+      default_origin_kind?: string | null;
+      default_origin_card_id?: string | null;
+    };
+    const nextKind = resolveDefaultOriginKind(data.default_origin_kind);
+    setMe((prev) =>
+      prev
+        ? {
+            ...prev,
+            default_origin_kind: nextKind,
+            default_origin_card_id: resolveDefaultOriginCardId(nextKind, data.default_origin_card_id),
+          }
+        : prev,
+    );
   }, []);
 
   const value = useMemo(

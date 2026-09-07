@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useState } from "react";
 
-import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
+import { SingleChipPicker } from "@/components/ChipPicker";
 import type { ListItem } from "../lists/listsClient";
 import { setDefaultImportList } from "../lists/listsClient";
 
@@ -77,20 +77,14 @@ export function DefaultImportListControl({ lists, messages, onChanged }: Props) 
       >
         {messages.defaultListTitle}
       </h2>
-      <SoftLedgerSelect
-        aria-label={messages.defaultListTitle}
-        value={activeListId}
+      <SingleChipPicker
+        ariaLabel={messages.defaultListTitle}
+        selectedValue={activeListId}
         disabled={pending}
         options={lists.map((l) => ({ value: l.id, label: l.name }))}
-        onChange={onChange}
+        onSelect={onChange}
+        error={error}
       />
-      <div aria-live="polite">
-        {error ? (
-          <p className="text-owe text-[0.85rem] m-0 mt-1" role="alert">
-            {error}
-          </p>
-        ) : null}
-      </div>
     </section>
   );
 }
