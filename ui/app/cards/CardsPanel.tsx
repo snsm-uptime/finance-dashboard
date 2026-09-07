@@ -9,7 +9,7 @@ import { IconButton } from "@/components/IconButton";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { StackedListPanel } from "@/components/StackedListPanel";
 import { cardsCopy } from "@/lib/i18n/cards";
-import { BoxIcon } from "@/app/icons";
+import { ArchiveToggleIcon } from "@/app/icons";
 import { DocsHelpButton } from "@/app/docs/DocsHelpButton";
 import { fetchLists } from "../lists/listsClient";
 import {
@@ -57,7 +57,7 @@ export function CardsPanel({ refreshToken = 0 }: Props = {}) {
     trailing: (
       <>
         <IconButton
-          icon={<BoxIcon active={showArchived} className="size-5" />}
+          icon={<ArchiveToggleIcon active={showArchived} className="size-5" />}
           label={showArchived ? t.cardsShowActive : t.cardsShowArchived}
           aria-pressed={showArchived}
           onClick={() => setShowArchived((prev) => !prev)}
@@ -208,7 +208,7 @@ export function CardsPanel({ refreshToken = 0 }: Props = {}) {
                 </span>
               </CopyButton>
               <IconButton
-                icon={<BoxIcon active={showArchived} className="size-5" />}
+                icon={<ArchiveToggleIcon active={showArchived} className="size-5" />}
                 label={showArchived ? t.cardsUnarchive : t.cardsArchive}
                 onClick={() =>
                   void (showArchived ? onUnarchive(card) : onArchive(card))

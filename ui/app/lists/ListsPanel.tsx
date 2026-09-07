@@ -27,9 +27,8 @@ import { StackedListPanel } from "@/components/StackedListPanel";
 import { GhostButton } from "@/components/soft-ledger/GhostButton";
 import { listsMessages } from "@/lib/i18n/lists";
 import {
-  BoxIcon,
+  ArchiveToggleIcon,
   DotsIcon,
-  OpenBoxIcon,
   PencilIcon,
   PlusIcon,
   TrashIcon,
@@ -566,7 +565,7 @@ export function ListsPanel({ initialLists, currentUserId, showArchived = false }
                         disabled={anyOpening || archivingId !== null}
                       >
                         <span className="flex items-center gap-4">
-                          <OpenBoxIcon active className="h-4 w-4 shrink-0" />
+                          <ArchiveToggleIcon active className="h-4 w-4 shrink-0" />
                           {t.listsUnarchive}
                         </span>
                       </IconButtonPopupItem>
@@ -606,7 +605,7 @@ export function ListsPanel({ initialLists, currentUserId, showArchived = false }
                           disabled={anyOpening || archivingId !== null}
                         >
                           <span className="flex items-center gap-4">
-                            <BoxIcon className="h-4 w-4 shrink-0" />
+                            <ArchiveToggleIcon className="h-4 w-4 shrink-0" />
                             {t.listsArchive}
                           </span>
                         </IconButtonPopupItem>

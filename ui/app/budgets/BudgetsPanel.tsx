@@ -13,7 +13,7 @@ import { TopProgressBar } from "@/components/TopProgressBar";
 import { Tooltip } from "@/components/Tooltip";
 import { formatMoneyAmount } from "@/lib/currency";
 import { listsMessages } from "@/lib/i18n/lists";
-import { BoxIcon } from "@/app/icons";
+import { ArchiveToggleIcon } from "@/app/icons";
 import { DocsHelpButton } from "@/app/docs/DocsHelpButton";
 import { fetchLists } from "@/app/lists/listsClient";
 import {
@@ -139,7 +139,7 @@ export function BudgetsPanel() {
     trailing: (
       <>
         <IconButton
-          icon={<BoxIcon active={showArchived} className="size-5" />}
+          icon={<ArchiveToggleIcon active={showArchived} className="size-5" />}
           label={showArchived ? t.budgetsShowActive : t.budgetsShowArchived}
           aria-pressed={showArchived}
           onClick={() => setShowArchived((prev) => !prev)}
