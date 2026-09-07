@@ -615,7 +615,7 @@ describe("ManualExpenseForm", () => {
     expect(submitButton.disabled).toBe(false);
   });
 
-  it("origin defaults to blank", async () => {
+  it("origin defaults to Cash outside a PreferencesProvider", async () => {
     await act(async () => {
       root.render(
         <ManualExpenseForm
@@ -627,7 +627,7 @@ describe("ManualExpenseForm", () => {
       );
     });
     const origin = container.querySelector('select[name="origin"]') as HTMLSelectElement;
-    expect(origin.value).toBe("");
+    expect(origin.value).toBe("cash");
   });
 
   it("selecting Cash then submitting sends origin_kind cash", async () => {

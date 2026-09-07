@@ -712,6 +712,82 @@ export async function updateExpenseOrigin(
   return { ok: true, expense };
 }
 
+export type UpdateExpenseBody = {
+  amount: string;
+  currency: string;
+  description: string;
+  payer_id: string;
+  posted_date: string;
+  split_override?: {
+    kind: "whole_assignee" | "absolute_amounts" | "percentage";
+    assignee_id?: string;
+    amounts?: Record<string, string>;
+    percentages?: Record<string, string>;
+  };
+};
+
+/** Full edit (amount incl. sign, description, payer, date, split) — any entry, hand or parsed. */
+export async function updateExpense(
+  listId: string,
+  entryId: string,
+  body: UpdateExpenseBody,
+  messages: ListsClientMessages,
+): Promise<OkExpense | ErrorResult> {
+  let response: Response;
+  try {
+    response = await fetch(
+      `/api/lists/${encodeURIComponent(listId)}/expenses/${encodeURIComponent(entryId)}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify(body),
+      },
+    );
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  if (!response.ok) {
+    const parsed = (await parseJson(response)) as {
+      detail?: unknown;
+      code?: unknown;
+    } | null;
+    return { ok: false, error: detailOrMapped(response.status, parsed, messages) };
+  }
+  const expense = asExpense(await parseJson(response));
+  if (!expense) return { ok: false, error: messages.errorGeneric };
+  return { ok: true, expense };
+}
+
+/** Hard-delete a hand-entered entry (403 `expense_not_deletable` for parsed rows). */
+export async function deleteExpense(
+  listId: string,
+  entryId: string,
+  messages: ListsClientMessages,
+): Promise<OkSimple | ErrorResult> {
+  let response: Response;
+  try {
+    response = await fetch(
+      `/api/lists/${encodeURIComponent(listId)}/expenses/${encodeURIComponent(entryId)}`,
+      {
+        method: "DELETE",
+        headers: { Accept: "application/json" },
+        credentials: "same-origin",
+      },
+    );
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  if (!response.ok) {
+    const parsed = (await parseJson(response)) as {
+      detail?: unknown;
+      code?: unknown;
+    } | null;
+    return { ok: false, error: detailOrMapped(response.status, parsed, messages) };
+  }
+  return { ok: true };
+}
+
 export async function fetchListMembers(
   listId: string,
   messages: ListsClientMessages,

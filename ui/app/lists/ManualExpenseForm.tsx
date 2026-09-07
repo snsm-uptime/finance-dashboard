@@ -8,6 +8,7 @@ import { HashtagIcon, PercentageIcon, UserIcon } from "@/app/icons";
 import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
 import { FormIconSubmit } from "@/components/FormIconSubmit";
 import { TriSwitch } from "@/components/TriSwitch";
+import { useOptionalPreferences } from "@/components/PreferencesProvider";
 
 import { fetchCards, type CardItem } from "../cards/cardsClient";
 import { PercentageSplitTrack } from "./PercentageSplitTrack";
@@ -55,7 +56,7 @@ type Props = {
 
 type SplitMode = "whole_assignee" | "absolute_amounts" | "percentage";
 
-function evenPercentMap(list: ListMember[]): Record<string, string> {
+export function evenPercentMap(list: ListMember[]): Record<string, string> {
   if (list.length === 0) return {};
   const each = Math.floor(100 / list.length);
   const map: Record<string, string> = {};
@@ -71,7 +72,7 @@ function evenPercentMap(list: ListMember[]): Record<string, string> {
   return map;
 }
 
-function percentMapFromDefault(
+export function percentMapFromDefault(
   list: ListMember[],
   defaultSplit: DefaultSplitPayload | null | undefined,
 ): Record<string, string> {
@@ -88,7 +89,7 @@ function percentMapFromDefault(
   return map;
 }
 
-function percentMapsEqual(
+export function percentMapsEqual(
   left: Record<string, string>,
   right: Record<string, string>,
 ): boolean {
@@ -99,11 +100,11 @@ function percentMapsEqual(
   return true;
 }
 
-function emptyMemberMap(members: ListMember[]): Record<string, string> {
+export function emptyMemberMap(members: ListMember[]): Record<string, string> {
   return Object.fromEntries(members.map((m) => [m.user_id, ""]));
 }
 
-function nonEmptyEntries(map: Record<string, string>): Record<string, string> | null {
+export function nonEmptyEntries(map: Record<string, string>): Record<string, string> | null {
   const out: Record<string, string> = {};
   for (const [key, raw] of Object.entries(map)) {
     const value = raw.trim();
@@ -124,6 +125,7 @@ export function ManualExpenseForm({
   onCanSubmitChange,
 }: Props) {
   const router = useRouter();
+  const preferences = useOptionalPreferences()?.me ?? null;
   const liveSplit = useOptionalListDefaultSplit();
   const effectiveSplit = liveSplit ? liveSplit.defaultSplit : defaultSplit;
   const baseId = useId();
@@ -137,7 +139,17 @@ export function ManualExpenseForm({
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [payerId, setPayerId] = useState(currentUserId);
-  const [originValue, setOriginValue] = useState("");
+  // Preselects the account's default origin (Cash unless the account was set
+  // to "None") — the user can still change or clear it before submitting.
+  const [originValue, setOriginValue] = useState(() =>
+    preferences?.default_origin_kind === "blank" ? "" : "cash",
+  );
+  const originTouchedRef = useRef(false);
+  useEffect(() => {
+    if (originTouchedRef.current || !preferences) return;
+    setOriginValue(preferences.default_origin_kind === "blank" ? "" : "cash");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preferences?.default_origin_kind]);
   const [cards, setCards] = useState<CardItem[]>([]);
   const [mode, setMode] = useState<SplitMode>("percentage");
   const [assigneeId, setAssigneeId] = useState(currentUserId);
@@ -379,7 +391,10 @@ export function ManualExpenseForm({
               ]}
               disabled={pending}
               aria-labelledby={`${baseId}-origin-label`}
-              onChange={setOriginValue}
+              onChange={(next) => {
+                originTouchedRef.current = true;
+                setOriginValue(next);
+              }}
             />
           </div>
         ) : null}

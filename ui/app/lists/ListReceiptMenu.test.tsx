@@ -39,6 +39,33 @@ vi.mock("@/components/IconButtonPopup/IconButtonPopup.module.scss", () => ({
   ),
 }));
 
+vi.mock("@/components/FormIconSubmit/FormIconSubmit.module.scss", () => ({
+  default: new Proxy(
+    {},
+    {
+      get: (_t, prop) => String(prop),
+    },
+  ),
+}));
+
+vi.mock("@/components/TriSwitch/TriSwitch.module.scss", () => ({
+  default: new Proxy(
+    {},
+    {
+      get: (_t, prop) => String(prop),
+    },
+  ),
+}));
+
+vi.mock("./PercentageSplitTrack.module.scss", () => ({
+  default: new Proxy(
+    {},
+    {
+      get: (_t, prop) => String(prop),
+    },
+  ),
+}));
+
 const fetchLists = vi.fn();
 const reassignStatement = vi.fn();
 
@@ -65,7 +92,53 @@ const messages = {
   errorInvalidName: listsMessages.en.errorInvalidName,
   errorForbidden: listsMessages.en.errorForbidden,
   errorUnauthorized: listsMessages.en.errorUnauthorized,
+  errorReassignSplit: listsMessages.en.errorReassignSplit,
+  editExpenseTitle: listsMessages.en.editExpenseTitle,
+  expenseAmount: listsMessages.en.expenseAmount,
+  expenseDescription: listsMessages.en.expenseDescription,
+  expensePayer: listsMessages.en.expensePayer,
+  editExpenseDateLabel: listsMessages.en.editExpenseDateLabel,
+  editExpenseSave: listsMessages.en.editExpenseSave,
+  editExpenseSaving: listsMessages.en.editExpenseSaving,
+  editExpenseCancel: listsMessages.en.editExpenseCancel,
+  expenseAdjustSplit: listsMessages.en.expenseAdjustSplit,
+  expenseModeWhole: listsMessages.en.expenseModeWhole,
+  expenseModeAbsolute: listsMessages.en.expenseModeAbsolute,
+  expenseModePercentage: listsMessages.en.expenseModePercentage,
+  expenseAssignee: listsMessages.en.expenseAssignee,
+  deleteExpenseConfirmTitle: listsMessages.en.deleteExpenseConfirmTitle,
+  deleteExpenseConfirmBody: listsMessages.en.deleteExpenseConfirmBody,
+  deleteExpenseConfirmAction: listsMessages.en.deleteExpenseConfirmAction,
+  deleteExpenseConfirmCancel: listsMessages.en.deleteExpenseConfirmCancel,
 };
+
+const expense = {
+  id: "entry-1",
+  list_id: "list-a",
+  amount: "10.00",
+  currency: "CRC",
+  description: "Coffee",
+  payer_id: "u1",
+  provenance: "hand",
+  line_type: "purchase",
+  posted_date: "2026-01-01",
+  created_at: "2026-01-01T00:00:00Z",
+  amount_crc: "10.00",
+  fx_rate: "1",
+  fx_rate_date: null,
+  fx_fallback: false,
+  origin_kind: null,
+  origin_card_id: null,
+  origin_card_label: null,
+  viewer_share_kind: null,
+  viewer_share_value: null,
+  viewer_net_crc: null,
+  viewer_net_polarity: null,
+  import_batch_id: null,
+  statement_id: null,
+};
+
+const members = [{ user_id: "u1", alias: "me", photo_base64: null }];
 
 describe("ListReceiptMenu", () => {
   let container: HTMLDivElement;
@@ -89,7 +162,14 @@ describe("ListReceiptMenu", () => {
   it("hides move action when statement_id is missing", () => {
     act(() => {
       root.render(
-        <ListReceiptMenu listId="list-a" statementId={null} messages={messages} />,
+        <ListReceiptMenu
+          listId="list-a"
+          currentUserId="u1"
+          members={members}
+          expense={expense}
+          statementId={null}
+          messages={messages}
+        />,
       );
     });
     expect(container.textContent).not.toContain(messages.moveStatementLabel);
@@ -106,7 +186,14 @@ describe("ListReceiptMenu", () => {
 
     act(() => {
       root.render(
-        <ListReceiptMenu listId="list-a" statementId="stmt-1" messages={messages} />,
+        <ListReceiptMenu
+          listId="list-a"
+          currentUserId="u1"
+          members={members}
+          expense={expense}
+          statementId="stmt-1"
+          messages={messages}
+        />,
       );
     });
 
@@ -135,7 +222,14 @@ describe("ListReceiptMenu", () => {
 
     act(() => {
       root.render(
-        <ListReceiptMenu listId="list-a" statementId="stmt-1" messages={messages} />,
+        <ListReceiptMenu
+          listId="list-a"
+          currentUserId="u1"
+          members={members}
+          expense={expense}
+          statementId="stmt-1"
+          messages={messages}
+        />,
       );
     });
 
@@ -163,7 +257,14 @@ describe("ListReceiptMenu", () => {
 
     act(() => {
       root.render(
-        <ListReceiptMenu listId="list-a" statementId="stmt-1" messages={messages} />,
+        <ListReceiptMenu
+          listId="list-a"
+          currentUserId="u1"
+          members={members}
+          expense={expense}
+          statementId="stmt-1"
+          messages={messages}
+        />,
       );
     });
 
@@ -210,7 +311,14 @@ describe("ListReceiptMenu", () => {
 
     act(() => {
       root.render(
-        <ListReceiptMenu listId="list-a" statementId="stmt-1" messages={messages} />,
+        <ListReceiptMenu
+          listId="list-a"
+          currentUserId="u1"
+          members={members}
+          expense={expense}
+          statementId="stmt-1"
+          messages={messages}
+        />,
       );
     });
 

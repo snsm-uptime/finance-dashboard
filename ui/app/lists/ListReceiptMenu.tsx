@@ -5,42 +5,81 @@ import { useState } from "react";
 
 import { GhostButton } from "@/components/soft-ledger/GhostButton";
 import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
-import { ReceiptRowMenu, type ReceiptRowRollback } from "@/components/soft-ledger/ReceiptRowMenu";
+import {
+  ReceiptRowMenu,
+  type ReceiptRowDeleteEntry,
+  type ReceiptRowRollback,
+} from "@/components/soft-ledger/ReceiptRowMenu";
 
+import { EditExpenseForm, type EditExpenseFormMessages } from "./EditExpenseForm";
 import { Sheet } from "./Sheet";
 import {
   fetchLists,
   reassignStatement,
+  type ExpenseItem,
   type ListItem,
+  type ListMember,
   type ListsClientMessages,
 } from "./listsClient";
 
-export type ListReceiptMenuMessages = ListsClientMessages & {
-  menuAria: string;
-  editLabel: string;
-  deleteLabel: string;
-  moveStatementLabel: string;
-  moveConfirm: string;
-  pickerTitle: string;
-  confirmAction: string;
-  cancelLabel: string;
-  emptyDestLabel: string;
-};
+export type ListReceiptMenuMessages = ListsClientMessages &
+  EditExpenseFormMessages & {
+    menuAria: string;
+    editLabel: string;
+    deleteLabel: string;
+    moveStatementLabel: string;
+    moveConfirm: string;
+    pickerTitle: string;
+    confirmAction: string;
+    cancelLabel: string;
+    emptyDestLabel: string;
+    deleteExpenseConfirmTitle: string;
+    deleteExpenseConfirmBody: string;
+    deleteExpenseConfirmAction: string;
+    deleteExpenseConfirmCancel: string;
+  };
 
 type Props = {
   listId: string;
+  currentUserId: string;
+  members: ListMember[];
+  expense: ExpenseItem;
   statementId: string | null;
   messages: ListReceiptMenuMessages;
   rollback?: ReceiptRowRollback;
 };
 
-export function ListReceiptMenu({ listId, statementId, messages, rollback }: Props) {
+export function ListReceiptMenu({
+  listId,
+  currentUserId,
+  members,
+  expense,
+  statementId,
+  messages,
+  rollback,
+}: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [lists, setLists] = useState<ListItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const deleteEntry: ReceiptRowDeleteEntry | undefined =
+    expense.provenance === "hand"
+      ? {
+          listId,
+          entryId: expense.id,
+          confirmTitle: messages.deleteExpenseConfirmTitle,
+          confirmBody: messages.deleteExpenseConfirmBody,
+          confirmAction: messages.deleteExpenseConfirmAction,
+          cancelLabel: messages.deleteExpenseConfirmCancel,
+          errorGeneric: messages.errorGeneric,
+          errorForbidden: messages.errorForbidden,
+          errorUnauthorized: messages.errorUnauthorized,
+        }
+      : undefined;
 
   async function openPicker() {
     setError(null);
@@ -81,7 +120,18 @@ export function ListReceiptMenu({ listId, statementId, messages, rollback }: Pro
           moveStatementLabel: statementId ? messages.moveStatementLabel : undefined,
         }}
         onMoveStatement={statementId ? openPicker : undefined}
+        onEdit={() => setEditOpen(true)}
         rollback={rollback}
+        deleteEntry={deleteEntry}
+      />
+      <EditExpenseForm
+        listId={listId}
+        currentUserId={currentUserId}
+        members={members}
+        expense={expense}
+        messages={messages}
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
       />
       <Sheet
         open={open}

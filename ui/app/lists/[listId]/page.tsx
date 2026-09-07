@@ -903,6 +903,9 @@ export default async function ListDetailPage({
                           menuSlot: (
                             <ListReceiptMenu
                               listId={listId}
+                              currentUserId={session.user_id}
+                              members={members}
+                              expense={e}
                               statementId={e.statement_id}
                               messages={{
                                 menuAria: t.receiptMenuAria,
@@ -919,6 +922,23 @@ export default async function ListDetailPage({
                                 errorForbidden: t.errorForbidden,
                                 errorUnauthorized: t.errorUnauthorized,
                                 errorReassignSplit: t.errorReassignSplit,
+                                editExpenseTitle: t.editExpenseTitle,
+                                expenseAmount: t.expenseAmount,
+                                expenseDescription: t.expenseDescription,
+                                expensePayer: t.expensePayer,
+                                editExpenseDateLabel: t.editExpenseDateLabel,
+                                editExpenseSave: t.editExpenseSave,
+                                editExpenseSaving: t.editExpenseSaving,
+                                editExpenseCancel: t.editExpenseCancel,
+                                expenseAdjustSplit: t.expenseAdjustSplit,
+                                expenseModeWhole: t.expenseModeWhole,
+                                expenseModeAbsolute: t.expenseModeAbsolute,
+                                expenseModePercentage: t.expenseModePercentage,
+                                expenseAssignee: t.expenseAssignee,
+                                deleteExpenseConfirmTitle: t.deleteExpenseConfirmTitle,
+                                deleteExpenseConfirmBody: t.deleteExpenseConfirmBody,
+                                deleteExpenseConfirmAction: t.deleteExpenseConfirmAction,
+                                deleteExpenseConfirmCancel: t.deleteExpenseConfirmCancel,
                               }}
                               rollback={
                                 e.import_batch_id
