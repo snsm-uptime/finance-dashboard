@@ -64,7 +64,6 @@ export function SourceListChipPicker({
 
   function selectFromPanel(id: string) {
     onToggle(id);
-    close();
   }
 
   return (
