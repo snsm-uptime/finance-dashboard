@@ -55,6 +55,7 @@ from application.signup import SignupCommand, SignUpService
 from domain.errors import (
     AliasAlreadySetError,
     AliasTakenError,
+    CardNotFoundError,
     DuplicateEmailError,
     EmailNotVerifiedError,
     InvalidAliasError,
@@ -156,6 +157,7 @@ def _me_response(result) -> MeResponse:
         last_opened_list_id=result.last_opened_list_id,
         default_import_list_id=result.default_import_list_id,
         default_origin_kind=result.default_origin_kind,
+        default_origin_card_id=result.default_origin_card_id,
     )
 
 
@@ -290,12 +292,13 @@ def patch_current_user(
                     list_id=body.default_import_list_id,
                 )
             )
-        result = UpdatePreferencesService(prefs).execute(
+        result = UpdatePreferencesService(prefs, SqlAlchemyCardRepository(db)).execute(
             UpdatePreferencesCommand(
                 user_id=user_id,
                 language=body.language,
                 theme=body.theme,
                 default_origin_kind=body.default_origin_kind,
+                default_origin_card_id=body.default_origin_card_id,
                 photo_base64=body.photo_base64,
                 clear_photo=clear_photo,
             )
@@ -334,6 +337,11 @@ def patch_current_user(
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
             content={"detail": str(exc), "code": "invalid_preferences"},
+        )
+    except CardNotFoundError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": str(exc), "code": CardNotFoundError.CODE},
         )
     except PrincipalNotFoundError:
         return JSONResponse(

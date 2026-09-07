@@ -47,7 +47,8 @@ class MeResponse(BaseModel):
     theme: str | None = None
     last_opened_list_id: UUID | None = None
     default_import_list_id: UUID | None = None
-    default_origin_kind: Literal["cash", "blank"] = "cash"
+    default_origin_kind: Literal["cash", "blank", "card"] = "cash"
+    default_origin_card_id: UUID | None = None
 
 
 class PatchMeBody(BaseModel):
@@ -55,7 +56,8 @@ class PatchMeBody(BaseModel):
     theme: Literal["light", "dark", "system"] | None = None
     last_opened_list_id: UUID | None = None
     default_import_list_id: UUID | None = None
-    default_origin_kind: Literal["cash", "blank"] | None = None
+    default_origin_kind: Literal["cash", "blank", "card"] | None = None
+    default_origin_card_id: UUID | None = None
     # Wide wire bound so length/charset failures answer with `invalid_alias`
     # from the domain instead of an unlabelled pydantic 422.
     alias: str | None = Field(default=None, max_length=255)

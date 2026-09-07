@@ -52,6 +52,12 @@ class UserModel(Base):
         index=True,
     )
     default_origin_kind: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    default_origin_card_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("cards.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -73,7 +79,9 @@ class UserModel(Base):
         back_populates="inviter",
         foreign_keys="ListInviteTokenModel.inviter_user_id",
     )
-    cards: Mapped[list[CardModel]] = relationship(back_populates="owner")
+    cards: Mapped[list[CardModel]] = relationship(
+        back_populates="owner", foreign_keys="CardModel.user_id"
+    )
 
 
 class ListModel(Base):
@@ -497,7 +505,9 @@ class CardModel(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    owner: Mapped[UserModel] = relationship(back_populates="cards")
+    owner: Mapped[UserModel] = relationship(
+        back_populates="cards", foreign_keys=[user_id]
+    )
 
 
 class BudgetModel(Base):

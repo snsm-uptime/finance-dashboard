@@ -116,5 +116,55 @@ def test_patch_default_origin_kind_to_blank_persists(
 
 def test_patch_rejects_invalid_default_origin_kind(client: TestClient) -> None:
     _register(client, "origin-bad@example.com")
-    response = client.patch("/auth/me", json={"default_origin_kind": "card"})
+    response = client.patch("/auth/me", json={"default_origin_kind": "cheque"})
     assert response.status_code == 422
+
+
+def test_patch_rejects_card_kind_without_card_id(client: TestClient) -> None:
+    _register(client, "origin-card-missing@example.com")
+    response = client.patch("/auth/me", json={"default_origin_kind": "card"})
+    assert response.status_code == 400, response.text
+    assert response.json()["code"] == "invalid_preferences"
+
+
+def test_patch_rejects_card_id_not_owned(client: TestClient) -> None:
+    _register(client, "origin-card-foreign@example.com")
+    response = client.patch(
+        "/auth/me",
+        json={
+            "default_origin_kind": "card",
+            "default_origin_card_id": "00000000-0000-0000-0000-000000000000",
+        },
+    )
+    assert response.status_code == 404
+    assert response.json()["code"] == "card_not_found"
+
+
+def test_patch_default_origin_kind_to_card_persists(
+    client: TestClient, db_session: Session
+) -> None:
+    _register(client, "origin-card@example.com")
+    card = client.post("/cards", json={"label": "My Visa", "iban": "CR05 0152 0200"})
+    assert card.status_code == 201, card.text
+    card_id = card.json()["id"]
+
+    patched = client.patch(
+        "/auth/me",
+        json={"default_origin_kind": "card", "default_origin_card_id": card_id},
+    )
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["default_origin_kind"] == "card"
+    assert patched.json()["default_origin_card_id"] == card_id
+
+    again = client.get("/auth/me")
+    assert again.json()["default_origin_kind"] == "card"
+    assert again.json()["default_origin_card_id"] == card_id
+
+    row = db_session.scalar(select(UserModel).where(UserModel.email == "origin-card@example.com"))
+    assert row is not None
+    assert str(row.default_origin_card_id) == card_id
+
+    # Switching back to cash clears the stored card reference.
+    reverted = client.patch("/auth/me", json={"default_origin_kind": "cash"})
+    assert reverted.status_code == 200, reverted.text
+    assert reverted.json()["default_origin_card_id"] is None
