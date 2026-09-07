@@ -149,7 +149,7 @@ export const listsMessages = {
     budgetsBackToList: "Back to list",
     budgetsHistoryTitle: "Your Budgets",
     budgetsHistoryEmpty:
-      "No transactions assigned to this budget yet. Assign a transaction manually or manage your rules above.",
+      "No transactions assigned to this budget yet. Assign a transaction manually or manage your rules by editing the budget.",
     budgetsSourcesHeading: "Sources",
     budgetsSpentCaption: "Spent",
     budgetsCapCaption: "Cap",
