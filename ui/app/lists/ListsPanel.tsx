@@ -26,7 +26,17 @@ import { usePreferences } from "@/components/PreferencesProvider";
 import { StackedListPanel } from "@/components/StackedListPanel";
 import { GhostButton } from "@/components/soft-ledger/GhostButton";
 import { listsMessages } from "@/lib/i18n/lists";
-import { DotsIcon, PlusIcon, UploadIcon, UsersIcon, WalletIcon } from "@/app/icons";
+import {
+  BoxIcon,
+  DotsIcon,
+  OpenBoxIcon,
+  PencilIcon,
+  PlusIcon,
+  TrashIcon,
+  UploadIcon,
+  UsersIcon,
+  WalletIcon,
+} from "@/app/icons";
 import type { InviteFormMessages } from "./InviteForm";
 import { InviteForm } from "./InviteForm";
 import { Sheet } from "./Sheet";
@@ -498,7 +508,7 @@ export function ListsPanel({ initialLists, currentUserId, showArchived = false }
                     panelClassName={
                       deleteConfirmId === list.id
                         ? styles.confirmPanel
-                        : undefined
+                        : styles.menuPanel
                     }
                     panelRole={
                       deleteConfirmId === list.id ? "alertdialog" : "menu"
@@ -555,7 +565,10 @@ export function ListsPanel({ initialLists, currentUserId, showArchived = false }
                         onClick={() => void onUnarchive(list)}
                         disabled={anyOpening || archivingId !== null}
                       >
-                        {t.listsUnarchive}
+                        <span className="flex items-center gap-4">
+                          <OpenBoxIcon active className="h-4 w-4 shrink-0" />
+                          {t.listsUnarchive}
+                        </span>
                       </IconButtonPopupItem>
                     ) : (
                       <>
@@ -563,13 +576,19 @@ export function ListsPanel({ initialLists, currentUserId, showArchived = false }
                           onClick={() => startInvite(list.id)}
                           disabled={anyOpening}
                         >
-                          {t.mobileInviteAria}
+                          <span className="flex items-center gap-4">
+                            <UsersIcon className="h-4 w-4 shrink-0" />
+                            {t.mobileInviteAria}
+                          </span>
                         </IconButtonPopupItem>
                         <IconButtonPopupItem
                           onClick={() => startRename(list)}
                           disabled={anyOpening || renamingId !== null}
                         >
-                          {t.renameLabel}
+                          <span className="flex items-center gap-4">
+                            <PencilIcon className="h-4 w-4 shrink-0" />
+                            {t.renameLabel}
+                          </span>
                         </IconButtonPopupItem>
                         <IconButtonPopupItem
                           danger
@@ -577,13 +596,19 @@ export function ListsPanel({ initialLists, currentUserId, showArchived = false }
                           onClick={() => showDeleteConfirm(list.id)}
                           disabled={anyOpening || deletingId !== null}
                         >
-                          {t.deleteAria}
+                          <span className="flex items-center gap-4">
+                            <TrashIcon className="h-4 w-4 shrink-0" />
+                            {t.deleteAria}
+                          </span>
                         </IconButtonPopupItem>
                         <IconButtonPopupItem
                           onClick={() => void onArchive(list)}
                           disabled={anyOpening || archivingId !== null}
                         >
-                          {t.listsArchive}
+                          <span className="flex items-center gap-4">
+                            <BoxIcon className="h-4 w-4 shrink-0" />
+                            {t.listsArchive}
+                          </span>
                         </IconButtonPopupItem>
                       </>
                     )}
