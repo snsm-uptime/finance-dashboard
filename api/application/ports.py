@@ -44,6 +44,7 @@ class UserPreferencesRecord:
     theme: str | None
     last_opened_list_id: UUID | None = None
     default_import_list_id: UUID | None = None
+    default_origin_kind: str | None = None
     alias: str | None = None
     photo_base64: str | None = None
 
@@ -97,6 +98,7 @@ class PreferencesRepository(Protocol):
         clear_last_opened_list_id: bool = False,
         default_import_list_id: UUID | None = None,
         clear_default_import_list_id: bool = False,
+        default_origin_kind: str | None = None,
         photo_base64: str | None = None,
         clear_photo: bool = False,
     ) -> UserPreferencesRecord: ...

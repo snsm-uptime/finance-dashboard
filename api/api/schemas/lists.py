@@ -129,6 +129,19 @@ class CreateExpenseResponse(BaseModel):
     origin_card_id: UUID | None = None
 
 
+class UpdateExpenseBody(BaseModel):
+    """Full edit of an existing entry — amount (incl. sign), description,
+    payer, posted date, and optional split behavior. Origin is unaffected;
+    edit it via `PATCH .../origin`."""
+
+    amount: str
+    currency: str = "CRC"
+    description: str
+    payer_id: UUID
+    posted_date: str
+    split_override: SetSplitOverrideBody | None = None
+
+
 class UpdateExpenseOriginBody(BaseModel):
     origin_kind: Literal["card", "cash"] | None = None
     origin_card_id: UUID | None = None

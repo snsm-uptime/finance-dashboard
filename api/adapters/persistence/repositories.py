@@ -628,6 +628,72 @@ class SqlAlchemyListRepository:
             statement_id = batch.statement_id if batch is not None else None
         return _ledger_entry_record(row, statement_id)
 
+    def get_full_ledger_entry(self, *, list_id: UUID, entry_id: UUID):
+        row = self._session.get(LedgerEntryModel, entry_id)
+        if (
+            row is None
+            or row.list_id != list_id
+            or row.normalized_description is None
+            or row.payer_id is None
+            or row.provenance is None
+            or row.line_type is None
+            or row.posted_date is None
+        ):
+            return None
+        statement_id = None
+        if row.import_batch_id is not None:
+            batch = self._session.get(ImportBatchModel, row.import_batch_id)
+            statement_id = batch.statement_id if batch is not None else None
+        return _ledger_entry_record(row, statement_id)
+
+    def update_ledger_entry(
+        self,
+        *,
+        list_id: UUID,
+        entry_id: UUID,
+        amount,
+        currency: str,
+        description: str,
+        payer_id: UUID,
+        posted_date: str,
+        fx,
+    ):
+        from datetime import date as date_cls
+
+        row = self._session.get(LedgerEntryModel, entry_id)
+        if (
+            row is None
+            or row.list_id != list_id
+            or row.normalized_description is None
+            or row.payer_id is None
+            or row.provenance is None
+            or row.line_type is None
+            or row.posted_date is None
+        ):
+            raise SubjectNotFoundError()
+        row.amount = amount
+        row.currency = currency
+        row.normalized_description = description
+        row.payer_id = payer_id
+        row.posted_date = date_cls.fromisoformat(posted_date)
+        row.amount_crc = fx.amount_crc
+        row.fx_rate = fx.fx_rate
+        row.fx_rate_date = fx.fx_rate_date
+        row.fx_fallback = fx.fx_fallback
+        self._session.flush()
+        statement_id = None
+        if row.import_batch_id is not None:
+            batch = self._session.get(ImportBatchModel, row.import_batch_id)
+            statement_id = batch.statement_id if batch is not None else None
+        return _ledger_entry_record(row, statement_id)
+
+    def delete_ledger_entry(self, *, list_id: UUID, entry_id: UUID) -> None:
+        row = self._session.get(LedgerEntryModel, entry_id)
+        if row is None or row.list_id != list_id:
+            raise SubjectNotFoundError()
+        self._session.delete(row)
+        self._session.flush()
+
     def list_members_with_alias(self, list_id: UUID):
         """Roster labels are aliases — email is an identity surface, never a label."""
         from application.expenses import ListMemberView

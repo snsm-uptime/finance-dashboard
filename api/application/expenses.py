@@ -10,6 +10,7 @@ from typing import Protocol
 from uuid import UUID, uuid4
 
 from domain.errors import (
+    ExpenseNotDeletableError,
     InvalidDefaultSplitError,
     InvalidManualExpenseError,
     InvalidSplitOverrideError,
@@ -18,7 +19,13 @@ from domain.errors import (
     SubjectNotFoundError,
 )
 from domain.expense_lens import ViewerExpenseLens, build_viewer_expense_lens
-from domain.expenses import ManualExpenseDraft, validate_manual_expense, validate_origin_update
+from domain.expenses import (
+    PROVENANCE_HAND,
+    ManualExpenseDraft,
+    validate_expense_edit,
+    validate_manual_expense,
+    validate_origin_update,
+)
 from domain.splits import SUBJECT_ITEM, compute_share_allocations, resolve_override_source
 from domain.statement_cycles import filter_entries_by_statement, resolve_period_bounds
 
@@ -123,6 +130,25 @@ class ExpenseRepository(Protocol):
         origin_card_id: UUID | None,
     ) -> LedgerEntryRecord: ...
 
+    def get_full_ledger_entry(
+        self, *, list_id: UUID, entry_id: UUID
+    ) -> LedgerEntryRecord | None: ...
+
+    def update_ledger_entry(
+        self,
+        *,
+        list_id: UUID,
+        entry_id: UUID,
+        amount: Decimal,
+        currency: str,
+        description: str,
+        payer_id: UUID,
+        posted_date: str,
+        fx: MaterializedFx,
+    ) -> LedgerEntryRecord: ...
+
+    def delete_ledger_entry(self, *, list_id: UUID, entry_id: UUID) -> None: ...
+
     def atomic(self) -> AbstractContextManager[None]:
         """Savepoint so create+override failures do not need a full session rollback."""
         ...
@@ -148,6 +174,26 @@ class UpdateExpenseOriginCommand:
     entry_id: UUID
     origin_kind: str | None
     origin_card_id: UUID | None
+
+
+@dataclass(frozen=True, slots=True)
+class UpdateExpenseCommand:
+    actor_user_id: UUID
+    list_id: UUID
+    entry_id: UUID
+    amount: str
+    currency: str
+    description: str
+    payer_id: UUID
+    posted_date: str
+    split_override: SplitOverrideInput | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DeleteExpenseCommand:
+    actor_user_id: UUID
+    list_id: UUID
+    entry_id: UUID
 
 
 @dataclass(frozen=True, slots=True)
@@ -309,6 +355,101 @@ class UpdateExpenseOriginService:
             origin_kind=origin_kind,
             origin_card_id=origin_card_id,
         )
+
+
+class UpdateExpenseService:
+    """Full edit of an existing ledger entry — amount (incl. sign), description,
+    payer, and posted date; hand or parsed rows alike (open editing, unlike
+    origin which is payer-restricted). Origin itself stays untouched here (see
+    ``UpdateExpenseOriginService``); split behavior updates by reusing
+    ``SetSplitOverrideService`` in the same transaction as the create path does.
+    """
+
+    def __init__(self, repo: ExpenseRepository, fx_service: MaterializeFxService) -> None:
+        self._repo = repo
+        self._fx_service = fx_service
+
+    def execute(self, command: UpdateExpenseCommand) -> LedgerEntryRecord:
+        AuthorizeListAccessService(self._repo).execute(
+            AuthorizeListAccessCommand(
+                acting_user_id=command.actor_user_id,
+                list_id=command.list_id,
+                action="write_expense",
+            )
+        )
+        existing = self._repo.get_full_ledger_entry(
+            list_id=command.list_id, entry_id=command.entry_id
+        )
+        if existing is None:
+            raise SubjectNotFoundError()
+        members = self._repo.list_member_ids(command.list_id)
+        draft = validate_expense_edit(
+            amount=command.amount,
+            currency=command.currency,
+            description=command.description,
+            payer_id=command.payer_id,
+            posted_date=command.posted_date,
+            member_ids=members,
+        )
+        # Re-materialize FX at commit for the new amount/date (AD-7) — a failed
+        # BCCR lookup must not persist a half-written edit.
+        fx = self._fx_service.materialize_fx_for_entry(
+            amount=draft.amount,
+            currency=draft.currency,
+            posted_date=date.fromisoformat(draft.posted_date),
+        )
+        with self._repo.atomic():
+            updated = self._repo.update_ledger_entry(
+                list_id=command.list_id,
+                entry_id=command.entry_id,
+                amount=draft.amount,
+                currency=draft.currency,
+                description=draft.normalized_description,
+                payer_id=draft.payer_id,
+                posted_date=draft.posted_date,
+                fx=fx,
+            )
+            if command.split_override is not None:
+                # Reuse SetSplitOverride — do not invent a second allocator.
+                SetSplitOverrideService(self._repo).execute(  # type: ignore[arg-type]
+                    SetSplitOverrideCommand(
+                        actor_user_id=command.actor_user_id,
+                        list_id=command.list_id,
+                        subject_kind=SUBJECT_ITEM,
+                        subject_id=updated.id,
+                        kind=command.split_override.kind,
+                        assignee_id=command.split_override.assignee_id,
+                        amounts=command.split_override.amounts,
+                        percentages=command.split_override.percentages,
+                    )
+                )
+            return updated
+
+
+class DeleteExpenseService:
+    """Hard-delete a hand-entered ledger entry. Parsed (provenance='parser')
+    rows stay removable only via whole-batch rollback — deleting a single
+    imported row would desync it from its statement without a trace."""
+
+    def __init__(self, repo: ExpenseRepository) -> None:
+        self._repo = repo
+
+    def execute(self, command: DeleteExpenseCommand) -> None:
+        AuthorizeListAccessService(self._repo).execute(
+            AuthorizeListAccessCommand(
+                acting_user_id=command.actor_user_id,
+                list_id=command.list_id,
+                action="write_expense",
+            )
+        )
+        existing = self._repo.get_full_ledger_entry(
+            list_id=command.list_id, entry_id=command.entry_id
+        )
+        if existing is None:
+            raise SubjectNotFoundError()
+        if existing.provenance != PROVENANCE_HAND:
+            raise ExpenseNotDeletableError()
+        self._repo.delete_ledger_entry(list_id=command.list_id, entry_id=command.entry_id)
 
 
 @dataclass(frozen=True, slots=True)

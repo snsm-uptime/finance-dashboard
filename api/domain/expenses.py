@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from uuid import UUID
 
@@ -62,6 +62,81 @@ def validate_origin_update(
 ) -> tuple[str | None, UUID | None]:
     """Validate an origin-only update (existing card / Cash / blank) — no expense shape."""
     return _validate_origin(origin_kind=origin_kind, origin_card_id=origin_card_id)
+
+
+@dataclass(frozen=True, slots=True)
+class ExpenseEditDraft:
+    """Validated full-edit fields for an existing ledger entry (any provenance)."""
+
+    amount: Decimal
+    currency: str
+    normalized_description: str
+    payer_id: UUID
+    posted_date: str
+
+
+def validate_expense_edit(
+    *,
+    amount: str | Decimal,
+    currency: str,
+    description: str,
+    payer_id: UUID,
+    posted_date: str,
+    member_ids: list[UUID],
+) -> ExpenseEditDraft:
+    """Validate a full edit (amount incl. sign, description, payer, date) of an
+    existing committed entry — hand or parsed alike.
+
+    Unlike create, amount may be negative to represent a refund/credit against
+    the list; it must never be zero. `domain.settle` already takes
+    ``abs(raw_amount)`` for split totals and folds the sign into balance
+    direction, so a negative amount here flows through settle math unchanged.
+    """
+    cur = (currency or "").strip().upper()
+    if cur not in MANUAL_SUPPORTED_CURRENCIES:
+        raise InvalidManualExpenseError(
+            f"Manual expenses support {', '.join(sorted(MANUAL_SUPPORTED_CURRENCIES))} only "
+            "in this release."
+        )
+
+    try:
+        parsed = amount if isinstance(amount, Decimal) else Decimal(str(amount).strip())
+    except (InvalidOperation, ValueError) as exc:
+        raise InvalidManualExpenseError("Amount must be an exact decimal string.") from exc
+    if not parsed.is_finite():
+        raise InvalidManualExpenseError("Amount must be a finite decimal value.")
+    if parsed == 0:
+        raise InvalidManualExpenseError("Amount must not be zero.")
+    if abs(parsed) > AMOUNT_MAX:
+        raise InvalidManualExpenseError("Amount is too large.")
+    quantized = parsed.quantize(CRC_AMOUNT_QUANTUM)
+    if quantized != parsed:
+        raise InvalidManualExpenseError("Amount may have at most two decimal places.")
+
+    normalized = (description or "").strip()
+    if not normalized:
+        raise InvalidManualExpenseError("Description is required.")
+    if len(normalized) > DESCRIPTION_MAX_LENGTH:
+        raise InvalidManualExpenseError(
+            f"Description must be at most {DESCRIPTION_MAX_LENGTH} characters."
+        )
+
+    members = set(member_ids)
+    if payer_id not in members:
+        raise InvalidManualExpenseError("Payer must be a current list member.")
+
+    try:
+        parsed_date = date.fromisoformat(posted_date)
+    except ValueError as exc:
+        raise InvalidManualExpenseError("Posted date must be an ISO calendar date.") from exc
+
+    return ExpenseEditDraft(
+        amount=parsed,
+        currency=cur,
+        normalized_description=normalized,
+        payer_id=payer_id,
+        posted_date=parsed_date.isoformat(),
+    )
 
 
 def validate_manual_expense(

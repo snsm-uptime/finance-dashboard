@@ -18,14 +18,18 @@ from adapters.persistence.same_price_conflicts import SqlAlchemySamePriceConflic
 from application.expenses import (
     CreateManualExpenseCommand,
     CreateManualExpenseService,
+    DeleteExpenseCommand,
+    DeleteExpenseService,
     ListedExpense,
     ListExpensesCommand,
     ListExpensesService,
     ListMembersCommand,
     ListMembersService,
     SplitOverrideInput,
+    UpdateExpenseCommand,
     UpdateExpenseOriginCommand,
     UpdateExpenseOriginService,
+    UpdateExpenseService,
 )
 from application.fx_service import MaterializeFxService
 from application.import_rollback import RollbackImportBatchCommand, RollbackImportBatchService
@@ -63,6 +67,7 @@ from application.lists import (
 from application.reassign_statement import ReassignStatementCommand, ReassignStatementService
 from domain.errors import (
     AlreadyListMemberError,
+    ExpenseNotDeletableError,
     FxAuthenticationError,
     FxCurrencyNotSupportedError,
     FxFutureDateError,
@@ -119,6 +124,7 @@ from api.schemas.lists import (
     SetDefaultSplitBody,
     SimplifyPlanResponse,
     TransferResponse,
+    UpdateExpenseBody,
     UpdateExpenseOriginBody,
 )
 from api.settings import AuthSettings
@@ -231,7 +237,9 @@ def _expense_item(row: ListedExpense) -> ExpenseItemResponse:
     )
 
 
-def _parse_split_override(body: CreateExpenseBody) -> SplitOverrideInput | None | JSONResponse:
+def _parse_split_override(
+    body: CreateExpenseBody | UpdateExpenseBody,
+) -> SplitOverrideInput | None | JSONResponse:
     if body.split_override is None:
         return None
     ov = body.split_override
@@ -608,6 +616,94 @@ def update_list_expense_origin(
         updated.origin_kind,
     )
     return _expense_item(ListedExpense(entry=updated))
+
+
+@router.patch("/{list_id}/expenses/{entry_id}", response_model=ExpenseItemResponse)
+def update_list_expense(
+    list_id: uuid.UUID,
+    entry_id: uuid.UUID,
+    body: UpdateExpenseBody,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+    fx_service: MaterializeFxService = Depends(get_fx_service),
+) -> ExpenseItemResponse | JSONResponse:
+    parsed_override = _parse_split_override(body)
+    if isinstance(parsed_override, JSONResponse):
+        return parsed_override
+
+    service = UpdateExpenseService(SqlAlchemyListRepository(db), fx_service)
+    try:
+        updated = service.execute(
+            UpdateExpenseCommand(
+                actor_user_id=user_id,
+                list_id=list_id,
+                entry_id=entry_id,
+                amount=body.amount,
+                currency=body.currency,
+                description=body.description,
+                payer_id=body.payer_id,
+                posted_date=body.posted_date,
+                split_override=parsed_override,
+            )
+        )
+    except InvalidManualExpenseError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            content={"detail": str(exc), "code": "invalid_manual_expense"},
+        )
+    except InvalidSplitOverrideError as exc:
+        # Nested savepoint in UpdateExpenseService undoes the entry edit too.
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            content={"detail": str(exc), "code": "invalid_split_override"},
+        )
+    except (
+        FxFutureDateError,
+        FxCurrencyNotSupportedError,
+        FxRateNotAvailableError,
+        FxAuthenticationError,
+        FxServiceUnavailableError,
+    ) as exc:
+        return _fx_error_response(exc)
+    except SubjectNotFoundError:
+        return _subject_not_found()
+    except (ListNotFoundError, NotListMemberError):
+        return _access_denied()
+
+    logger.info(
+        "manual_expense_updated list_id=%s entry_id=%s currency=%s fx_fallback=%s",
+        list_id,
+        entry_id,
+        updated.currency,
+        updated.fx_fallback,
+    )
+    return _expense_item(ListedExpense(entry=updated))
+
+
+@router.delete("/{list_id}/expenses/{entry_id}", response_model=None)
+def delete_list_expense(
+    list_id: uuid.UUID,
+    entry_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> Response | JSONResponse:
+    service = DeleteExpenseService(SqlAlchemyListRepository(db))
+    try:
+        service.execute(
+            DeleteExpenseCommand(actor_user_id=user_id, list_id=list_id, entry_id=entry_id)
+        )
+    except SubjectNotFoundError:
+        return _subject_not_found()
+    except ExpenseNotDeletableError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={"detail": str(exc), "code": exc.CODE},
+        )
+    except (ListNotFoundError, NotListMemberError):
+        return _access_denied()
+
+    logger.info("manual_expense_deleted list_id=%s entry_id=%s", list_id, entry_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.delete("/{list_id}/import-batches/{batch_id}", response_model=None)

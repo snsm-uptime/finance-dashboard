@@ -931,3 +931,177 @@ def test_patch_origin_on_parser_row_succeeds(client: TestClient, db_session: Ses
     assert patched.status_code == 200, patched.text
     assert patched.json()["origin_kind"] == "cash"
     assert "import_reviewed_at" not in patched.json()
+
+
+def test_update_expense_amount_date_payer(client: TestClient) -> None:
+    owner_id = _register(client, "owner-edit@example.com")
+    created = client.post("/lists", json={"name": "Household"})
+    list_id = created.json()["id"]
+
+    expense = client.post(
+        f"/lists/{list_id}/expenses",
+        json={
+            "amount": "10.00",
+            "currency": "CRC",
+            "description": "Coffee",
+            "payer_id": owner_id,
+        },
+    )
+    assert expense.status_code == 201, expense.text
+    entry_id = expense.json()["id"]
+
+    updated = client.patch(
+        f"/lists/{list_id}/expenses/{entry_id}",
+        json={
+            "amount": "-5.00",
+            "currency": "CRC",
+            "description": "Refund",
+            "payer_id": owner_id,
+            "posted_date": "2026-01-15",
+        },
+    )
+    assert updated.status_code == 200, updated.text
+    body = updated.json()
+    assert body["amount"] == "-5.00"
+    assert body["description"] == "Refund"
+    assert body["posted_date"] == "2026-01-15"
+
+
+def test_update_expense_zero_amount_rejected(client: TestClient) -> None:
+    owner_id = _register(client, "owner-edit-zero@example.com")
+    created = client.post("/lists", json={"name": "Household"})
+    list_id = created.json()["id"]
+
+    expense = client.post(
+        f"/lists/{list_id}/expenses",
+        json={
+            "amount": "10.00",
+            "currency": "CRC",
+            "description": "Coffee",
+            "payer_id": owner_id,
+        },
+    )
+    entry_id = expense.json()["id"]
+
+    updated = client.patch(
+        f"/lists/{list_id}/expenses/{entry_id}",
+        json={
+            "amount": "0",
+            "currency": "CRC",
+            "description": "Coffee",
+            "payer_id": owner_id,
+            "posted_date": "2026-01-15",
+        },
+    )
+    assert updated.status_code == 422, updated.text
+    assert updated.json()["code"] == "invalid_manual_expense"
+
+
+def test_update_expense_by_non_member_forbidden(client: TestClient) -> None:
+    owner_id = _register(client, "owner-edit-forbidden@example.com")
+    created = client.post("/lists", json={"name": "Household"})
+    list_id = created.json()["id"]
+    expense = client.post(
+        f"/lists/{list_id}/expenses",
+        json={
+            "amount": "10.00",
+            "currency": "CRC",
+            "description": "Coffee",
+            "payer_id": owner_id,
+        },
+    )
+    entry_id = expense.json()["id"]
+
+    _register(client, "outsider-edit@example.com")
+    updated = client.patch(
+        f"/lists/{list_id}/expenses/{entry_id}",
+        json={
+            "amount": "10.00",
+            "currency": "CRC",
+            "description": "Coffee",
+            "payer_id": owner_id,
+            "posted_date": "2026-01-15",
+        },
+    )
+    assert updated.status_code == 403, updated.text
+    assert updated.json()["code"] == "not_list_member"
+
+
+def test_delete_hand_expense_succeeds(client: TestClient) -> None:
+    owner_id = _register(client, "owner-delete@example.com")
+    created = client.post("/lists", json={"name": "Household"})
+    list_id = created.json()["id"]
+    expense = client.post(
+        f"/lists/{list_id}/expenses",
+        json={
+            "amount": "10.00",
+            "currency": "CRC",
+            "description": "Coffee",
+            "payer_id": owner_id,
+        },
+    )
+    entry_id = expense.json()["id"]
+
+    deleted = client.delete(f"/lists/{list_id}/expenses/{entry_id}")
+    assert deleted.status_code == 204, deleted.text
+
+    listing = client.get(f"/lists/{list_id}/expenses")
+    assert listing.json()["expenses"] == []
+
+
+def test_delete_parsed_expense_rejected(client: TestClient, db_session: Session) -> None:
+    from datetime import UTC, datetime
+    from uuid import UUID
+
+    from adapters.persistence.models import LedgerEntryModel
+
+    owner_id = _register(client, "owner-delete-parsed@example.com")
+    created = client.post("/lists", json={"name": "Household"})
+    list_id = created.json()["id"]
+
+    entry_id = uuid4()
+    db_session.add(
+        LedgerEntryModel(
+            id=entry_id,
+            list_id=UUID(list_id),
+            amount=Decimal("10.00"),
+            currency="CRC",
+            normalized_description="Card purchase",
+            payer_id=UUID(owner_id),
+            provenance="parser",
+            line_type="purchase",
+            posted_date=date(2026, 1, 1),
+            created_at=datetime.now(UTC),
+            amount_crc=Decimal("10.00"),
+            fx_rate=Decimal("1"),
+            fx_rate_date=date(2026, 1, 1),
+            fx_fallback=False,
+        )
+    )
+    db_session.commit()
+
+    deleted = client.delete(f"/lists/{list_id}/expenses/{entry_id}")
+    assert deleted.status_code == 403, deleted.text
+    assert deleted.json()["code"] == "expense_not_deletable"
+
+
+def test_delete_expense_wrong_list_returns_404(client: TestClient) -> None:
+    owner_id = _register(client, "owner-delete-404@example.com")
+    created = client.post("/lists", json={"name": "Household"})
+    list_id = created.json()["id"]
+    expense = client.post(
+        f"/lists/{list_id}/expenses",
+        json={
+            "amount": "10.00",
+            "currency": "CRC",
+            "description": "Coffee",
+            "payer_id": owner_id,
+        },
+    )
+    entry_id = expense.json()["id"]
+
+    other_created = client.post("/lists", json={"name": "Other"})
+    other_list_id = other_created.json()["id"]
+
+    deleted = client.delete(f"/lists/{other_list_id}/expenses/{entry_id}")
+    assert deleted.status_code == 404, deleted.text

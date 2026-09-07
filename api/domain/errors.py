@@ -258,6 +258,17 @@ class NotEntryPayerError(DomainError):
         super().__init__(self.MESSAGE)
 
 
+class ExpenseNotDeletableError(DomainError):
+    """Raised when deleting a parsed (non-hand) ledger entry is attempted — only
+    whole-batch rollback removes imported rows."""
+
+    MESSAGE = "Only hand-entered expenses can be deleted; imported rows roll back by batch."
+    CODE = "expense_not_deletable"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
 class SplitOverrideNotFoundError(DomainError):
     """Raised when no override is stored for a subject."""
 
