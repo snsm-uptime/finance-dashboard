@@ -10,8 +10,10 @@ from domain.alias import validate_alias
 from domain.errors import PrincipalNotFoundError
 from domain.photo import validate_photo
 from domain.preferences import (
+    coerce_stored_default_origin_kind,
     coerce_stored_language,
     coerce_stored_theme,
+    validate_default_origin_kind,
     validate_language,
     validate_theme,
 )
@@ -47,6 +49,7 @@ class MePreferencesResult:
     theme: str | None
     last_opened_list_id: UUID | None
     default_import_list_id: UUID | None = None
+    default_origin_kind: str = "cash"
     alias: str | None = None
     photo_base64: str | None = None
 
@@ -66,6 +69,7 @@ class UpdatePreferencesCommand:
     user_id: UUID
     language: str | None = None
     theme: str | None = None
+    default_origin_kind: str | None = None
     photo_base64: str | None = None
     clear_photo: bool = False
 
@@ -92,6 +96,7 @@ def _to_result(row: UserPreferencesRecord) -> MePreferencesResult:
         theme=_coerce_theme(row.theme),
         last_opened_list_id=row.last_opened_list_id,
         default_import_list_id=row.default_import_list_id,
+        default_origin_kind=coerce_stored_default_origin_kind(row.default_origin_kind),
         alias=row.alias,
         photo_base64=row.photo_base64,
     )
@@ -128,6 +133,7 @@ class UpdatePreferencesService:
         if (
             command.language is None
             and command.theme is None
+            and command.default_origin_kind is None
             and command.photo_base64 is None
             and not command.clear_photo
         ):
@@ -137,16 +143,20 @@ class UpdatePreferencesService:
 
         language: str | None = None
         theme: str | None = None
+        default_origin_kind: str | None = None
         if command.language is not None:
             language = validate_language(command.language)
         if command.theme is not None:
             theme = validate_theme(command.theme)
+        if command.default_origin_kind is not None:
+            default_origin_kind = validate_default_origin_kind(command.default_origin_kind)
         photo_base64 = validate_photo(command.photo_base64) if not command.clear_photo else None
 
         row = self._repo.update_preferences(
             command.user_id,
             language=language,
             theme=theme,
+            default_origin_kind=default_origin_kind,
             photo_base64=photo_base64,
             clear_photo=command.clear_photo,
         )

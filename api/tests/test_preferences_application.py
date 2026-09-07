@@ -54,3 +54,27 @@ def test_get_me_logs_corrupt_language(caplog) -> None:  # noqa: ANN001
     assert result.language is None
     assert result.theme == "dark"
     assert "corrupt_user_language_preference" in caplog.text
+
+
+def test_get_me_default_origin_kind_falls_back_to_cash_when_unset() -> None:
+    user_id = uuid4()
+    repo = _FakeRepo(
+        UserPreferencesRecord(id=user_id, email="user@example.com", language="en", theme="dark")
+    )
+    result = GetMePreferencesService(repo).execute(GetMePreferencesCommand(user_id=user_id))
+    assert result.default_origin_kind == "cash"
+
+
+def test_get_me_default_origin_kind_blank_is_preserved() -> None:
+    user_id = uuid4()
+    repo = _FakeRepo(
+        UserPreferencesRecord(
+            id=user_id,
+            email="user@example.com",
+            language="en",
+            theme="dark",
+            default_origin_kind="blank",
+        )
+    )
+    result = GetMePreferencesService(repo).execute(GetMePreferencesCommand(user_id=user_id))
+    assert result.default_origin_kind == "blank"

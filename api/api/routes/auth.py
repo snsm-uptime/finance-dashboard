@@ -155,6 +155,7 @@ def _me_response(result) -> MeResponse:
         theme=result.theme,
         last_opened_list_id=result.last_opened_list_id,
         default_import_list_id=result.default_import_list_id,
+        default_origin_kind=result.default_origin_kind,
     )
 
 
@@ -257,7 +258,12 @@ def patch_current_user(
     # wire-set membership is the only signal for "clear".
     photo_field_set = "photo_base64" in body.model_fields_set
     clear_photo = photo_field_set and body.photo_base64 is None
-    wrote_prefs = body.language is not None or body.theme is not None or photo_field_set
+    wrote_prefs = (
+        body.language is not None
+        or body.theme is not None
+        or body.default_origin_kind is not None
+        or photo_field_set
+    )
     try:
         # Prefs / last-opened first; claim alias last so a later failure cannot
         # leave a set-once alias under an error JSON response (get_db commits on
@@ -289,6 +295,7 @@ def patch_current_user(
                 user_id=user_id,
                 language=body.language,
                 theme=body.theme,
+                default_origin_kind=body.default_origin_kind,
                 photo_base64=body.photo_base64,
                 clear_photo=clear_photo,
             )

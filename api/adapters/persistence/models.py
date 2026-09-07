@@ -51,6 +51,7 @@ class UserModel(Base):
         nullable=True,
         index=True,
     )
+    default_origin_kind: Mapped[str | None] = mapped_column(String(8), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

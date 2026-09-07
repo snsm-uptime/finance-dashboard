@@ -99,6 +99,7 @@ def _preferences_record(row: UserModel) -> UserPreferencesRecord:
         theme=row.theme,
         last_opened_list_id=row.last_opened_list_id,
         default_import_list_id=row.default_import_list_id,
+        default_origin_kind=row.default_origin_kind,
         alias=row.alias,
         photo_base64=row.photo_base64,
     )
@@ -201,6 +202,7 @@ class SqlAlchemyAuthUserRepository:
         clear_last_opened_list_id: bool = False,
         default_import_list_id: UUID | None = None,
         clear_default_import_list_id: bool = False,
+        default_origin_kind: str | None = None,
         photo_base64: str | None = None,
         clear_photo: bool = False,
     ) -> UserPreferencesRecord:
@@ -219,6 +221,8 @@ class SqlAlchemyAuthUserRepository:
             row.default_import_list_id = None
         elif default_import_list_id is not None:
             row.default_import_list_id = default_import_list_id
+        if default_origin_kind is not None:
+            row.default_origin_kind = default_origin_kind
         if clear_photo:
             row.photo_base64 = None
         elif photo_base64 is not None:

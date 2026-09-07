@@ -88,3 +88,33 @@ def test_patch_partial_preserves_other_field(client: TestClient, db_session: Ses
 def test_patch_me_requires_session(client: TestClient) -> None:
     response = client.patch("/auth/me", json={"language": "en"})
     assert response.status_code == 401
+
+
+def test_me_default_origin_kind_defaults_to_cash(client: TestClient) -> None:
+    _register(client, "origin-default@example.com")
+    response = client.get("/auth/me")
+    assert response.status_code == 200, response.text
+    assert response.json()["default_origin_kind"] == "cash"
+
+
+def test_patch_default_origin_kind_to_blank_persists(
+    client: TestClient, db_session: Session
+) -> None:
+    _register(client, "origin-blank@example.com")
+
+    patched = client.patch("/auth/me", json={"default_origin_kind": "blank"})
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["default_origin_kind"] == "blank"
+
+    again = client.get("/auth/me")
+    assert again.json()["default_origin_kind"] == "blank"
+
+    row = db_session.scalar(select(UserModel).where(UserModel.email == "origin-blank@example.com"))
+    assert row is not None
+    assert row.default_origin_kind == "blank"
+
+
+def test_patch_rejects_invalid_default_origin_kind(client: TestClient) -> None:
+    _register(client, "origin-bad@example.com")
+    response = client.patch("/auth/me", json={"default_origin_kind": "card"})
+    assert response.status_code == 422
