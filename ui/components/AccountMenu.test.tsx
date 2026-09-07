@@ -332,6 +332,43 @@ describe("AccountMenu", () => {
     unmount();
   });
 
+  it("PATCHes default origin kind and reflects the active choice", async () => {
+    const fetchMock = vi.fn();
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(mePayload({ default_origin_kind: "cash" })), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(mePayload({ default_origin_kind: "blank" })), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { host, unmount } = renderAccount();
+    await waitForDom(() => {
+      const btn = findButton(host, "None");
+      return Boolean(btn && !btn.disabled);
+    });
+    const noneBtn = findButton(host, "None");
+    await act(async () => {
+      noneBtn!.click();
+    });
+    await waitForDom(() => noneBtn?.getAttribute("aria-pressed") === "true");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/auth/me",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ default_origin_kind: "blank" }),
+      }),
+    );
+    unmount();
+  });
+
   it("shows a Back button (not the avatar) in the chrome leading slot, and it navigates back", async () => {
     routerBack.mockClear();
     const host = document.createElement("div");

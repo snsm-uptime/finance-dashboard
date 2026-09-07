@@ -25,7 +25,8 @@ import { Tooltip } from "./Tooltip";
 export function AccountMenu() {
   // NOTE: SSR hydration mismatch — server renders with default theme; client may hydrate with different theme.
   // This can cause brief light→dark flicker on page load. Mitigation: ensure initial HTML theme matches system preference.
-  const { locale, theme, setLanguage, setTheme, ready, me, refresh } = usePreferences();
+  const { locale, theme, setLanguage, setTheme, setDefaultOriginKind, ready, me, refresh } =
+    usePreferences();
   const t = accountCopy(locale);
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -80,6 +81,18 @@ export function AccountMenu() {
       await setTheme(next);
     } catch {
       setError(t.saveThemeFailed);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function onDefaultOriginKind(next: "cash" | "blank") {
+    setPending(true);
+    setError(null);
+    try {
+      await setDefaultOriginKind(next);
+    } catch {
+      setError(t.saveDefaultOriginFailed);
     } finally {
       setPending(false);
     }
@@ -256,6 +269,32 @@ export function AccountMenu() {
                 { value: "dark", label: t.dark, icon: <MoonIcon /> },
               ]}
             />
+          </section>
+
+          <section aria-labelledby="account-default-origin">
+            <h2 id="account-default-origin" className="m-0 mb-[0.6rem] text-[0.72rem] font-[550] text-muted tracking-[0.02rem]">
+              {t.defaultOriginTitle}
+            </h2>
+            <div className="flex flex-wrap gap-2" role="group" aria-label={t.defaultOriginTitle}>
+              <button
+                type="button"
+                className={me?.default_origin_kind === "cash" ? choiceButtonActiveClass : choiceButtonClass}
+                aria-pressed={me?.default_origin_kind === "cash"}
+                disabled={controlsDisabled}
+                onClick={() => void onDefaultOriginKind("cash")}
+              >
+                {t.defaultOriginCash}
+              </button>
+              <button
+                type="button"
+                className={me?.default_origin_kind === "blank" ? choiceButtonActiveClass : choiceButtonClass}
+                aria-pressed={me?.default_origin_kind === "blank"}
+                disabled={controlsDisabled}
+                onClick={() => void onDefaultOriginKind("blank")}
+              >
+                {t.defaultOriginBlank}
+              </button>
+            </div>
           </section>
 
           <section aria-labelledby="account-default-destination">

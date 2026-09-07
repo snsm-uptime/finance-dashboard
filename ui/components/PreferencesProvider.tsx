@@ -43,6 +43,7 @@ export type MePreferences = {
   alias: string | null;
   photo_base64: string | null;
   default_import_list_id: string | null;
+  default_origin_kind: "cash" | "blank";
 };
 
 type PreferencesContextValue = {
@@ -52,6 +53,7 @@ type PreferencesContextValue = {
   me: MePreferences | null;
   setLanguage: (language: Locale) => Promise<void>;
   setTheme: (theme: ThemePreference) => Promise<void>;
+  setDefaultOriginKind: (kind: "cash" | "blank") => Promise<void>;
   refresh: () => Promise<void>;
 };
 
@@ -95,6 +97,10 @@ function resolveTheme(raw: string | null | undefined): ThemePreference {
   return "system";
 }
 
+function resolveDefaultOriginKind(raw: string | null | undefined): "cash" | "blank" {
+  return raw === "blank" ? "blank" : "cash";
+}
+
 export function PreferencesProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [locale, setLocale] = useState<Locale>(() =>
@@ -131,6 +137,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
         alias?: string | null;
         photo_base64?: string | null;
         default_import_list_id?: string | null;
+        default_origin_kind?: string | null;
       };
       if (gen !== refreshGen.current || epoch !== prefsSessionEpoch) return;
       const nextLocale = resolveLocale(data.language);
@@ -152,6 +159,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
           typeof data.photo_base64 === "string" && data.photo_base64 ? data.photo_base64 : null,
         default_import_list_id:
           typeof data.default_import_list_id === "string" ? data.default_import_list_id : null,
+        default_origin_kind: resolveDefaultOriginKind(data.default_origin_kind),
       });
       setLocale(nextLocale);
       setThemeState(nextTheme);
@@ -212,6 +220,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       alias?: string | null;
       photo_base64?: string | null;
       default_import_list_id?: string | null;
+      default_origin_kind?: string | null;
     };
     const nextLocale = resolveLocale(data.language);
     const nextTheme = resolveTheme(data.theme);
@@ -233,6 +242,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
         typeof data.photo_base64 === "string" && data.photo_base64 ? data.photo_base64 : null,
       default_import_list_id:
         typeof data.default_import_list_id === "string" ? data.default_import_list_id : null,
+      default_origin_kind: resolveDefaultOriginKind(data.default_origin_kind),
     });
     applyDom(nextLocale, nextTheme);
   }, []);
@@ -260,6 +270,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       alias?: string | null;
       photo_base64?: string | null;
       default_import_list_id?: string | null;
+      default_origin_kind?: string | null;
     };
     const nextLocale = resolveLocale(data.language);
     const nextTheme = resolveTheme(data.theme);
@@ -281,8 +292,27 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
         typeof data.photo_base64 === "string" && data.photo_base64 ? data.photo_base64 : null,
       default_import_list_id:
         typeof data.default_import_list_id === "string" ? data.default_import_list_id : null,
+      default_origin_kind: resolveDefaultOriginKind(data.default_origin_kind),
     });
     applyDom(nextLocale, nextTheme);
+  }, []);
+
+  const setDefaultOriginKind = useCallback(async (kind: "cash" | "blank") => {
+    const response = await fetch("/api/auth/me", {
+      method: "PATCH",
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ default_origin_kind: kind }),
+    });
+    if (!response.ok) {
+      throw new Error("Failed to save default origin");
+    }
+    const data = (await response.json()) as { default_origin_kind?: string | null };
+    setMe((prev) => (prev ? { ...prev, default_origin_kind: resolveDefaultOriginKind(data.default_origin_kind) } : prev));
   }, []);
 
   const value = useMemo(
@@ -293,9 +323,10 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       me,
       setLanguage,
       setTheme,
+      setDefaultOriginKind,
       refresh,
     }),
-    [ready, locale, theme, me, setLanguage, setTheme, refresh],
+    [ready, locale, theme, me, setLanguage, setTheme, setDefaultOriginKind, refresh],
   );
 
   return (
@@ -303,6 +334,13 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       {children}
     </PreferencesContext.Provider>
   );
+}
+
+/** Null outside a PreferencesProvider (e.g. component tests) instead of throwing —
+ * callers that only want a soft default (like the account origin preference)
+ * can treat a null context as "not loaded yet". */
+export function useOptionalPreferences(): PreferencesContextValue | null {
+  return useContext(PreferencesContext);
 }
 
 export function usePreferences(): PreferencesContextValue {
