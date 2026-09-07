@@ -15,5 +15,5 @@ type Props = SVGProps<SVGSVGElement> & {
  * consistent.
  */
 export function ArchiveToggleIcon({ active = false, ...props }: Props) {
-  return active ? <OpenBoxIcon active {...props} /> : <BoxIcon {...props} />;
+  return active ? <BoxIcon active {...props} /> : <OpenBoxIcon {...props} />;
 }
