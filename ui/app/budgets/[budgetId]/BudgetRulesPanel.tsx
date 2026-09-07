@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useId, useState } from "react";
+import { KeyboardEvent, useId, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { useFormSubmission } from "@/hooks";
@@ -43,11 +43,16 @@ export function BudgetRulesPanel({ budgetId, rules, messages }: Props) {
     },
   );
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function onAddRule() {
     const trimmed = matchText.trim();
     if (!trimmed || pending) return;
     await submit(trimmed);
+  }
+
+  function onInputKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    void onAddRule();
   }
 
   async function onDelete(ruleId: string) {
@@ -63,7 +68,11 @@ export function BudgetRulesPanel({ budgetId, rules, messages }: Props) {
   }
 
   const addForm = (
-    <form className="flex w-full flex-col gap-1" onSubmit={onSubmit}>
+    // A <form> here would nest inside BudgetUpdateForm's outer <form> — invalid
+    // HTML that makes browsers break the inner form, silently rebinding this
+    // submit button to the outer (budget update) form instead. Plain div +
+    // Enter-key handling on the input keeps this working while nested.
+    <div className="flex w-full flex-col gap-1">
       <div className="flex flex-1 items-center gap-2 rounded-[8px] border-2 border-border bg-background px-[0.65rem] py-[0.5rem]">
         <label className="sr-only" htmlFor={`${baseId}-match-text`}>
           {messages.budgetsRuleMatchLabel}
@@ -77,6 +86,7 @@ export function BudgetRulesPanel({ budgetId, rules, messages }: Props) {
           placeholder={messages.budgetsRuleMatchLabel}
           autoComplete="off"
           disabled={pending}
+          onKeyDown={onInputKeyDown}
           onChange={(e) => {
             setMatchText(e.target.value);
             clearError();
@@ -84,7 +94,8 @@ export function BudgetRulesPanel({ budgetId, rules, messages }: Props) {
         />
         <IconButton
           className="h-7 w-7 shrink-0 !p-0 !rounded-[4px]"
-          type="submit"
+          type="button"
+          onClick={onAddRule}
           disabled={!matchText.trim() || pending}
           label={pending ? messages.budgetsRuleAdding : messages.budgetsRuleAddSubmit}
           icon={<PlusIcon />}
@@ -95,7 +106,7 @@ export function BudgetRulesPanel({ budgetId, rules, messages }: Props) {
           {error}
         </p>
       ) : null}
-    </form>
+    </div>
   );
 
   return (

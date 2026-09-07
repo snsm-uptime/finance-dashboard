@@ -83,9 +83,11 @@ describe("BudgetRulesPanel", () => {
     await act(async () => {
       setInputValue(input, "uber");
     });
-    const form = container.querySelector("form") as HTMLFormElement;
+    const submit = container.querySelector(
+      `button[aria-label="${messages.budgetsRuleAddSubmit}"]`,
+    ) as HTMLButtonElement;
     await act(async () => {
-      form.requestSubmit();
+      submit.click();
     });
 
     expect(createRule).toHaveBeenCalledWith("b1", "uber", messages);
@@ -131,9 +133,11 @@ describe("BudgetRulesPanel", () => {
     await act(async () => {
       setInputValue(input, "x".repeat(101));
     });
-    const form = container.querySelector("form") as HTMLFormElement;
+    const submit = container.querySelector(
+      `button[aria-label="${messages.budgetsRuleAddSubmit}"]`,
+    ) as HTMLButtonElement;
     await act(async () => {
-      form.requestSubmit();
+      submit.click();
     });
 
     expect(container.querySelector("[role='alert']")?.textContent).toBe(
