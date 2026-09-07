@@ -40,8 +40,7 @@ def validate_default_origin_kind(value: str) -> str:
     normalized = value.strip().lower()
     if normalized not in ALLOWED_DEFAULT_ORIGIN_KINDS:
         raise InvalidPreferencesError(
-            "default_origin_kind must be one of: "
-            f"{', '.join(sorted(ALLOWED_DEFAULT_ORIGIN_KINDS))}"
+            f"default_origin_kind must be one of: {', '.join(sorted(ALLOWED_DEFAULT_ORIGIN_KINDS))}"
         )
     return normalized
 
