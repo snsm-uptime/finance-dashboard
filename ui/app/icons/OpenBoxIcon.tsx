@@ -17,7 +17,7 @@ export function OpenBoxIcon({ active = false, className, ...props }: Props) {
     strokeLinecap: "round" as const,
     strokeLinejoin: "round" as const,
   };
-  const strokeWidth = ICON_STROKE;
+  const strokeWidth = ICON_STROKE - 0.5;
   return (
     <svg
       className={["box-icon", className].filter(Boolean).join(" ")}
