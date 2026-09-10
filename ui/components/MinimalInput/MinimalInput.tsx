@@ -5,7 +5,7 @@ type Props = Omit<InputHTMLAttributes<HTMLInputElement>, "className"> & {
 };
 
 const baseClasses =
-  "min-w-0 border-none border-b-[1.5px] border-border bg-transparent font-inherit text-[0.85rem] text-foreground placeholder:text-muted outline-none focus:border-accent disabled:cursor-not-allowed disabled:opacity-60";
+  "min-w-0 border-none border-b-[1.5px] border-border bg-transparent pb-0.5 font-inherit text-[0.85rem] text-foreground placeholder:text-muted outline-none focus:border-accent disabled:cursor-not-allowed disabled:opacity-60";
 
 /**
  * Underline-style text input — no box, no fill, a single bottom rule.

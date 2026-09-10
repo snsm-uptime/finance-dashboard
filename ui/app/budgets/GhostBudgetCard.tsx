@@ -5,8 +5,9 @@ import { FormEvent, useId, useState } from "react";
 import { DateRangeField } from "@/components/DateRangeField";
 import { MinimalInput } from "@/components/MinimalInput";
 import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
+import { AccentButton } from "@/components/soft-ledger/AccentButton";
 import { useFormSubmission } from "@/hooks";
-import { CalendarIcon, PlusIcon, SpinnerIcon } from "@/app/icons";
+import { CalendarIcon, PlusIcon } from "@/app/icons";
 import type { ListItem } from "@/app/lists/listsClient";
 
 import { SourceListChipPicker } from "./SourceListChipPicker";
@@ -44,10 +45,17 @@ const CURRENCY_OPTIONS = [
   { value: "USD", label: "USD" },
 ];
 
-const calendarSlotClassName = "";
+const calendarSlotClassName = "mr-2";
 
-const submitBadgeBaseClassName =
-  "absolute -top-2 -right-2 inline-flex h-8 w-8 items-center justify-center rounded-full border bg-surface shadow-sm outline-none transition-colors duration-150 disabled:cursor-not-allowed";
+/** Inserts thousands commas into the integer part while typing (e.g. "1234.5" -> "1,234.5"). */
+function formatCapDisplay(raw: string): string {
+  if (!raw) return raw;
+  const negative = raw.startsWith("-");
+  const [intPart, ...rest] = (negative ? raw.slice(1) : raw).split(".");
+  const withCommas = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const decPart = rest.length ? `.${rest.join(".")}` : "";
+  return `${negative ? "-" : ""}${withCommas}${decPart}`;
+}
 
 /**
  * Budget-creation entry point (Story 7.5 amendment — see
@@ -125,21 +133,9 @@ export function GhostBudgetCard({ lists, messages, locale, onCreated, cardRef }:
       ref={(el) => cardRef?.(el)}
       onSubmit={onSubmit}
       aria-label={messages.budgetsCreateSubmit}
-      className="relative flex flex-col gap-[var(--space-3)] overflow-visible rounded-[10px] border border-dashed border-border bg-surface pt-[var(--space-4)] px-[var(--space-3)] pb-[var(--space-3)]"
+      className="relative flex flex-col gap-(--space-3) overflow-visible rounded-[10px] border border-dashed border-border bg-surface pt-(--space-4) px-(--space-3) pb-(--space-3)"
     >
-      <button
-        type="submit"
-        disabled={!canSubmit}
-        aria-label={pending ? messages.budgetsCreating : messages.budgetsCreateSubmit}
-        className={`${submitBadgeBaseClassName} ${canSubmit
-          ? "border-accent text-accent hover:bg-accent/10"
-          : "border-border text-muted opacity-60"
-          }`}
-      >
-        {pending ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : <PlusIcon className="h-4 w-4" />}
-      </button>
-
-      <div className="flex items-center justify-between gap-[var(--space-3)]">
+      <div className="flex items-center justify-between gap-(--space-3)">
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <label htmlFor={nameId} className="sr-only">
             {messages.budgetsNameLabel}
@@ -218,47 +214,57 @@ export function GhostBudgetCard({ lists, messages, locale, onCreated, cardRef }:
       </div>
 
       <div className="flex items-center justify-between gap-2 pb-1">
+        <AccentButton
+          type="submit"
+          size="sm"
+          disabled={!canSubmit}
+          loading={pending}
+          aria-label={pending ? messages.budgetsCreating : messages.budgetsCreateSubmit}
+          iconLeft={<PlusIcon className="h-4 w-4" />}
+        >
+          {messages.budgetsCreateSubmit}
+        </AccentButton>
         <span className="sr-only" id={currencyLabelId}>
           {messages.budgetsCurrencyLabel}
         </span>
-        <div aria-live="polite" className="min-w-0 flex-1">
+        <div aria-live="polite" className="min-w-0 shrink-0">
           {error ? (
             <p className="m-0 text-[0.72rem] text-owe" role="alert">
               {error}
             </p>
           ) : null}
         </div>
-        <div className="flex min-w-0 flex-1 justify-between gap-1">
-          <label htmlFor={capId} className="sr-only">
-            {messages.budgetsCapLabel}
-          </label>
-          <MinimalInput
-            id={capId}
-            className="text-right text-[0.72rem] font-[550] tabular-nums flex-1"
-            inputMode="decimal"
-            value={cap}
-            placeholder={messages.budgetsCapLabel}
-            required
+        <label htmlFor={capId} className="sr-only">
+          {messages.budgetsCapLabel}
+        </label>
+        <MinimalInput
+          id={capId}
+          className="min-w-0 flex-1 text-right text-[0.72rem] font-[550] tabular-nums"
+          inputMode="decimal"
+          value={formatCapDisplay(cap)}
+          placeholder="0.00"
+          required
+          disabled={pending}
+          onChange={(e) => {
+            const raw = e.target.value.replace(/,/g, "");
+            if (!/^\d*\.?\d*$/.test(raw)) return;
+            setCap(raw);
+            clearError();
+          }}
+        />
+        <div className="w-fit shrink-0">
+          <SoftLedgerSelect
+            id={currencyId}
+            ghost
+            value={currency}
+            options={CURRENCY_OPTIONS}
             disabled={pending}
-            onChange={(e) => {
-              setCap(e.target.value);
+            aria-labelledby={currencyLabelId}
+            onChange={(value) => {
+              setCurrency(value);
               clearError();
             }}
           />
-          <div className="w-fit shrink-0">
-            <SoftLedgerSelect
-              id={currencyId}
-              ghost
-              value={currency}
-              options={CURRENCY_OPTIONS}
-              disabled={pending}
-              aria-labelledby={currencyLabelId}
-              onChange={(value) => {
-                setCurrency(value);
-                clearError();
-              }}
-            />
-          </div>
         </div>
       </div>
     </form>

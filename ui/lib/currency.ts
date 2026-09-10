@@ -12,7 +12,7 @@ export function formatCrcAmount(amount: string): string {
   return `₡${formatCrcNumber(amount)}`;
 }
 
-const CURRENCY_SYMBOLS: Record<string, string> = {
+export const CURRENCY_SYMBOLS: Record<string, string> = {
   CRC: "₡",
   USD: "$",
 };
