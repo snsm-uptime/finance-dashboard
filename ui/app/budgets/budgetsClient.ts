@@ -104,6 +104,7 @@ export function formatPeriodBoundNumeric(dateStr: string, locale: "en" | "es"): 
 type ErrorResult = { ok: false; error: string };
 type OkBudgets = { ok: true; budgets: BudgetItem[] };
 type OkBudget = { ok: true; budget: BudgetItem };
+type OkSimple = { ok: true };
 
 function mapError(
   status: number,
@@ -381,6 +382,30 @@ export async function unarchiveBudget(
   messages: BudgetsClientMessages,
 ): Promise<OkBudget | ErrorResult> {
   return postBudgetAction(budgetId, "unarchive", messages);
+}
+
+export async function deleteBudget(
+  budgetId: string,
+  messages: BudgetsClientMessages,
+): Promise<OkSimple | ErrorResult> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/budgets/${encodeURIComponent(budgetId)}`, {
+      method: "DELETE",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+    });
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  if (!response.ok) {
+    const parsed = (await parseJson(response)) as {
+      detail?: unknown;
+      code?: unknown;
+    } | null;
+    return { ok: false, error: mapError(response.status, parsed, messages) };
+  }
+  return { ok: true };
 }
 
 export async function previewPeriodChange(

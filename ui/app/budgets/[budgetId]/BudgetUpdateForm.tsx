@@ -10,8 +10,10 @@ import { FormIconSubmit } from "@/components/FormIconSubmit";
 import { IconButton } from "@/components/IconButton";
 import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
 import { PencilIcon } from "@/app/icons/PencilIcon";
+import { TrashIcon } from "@/app/icons/TrashIcon";
 import { Sheet } from "@/app/lists/Sheet";
 import {
+  deleteBudget,
   periodChangeConfirmBodyFrom,
   updateBudget,
   type BudgetItem,
@@ -41,6 +43,11 @@ export type BudgetUpdateFormMessages = BudgetsClientMessages &
   budgetsDateFrom: string;
   budgetsDateTo: string;
   budgetsDateClear: string;
+  budgetsDeleteAria: string;
+  budgetsDeleteConfirmTitle: string;
+  budgetsDeleteConfirmBody: string;
+  budgetsDeleteConfirmAction: string;
+  budgetsDeleting: string;
   cancelLabel: string;
 };
 
@@ -102,6 +109,9 @@ export function BudgetUpdateForm({ budget, lists, rules, messages, locale }: Pro
   const [excludedLines, setExcludedLines] = useState<PeriodChangeLine[]>([]);
   const [confirming, setConfirming] = useState(false);
 
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
   function openEditor() {
     setName(budget.name);
     setCap(budget.cap);
@@ -112,7 +122,21 @@ export function BudgetUpdateForm({ budget, lists, rules, messages, locale }: Pro
     setError(null);
     setConfirmOpen(false);
     setExcludedLines([]);
+    setDeleteConfirmOpen(false);
     setOpen(true);
+  }
+
+  async function onConfirmDelete() {
+    setDeleting(true);
+    const result = await deleteBudget(budget.id, messages);
+    setDeleting(false);
+    setDeleteConfirmOpen(false);
+    if (result.ok) {
+      setOpen(false);
+      router.push("/budgets");
+      return;
+    }
+    setError(result.error);
   }
 
   function toggleListId(listId: string) {
@@ -186,12 +210,38 @@ export function BudgetUpdateForm({ budget, lists, rules, messages, locale }: Pro
       />
       <Sheet
         open={open}
-        onClose={() => (confirmOpen ? setConfirmOpen(false) : setOpen(false))}
+        onClose={() =>
+          deleteConfirmOpen
+            ? setDeleteConfirmOpen(false)
+            : confirmOpen
+              ? setConfirmOpen(false)
+              : setOpen(false)
+        }
         fillBelowChrome={true}
-        closeLabel={confirmOpen ? messages.budgetsPeriodChangeCancel : messages.cancelLabel}
-        title={confirmOpen ? messages.budgetsPeriodChangeConfirmTitle : messages.budgetsEditTitle}
+        closeLabel={
+          deleteConfirmOpen
+            ? messages.cancelLabel
+            : confirmOpen
+              ? messages.budgetsPeriodChangeCancel
+              : messages.cancelLabel
+        }
+        title={
+          deleteConfirmOpen
+            ? messages.budgetsDeleteConfirmTitle
+            : confirmOpen
+              ? messages.budgetsPeriodChangeConfirmTitle
+              : messages.budgetsEditTitle
+        }
         cornerAction={
-          confirmOpen ? (
+          deleteConfirmOpen ? (
+            <FormIconSubmit
+              type="button"
+              variant="save"
+              label={deleting ? messages.budgetsDeleting : messages.budgetsDeleteConfirmAction}
+              disabled={deleting}
+              onClick={onConfirmDelete}
+            />
+          ) : confirmOpen ? (
             <FormIconSubmit
               type="button"
               variant="save"
@@ -211,7 +261,9 @@ export function BudgetUpdateForm({ budget, lists, rules, messages, locale }: Pro
           )
         }
         body={
-          confirmOpen ? (
+          deleteConfirmOpen ? (
+            <p className="m-0 text-foreground">{messages.budgetsDeleteConfirmBody}</p>
+          ) : confirmOpen ? (
             <div className="flex flex-col gap-(--space-3)">
               <p className="m-0 text-foreground">
                 {periodChangeConfirmBodyFrom(excludedLines, messages)}
@@ -328,6 +380,13 @@ export function BudgetUpdateForm({ budget, lists, rules, messages, locale }: Pro
               })}
             </div>
             <BudgetRulesPanel budgetId={budget.id} rules={rules} messages={messages} />
+            <IconButton
+              icon={<TrashIcon className={styles.icon} />}
+              label={messages.budgetsDeleteAria}
+              disabled={pending || deleting}
+              onClick={() => setDeleteConfirmOpen(true)}
+              className="self-start text-owe"
+            />
             <div aria-live="polite">
               {error ? (
                 <p className="m-0 text-[0.85rem] text-owe" role="alert">

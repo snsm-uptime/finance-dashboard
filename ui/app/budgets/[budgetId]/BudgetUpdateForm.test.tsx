@@ -10,9 +10,10 @@ import type { BudgetItem } from "../budgetsClient";
 import { BudgetUpdateForm } from "./BudgetUpdateForm";
 
 const refresh = vi.fn();
+const push = vi.fn();
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh }),
+  useRouter: () => ({ refresh, push }),
 }));
 
 vi.mock("@/app/lists/Sheet.module.scss", () => ({
@@ -28,12 +29,14 @@ vi.mock("@/components/FormIconSubmit/FormIconSubmit.module.scss", () => ({
 }));
 
 const updateBudgetMock = vi.fn();
+const deleteBudgetMock = vi.fn();
 
 vi.mock("../budgetsClient", async () => {
   const actual = await vi.importActual<typeof import("../budgetsClient")>("../budgetsClient");
   return {
     ...actual,
     updateBudget: (...args: unknown[]) => updateBudgetMock(...args),
+    deleteBudget: (...args: unknown[]) => deleteBudgetMock(...args),
   };
 });
 
@@ -65,7 +68,9 @@ describe("BudgetUpdateForm", () => {
 
   beforeEach(() => {
     refresh.mockReset();
+    push.mockReset();
     updateBudgetMock.mockReset();
+    deleteBudgetMock.mockReset();
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -172,5 +177,119 @@ describe("BudgetUpdateForm", () => {
       messages,
     );
     expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("clicking delete shows a confirmation, and confirming deletes the budget and navigates to /budgets", async () => {
+    deleteBudgetMock.mockResolvedValue({ ok: true });
+    act(() => {
+      root.render(<BudgetUpdateForm budget={budget} lists={lists} rules={[]} messages={messages} locale="en" />);
+    });
+    await openEditor();
+
+    const deleteButton = Array.from(document.querySelectorAll("button")).find(
+      (el) => el.getAttribute("aria-label") === t.budgetsDeleteAria,
+    ) as HTMLButtonElement;
+    await act(async () => {
+      deleteButton.click();
+    });
+
+    expect(document.body.textContent).toContain(t.budgetsDeleteConfirmBody);
+
+    const confirmButton = Array.from(document.querySelectorAll("button")).find((el) =>
+      el.getAttribute("aria-label")?.startsWith(t.budgetsDeleteConfirmAction),
+    ) as HTMLButtonElement;
+    await act(async () => {
+      confirmButton.click();
+    });
+
+    expect(deleteBudgetMock).toHaveBeenCalledWith("b1", messages);
+    expect(push).toHaveBeenCalledWith("/budgets");
+  });
+
+  it("a failed delete keeps the editor open, resets the confirm sheet, and shows the error", async () => {
+    deleteBudgetMock.mockResolvedValue({ ok: false, error: "boom" });
+    act(() => {
+      root.render(<BudgetUpdateForm budget={budget} lists={lists} rules={[]} messages={messages} locale="en" />);
+    });
+    await openEditor();
+
+    const deleteButton = Array.from(document.querySelectorAll("button")).find(
+      (el) => el.getAttribute("aria-label") === t.budgetsDeleteAria,
+    ) as HTMLButtonElement;
+    await act(async () => {
+      deleteButton.click();
+    });
+
+    const confirmButton = Array.from(document.querySelectorAll("button")).find((el) =>
+      el.getAttribute("aria-label")?.startsWith(t.budgetsDeleteConfirmAction),
+    ) as HTMLButtonElement;
+    await act(async () => {
+      confirmButton.click();
+    });
+
+    expect(push).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain("boom");
+    // Back on the edit form, not still showing the delete-confirm body.
+    expect(document.body.textContent).not.toContain(t.budgetsDeleteConfirmBody);
+    expect(document.querySelector("form")).not.toBeNull();
+  });
+
+  it("closing the delete confirmation returns to the edit form instead of closing the sheet", async () => {
+    act(() => {
+      root.render(<BudgetUpdateForm budget={budget} lists={lists} rules={[]} messages={messages} locale="en" />);
+    });
+    await openEditor();
+
+    const deleteButton = Array.from(document.querySelectorAll("button")).find(
+      (el) => el.getAttribute("aria-label") === t.budgetsDeleteAria,
+    ) as HTMLButtonElement;
+    await act(async () => {
+      deleteButton.click();
+    });
+    expect(document.body.textContent).toContain(t.budgetsDeleteConfirmBody);
+
+    const closeButton = Array.from(document.querySelectorAll("button")).find(
+      (el) => el.getAttribute("aria-label") === messages.cancelLabel,
+    ) as HTMLButtonElement;
+    await act(async () => {
+      closeButton.click();
+    });
+
+    expect(document.body.textContent).not.toContain(t.budgetsDeleteConfirmBody);
+    expect(document.querySelector("form")).not.toBeNull();
+    expect(deleteBudgetMock).not.toHaveBeenCalled();
+  });
+
+  it("the confirm-delete action is disabled while a delete is in flight, preventing a double-submit", async () => {
+    let resolveDelete: (value: { ok: true }) => void = () => {};
+    deleteBudgetMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveDelete = resolve;
+      }),
+    );
+    act(() => {
+      root.render(<BudgetUpdateForm budget={budget} lists={lists} rules={[]} messages={messages} locale="en" />);
+    });
+    await openEditor();
+
+    const deleteButton = Array.from(document.querySelectorAll("button")).find(
+      (el) => el.getAttribute("aria-label") === t.budgetsDeleteAria,
+    ) as HTMLButtonElement;
+    await act(async () => {
+      deleteButton.click();
+    });
+    const confirmButton = Array.from(document.querySelectorAll("button")).find((el) =>
+      el.getAttribute("aria-label")?.startsWith(t.budgetsDeleteConfirmAction),
+    ) as HTMLButtonElement;
+    act(() => {
+      confirmButton.click();
+    });
+
+    expect(confirmButton.disabled).toBe(true);
+    expect(deleteBudgetMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveDelete({ ok: true });
+    });
   });
 });
