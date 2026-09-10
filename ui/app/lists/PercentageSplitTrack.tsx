@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 
 import { Avatar } from "@/components/Avatar";
+import { formatMoneyAmount } from "@/lib/currency";
 
 import { orderPercentageSplitUserIds } from "./orderPercentageSplitUserIds";
 import styles from "./PercentageSplitTrack.module.scss";
@@ -22,6 +23,9 @@ type Props = {
   disabled?: boolean;
   /** List's default split (Story 2.5/2.6), used to render a muted reference bar per segment. */
   defaultPercents?: Record<string, string>;
+  /** Expense total + currency, used to show each member's paid share next to their avatar. */
+  amount?: string;
+  currency?: string;
 };
 
 /**
@@ -36,6 +40,8 @@ export function PercentageSplitTrack({
   onChangePercents,
   disabled = false,
   defaultPercents,
+  amount,
+  currency,
 }: Props) {
   const orderedUserIds = useMemo(
     () => orderPercentageSplitUserIds(userIds, currentUserId),
@@ -67,6 +73,8 @@ export function PercentageSplitTrack({
     if (!defaultPercents) return null;
     return orderedUserIds.map((id) => Number(defaultPercents[id]) || 0);
   }, [orderedUserIds, defaultPercents]);
+  const amountValue = Number(amount);
+  const showShareAmounts = amount !== undefined && currency !== undefined && Number.isFinite(amountValue);
 
   const handleMouseDown = (index: number) => (e: React.MouseEvent) => {
     if (disabled) return;
@@ -295,6 +303,14 @@ export function PercentageSplitTrack({
               photoBase64={photoMap.get(userId)}
               size="xs"
             />
+            {showShareAmounts ? (
+              <span className="text-muted">
+                {formatMoneyAmount(
+                  String((amountValue * percentValues[i]) / 100),
+                  currency as string,
+                )}
+              </span>
+            ) : null}
           </div>
         ))}
       </div>

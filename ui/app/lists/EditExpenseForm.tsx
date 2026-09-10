@@ -281,6 +281,8 @@ export function EditExpenseForm({
                   onChangePercents={setPercentages}
                   disabled={pending}
                   defaultPercents={evenPercentMap(members)}
+                  amount={amount}
+                  currency={expense.currency}
                 />
               ) : null}
 

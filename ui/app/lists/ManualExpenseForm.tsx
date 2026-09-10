@@ -464,6 +464,8 @@ export function ManualExpenseForm({
                 onChangePercents={setPercentages}
                 disabled={pending}
                 defaultPercents={percentMapFromDefault(members, effectiveSplit)}
+                amount={amount}
+                currency="CRC"
               />
             ) : null}
 
