@@ -233,6 +233,7 @@ def _expense_item(row: ListedExpense) -> ExpenseItemResponse:
         ),
         viewer_net_polarity=net_polarity,
         origin_card_label=row.origin_card_label,
+        origin_card_owned_by_payer=row.origin_card_owned_by_payer,
         statement_id=entry.statement_id,
     )
 

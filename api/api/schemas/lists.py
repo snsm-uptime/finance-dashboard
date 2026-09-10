@@ -91,6 +91,7 @@ class ExpenseItemResponse(BaseModel):
     viewer_net_crc: str | None = None
     viewer_net_polarity: Literal["owe", "owed", "zero"] | None = None
     origin_card_label: str | None = None
+    origin_card_owned_by_payer: bool = False
     import_batch_id: UUID | None = None
     statement_id: UUID | None = None
 

@@ -137,12 +137,14 @@ function OriginMeta({
   originAction?: ReactNode;
 }) {
   if (originAction) return originAction;
-  if (!originChip) return null;
   // Unknown origin on another member's row: the payer avatar alone is
-  // enough context — the "Unknown" text label would just be noise.
+  // enough context — the "Unknown" text label would just be noise. Same
+  // treatment applies when there's no chip text at all (e.g. a card-origin
+  // row whose payer no longer owns that card).
   if (originUnknown && payerSeed) {
     return <Avatar alias={payerAlias ?? ""} seed={payerSeed} photoBase64={payerPhoto} size="xs" />;
   }
+  if (!originChip) return null;
   return (
     <Chip tone={originChipTone} disabled={originDisabled}>
       <span className="inline-flex items-center gap-1">

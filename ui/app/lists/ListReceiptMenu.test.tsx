@@ -130,6 +130,7 @@ const expense = {
   origin_kind: null,
   origin_card_id: null,
   origin_card_label: null,
+    origin_card_owned_by_payer: false,
   viewer_share_kind: null,
   viewer_share_value: null,
   viewer_net_crc: null,

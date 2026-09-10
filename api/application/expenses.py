@@ -203,6 +203,7 @@ class ListedExpense:
     entry: LedgerEntryRecord
     lens: ViewerExpenseLens | None = None
     origin_card_label: str | None = None
+    origin_card_owned_by_payer: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -593,6 +594,7 @@ class ListExpensesService:
         default_shares: dict[UUID, Decimal] | None,
     ) -> ListedExpense:
         origin_card_label = self._origin_card_label(row, actor_user_id)
+        origin_card_owned_by_payer = self._origin_card_owned_by_payer(row)
         resolution = resolve_viewer_lens_for_entry(
             self._repo,  # type: ignore[arg-type]
             list_id=row.list_id,
@@ -606,7 +608,12 @@ class ListExpensesService:
             default_mode=default_mode,
             default_shares=default_shares,
         )
-        return ListedExpense(entry=row, lens=resolution.lens, origin_card_label=origin_card_label)
+        return ListedExpense(
+            entry=row,
+            lens=resolution.lens,
+            origin_card_label=origin_card_label,
+            origin_card_owned_by_payer=origin_card_owned_by_payer,
+        )
 
     def _origin_card_label(self, row: LedgerEntryRecord, actor_user_id: UUID) -> str | None:
         if row.origin_kind != "card" or row.origin_card_id is None:
@@ -617,6 +624,18 @@ class ListExpensesService:
         if card is None:
             return None
         return card.label
+
+    def _origin_card_owned_by_payer(self, row: LedgerEntryRecord) -> bool:
+        """Whether the imported card still belongs to the entry's current payer.
+
+        Independent of the viewer/actor — used so the UI can suppress the Card
+        chip entirely (leaving only the payer avatar) once the payer is
+        reassigned away from the card's owner, without leaking the label of a
+        card that isn't the viewer's own.
+        """
+        if row.origin_kind != "card" or row.origin_card_id is None:
+            return False
+        return self._repo.get_card_for_owner(row.payer_id, row.origin_card_id) is not None
 
 
 class ListMembersService:

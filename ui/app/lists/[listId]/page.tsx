@@ -241,11 +241,21 @@ export function originChipFrom(
 ): string | undefined {
   if (e.origin_kind === "cash") return t.expenseOriginCash;
   if (e.origin_kind === "card") {
+    if (!e.origin_card_owned_by_payer) return undefined;
     if (e.payer_id === currentUserId && e.origin_card_label) return e.origin_card_label;
     return t.expenseOriginCard;
   }
   if (e.payer_id !== currentUserId) return t.expenseOriginUnknown;
   return t.expenseOriginNone;
+}
+
+/**
+ * A card-origin row whose payer no longer owns that card (e.g. reassigned to
+ * another list member) has no honest chip text to show — but the payer's
+ * avatar should still render, same as an "Unknown" origin row does.
+ */
+export function originAvatarOnlyFrom(e: ExpenseItem): boolean {
+  return e.origin_kind === "card" && !e.origin_card_owned_by_payer;
 }
 
 const COSTA_RICA_TZ = "America/Costa_Rica";
@@ -997,7 +1007,9 @@ export default async function ListDetailPage({
                             originChip={originChip}
                             originChipTone="muted"
                             originDisabled
-                            originUnknown={originChip === t.expenseOriginUnknown}
+                            originUnknown={
+                              originChip === t.expenseOriginUnknown || originAvatarOnlyFrom(e)
+                            }
                             {...rowShared}
                           />
                         );
