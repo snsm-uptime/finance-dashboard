@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { useChromeHeader } from "@/components/ChromeBack";
 import { DocsHelpButton } from "@/app/docs/DocsHelpButton";
 import { ArchiveBudgetButton } from "./ArchiveBudgetButton";
-import type { BudgetsClientMessages } from "../budgetsClient";
+import { DeleteBudgetButton, type DeleteBudgetButtonMessages } from "./DeleteBudgetButton";
 
 /** Opts budget detail into AppShell Back + title (same chrome as list detail). */
 export function BudgetDetailChrome({
@@ -25,7 +25,7 @@ export function BudgetDetailChrome({
   isArchived: boolean;
   archiveLabel: string;
   unarchiveLabel: string;
-  messages: BudgetsClientMessages;
+  messages: DeleteBudgetButtonMessages;
   /** Edit-budget affordance (Story 7.5), rendered alongside the docs help button. */
   editAction?: ReactNode;
 }) {
@@ -43,6 +43,7 @@ export function BudgetDetailChrome({
           messages={messages}
         />
         {editAction}
+        <DeleteBudgetButton budgetId={budgetId} messages={messages} />
         <DocsHelpButton pageName="Budgets" docsAnchor="/docs#budgets" />
       </>
     ),

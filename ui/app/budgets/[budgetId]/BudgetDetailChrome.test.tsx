@@ -54,6 +54,12 @@ describe("BudgetDetailChrome", () => {
               errorInvalidBudgetSourceLists: "Select at least one source list.",
               errorInvalidBudgetPeriod: "Period start must be on or before period end.",
               errorForbidden: "You do not have access to this.",
+              budgetsDeleteAria: "Delete budget",
+              budgetsDeleteConfirmTitle: "Delete this budget?",
+              budgetsDeleteConfirmBody: "This permanently deletes the budget.",
+              budgetsDeleteConfirmAction: "Yes, delete",
+              budgetsDeleting: "Deleting…",
+              cancelLabel: "Cancel",
             }}
           />
         </AppShell>,

@@ -367,16 +367,7 @@ export default async function BudgetDetailPage({
               isArchived={budget.is_archived}
               archiveLabel={t.budgetsArchive}
               unarchiveLabel={t.budgetsUnarchive}
-              messages={{
-                errorGeneric: t.errorGeneric,
-                errorUnauthorized: t.errorUnauthorized,
-                errorInvalidBudgetName: t.errorInvalidBudgetName,
-                errorInvalidBudgetCap: t.errorInvalidBudgetCap,
-                errorInvalidBudgetCurrency: t.errorInvalidBudgetCurrency,
-                errorInvalidBudgetSourceLists: t.errorInvalidBudgetSourceLists,
-                errorInvalidBudgetPeriod: t.errorInvalidBudgetPeriod,
-                errorForbidden: t.errorForbidden,
-              }}
+              messages={{ ...t, cancelLabel: t.receiptMoveCancel }}
               editAction={
                 <BudgetUpdateForm
                   budget={budget}
