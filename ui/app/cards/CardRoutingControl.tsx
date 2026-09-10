@@ -116,7 +116,9 @@ export function CardRoutingControl({
             {chipLabel}
           </ChipTrigger>
         </div>
-        {trailing}
+        <div className="flex items-center gap-4">
+          {trailing}
+        </div>
       </div>
       <ChipOptionsPanel
         open={open}
