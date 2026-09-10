@@ -107,7 +107,9 @@ describe("PercentageSplitTrack", () => {
     const bars = Array.from(
       container.querySelectorAll("[data-default-bar]"),
     ) as HTMLElement[];
-    expect(bars).toHaveLength(3);
+    // Only handle-boundary bars are rendered — no trailing bar at the
+    // container's right edge for the last member.
+    expect(bars).toHaveLength(2);
     // owner: cumulative default = 40 -> left: 40%
     expect(bars.find((b) => b.getAttribute("data-default-bar") === "owner")?.style.left).toBe(
       "40%",
@@ -116,10 +118,7 @@ describe("PercentageSplitTrack", () => {
     expect(bars.find((b) => b.getAttribute("data-default-bar") === "alice")?.style.left).toBe(
       "70%",
     );
-    // bob: cumulative default = 40 + 30 + 30 = 100 -> left: 100%
-    expect(bars.find((b) => b.getAttribute("data-default-bar") === "bob")?.style.left).toBe(
-      "100%",
-    );
+    expect(bars.find((b) => b.getAttribute("data-default-bar") === "bob")).toBeUndefined();
   });
 
   it("renders no reference bar when percents equal the default (AC #3)", async () => {

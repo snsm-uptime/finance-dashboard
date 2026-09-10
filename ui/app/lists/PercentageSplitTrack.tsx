@@ -242,6 +242,7 @@ export function PercentageSplitTrack({
 
         {defaultPercentValues
           ? orderedUserIds.map((userId, i) => {
+              if (i >= handleCount) return null;
               if (Math.round(defaultPercentValues[i]) === Math.round(percentValues[i])) {
                 return null;
               }
