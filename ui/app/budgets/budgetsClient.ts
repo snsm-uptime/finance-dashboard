@@ -25,6 +25,8 @@ export type BudgetsClientMessages = {
   errorInvalidBudgetSourceLists: string;
   errorInvalidBudgetPeriod: string;
   errorForbidden: string;
+  /** Optional — 409 on deleting a non-archived budget falls back to `errorGeneric` when absent. */
+  errorBudgetNotArchived?: string;
 };
 
 export type BudgetStateMessages = {
@@ -122,6 +124,8 @@ function mapError(
   if (code === "invalid_budget_source_lists")
     return messages.errorInvalidBudgetSourceLists;
   if (code === "invalid_budget_period") return messages.errorInvalidBudgetPeriod;
+  if (code === "budget_not_archived")
+    return messages.errorBudgetNotArchived ?? messages.errorGeneric;
   return messages.errorGeneric;
 }
 

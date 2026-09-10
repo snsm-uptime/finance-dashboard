@@ -27,6 +27,7 @@ from domain.budgets import (
     validate_budget_source_list_ids,
 )
 from domain.errors import (
+    BudgetNotArchivedError,
     BudgetNotFoundError,
     BudgetRuleNotFoundError,
     DuplicateBudgetNameError,
@@ -344,13 +345,18 @@ class DeleteBudgetCommand:
 class DeleteBudgetService:
     """Owner-only, 404-on-deny (AD-30). Relies entirely on existing FK
     cascades/SET NULLs (`budget_rules` CASCADE, `budget_source_lists`
-    CASCADE, `ledger_entries.budget_id` SET NULL) — no manual cascade code."""
+    CASCADE, `ledger_entries.budget_id` SET NULL) — no manual cascade code.
+
+    Only an archived budget may be deleted — archiving is the reversible
+    step required before this irreversible one."""
 
     def __init__(self, repo: BudgetRepository) -> None:
         self._repo = repo
 
     def execute(self, command: DeleteBudgetCommand) -> None:
         budget = _get_owned_budget(self._repo, command.budget_id, command.actor_user_id)
+        if not budget.is_archived:
+            raise BudgetNotArchivedError()
         self._repo.delete_budget(budget.id)
 
 

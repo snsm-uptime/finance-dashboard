@@ -791,6 +791,9 @@ def test_delete_budget_with_rules_and_assigned_entries_cascades(
     assert rule.status_code == 201, rule.text
     rule_id = rule.json()["id"]
 
+    archived = client.post(f"/budgets/{budget_id}/archive")
+    assert archived.status_code == 200, archived.text
+
     deleted = client.delete(f"/budgets/{budget_id}")
     assert deleted.status_code == 204, deleted.text
 
@@ -804,6 +807,19 @@ def test_delete_budget_with_rules_and_assigned_entries_cascades(
     still_gone = client.get(f"/budgets/{budget_id}")
     assert still_gone.status_code == 404
     assert still_gone.json()["code"] == "budget_not_found"
+
+
+def test_delete_budget_rejects_a_budget_that_is_not_archived(client: TestClient) -> None:
+    _register(client, "budgetdeletenotarchived@example.com")
+    list_id = _own_list_id(client)
+    budget_id = _create_budget(client, [list_id])
+
+    deleted = client.delete(f"/budgets/{budget_id}")
+    assert deleted.status_code == 409, deleted.text
+    assert deleted.json()["code"] == "budget_not_archived"
+
+    still_there = client.get(f"/budgets/{budget_id}")
+    assert still_there.status_code == 200
 
 
 def _add_second_member(db_session: Session, *, list_id: str, email: str) -> uuid.UUID:

@@ -35,6 +35,7 @@ from application.budgets import (
 from application.expenses import LedgerEntryRecord
 from application.lists import ListRecord, StoredDefaultSplit
 from domain.errors import (
+    BudgetNotArchivedError,
     BudgetNotFoundError,
     DuplicateBudgetNameError,
     InvalidBudgetNameError,
@@ -646,10 +647,10 @@ class TestPreviewBudgetPeriodChangeService:
 # --- DeleteBudgetService -----------------------------------------------------
 
 
-def test_delete_budget_deletes_owned_budget():
+def test_delete_budget_deletes_owned_archived_budget():
     owner = uuid4()
     list_id = uuid4()
-    budget = _budget(owner_user_id=owner, source_list_ids=(list_id,))
+    budget = _budget(owner_user_id=owner, source_list_ids=(list_id,), is_archived=True)
     repo = _FakeBudgetRepo(budgets={budget.id: budget}, owner_id=owner)
     service = DeleteBudgetService(repo)
 
@@ -659,11 +660,24 @@ def test_delete_budget_deletes_owned_budget():
     assert budget.id not in repo.budgets
 
 
+def test_delete_budget_rejects_a_budget_that_is_not_archived():
+    owner = uuid4()
+    list_id = uuid4()
+    budget = _budget(owner_user_id=owner, source_list_ids=(list_id,), is_archived=False)
+    repo = _FakeBudgetRepo(budgets={budget.id: budget}, owner_id=owner)
+    service = DeleteBudgetService(repo)
+
+    with pytest.raises(BudgetNotArchivedError):
+        service.execute(DeleteBudgetCommand(actor_user_id=owner, budget_id=budget.id))
+    assert repo.delete_calls == []
+    assert budget.id in repo.budgets
+
+
 def test_delete_budget_foreign_budget_is_not_found():
     owner = uuid4()
     stranger = uuid4()
     list_id = uuid4()
-    budget = _budget(owner_user_id=owner, source_list_ids=(list_id,))
+    budget = _budget(owner_user_id=owner, source_list_ids=(list_id,), is_archived=True)
     repo = _FakeBudgetRepo(budgets={budget.id: budget}, owner_id=owner)
     service = DeleteBudgetService(repo)
 

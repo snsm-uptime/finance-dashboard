@@ -702,6 +702,17 @@ class BudgetNotFoundError(DomainError):
         super().__init__(self.MESSAGE)
 
 
+class BudgetNotArchivedError(DomainError):
+    """Raised when deleting a budget that has not been archived first —
+    archiving is the reversible step required before the irreversible delete."""
+
+    MESSAGE = "Archive the budget before deleting it."
+    CODE = "budget_not_archived"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
 class DuplicateBudgetNameError(DomainError):
     """Raised when renaming/updating a budget to a name already used by
     another budget owned by the same actor (case-sensitive exact match)."""

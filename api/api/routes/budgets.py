@@ -48,6 +48,7 @@ from application.budgets import (
 from application.expenses import LedgerEntryRecord
 from domain.budgets import classify_budget_state
 from domain.errors import (
+    BudgetNotArchivedError,
     BudgetNotFoundError,
     BudgetRuleNotFoundError,
     DuplicateBudgetNameError,
@@ -118,6 +119,13 @@ def _budget_name_taken() -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content={"detail": DuplicateBudgetNameError.MESSAGE, "code": "budget_name_taken"},
+    )
+
+
+def _budget_not_archived() -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={"detail": BudgetNotArchivedError.MESSAGE, "code": "budget_not_archived"},
     )
 
 
@@ -383,6 +391,8 @@ def delete_budget(
         service.execute(DeleteBudgetCommand(actor_user_id=user_id, budget_id=budget_id))
     except BudgetNotFoundError:
         return _budget_not_found()
+    except BudgetNotArchivedError:
+        return _budget_not_archived()
     logger.info("budget_deleted budget_id=%s", budget_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

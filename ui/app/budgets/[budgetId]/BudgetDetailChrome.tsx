@@ -43,7 +43,7 @@ export function BudgetDetailChrome({
           messages={messages}
         />
         {editAction}
-        <DeleteBudgetButton budgetId={budgetId} messages={messages} />
+        <DeleteBudgetButton budgetId={budgetId} isArchived={isArchived} messages={messages} />
         <DocsHelpButton pageName="Budgets" docsAnchor="/docs#budgets" />
       </>
     ),

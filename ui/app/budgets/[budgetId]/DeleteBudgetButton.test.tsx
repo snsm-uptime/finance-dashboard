@@ -65,9 +65,17 @@ describe("DeleteBudgetButton", () => {
     ) as HTMLButtonElement;
   }
 
+  it("renders nothing for a budget that is not archived", () => {
+    act(() => {
+      root.render(<DeleteBudgetButton budgetId="b1" isArchived={false} messages={messages} />);
+    });
+
+    expect(container.querySelector("button")).toBeNull();
+  });
+
   it("clicking the trash icon shows a popup confirmation before deleting anything", async () => {
     act(() => {
-      root.render(<DeleteBudgetButton budgetId="b1" messages={messages} />);
+      root.render(<DeleteBudgetButton budgetId="b1" isArchived messages={messages} />);
     });
     await openConfirm();
 
@@ -79,7 +87,7 @@ describe("DeleteBudgetButton", () => {
   it("confirming deletes the budget and navigates to /budgets", async () => {
     deleteBudgetMock.mockResolvedValue({ ok: true });
     act(() => {
-      root.render(<DeleteBudgetButton budgetId="b1" messages={messages} />);
+      root.render(<DeleteBudgetButton budgetId="b1" isArchived messages={messages} />);
     });
     await openConfirm();
 
@@ -94,7 +102,7 @@ describe("DeleteBudgetButton", () => {
   it("a failed delete keeps the popup open and appends the error, without navigating", async () => {
     deleteBudgetMock.mockResolvedValue({ ok: false, error: "boom" });
     act(() => {
-      root.render(<DeleteBudgetButton budgetId="b1" messages={messages} />);
+      root.render(<DeleteBudgetButton budgetId="b1" isArchived messages={messages} />);
     });
     await openConfirm();
 
@@ -109,7 +117,7 @@ describe("DeleteBudgetButton", () => {
 
   it("cancelling the popup closes it without deleting", async () => {
     act(() => {
-      root.render(<DeleteBudgetButton budgetId="b1" messages={messages} />);
+      root.render(<DeleteBudgetButton budgetId="b1" isArchived messages={messages} />);
     });
     await openConfirm();
 
@@ -129,7 +137,7 @@ describe("DeleteBudgetButton", () => {
       }),
     );
     act(() => {
-      root.render(<DeleteBudgetButton budgetId="b1" messages={messages} />);
+      root.render(<DeleteBudgetButton budgetId="b1" isArchived messages={messages} />);
     });
     await openConfirm();
 

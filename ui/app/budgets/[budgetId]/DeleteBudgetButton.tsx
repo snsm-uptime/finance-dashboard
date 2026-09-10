@@ -19,6 +19,10 @@ export type DeleteBudgetButtonMessages = BudgetsClientMessages & {
 
 type Props = {
   budgetId: string;
+  /** Deletion is only offered once a budget is archived — an active budget
+   * is removed by archiving it first (a reversible step) before this
+   * irreversible one becomes available. */
+  isArchived: boolean;
   messages: DeleteBudgetButtonMessages;
 };
 
@@ -26,11 +30,13 @@ type Props = {
  * (pencil) and docs (?) actions — a modal popup confirmation (not the sliding
  * edit Sheet), since deleting is a separate destructive action, not a field edit.
  */
-export function DeleteBudgetButton({ budgetId, messages }: Props) {
+export function DeleteBudgetButton({ budgetId, isArchived, messages }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  if (!isArchived) return null;
 
   async function onConfirmDelete() {
     setDeleting(true);
