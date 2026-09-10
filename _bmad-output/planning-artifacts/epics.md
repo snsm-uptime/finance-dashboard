@@ -2493,3 +2493,92 @@ offers unarchiving before continuing (no silent import against a hidden
 card) — exact confirmation UX is this story's to design, consistent with
 Story 7.6/9.2's owner-facing tone (UX-DR17)
 
+## Epic 10: Performance — list detail page load
+
+Party-mode review (2026-09-09) of `ui/app/lists/[listId]/page.tsx` found the
+Soft-Ledger list detail page serializes its server-side data fetching into
+three sequential round trips (detail → [split, members, cycles] →
+[expenses, balances]), when only `expenses`/`balances` genuinely depend on
+the resolved statement period. The other three fetches only need `listId`
+and can start immediately alongside `detail`. This epic collapses the
+waterfall and adds a loading shell so the wait — whatever it ends up being
+— doesn't read as a frozen page.
+
+**FRs covered:** none new — performance/tech-debt work against existing
+list-detail functionality (no behavior change)
+**Demo gate:** opening a list detail page issues at most two sequential
+server-side fetch waves (verified via request timing/logs), and a loading
+skeleton is visible during the wait instead of a blank page
+**Sequencing:** 10.1 (waterfall reshape) is a pure code change to the one
+file, no API contract change, no risk to existing behavior. 10.2 (loading
+skeleton) is independent and can land in parallel.
+
+### Story 10.1: Parallelize list-detail server-side data fetching
+
+As a list member,
+I want the list detail page's server-side data fetching to run in as few
+sequential round trips as possible,
+so that opening a list loads noticeably faster.
+
+**Acceptance Criteria:**
+
+**Given** `ListDetailPage` in `ui/app/lists/[listId]/page.tsx` loading a
+list that exists
+**When** the page fetches its data
+**Then** `detail`, `default-split`, `members`, and `cycles` are requested
+in a single parallel wave (none of them wait on another's response), and
+only `expenses`/`balances` — which depend on the resolved
+`selectedStatementId` — are requested in a second wave after that first
+wave resolves
+
+**Given** the existing 404/401/error handling for the `detail` fetch
+**When** the waterfall is reshaped
+**Then** all current behavior is preserved exactly: a 401 still redirects
+to sign-in, a 404 still sets `notFound`, and a non-ok/non-404/non-401
+response still sets `loadError`, with no fetch of split/members/cycles/
+expenses/balances performed once `detail` itself has failed that way
+
+**Given** `default-split`, `members`, or `cycles` individually fail or
+return malformed data
+**When** the page renders
+**Then** each surfaces its existing independent error state
+(`splitLoadError`, `membersLoadError`, `cyclesLoadError`) exactly as today
+— reordering the fetches must not change any existing error semantics or
+defensive-parse behavior (`asDefaultSplit`, `asMembers`, `asCycles`)
+
+**Given** the reshaped fetch waves
+**When** `?period=<statement_id>` is present in the URL
+**Then** `resolveSelectedPeriod` still resolves the selected period from
+the now-parallel-fetched `cycles` payload before `expenses`/`balances` are
+requested, exactly as today (no behavior change to period filtering)
+
+**Given** the `export const dynamic = "force-dynamic"` directive at the
+top of the file
+**When** this story is implemented
+**Then** its necessity is checked (git history / blame for why it was
+added) and left in place unless removing it is proven safe and explicitly
+called out in the story's Dev Notes — this story does not silently change
+caching behavior, only fetch ordering
+
+### Story 10.2: Loading skeleton for list detail page
+
+As a list member,
+I want to see a loading skeleton while a list's detail page data is being
+fetched,
+so that opening a list feels responsive rather than frozen, independent
+of how fast the underlying fetches are.
+
+**Acceptance Criteria:**
+
+**Given** navigation to `/lists/[listId]`
+**When** the page's server-side data fetch has not yet resolved
+**Then** a loading skeleton (matching the page's layout shape — balance
+strip, receipts list, sidebar) is shown instead of a blank page, per this
+project's convention of a spinner/skeleton over literal "Loading…" text
+
+**Given** the skeleton is implemented via a Next.js `loading.tsx` route
+segment (or equivalent `<Suspense>` boundary)
+**When** the page eventually resolves
+**Then** the skeleton is replaced by the real content with no layout
+shift beyond what the real content's own dimensions require
+

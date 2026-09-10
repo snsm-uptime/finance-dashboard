@@ -42,7 +42,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-03T22:46:31
-last_updated: 2026-09-05 (story 9-3: archive toggle cards panel, ready-for-dev)
+last_updated: 2026-09-09 (story 10-1: parallelize list-detail fetching, ready-for-dev)
 
 project: finance-dashboard
 project_key: NOKEY
@@ -175,6 +175,13 @@ development_status:
   9-2-archive-toggle-lists-homepage: done
   9-3-archive-toggle-cards-panel: review
   epic-9-retrospective: optional
+
+  # Epic 10 — Performance: list detail page load. From bmad-party-mode
+  # review (2026-09-09) of ui/app/lists/[listId]/page.tsx's fetch waterfall.
+  epic-10: in-progress
+  10-1-parallelize-list-detail-fetching: ready-for-dev
+  10-2-loading-skeleton-list-detail: backlog
+  epic-10-retrospective: optional
 
 action_items:
   - epic: 1
