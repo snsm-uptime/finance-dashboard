@@ -141,7 +141,7 @@ export const listsMessages = {
     budgetsNameLabel: "Name",
     budgetsCapLabel: "Cap",
     budgetsCurrencyLabel: "Currency",
-    budgetsCreateSubmit: "Create budget",
+    budgetsCreateSubmit: "New budget",
     budgetsCreating: "Creating…",
     budgetsStateOk: "Under cap",
     budgetsStateNear: "Near cap",
