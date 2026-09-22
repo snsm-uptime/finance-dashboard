@@ -86,7 +86,7 @@ describe("SourceListChipPicker", () => {
     ).toBe(true);
   });
 
-  it("selecting an option from the panel toggles it and closes the panel", () => {
+  it("selecting an option from the panel toggles it and keeps the panel open", () => {
     const onToggle = render([]);
     const trigger = Array.from(container.querySelectorAll("button")).find((el) =>
       el.textContent?.includes("+ Add list"),
@@ -101,6 +101,6 @@ describe("SourceListChipPicker", () => {
       option.click();
     });
     expect(onToggle).toHaveBeenCalledWith("l1");
-    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
   });
 });
