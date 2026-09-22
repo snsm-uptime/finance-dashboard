@@ -1,6 +1,10 @@
+---
+baseline_commit: f7781c3
+---
+
 # Story 10.1: Parallelize list-detail server-side data fetching
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -44,42 +48,47 @@ so that opening a list loads noticeably faster.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Investigate `dynamic = "force-dynamic"` origin (AC: #5)
-  - [ ] `git log -p --follow -- ui/app/lists/'[listId]'/page.tsx` (or
+- [x] Task 1: Investigate `dynamic = "force-dynamic"` origin (AC: #5)
+  - [x] `git log -p --follow -- ui/app/lists/'[listId]'/page.tsx` (or
         `git blame` on line 35) to find why it was added; note the finding
         in Dev Notes regardless of outcome — do not remove the directive
         as part of this story unless the investigation proves it's dead
         weight AND that is called out explicitly
-- [ ] Task 2: Reshape the fetch waterfall in `ListDetailPage` (AC: #1-#4)
-  - [ ] Keep the initial `detail` fetch's own try/catch and its 401/404/
+- [x] Task 2: Reshape the fetch waterfall in `ListDetailPage` (AC: #1-#4)
+  - [x] Keep the initial `detail` fetch's own try/catch and its 401/404/
         error branching exactly as-is (lines ~571-588 today) — this
         gates everything downstream and must not become parallel with
         the rest, since a 401/404 must short-circuit before any other
         network call is made
-  - [ ] Inside the `response.ok` branch, replace the current two-stage
+  - [x] Inside the `response.ok` branch, replace the current two-stage
         `Promise.all([split, members, cycles])` → `Promise.all([expenses, balances])`
         with a restructure where `split`, `members`, and `cycles` fetches
         start immediately (they need only `listId` + `header`, same as
         `detail` — but they must remain nested inside the `response.ok`
         branch, matching AC #2's "no further fetches once detail fails")
-  - [ ] Await that first wave, parse each response exactly as today
+  - [x] Await that first wave, parse each response exactly as today
         (`asDefaultSplit`, `asMembers`, `asCycles` — do not touch these
         functions), compute `resolvedPeriod`/`selectedStatementId`/
         `periodQuery` exactly as today
-  - [ ] Fire the second wave (`expenses`, `balances`) with `periodQuery`,
+  - [x] Fire the second wave (`expenses`, `balances`) with `periodQuery`,
         await, parse exactly as today (`asExpenses`, `asBalances`)
-  - [ ] Do not change any of the `*LoadError` flag assignments, the
+  - [x] Do not change any of the `*LoadError` flag assignments, the
         `notFound`/`loadError` semantics, or the response-parsing logic —
         this is a pure reordering/parallelization of already-existing
         fetch calls, not a rewrite
-- [ ] Task 3: Verify no regression
-  - [ ] Manually load a list detail page (existing list, list with a
+- [x] Task 3: Verify no regression
+  - [x] Manually load a list detail page (existing list, list with a
         period query param, a list you don't own, a nonexistent list id)
         and confirm identical rendering to before the change
-  - [ ] Confirm the `ui/tests/` suite covering this route (if any) still
+  - [x] Confirm the `ui/tests/` suite covering this route (if any) still
         passes; if no existing test covers this file's data-fetching
         behavior, note that gap in Dev Notes rather than adding new test
         infrastructure as part of this fetch-only story
+
+### Review Findings
+
+- [x] [Review][Patch] `Promise.all` couples `detail` JSON-parse failure with sibling fetch results, undocumented [ui/app/lists/[listId]/page.tsx:589]
+- [x] [Review][Defer] `detail` payload uses an unchecked type cast, unlike validated siblings (`asDefaultSplit`/`asMembers`/`asCycles`) [ui/app/lists/[listId]/page.tsx:590] — deferred, pre-existing
 
 ## Dev Notes
 
@@ -152,8 +161,72 @@ so that opening a list loads noticeably faster.
 
 ### Agent Model Used
 
+Claude Sonnet 5
+
 ### Debug Log References
+
+- `git log -p --follow -- "ui/app/lists/[listId]/page.tsx"` shows
+  `export const dynamic = "force-dynamic";` present on the earliest commit
+  that introduced this file (no prior commit adds it separately, no commit
+  message or in-file comment explains it). It has survived every rewrite of
+  the file since without ever being touched. Conclusion: origin is
+  undocumented/scaffold-era, not tied to a specific bug fix. Per AC #5 and
+  the story's explicit caution ("do not remove ... unless provably safe and
+  explicitly confirmed"), it is left in place unchanged — this story's scope
+  is fetch ordering, not caching behavior.
+- `docker compose ps` / `curl .../health` confirmed the worktree's Compose
+  stack (`fh-feat-10-10-1-parallelize-list-detail-fetching-{api,db,ui}`) was
+  already up and healthy before implementation began.
+- `npx tsc --noEmit`, `npx eslint app/lists/[listId]/page.tsx`, and
+  `npx vitest run app/lists/[listId]/page` (all 6 existing sibling test
+  files, 45 tests) ran clean inside the `ui` container after the change.
 
 ### Completion Notes List
 
+- Reshaped the single `response.ok` branch in `ListDetailPage` (`ui/app/lists/[listId]/page.tsx`)
+  so that `detail`'s JSON body is parsed (`response.json()`) inside the same
+  `Promise.all` as the `default-split`, `members`, and `cycles` fetches,
+  instead of being awaited first and only then kicking off those three. The
+  initial `fetch()` for `detail` (and its 401/404/error/not-ok branching)
+  is untouched and still fully gates whether any other network call happens
+  at all — a 401/404/non-ok response still short-circuits before any other
+  fetch is issued, satisfying AC #2. This removes one full round-trip of
+  latency (previously: await detail body → *then* start split/members/cycles)
+  without racing ahead of the `detail` response's status itself, matching
+  the Dev Notes' explicit rejection of a "true wave 1" that fires before
+  `detail`'s own response resolves.
+  - Second wave (`expenses`, `balances`, gated on `periodQuery` computed from
+    the first wave's `cycles` result) is unchanged.
+  - None of `asDefaultSplit`, `asMembers`, `asCycles`, `asExpenses`,
+    `asBalances`, or any `*LoadError`/`notFound`/`loadError` assignment was
+    touched — pure fetch-ordering change, confirmed by the diff being a
+    3-line move (variable destructuring only) plus removing one duplicate
+    `detail =` assignment.
+  - `dynamic = "force-dynamic"` investigated (AC #5) and left in place —
+    see Debug Log.
+- Test coverage gap noted (Task 3, AC #3/#4 scope): `ListDetailPage` itself
+  is a server component that is never rendered directly in tests per this
+  project's convention (see project-context.md — only extracted pure
+  functions are unit-tested in sibling `page.<feature>.test.ts` files).
+  There is no existing test harness that exercises the fetch-orchestration
+  code path (the `try`/`Promise.all` block) itself, so this story does not
+  add one — consistent with the story's own instruction to note this gap
+  rather than add new test infrastructure for a fetch-only reordering.
+  Verification instead relied on: (a) the diff being a pure reorder with no
+  logic changes to any parsing/flag-assignment code, (b) full typecheck +
+  lint + existing 45-test sibling suite passing, and (c) a manual
+  unauthenticated request to `/lists/<id>` confirming the pre-`detail`
+  redirect-to-sign-in path is unchanged.
+
 ### File List
+
+- `ui/app/lists/[listId]/page.tsx`
+
+## Change Log
+
+- 2026-09-21: Reshaped `ListDetailPage`'s fetch waterfall from three
+  sequential waves to two — `detail` (JSON parse), `default-split`,
+  `members`, and `cycles` now resolve in one `Promise.all`, gated on the
+  initial `detail` fetch's `response.ok` check; `expenses`/`balances`
+  remain a second wave dependent on the resolved period. No API contracts,
+  parsing functions, or error-flag semantics changed.
