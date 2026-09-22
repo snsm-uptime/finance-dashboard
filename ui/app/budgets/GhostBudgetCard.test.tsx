@@ -93,7 +93,7 @@ describe("GhostBudgetCard", () => {
   it("renders a dashed card shell with name/cap placeholders and a disabled submit badge", async () => {
     await render();
     const nameInput = container.querySelector('input[placeholder="Name"]') as HTMLInputElement;
-    const capInput = container.querySelector('input[placeholder="Cap"]') as HTMLInputElement;
+    const capInput = container.querySelector('input[placeholder="0.00"]') as HTMLInputElement;
     const submitButton = container.querySelector('button[type="submit"]') as HTMLButtonElement;
     expect(nameInput).not.toBeNull();
     expect(capInput).not.toBeNull();
@@ -110,7 +110,7 @@ describe("GhostBudgetCard", () => {
   it("enables the submit badge once name, cap, and a source list are set", async () => {
     await render();
     const nameInput = container.querySelector('input[placeholder="Name"]') as HTMLInputElement;
-    const capInput = container.querySelector('input[placeholder="Cap"]') as HTMLInputElement;
+    const capInput = container.querySelector('input[placeholder="0.00"]') as HTMLInputElement;
     const submitButton = container.querySelector('button[type="submit"]') as HTMLButtonElement;
 
     await act(async () => {
@@ -144,7 +144,7 @@ describe("GhostBudgetCard", () => {
     await render(onCreated);
 
     const nameInput = container.querySelector('input[placeholder="Name"]') as HTMLInputElement;
-    const capInput = container.querySelector('input[placeholder="Cap"]') as HTMLInputElement;
+    const capInput = container.querySelector('input[placeholder="0.00"]') as HTMLInputElement;
     await act(async () => {
       setInputValue(nameInput, "Groceries");
       setInputValue(capInput, "500.00");
@@ -191,7 +191,7 @@ describe("GhostBudgetCard", () => {
     await render();
 
     const nameInput = container.querySelector('input[placeholder="Name"]') as HTMLInputElement;
-    const capInput = container.querySelector('input[placeholder="Cap"]') as HTMLInputElement;
+    const capInput = container.querySelector('input[placeholder="0.00"]') as HTMLInputElement;
     await act(async () => {
       setInputValue(nameInput, "Groceries");
       setInputValue(capInput, "500.00");
@@ -239,7 +239,7 @@ describe("GhostBudgetCard", () => {
     await render();
 
     const nameInput = container.querySelector('input[placeholder="Name"]') as HTMLInputElement;
-    const capInput = container.querySelector('input[placeholder="Cap"]') as HTMLInputElement;
+    const capInput = container.querySelector('input[placeholder="0.00"]') as HTMLInputElement;
     await act(async () => {
       setInputValue(nameInput, "Groceries");
       setInputValue(capInput, "500.00");

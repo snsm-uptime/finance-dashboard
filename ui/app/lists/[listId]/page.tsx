@@ -586,8 +586,12 @@ export default async function ListDetailPage({
     if (response.status === 404) {
       notFound = true;
     } else if (response.ok) {
-      detail = (await response.json()) as DetailPayload;
-      const [splitRes, membersRes, cyclesRes] = await Promise.all([
+      // If detail's body fails to parse, this Promise.all rejects and the
+      // three sibling fetches' results are discarded even if they already
+      // succeeded — accepted because the outer catch sets loadError, which
+      // already gates all detail-dependent rendering regardless.
+      const [detailData, splitRes, membersRes, cyclesRes] = await Promise.all([
+        response.json() as Promise<DetailPayload>,
         fetch(`${getApiInternalUrl()}/lists/${encodeURIComponent(listId)}/default-split`, {
           method: "GET",
           headers: {
@@ -613,6 +617,7 @@ export default async function ListDetailPage({
           cache: "no-store",
         }),
       ]);
+      detail = detailData;
       if (splitRes.ok) {
         const parsed = asDefaultSplit(await splitRes.json());
         if (parsed) {

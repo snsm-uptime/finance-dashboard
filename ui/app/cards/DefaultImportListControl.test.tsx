@@ -33,15 +33,15 @@ const lists: ListItem[] = [
 ];
 
 async function chooseListOption(container: HTMLElement, label: string) {
-  const trigger = container.querySelector('button[aria-haspopup="listbox"]') as HTMLButtonElement;
+  const trigger = container.querySelector("button[aria-expanded]") as HTMLButtonElement;
   await act(async () => {
     trigger.click();
   });
-  const option = Array.from(container.querySelectorAll('li[role="option"]')).find(
-    (li) => li.textContent === label,
-  ) as HTMLLIElement;
+  const option = Array.from(container.querySelectorAll('[role="region"] button')).find(
+    (button) => button.textContent === label,
+  ) as HTMLButtonElement;
   await act(async () => {
-    option.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    option.click();
   });
 }
 
@@ -83,7 +83,7 @@ describe("DefaultImportListControl", () => {
       "/api/auth/me",
       expect.objectContaining({ credentials: "same-origin" }),
     );
-    const trigger = container.querySelector('button[aria-haspopup="listbox"]') as HTMLButtonElement;
+    const trigger = container.querySelector("button[aria-expanded]") as HTMLButtonElement;
     expect(trigger.textContent).toBe("Household");
   });
 
@@ -127,7 +127,7 @@ describe("DefaultImportListControl", () => {
     await act(async () => {
       await Promise.resolve();
     });
-    const trigger = container.querySelector('button[aria-haspopup="listbox"]') as HTMLButtonElement;
+    const trigger = container.querySelector("button[aria-expanded]") as HTMLButtonElement;
     expect(trigger.textContent).toBe("Household");
 
     await act(async () => {

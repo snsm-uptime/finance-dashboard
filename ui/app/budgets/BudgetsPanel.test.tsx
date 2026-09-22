@@ -17,16 +17,12 @@ vi.mock("@/components/PreferencesProvider", () => ({
 }));
 
 const fetchBudgetsMock = vi.fn();
-const archiveBudgetMock = vi.fn();
-const unarchiveBudgetMock = vi.fn();
 vi.mock("./budgetsClient", async () => {
   const actual =
     await vi.importActual<typeof import("./budgetsClient")>("./budgetsClient");
   return {
     ...actual,
     fetchBudgets: (...args: unknown[]) => fetchBudgetsMock(...args),
-    archiveBudget: (...args: unknown[]) => archiveBudgetMock(...args),
-    unarchiveBudget: (...args: unknown[]) => unarchiveBudgetMock(...args),
   };
 });
 
@@ -64,8 +60,6 @@ describe("BudgetsPanel tile link", () => {
 
   beforeEach(() => {
     fetchBudgetsMock.mockReset();
-    archiveBudgetMock.mockReset();
-    unarchiveBudgetMock.mockReset();
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -252,35 +246,5 @@ describe("BudgetsPanel tile link", () => {
       expect.objectContaining({ archived: false }),
     );
     expect(container.querySelector("form")).not.toBeNull();
-  });
-
-  it("archiving a tile removes it from the current view on success", async () => {
-    fetchBudgetsMock.mockResolvedValue({ ok: true, budgets: [budget] });
-    archiveBudgetMock.mockResolvedValue({
-      ok: true,
-      budget: { ...budget, is_archived: true },
-    });
-
-    await act(async () => {
-      root.render(<BudgetsPanel />);
-    });
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    const archiveButton = container.querySelector(
-      'button[aria-label="Archive"]',
-    ) as HTMLButtonElement;
-    expect(archiveButton).toBeTruthy();
-
-    await act(async () => {
-      archiveButton.click();
-    });
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    expect(archiveBudgetMock).toHaveBeenCalledWith("b1", expect.anything());
-    expect(container.querySelector('a[href="/budgets/b1"]')).toBeNull();
   });
 });

@@ -368,3 +368,7 @@
 ## Deferred from: code review of 7-5-budget-period-range (2026-09-03)
 
 - Removing a source list from a budget's `source_list_ids` on update never unassigns entries previously attributed from that list — the FK (`ledger_entries.budget_id`) is left set even though the list is no longer a member of `budget_source_lists`. Pre-existing repository behavior (`api/adapters/persistence/budgets.py:112-140`), not introduced by Story 7.5, but it means combining a period-narrow with a source-list-narrow in the same PATCH won't surface source-list-driven exclusions in the confirmation diff either.
+
+## Deferred from: code review of 10-1-parallelize-list-detail-fetching.md (2026-09-21)
+
+- `detail`'s payload is parsed via `response.json() as Promise<DetailPayload>` with no runtime validation, unlike the sibling `split`/`members`/`cycles` fetches which go through `asDefaultSplit`/`asMembers`/`asCycles`. Pre-existing — the same unchecked cast existed before this story, just moved into the `Promise.all`; a malformed/unexpected `detail` body still silently propagates `undefined` fields (e.g. `detail?.owner_id`) rather than being caught with an equivalent `detailLoadError` flag.
