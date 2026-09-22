@@ -15,6 +15,7 @@ from domain.default_split import (
     validate_percentage_shares,
 )
 from domain.errors import (
+    CannotHideOwnedListError,
     InvalidDefaultSplitError,
     NotListMemberError,
     NotListOwnerError,
@@ -134,6 +135,10 @@ class ListRepository(Protocol):
 
     def unarchive_list(self, list_id: UUID) -> None: ...
 
+    def hide_list_for_member(self, list_id: UUID, user_id: UUID) -> None: ...
+
+    def unhide_list_for_member(self, list_id: UUID, user_id: UUID) -> None: ...
+
     def list_for_user(
         self, user_id: UUID, *, archived: bool = False
     ) -> list[ListMembershipSummary]: ...
@@ -194,6 +199,18 @@ class ArchiveListCommand:
 
 @dataclass(frozen=True, slots=True)
 class UnarchiveListCommand:
+    actor_user_id: UUID
+    list_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class HideListCommand:
+    actor_user_id: UUID
+    list_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class UnhideListCommand:
     actor_user_id: UUID
     list_id: UUID
 
@@ -429,6 +446,47 @@ class UnarchiveListService:
 
         self._repo.unarchive_list(command.list_id)
         return self._repo.get_list(command.list_id)
+
+
+class HideListService:
+    """Hide a list from a non-owner member's own dashboard — personal view filter.
+
+    Unlike ArchiveListService, this is member-only: the owner must use the
+    existing archive action instead, since hiding is scoped to one member's
+    membership row and has no meaning for the owner's own list.
+    """
+
+    def __init__(self, repo: ListRepository) -> None:
+        self._repo = repo
+
+    def execute(self, command: HideListCommand) -> None:
+        existing = self._repo.get_list(command.list_id)
+        membership = self._repo.get_membership(command.list_id, command.actor_user_id)
+        if existing is None or membership is None:
+            raise NotListMemberError()
+
+        if existing.owner_id == command.actor_user_id:
+            raise CannotHideOwnedListError()
+
+        self._repo.hide_list_for_member(command.list_id, command.actor_user_id)
+
+
+class UnhideListService:
+    """Unhide a list previously hidden by a non-owner member."""
+
+    def __init__(self, repo: ListRepository) -> None:
+        self._repo = repo
+
+    def execute(self, command: UnhideListCommand) -> None:
+        existing = self._repo.get_list(command.list_id)
+        membership = self._repo.get_membership(command.list_id, command.actor_user_id)
+        if existing is None or membership is None:
+            raise NotListMemberError()
+
+        if existing.owner_id == command.actor_user_id:
+            raise CannotHideOwnedListError()
+
+        self._repo.unhide_list_for_member(command.list_id, command.actor_user_id)
 
 
 def _filter_entries_by_period(

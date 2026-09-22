@@ -42,7 +42,7 @@ from domain.splits import (
     KIND_PERCENTAGE,
     KIND_WHOLE_ASSIGNEE,
 )
-from sqlalchemy import delete, select, update
+from sqlalchemy import case, delete, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -355,9 +355,44 @@ class SqlAlchemyListRepository:
         row.is_archived = False
         self._session.flush()
 
+    def hide_list_for_member(self, list_id: UUID, user_id: UUID) -> None:
+        row = self._session.scalar(
+            select(ListMembershipModel).where(
+                ListMembershipModel.list_id == list_id,
+                ListMembershipModel.user_id == user_id,
+            )
+        )
+        if row is None:
+            raise ListNotFoundError()
+        row.is_hidden = True
+        self._session.flush()
+
+    def unhide_list_for_member(self, list_id: UUID, user_id: UUID) -> None:
+        row = self._session.scalar(
+            select(ListMembershipModel).where(
+                ListMembershipModel.list_id == list_id,
+                ListMembershipModel.user_id == user_id,
+            )
+        )
+        if row is None:
+            raise ListNotFoundError()
+        row.is_hidden = False
+        self._session.flush()
+
     def list_for_user(
         self, user_id: UUID, *, archived: bool = False
     ) -> list[ListMembershipSummary]:
+        # Effective archived state is per-row. The owner's own copy follows
+        # lists.is_archived alone. A non-owner member's follows the OR of
+        # both: the owner archiving still moves it to everyone's archived
+        # view (pre-existing Story 9.1 behavior, unchanged), and a member's
+        # own personal hide is an *additional*, independent reason for it
+        # to appear archived in their view only — never the inverse (a
+        # member can't unhide their way out of an owner's archive).
+        effective_archived = case(
+            (ListModel.owner_id == user_id, ListModel.is_archived),
+            else_=ListModel.is_archived | ListMembershipModel.is_hidden,
+        )
         stmt = (
             select(ListModel, ListMembershipModel.role)
             .join(
@@ -366,7 +401,7 @@ class SqlAlchemyListRepository:
             )
             .where(
                 ListMembershipModel.user_id == user_id,
-                ListModel.is_archived == archived,
+                effective_archived == archived,
             )
             .order_by(ListModel.created_at.asc())
         )

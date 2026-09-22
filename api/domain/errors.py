@@ -204,6 +204,15 @@ class NotListOwnerError(DomainError):
         super().__init__(detail or self.MESSAGE)
 
 
+class CannotHideOwnedListError(DomainError):
+    """Raised when the list owner attempts the member-only hide/unhide action."""
+
+    MESSAGE = "The list owner cannot hide their own list; use archive instead."
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
 class ListWriteError(DomainError):
     """Raised when list persistence fails due to a constraint / integrity error."""
 

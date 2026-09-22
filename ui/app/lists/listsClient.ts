@@ -283,6 +283,55 @@ export async function unarchiveList(
   return postListAction(listId, "unarchive", messages);
 }
 
+async function postHideAction(
+  listId: string,
+  action: "hide" | "unhide",
+  messages: ListsClientMessages,
+): Promise<OkSimple | ErrorResult> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/lists/${encodeURIComponent(listId)}/${action}`, {
+      method: "POST",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+    });
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  if (!response.ok) {
+    const body = (await parseJson(response)) as {
+      detail?: unknown;
+      code?: unknown;
+    } | null;
+    return { ok: false, error: mapError(response.status, body, messages) };
+  }
+  return { ok: true };
+}
+
+/**
+ * Hides a list from a non-owner member's own dashboard — a personal view
+ * filter, invisible to the owner and other members. Owner-only lists still
+ * use archiveList; this is member-only (`POST /lists/{id}/hide`).
+ */
+export async function hideList(
+  listId: string,
+  messages: ListsClientMessages,
+): Promise<OkSimple | ErrorResult> {
+  const result = await postHideAction(listId, "hide", messages);
+  if (result.ok) {
+    patchMembershipLists((prev) => prev.filter((item) => item.id !== listId));
+  }
+  return result;
+}
+
+/** Unhides a list previously hidden by a non-owner member. */
+export async function unhideList(
+  listId: string,
+  messages: ListsClientMessages,
+): Promise<OkSimple | ErrorResult> {
+  return postHideAction(listId, "unhide", messages);
+}
+
 /** Persist last-opened via /auth/me (account column) after ACL on the API. */
 export async function setLastOpenedList(
   listId: string,
