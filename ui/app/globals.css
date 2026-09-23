@@ -16,6 +16,8 @@
   --color-owe: var(--owe);
   --color-owed: var(--owed);
   --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --color-danger-strong: var(--danger-strong);
 
   --radius-sm: var(--rounded-sm);
   --radius-md: var(--rounded-md);
@@ -39,6 +41,8 @@
   --wb-owe: #a04936;
   --wb-owed: #2f6e48;
   --wb-warn: #a6791f;
+  --wb-danger: #8b3a2a;
+  --wb-danger-strong: #d32f2f;
 
   --background: var(--wb-bg);
   --surface: var(--wb-surface);
@@ -50,6 +54,8 @@
   --owe: var(--wb-owe);
   --owed: var(--wb-owed);
   --warn: var(--wb-warn);
+  --danger: var(--wb-danger);
+  --danger-strong: var(--wb-danger-strong);
 
   /* button-system Secondary variant — distinct from --accent (moss/Primary); see
      _bmad-output/planning-artifacts/ux-designs/ux-finance-dashboard-2026-09-02-buttons/DESIGN.md */
@@ -151,6 +157,8 @@ html.dark {
   --wb-owe: #d48b78;
   --wb-owed: #7ec794;
   --wb-warn: #d9b866;
+  --wb-danger: color-mix(in srgb, #8b3a2a 65%, white);
+  --wb-danger-strong: #d32f2f;
 
   --background: var(--wb-bg);
   --surface: var(--wb-surface);
@@ -162,6 +170,8 @@ html.dark {
   --owe: var(--wb-owe);
   --owed: var(--wb-owed);
   --warn: var(--wb-warn);
+  --danger: var(--wb-danger);
+  --danger-strong: var(--wb-danger-strong);
 
   --secondary: #adbdff;
   --on-secondary: #17140f;
@@ -186,6 +196,8 @@ html.dark {
     --wb-owe: #d48b78;
     --wb-owed: #7ec794;
     --wb-warn: #d9b866;
+    --wb-danger: color-mix(in srgb, #8b3a2a 65%, white);
+    --wb-danger-strong: #d32f2f;
 
     --background: var(--wb-bg);
     --surface: var(--wb-surface);
@@ -197,6 +209,8 @@ html.dark {
     --owe: var(--wb-owe);
     --owed: var(--wb-owed);
     --warn: var(--wb-warn);
+    --danger: var(--wb-danger);
+    --danger-strong: var(--wb-danger-strong);
 
     --secondary: #adbdff;
     --on-secondary: #17140f;

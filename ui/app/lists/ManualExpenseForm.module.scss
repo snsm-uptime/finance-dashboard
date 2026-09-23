@@ -41,7 +41,7 @@
 
 .input[aria-invalid="true"],
 .textarea[aria-invalid="true"] {
-  border-color: color-mix(in srgb, var(--danger, #b33) 70%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 70%, transparent);
 }
 
 .heading {
@@ -72,7 +72,7 @@
 
 .error {
   margin: 0;
-  color: var(--danger, #b33);
+  color: var(--danger);
   font-size: 0.9rem;
 }
 
