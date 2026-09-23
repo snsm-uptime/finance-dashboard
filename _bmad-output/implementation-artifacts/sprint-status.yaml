@@ -42,7 +42,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-03T22:46:31
-last_updated: 2026-09-23 (story 4-9-1: bac debit adapter, done)
+last_updated: 2026-09-23 (story 11-1: avatar crop & zoom control, review)
 
 project: finance-dashboard
 project_key: NOKEY
@@ -188,6 +188,12 @@ development_status:
   10-1-parallelize-list-detail-fetching: done
   10-2-loading-skeleton-list-detail: done
   epic-10-retrospective: optional
+
+  # Epic 11 — Avatar photo crop & zoom control. Sprint Change Proposal
+  # 2026-09-23. Renegotiates spec-profile-photo-avatar.md's "no cropping
+  # UI" boundary. Client-only.
+  epic-11: in-progress
+  11-1-avatar-crop-zoom-control: review
 
 action_items:
   - epic: 1

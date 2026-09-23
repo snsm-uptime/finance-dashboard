@@ -28,7 +28,7 @@ baseline_commit: '7cc8c5bad0e65684b16964e559bc5c93b4c0ea89'
 
 **Ask First:** none — decisions were resolved during clarification.
 
-**Never:** No cropping UI/editor (resize is automatic, no user-adjustable crop). No separate media storage/CDN/S3 — base64 stays inline in the `users` row and in API responses. No new npm/pip image libraries (Pillow, sharp, browser-image-compression, tooltip libs).
+**Never:** ~~No cropping UI/editor (resize is automatic, no user-adjustable crop).~~ **Amended 2026-09-23** (human renegotiation via Sprint Change Proposal `sprint-change-proposal-2026-09-23.md`, standalone story `11-1-avatar-crop-zoom-control`): a user-adjustable crop/zoom step is now in scope, using `react-easy-crop` client-side only — this is the one exception to the original "no new frontend dependency" and "no cropping UI" rules below, superseded specifically for this dependency and this UI. No separate media storage/CDN/S3 — base64 stays inline in the `users` row and in API responses. No new npm/pip image libraries beyond `react-easy-crop` (still no Pillow, sharp, browser-image-compression, tooltip libs).
 
 ## I/O & Edge-Case Matrix
 

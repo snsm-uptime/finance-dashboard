@@ -343,6 +343,11 @@ Extends the archive box-icon toggle pattern (Story 7.6) to lists and cards: an o
 **Demo gate:** a list owner archives a list via the Lists homepage toggle and it disappears from the default view but reappears via the archived toggle; same for a card on the Cards panel
 **Sequencing note:** Story 9.1 (backend) is a prerequisite for 9.2/9.3 and is **not** `--lite`-compatible (schema/API change) — run it in a full worktree. Stories 9.2 and 9.3 are independent of each other and both `--lite`-compatible once 9.1's API is available on the primary.
 
+### Epic 11: Avatar photo crop & zoom control
+Renegotiates the frozen profile-photo spec's "no cropping UI" boundary: adds `react-easy-crop` so the user positions/zooms their photo before saving, at both upload entry points (Account Menu, Alias Setup). Client-only, no API change.
+**FRs covered:** none new
+**Demo gate:** uploading a photo from either entry point opens a crop/zoom control before saving; saved avatar reflects the chosen framing
+
 ## Epic 1: Accounts & personal workspace
 
 Users can sign up, sign in, reset password, land with a personal list, and set EN/ES language plus Light / Dark / System theme in the Account menu. Includes greenfield Compose scaffold (`db`/`api`/`ui`).
@@ -2653,4 +2658,48 @@ segment (or equivalent `<Suspense>` boundary)
 **When** the page eventually resolves
 **Then** the skeleton is replaced by the real content with no layout
 shift beyond what the real content's own dimensions require
+
+## Epic 11: Avatar photo crop & zoom control
+
+Added by Sprint Change Proposal 2026-09-23 (`sprint-change-proposal-2026-09-23.md`). The profile-photo feature (spec `spec-profile-photo-avatar.md`, `status: done`) shipped with an automatic center-square crop and no user control, a limitation the spec's frozen intent explicitly called out ("no cropping UI/editor"). This epic renegotiates that one boundary: adds `react-easy-crop` so the user positions/zooms the source image before it's saved, at both existing upload entry points (Account Menu, Alias Setup onboarding). No other part of the frozen spec changes — same 256×256 output, same ~200KB cap, same backend contract (`PATCH /auth/me`, `photo_base64`), no new backend dependency.
+
+**FRs covered:** none new — UX refinement of existing profile-photo behavior (no FR previously tracked this feature)
+**Demo gate:** uploading a photo from either Account Menu or the Alias Setup screen opens a crop/zoom control before saving; the saved avatar reflects the user's chosen framing, not an automatic center-crop
+**Sequencing note:** independent of all other epics — client-only change, no API/data-model impact
+
+### Story 11.1: Avatar crop & zoom control
+
+As a user uploading a profile photo (from Account Menu or Alias Setup),
+I want to position and zoom the image before it's saved,
+so that my avatar isn't limited to an automatic center-crop that may cut off the part of the photo I want.
+
+**Acceptance Criteria:**
+
+**Given** the user selects an image file from either the Account Menu photo control or the Alias Setup photo control
+**When** the file is read successfully
+**Then** a `Sheet` (`ui/app/lists/Sheet.tsx` — not a modal) opens showing the image in a `react-easy-crop` `Cropper`, `cropShape="round"` (matches the circular `Avatar` preview), with a zoom control
+
+**Given** the crop sheet is open
+**When** the user drags to reposition or adjusts zoom
+**Then** the crop preview updates live; no network call and no alias-claim/photo PATCH is made yet
+
+**Given** the user has adjusted crop/zoom
+**When** they activate the sheet's corner action (`FormIconSubmit`, `variant="save"` — matches `BudgetUpdateForm.tsx`'s convention; not a text "Guardar" button)
+**Then** the cropped area is rendered to a 256×256 canvas and encoded/size-capped exactly as today (JPEG quality step-down to ≤200KB, PNG-with-transparency exception preserved), the sheet closes, and the resulting data URI is handed back to the calling surface (Account Menu PATCHes immediately; Alias Setup stores it in local state until form submit, unchanged from today)
+
+**Given** the crop sheet is open
+**When** the user activates the sheet's default close control (X) or the backdrop
+**Then** the sheet closes, nothing is saved/PATCHed, and the file input is reset — equivalent to today's do-nothing cancel
+
+**Given** the encode/PATCH (Account Menu) or encode (Alias Setup) step fails
+**When** the error returns
+**Then** the existing error messaging is shown (`t.photoError` / `messages.errorPhotoInvalid`), unchanged from current behavior
+
+**Given** `imageEncode.ts`'s existing size-capping/encode logic
+**When** this story is implemented
+**Then** that logic (JPEG quality step-down loop, PNG-transparency exception, `decodedByteLength` cap) is reused as-is — only the crop-source rectangle changes, from an always-centered square to the `Area` (`{x, y, width, height}`) that `react-easy-crop` reports via `onCropComplete`
+
+**Given** both Account Menu and Alias Setup need the same crop sheet
+**When** this story is implemented
+**Then** the crop `Sheet` + `Cropper` wiring is built once as a shared component (not duplicated in both call sites) and imported by both `AccountMenu.tsx` and `AliasSetupForm.tsx`
 

@@ -4,7 +4,7 @@ import { ChangeEvent, FormEvent, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Avatar } from "@/components/Avatar";
-import { encodeAvatarPhoto } from "@/lib/imageEncode";
+import { AvatarCropSheet } from "@/components/AvatarCropSheet";
 import type { AliasMessages } from "@/lib/i18n/alias";
 import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 
@@ -38,17 +38,16 @@ export function AliasSetupForm({ messages, continueHref }: Props) {
   const [photoBase64, setPhotoBase64] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const photoInputId = `${baseId}-photo`;
+  const [cropFile, setCropFile] = useState<File | null>(null);
+  const [cropOpen, setCropOpen] = useState(false);
 
-  async function onPhotoChange(event: ChangeEvent<HTMLInputElement>) {
+  function onPhotoChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
     setPhotoError(null);
-    try {
-      setPhotoBase64(await encodeAvatarPhoto(file));
-    } catch {
-      setPhotoError(messages.errorPhotoInvalid);
-    }
+    setCropFile(file);
+    setCropOpen(true);
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -131,7 +130,7 @@ export function AliasSetupForm({ messages, continueHref }: Props) {
             type="file"
             accept="image/png,image/jpeg"
             disabled={pending}
-            onChange={(e) => void onPhotoChange(e)}
+            onChange={onPhotoChange}
           />
           {photoBase64 ? (
             <button
@@ -154,6 +153,18 @@ export function AliasSetupForm({ messages, continueHref }: Props) {
       <PrimaryButton type="submit" disabled={pending} loading={pending}>
         {pending ? messages.saving : messages.submit}
       </PrimaryButton>
+
+      <AvatarCropSheet
+        file={cropFile}
+        open={cropOpen}
+        onClose={() => setCropOpen(false)}
+        onConfirm={(dataUri) => setPhotoBase64(dataUri)}
+        onError={() => setPhotoError(messages.errorPhotoInvalid)}
+        title={messages.photoCropTitle}
+        saveLabel={messages.photoCropSave}
+        closeLabel={messages.photoCropCancel}
+        zoomLabel={messages.photoCropZoom}
+      />
     </form>
   );
 }

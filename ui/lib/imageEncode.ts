@@ -1,5 +1,5 @@
 /**
- * Client-side avatar photo prep: canvas resize/crop to a 256x256 square and
+ * Client-side avatar photo prep: canvas crop/resize to a 256x256 square and
  * base64-encode, capped near 200KB — done here so the backend never needs an
  * image library (no Pillow/sharp, no separate media storage).
  */
@@ -8,7 +8,14 @@ const AVATAR_SIZE = 256;
 const TARGET_MAX_BYTES = 200_000;
 const MIN_JPEG_QUALITY = 0.4;
 
-function loadImage(file: File): Promise<HTMLImageElement> {
+export interface Area {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export function loadImage(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -24,20 +31,14 @@ function loadImage(file: File): Promise<HTMLImageElement> {
   });
 }
 
-function drawSquare(img: HTMLImageElement): HTMLCanvasElement {
+function drawCroppedSquare(img: HTMLImageElement, area: Area): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = AVATAR_SIZE;
   canvas.height = AVATAR_SIZE;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas 2D context unavailable.");
 
-  // Center-crop to a square before scaling, so the resize never distorts
-  // the aspect ratio (no user-adjustable crop — this is automatic).
-  const side = Math.min(img.naturalWidth, img.naturalHeight);
-  if (side <= 0) throw new Error("Could not read image file.");
-  const sx = (img.naturalWidth - side) / 2;
-  const sy = (img.naturalHeight - side) / 2;
-  ctx.drawImage(img, sx, sy, side, side, 0, 0, AVATAR_SIZE, AVATAR_SIZE);
+  ctx.drawImage(img, area.x, area.y, area.width, area.height, 0, 0, AVATAR_SIZE, AVATAR_SIZE);
   return canvas;
 }
 
@@ -53,16 +54,12 @@ function decodedByteLength(dataUri: string): number {
 }
 
 /**
- * Resize `file` to a 256x256 square and encode as a base64 data URI, capped
- * near 200KB. PNGs with transparency stay PNG (no quality knob to shrink
- * with); everything else re-encodes as JPEG, stepping quality down until it
- * clears the size cap.
+ * PNGs with transparency stay PNG (no quality knob to shrink with) as long
+ * as they clear the size cap; everything else re-encodes as JPEG, stepping
+ * quality down until it clears the size cap.
  */
-export async function encodeAvatarPhoto(file: File): Promise<string> {
-  const img = await loadImage(file);
-  const canvas = drawSquare(img);
-
-  if (file.type === "image/png") {
+function encodeCanvas(canvas: HTMLCanvasElement, mimeType: string): string {
+  if (mimeType === "image/png") {
     const dataUri = canvasToDataUri(canvas, "image/png");
     if (decodedByteLength(dataUri) <= TARGET_MAX_BYTES) return dataUri;
     // Oversized PNG (e.g. a large transparent graphic) — fall through to
@@ -76,4 +73,17 @@ export async function encodeAvatarPhoto(file: File): Promise<string> {
     dataUri = canvasToDataUri(canvas, "image/jpeg", quality);
   }
   return dataUri;
+}
+
+/**
+ * Crop `img` to the caller-supplied source rectangle, resize to a 256x256
+ * square, and encode as a base64 data URI, capped near 200KB.
+ */
+export async function encodeCroppedAvatar(
+  img: HTMLImageElement,
+  area: Area,
+  mimeType: string,
+): Promise<string> {
+  const canvas = drawCroppedSquare(img, area);
+  return encodeCanvas(canvas, mimeType);
 }
