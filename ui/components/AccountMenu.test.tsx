@@ -34,6 +34,28 @@ vi.mock("@/app/cards/cardsClient", async () => {
   };
 });
 
+// react-easy-crop needs ResizeObserver/canvas APIs jsdom doesn't provide —
+// stub it with a minimal component that immediately reports a crop area.
+vi.mock("react-easy-crop", async () => {
+  const React = await vi.importActual<typeof import("react")>("react");
+  function MockCropper({
+    onCropComplete,
+  }: {
+    onCropComplete?: (area: unknown, areaPixels: unknown) => void;
+  }) {
+    React.useEffect(() => {
+      onCropComplete?.(
+        { x: 0, y: 0, width: 100, height: 100 },
+        { x: 0, y: 0, width: 100, height: 100 },
+      );
+      // Fire once per mount (new file picked / sheet reopening), not on every render.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    return null;
+  }
+  return { default: MockCropper };
+});
+
 import { AccountMenu } from "./AccountMenu";
 import { AppShell } from "./AppShell";
 import { PreferencesProvider } from "./PreferencesProvider";
@@ -113,7 +135,33 @@ describe("AccountMenu", () => {
     document.body.innerHTML = "";
     document.documentElement.classList.remove("light", "dark");
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
+
+  /** Stubs the canvas + Image APIs the crop/encode pipeline needs, which jsdom doesn't implement. */
+  function stubImageEncodePipeline() {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      drawImage: vi.fn(),
+    } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue(
+      "data:image/jpeg;base64,AAAA",
+    );
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:mock-url");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+
+    const fakeImg = document.createElement("img");
+    Object.defineProperty(fakeImg, "src", {
+      set(_value: string) {
+        queueMicrotask(() => fakeImg.onload?.(new Event("load")));
+      },
+    });
+    vi.stubGlobal(
+      "Image",
+      function () {
+        return fakeImg;
+      },
+    );
+  }
 
   it("shows language, theme, password reset, and sign out", async () => {
     const { host, unmount } = renderAccount();
@@ -406,5 +454,64 @@ describe("AccountMenu", () => {
       root.unmount();
     });
     host.remove();
+  });
+
+  it("picking a photo opens the crop sheet, and confirming PATCHes /api/auth/me", async () => {
+    stubImageEncodePipeline();
+
+    const fetchMock = vi.fn();
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(mePayload()), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(mePayload({ photo_base64: "data:image/jpeg;base64,AAAA" })), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { host, unmount } = renderAccount();
+    await waitForDom(() => host.textContent?.includes("Language"));
+
+    const fileInput = host.querySelector('input[type="file"]') as HTMLInputElement;
+    expect(fileInput).toBeTruthy();
+    const file = new File(["fake"], "photo.png", { type: "image/png" });
+    await act(async () => {
+      Object.defineProperty(fileInput, "files", { value: [file], configurable: true });
+      fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await waitForDom(() => Boolean(document.querySelector('[role="dialog"]')));
+    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+
+    const saveButton = document.querySelector(
+      '[role="dialog"] button[aria-label="Save photo"]',
+    ) as HTMLButtonElement;
+    expect(saveButton).toBeTruthy();
+    expect(saveButton.disabled).toBe(false);
+
+    await act(async () => {
+      saveButton.click();
+    });
+
+    await waitForDom(() =>
+      fetchMock.mock.calls.some(
+        ([url, init]) => url === "/api/auth/me" && (init as RequestInit | undefined)?.method === "PATCH",
+      ),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/auth/me",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ photo_base64: "data:image/jpeg;base64,AAAA" }),
+      }),
+    );
+    unmount();
   });
 });

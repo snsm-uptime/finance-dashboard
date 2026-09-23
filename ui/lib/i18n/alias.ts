@@ -19,6 +19,10 @@ export const aliasMessages = {
     photoHint: "Shown wherever your alias appears. Skip to use a colored initial instead.",
     photoRemove: "Remove photo",
     errorPhotoInvalid: "That photo couldn't be used. Try a different image.",
+    photoCropTitle: "Adjust photo",
+    photoCropSave: "Save photo",
+    photoCropZoom: "Zoom",
+    photoCropCancel: "Close without saving",
   },
   es: {
     title: "Elige tu alias",
@@ -38,6 +42,10 @@ export const aliasMessages = {
     photoHint: "Se muestra donde aparece tu alias. Omite para usar una inicial de color.",
     photoRemove: "Quitar foto",
     errorPhotoInvalid: "No se pudo usar esa foto. Prueba con otra imagen.",
+    photoCropTitle: "Ajustar foto",
+    photoCropSave: "Guardar foto",
+    photoCropZoom: "Zoom",
+    photoCropCancel: "Cerrar sin guardar",
   },
 } as const;
 

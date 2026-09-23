@@ -32,6 +32,27 @@ vi.mock("./aliasClient", async () => {
   };
 });
 
+// react-easy-crop needs ResizeObserver/canvas APIs jsdom doesn't provide —
+// stub it with a minimal component that reports a crop area once per mount.
+vi.mock("react-easy-crop", async () => {
+  const React = await vi.importActual<typeof import("react")>("react");
+  function MockCropper({
+    onCropComplete,
+  }: {
+    onCropComplete?: (area: unknown, areaPixels: unknown) => void;
+  }) {
+    React.useEffect(() => {
+      onCropComplete?.(
+        { x: 0, y: 0, width: 100, height: 100 },
+        { x: 0, y: 0, width: 100, height: 100 },
+      );
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    return null;
+  }
+  return { default: MockCropper };
+});
+
 const messages = aliasMessages.en;
 
 describe("AliasSetupForm", () => {
@@ -52,7 +73,34 @@ describe("AliasSetupForm", () => {
       root.unmount();
     });
     container.remove();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
+
+  /** Stubs the canvas + Image APIs the crop/encode pipeline needs, which jsdom doesn't implement. */
+  function stubImageEncodePipeline() {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      drawImage: vi.fn(),
+    } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue(
+      "data:image/jpeg;base64,AAAA",
+    );
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:mock-url");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+
+    const fakeImg = document.createElement("img");
+    Object.defineProperty(fakeImg, "src", {
+      set(_value: string) {
+        queueMicrotask(() => fakeImg.onload?.(new Event("load")));
+      },
+    });
+    vi.stubGlobal(
+      "Image",
+      function () {
+        return fakeImg;
+      },
+    );
+  }
 
   async function render(continueHref = "/lists") {
     await act(async () => {
@@ -115,5 +163,45 @@ describe("AliasSetupForm", () => {
     await submit();
 
     expect(container.textContent).toContain(messages.errorInvalid);
+  });
+
+  it("picking a photo opens the crop sheet, and confirming sets photoBase64 state", async () => {
+    stubImageEncodePipeline();
+    await render();
+
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    expect(fileInput).toBeTruthy();
+    const file = new File(["fake"], "photo.png", { type: "image/png" });
+    await act(async () => {
+      Object.defineProperty(fileInput, "files", { value: [file], configurable: true });
+      fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+
+    const saveButton = document.querySelector(
+      '[role="dialog"] button[aria-label="Save photo"]',
+    ) as HTMLButtonElement;
+    expect(saveButton).toBeTruthy();
+    expect(saveButton.disabled).toBe(false);
+
+    await act(async () => {
+      saveButton.click();
+    });
+
+    // photoBase64 state is set once encode resolves — the "remove photo"
+    // control only renders when photoBase64 is non-null (see the ternary in
+    // the JSX). The Sheet itself takes CLOSE_ANIMATION_MS to unmount, so
+    // assert on the state effect rather than immediate DOM removal.
+    const start = Date.now();
+    while (!container.textContent?.includes(messages.photoRemove) && Date.now() - start < 2000) {
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 20));
+      });
+    }
+    expect(container.textContent).toContain(messages.photoRemove);
   });
 });
