@@ -1,6 +1,10 @@
+---
+baseline_commit: 11900d2174bb7a1d41c35eb52720e0d271467778
+---
+
 # Story 11.1: Avatar crop & zoom control
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -22,41 +26,41 @@ so that my avatar isn't limited to an automatic center-crop that may cut off the
 
 ## Tasks / Subtasks
 
-- [ ] Task 1 — Add dependency (AC: #1)
-  - [ ] `cd ui && npm i react-easy-crop`; confirm no peer-dep conflict with React 19.2.4 / Next 16.2.12 (`npm i` clean, no `--force`/`--legacy-peer-deps` needed — if one is needed, stop and report before proceeding, don't silently paper over it)
+- [x] Task 1 — Add dependency (AC: #1)
+  - [x] `cd ui && npm i react-easy-crop`; confirm no peer-dep conflict with React 19.2.4 / Next 16.2.12 (`npm i` clean, no `--force`/`--legacy-peer-deps` needed — if one is needed, stop and report before proceeding, don't silently paper over it)
 
-- [ ] Task 2 — Refactor `ui/lib/imageEncode.ts` to accept a user-chosen crop area (AC: #3, #6)
-  - [ ] Keep `loadImage`, `canvasToDataUri`, `decodedByteLength` unchanged
-  - [ ] Replace `drawSquare(img)` (which always center-crops) with a function that draws a caller-supplied source rectangle — e.g. `drawCroppedSquare(img: HTMLImageElement, area: { x: number; y: number; width: number; height: number })` — onto the same 256×256 canvas via `ctx.drawImage(img, area.x, area.y, area.width, area.height, 0, 0, AVATAR_SIZE, AVATAR_SIZE)`
-  - [ ] Export a new entry point, e.g. `encodeCroppedAvatar(img: HTMLImageElement, area: Area, mimeType: string): Promise<string>`, reusing the exact same JPEG-quality-step-down / PNG-transparency-exception logic that `encodeAvatarPhoto` has today (lines 61-79) — do not duplicate that loop, extract/share it
-  - [ ] Decide whether `encodeAvatarPhoto(file: File)` (the old auto-center entry point) stays exported for any other caller, or is fully replaced — grep the repo for other importers before removing it (currently only `AccountMenu.tsx` and `AliasSetupForm.tsx` import it, both of which this story changes — if no other caller exists after this story, remove the now-dead auto-center path rather than leaving unused code)
+- [x] Task 2 — Refactor `ui/lib/imageEncode.ts` to accept a user-chosen crop area (AC: #3, #6)
+  - [x] Keep `loadImage`, `canvasToDataUri`, `decodedByteLength` unchanged
+  - [x] Replace `drawSquare(img)` (which always center-crops) with a function that draws a caller-supplied source rectangle — e.g. `drawCroppedSquare(img: HTMLImageElement, area: { x: number; y: number; width: number; height: number })` — onto the same 256×256 canvas via `ctx.drawImage(img, area.x, area.y, area.width, area.height, 0, 0, AVATAR_SIZE, AVATAR_SIZE)`
+  - [x] Export a new entry point, e.g. `encodeCroppedAvatar(img: HTMLImageElement, area: Area, mimeType: string): Promise<string>`, reusing the exact same JPEG-quality-step-down / PNG-transparency-exception logic that `encodeAvatarPhoto` has today (lines 61-79) — do not duplicate that loop, extract/share it
+  - [x] Decide whether `encodeAvatarPhoto(file: File)` (the old auto-center entry point) stays exported for any other caller, or is fully replaced — grep the repo for other importers before removing it (currently only `AccountMenu.tsx` and `AliasSetupForm.tsx` import it, both of which this story changes — if no other caller exists after this story, remove the now-dead auto-center path rather than leaving unused code)
 
-- [ ] Task 3 — Build the shared crop-sheet component (AC: #1, #2, #3, #4, #7)
-  - [ ] New file, e.g. `ui/components/AvatarCropSheet.tsx` — accepts the picked `File`, an `open`/`onClose` pair, and an `onConfirm(dataUri: string)` callback
-  - [ ] Load the file into an `HTMLImageElement` (reuse `loadImage` from `imageEncode.ts` — export it if it isn't already, or move it somewhere both this component and `imageEncode.ts` can use without a circular import)
-  - [ ] Render `Sheet` from `ui/app/lists/Sheet.tsx` with: `body` = `react-easy-crop`'s `<Cropper image={objectUrl} crop={crop} zoom={zoom} cropShape="round" aspect={1} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={(_, areaPixels) => setCroppedAreaPixels(areaPixels)} />`; `cornerAction` = `<FormIconSubmit type="button" variant="save" label={<crop-confirm i18n key>} onClick={onConfirm} disabled={!croppedAreaPixels} />`; leave `closeButton`/`onClose` as `Sheet`'s defaults (no custom Cancelar button)
-  - [ ] `react-easy-crop` needs a sized container — give the `Cropper`'s wrapping div `position: relative` and an explicit height inside the sheet body (the library requires this; check its docs/README for the minimal required CSS — a bare `<Cropper>` with no positioned/sized parent renders nothing)
-  - [ ] On confirm: call `encodeCroppedAvatar(img, croppedAreaPixels, file.type === "image/png" ? "image/png" : "image/jpeg")`, then `onConfirm(dataUri)`, then close the sheet
-  - [ ] On close/cancel: revoke any `URL.createObjectURL` used for the image preview (avoid a memory leak — mirrors the `loadImage` cleanup pattern already in `imageEncode.ts`)
+- [x] Task 3 — Build the shared crop-sheet component (AC: #1, #2, #3, #4, #7)
+  - [x] New file, e.g. `ui/components/AvatarCropSheet.tsx` — accepts the picked `File`, an `open`/`onClose` pair, and an `onConfirm(dataUri: string)` callback
+  - [x] Load the file into an `HTMLImageElement` (reuse `loadImage` from `imageEncode.ts` — export it if it isn't already, or move it somewhere both this component and `imageEncode.ts` can use without a circular import)
+  - [x] Render `Sheet` from `ui/app/lists/Sheet.tsx` with: `body` = `react-easy-crop`'s `<Cropper image={objectUrl} crop={crop} zoom={zoom} cropShape="round" aspect={1} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={(_, areaPixels) => setCroppedAreaPixels(areaPixels)} />`; `cornerAction` = `<FormIconSubmit type="button" variant="save" label={<crop-confirm i18n key>} onClick={onConfirm} disabled={!croppedAreaPixels} />`; leave `closeButton`/`onClose` as `Sheet`'s defaults (no custom Cancelar button)
+  - [x] `react-easy-crop` needs a sized container — give the `Cropper`'s wrapping div `position: relative` and an explicit height inside the sheet body (the library requires this; check its docs/README for the minimal required CSS — a bare `<Cropper>` with no positioned/sized parent renders nothing)
+  - [x] On confirm: call `encodeCroppedAvatar(img, croppedAreaPixels, file.type === "image/png" ? "image/png" : "image/jpeg")`, then `onConfirm(dataUri)`, then close the sheet
+  - [x] On close/cancel: revoke any `URL.createObjectURL` used for the image preview (avoid a memory leak — mirrors the `loadImage` cleanup pattern already in `imageEncode.ts`)
 
-- [ ] Task 4 — Wire into `AccountMenu.tsx` (AC: #1, #3, #4, #5)
-  - [ ] Replace the current `onPhotoChange` (line 159-171) body: instead of calling `encodeAvatarPhoto` + `savePhoto` directly, store the picked `File` in state and open `AvatarCropSheet`
-  - [ ] `AvatarCropSheet`'s `onConfirm` calls the existing `savePhoto(dataUri)` (keep that function as-is — it already does the PATCH + `refresh()` + error handling)
-  - [ ] Cancel/close: just close the sheet, no state to revert (nothing was saved yet)
-  - [ ] The file `<input>` (currently inline in the `<label>` at line 234-240) still opens the OS file picker as today; only what happens *after* a file is picked changes
+- [x] Task 4 — Wire into `AccountMenu.tsx` (AC: #1, #3, #4, #5)
+  - [x] Replace the current `onPhotoChange` (line 159-171) body: instead of calling `encodeAvatarPhoto` + `savePhoto` directly, store the picked `File` in state and open `AvatarCropSheet`
+  - [x] `AvatarCropSheet`'s `onConfirm` calls the existing `savePhoto(dataUri)` (keep that function as-is — it already does the PATCH + `refresh()` + error handling)
+  - [x] Cancel/close: just close the sheet, no state to revert (nothing was saved yet)
+  - [x] The file `<input>` (currently inline in the `<label>` at line 234-240) still opens the OS file picker as today; only what happens *after* a file is picked changes
 
-- [ ] Task 5 — Wire into `AliasSetupForm.tsx` (AC: #1, #3, #4, #5, #7)
-  - [ ] Replace `onPhotoChange` (line 42-52): instead of calling `encodeAvatarPhoto` directly into `photoBase64` state, store the picked `File` and open the same `AvatarCropSheet`
-  - [ ] `onConfirm` sets `photoBase64` state exactly as today (line 48) — the rest of the submit flow (`setPhoto` call inside `onSubmit`, line 75-84) is unchanged
-  - [ ] This form has no chrome header (it's a plain onboarding page) — confirm `Sheet` still renders correctly with `fillBelowChrome` left at its default (`false`); do not pass `fillBelowChrome={true}` here since there's no `[data-app-chrome='header']` to measure against
+- [x] Task 5 — Wire into `AliasSetupForm.tsx` (AC: #1, #3, #4, #5, #7)
+  - [x] Replace `onPhotoChange` (line 42-52): instead of calling `encodeAvatarPhoto` directly into `photoBase64` state, store the picked `File` and open the same `AvatarCropSheet`
+  - [x] `onConfirm` sets `photoBase64` state exactly as today (line 48) — the rest of the submit flow (`setPhoto` call inside `onSubmit`, line 75-84) is unchanged
+  - [x] This form has no chrome header (it's a plain onboarding page) — confirm `Sheet` still renders correctly with `fillBelowChrome` left at its default (`false`); do not pass `fillBelowChrome={true}` here since there's no `[data-app-chrome='header']` to measure against
 
-- [ ] Task 6 — i18n (AC: #1, #3)
-  - [ ] `ui/lib/i18n/account.ts`: add EN+ES keys for the crop sheet — title (e.g. `photoCropTitle`), corner-action label (e.g. `photoCropSave`) — both locales, both files' `en`/`es` blocks kept in sync (existing convention, see file structure)
-  - [ ] `ui/lib/i18n/alias.ts`: add the same crop-sheet keys to `aliasMessages` (both `en`/`es`) — do not reuse `accountMessages` here, `AliasSetupForm` only imports `AliasMessages`/`aliasMessages` today, keep that boundary
-  - [ ] If the shared `AvatarCropSheet` component takes copy as props (recommended, keeps it presentation-only) rather than importing an i18n module itself, both call sites pass their own locale-resolved strings — avoids the component needing to know which i18n domain it's in
+- [x] Task 6 — i18n (AC: #1, #3)
+  - [x] `ui/lib/i18n/account.ts`: add EN+ES keys for the crop sheet — title (e.g. `photoCropTitle`), corner-action label (e.g. `photoCropSave`) — both locales, both files' `en`/`es` blocks kept in sync (existing convention, see file structure)
+  - [x] `ui/lib/i18n/alias.ts`: add the same crop-sheet keys to `aliasMessages` (both `en`/`es`) — do not reuse `accountMessages` here, `AliasSetupForm` only imports `AliasMessages`/`aliasMessages` today, keep that boundary
+  - [x] If the shared `AvatarCropSheet` component takes copy as props (recommended, keeps it presentation-only) rather than importing an i18n module itself, both call sites pass their own locale-resolved strings — avoids the component needing to know which i18n domain it's in
 
-- [ ] Task 7 — Tests (AC: all)
-  - [ ] No existing test file covers photo upload in `AccountMenu.test.tsx` or for `AliasSetupForm` — this story is not obligated to retrofit full coverage (per project-context: "UI: test-after," don't invent a coverage floor that wasn't there), but must add tests scoped to what it changes:
+- [x] Task 7 — Tests (AC: all)
+  - [x] No existing test file covers photo upload in `AccountMenu.test.tsx` or for `AliasSetupForm` — this story is not obligated to retrofit full coverage (per project-context: "UI: test-after," don't invent a coverage floor that wasn't there), but must add tests scoped to what it changes:
     - `imageEncode.ts` has **no existing test file** — add one covering the new `encodeCroppedAvatar`/`drawCroppedSquare` path: a given `Area` produces a canvas draw with those exact source coordinates (mock/spy `ctx.drawImage`), and the JPEG quality step-down / PNG-cap behavior still works when driven through the new entry point
     - `AccountMenu.test.tsx`: add a test that picking a file opens the crop sheet, and confirming it triggers the same `PATCH /api/auth/me` call shape as today's `fetchMock.toHaveBeenCalledWith(...)` assertions elsewhere in that file (mock `react-easy-crop`'s `Cropper` — it needs `ResizeObserver`/canvas APIs jsdom doesn't provide; stub it the way this file already stubs `matchMedia`/`fetch`)
     - A minimal `AliasSetupForm` test for the same open-sheet → confirm → state-set path, if no test file exists yet for that component, add one scoped to just this behavior (don't retrofit the rest of the form)
@@ -96,10 +100,37 @@ so that my avatar isn't limited to an automatic center-crop that may cut off the
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Sonnet 5 (claude-sonnet-5)
 
 ### Debug Log References
 
+- `docker restart fh-feat-11-11-1-avatar-crop-zoom-control-ui-1` was needed once after `worktree-bootstrap.sh --lite` left a stale `.next/dev` build (its own `rm -rf` failed with `Permission denied` on a busy mount); the restart cleared it and the UI came up healthy (200).
+
 ### Completion Notes List
 
+- Added `react-easy-crop` (clean `npm i`, no peer-dep conflicts with React 19.2.4 / Next 16.2.12).
+- Refactored `ui/lib/imageEncode.ts`: extracted the shared JPEG-quality-step-down/PNG-transparency-exception loop into `encodeCanvas`, replaced the always-centered `drawSquare` with `drawCroppedSquare(img, area)`, and exported `encodeCroppedAvatar(img, area, mimeType)` plus `loadImage`/`Area`. The old auto-center `encodeAvatarPhoto` was removed outright — its only two callers (`AccountMenu.tsx`, `AliasSetupForm.tsx`) are both updated in this story and no other importer existed.
+- Built `ui/components/AvatarCropSheet.tsx` once, imported by both call sites. Internally it's a thin wrapper that, once a file is picked, mounts a `CropEditor` keyed by the file's object URL — that key (rather than an effect-driven reset) is what gives every new pick/reopen fresh crop/zoom state without tripping the `react-hooks/set-state-in-effect` lint rule. Added an explicit zoom `<input type="range">` since AC #1 calls for "a zoom control" as a UI element, beyond the Cropper's built-in wheel/pinch gestures — the story's Task 3 crop-area snippet didn't spell this out, so it's an interpretation of AC #1's literal wording.
+- Wired both `AccountMenu.tsx` and `AliasSetupForm.tsx`: `onPhotoChange` now just stores the `File` and opens the sheet; existing `savePhoto` (Account Menu PATCH) and `photoBase64` state-set (Alias Setup) are unchanged and are the sheet's `onConfirm` targets. Added an `onError` prop on `AvatarCropSheet` so a caught encode failure surfaces each call site's own existing error copy (`t.photoError` / `messages.errorPhotoInvalid`) per AC #5.
+- Added EN/ES i18n keys per domain (`account.ts`, `alias.ts`): `photoCropTitle`, `photoCropSave`, `photoCropZoom`, `photoCropCancel` (the last one wasn't named in Task 6 but was needed for the Sheet's required `closeLabel` a11y prop — added following the file's existing key-naming convention).
+- Tests: `ui/lib/imageEncode.test.ts` is new (7 tests) covering the exact-coordinates draw, JPEG quality step-down, PNG-transparency-exception/fallback, and `loadImage` resolve/reject. Added one scoped test each to `AccountMenu.test.tsx` and `AliasSetupForm.test.tsx` (pick file → crop sheet opens → confirm → PATCH / state-set), mocking `react-easy-crop`'s `Cropper` and stubbing the canvas/`Image` APIs jsdom lacks.
+- Manually verified end-to-end in the story's worktree stack (browser automation against `http://localhost:3400`, ephemeral verified test user, cleaned up afterward): crop sheet opens with round `Cropper`, visible zoom slider, icon-only Save corner action (no text Cancel/Guardar), confirming PATCHes `/api/auth/me` and persists the cropped/encoded photo to the DB, and the X/backdrop close cancels with no PATCH and no state change. No console errors from the app's own code; the only console errors observed (401s on `/api/auth/session`/`/api/auth/me`) are pre-existing sign-in-redirect timing noise, unrelated to this story's code paths.
+- Full existing suite (`npx vitest run` in `ui/`): 113 files / 825 tests, all passing — no regressions. `npx tsc --noEmit` and `npx eslint .` both clean (only pre-existing unrelated warnings elsewhere, e.g. `BudgetAssignPanel.tsx`).
+
 ### File List
+
+- `ui/package.json` (modified — added `react-easy-crop` dependency)
+- `ui/package-lock.json` (modified — lockfile update from the above)
+- `ui/lib/imageEncode.ts` (modified — cropped-area encode path, extracted shared encode loop, removed old auto-center path)
+- `ui/lib/imageEncode.test.ts` (new)
+- `ui/components/AvatarCropSheet.tsx` (new — shared crop/zoom sheet)
+- `ui/components/AccountMenu.tsx` (modified — wired to `AvatarCropSheet`)
+- `ui/components/AccountMenu.test.tsx` (modified — added crop-flow test + `react-easy-crop` mock/canvas stubs)
+- `ui/app/alias/AliasSetupForm.tsx` (modified — wired to `AvatarCropSheet`)
+- `ui/app/alias/AliasSetupForm.test.tsx` (modified — added crop-flow test + `react-easy-crop` mock/canvas stubs)
+- `ui/lib/i18n/account.ts` (modified — added `photoCropTitle`/`photoCropSave`/`photoCropZoom`/`photoCropCancel`, EN+ES)
+- `ui/lib/i18n/alias.ts` (modified — same four keys added to `aliasMessages`, EN+ES)
+
+### Change Log
+
+- 2026-09-23: Implemented Story 11.1 — avatar crop & zoom control. Replaced the auto-center-crop avatar upload flow (Account Menu, Alias Setup) with a shared `AvatarCropSheet` built on `react-easy-crop` inside the existing `Sheet` primitive; `imageEncode.ts` now encodes a user-chosen crop area instead of an always-centered square.

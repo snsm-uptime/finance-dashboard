@@ -16,8 +16,8 @@ import {
   usePreferences,
 } from "@/components/PreferencesProvider";
 import { TriSwitch } from "@/components/TriSwitch";
+import { AvatarCropSheet } from "@/components/AvatarCropSheet";
 import { accountCopy } from "@/lib/i18n/account";
-import { encodeAvatarPhoto } from "@/lib/imageEncode";
 import type { Locale, ThemePreference } from "@/lib/i18n/locale";
 import listsStyles from "@/app/lists/lists.module.scss";
 
@@ -39,6 +39,8 @@ export function AccountMenu() {
   const [, setCardsRefreshToken] = useState(0);
   const [photoPending, setPhotoPending] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [cropFile, setCropFile] = useState<File | null>(null);
+  const [cropOpen, setCropOpen] = useState(false);
 
   // Account has no tab-bar entry of its own — it's reached only via the
   // avatar in the chrome leading slot on other pages, so this is the one
@@ -156,18 +158,13 @@ export function AccountMenu() {
     }
   }
 
-  async function onPhotoChange(event: ChangeEvent<HTMLInputElement>) {
+  function onPhotoChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    let encoded: string;
-    try {
-      encoded = await encodeAvatarPhoto(file);
-    } catch {
-      setPhotoError(t.photoError);
-      return;
-    }
-    await savePhoto(encoded);
+    setPhotoError(null);
+    setCropFile(file);
+    setCropOpen(true);
   }
 
   async function onSignOut() {
@@ -236,7 +233,7 @@ export function AccountMenu() {
               accept="image/png,image/jpeg"
               className="hidden"
               disabled={controlsDisabled || photoPending}
-              onChange={(e) => void onPhotoChange(e)}
+              onChange={onPhotoChange}
             />
           </label>
           {me?.photo_base64 ? (
@@ -358,6 +355,18 @@ export function AccountMenu() {
       {error ? (
         <p className="text-owe text-[0.9rem] mt-4">{error}</p>
       ) : null}
+
+      <AvatarCropSheet
+        file={cropFile}
+        open={cropOpen}
+        onClose={() => setCropOpen(false)}
+        onConfirm={(dataUri) => void savePhoto(dataUri)}
+        onError={() => setPhotoError(t.photoError)}
+        title={t.photoCropTitle}
+        saveLabel={t.photoCropSave}
+        closeLabel={t.photoCropCancel}
+        zoomLabel={t.photoCropZoom}
+      />
     </main>
   );
 }
