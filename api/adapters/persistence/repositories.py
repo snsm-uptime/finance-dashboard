@@ -905,12 +905,15 @@ class SqlAlchemyListRepository:
                 .values(list_id=destination_list_id)
             )
         if override_keys and from_list_ids:
+            subject_ids_by_kind: dict[str, list[UUID]] = {}
             for kind, subject_id in override_keys:
+                subject_ids_by_kind.setdefault(kind, []).append(subject_id)
+            for kind, subject_ids in subject_ids_by_kind.items():
                 self._session.execute(
                     update(SplitOverrideModel)
                     .where(
                         SplitOverrideModel.subject_kind == kind,
-                        SplitOverrideModel.subject_id == subject_id,
+                        SplitOverrideModel.subject_id.in_(subject_ids),
                         SplitOverrideModel.list_id.in_(from_list_ids),
                     )
                     .values(list_id=destination_list_id)
