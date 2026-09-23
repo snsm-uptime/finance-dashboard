@@ -372,3 +372,8 @@
 ## Deferred from: code review of 10-1-parallelize-list-detail-fetching.md (2026-09-21)
 
 - `detail`'s payload is parsed via `response.json() as Promise<DetailPayload>` with no runtime validation, unlike the sibling `split`/`members`/`cycles` fetches which go through `asDefaultSplit`/`asMembers`/`asCycles`. Pre-existing — the same unchecked cast existed before this story, just moved into the `Promise.all`; a malformed/unexpected `detail` body still silently propagates `undefined` fields (e.g. `detail?.owner_id`) rather than being caught with an equivalent `detailLoadError` flag.
+
+## Deferred from: code review of 4-9-1-bac-debit-adapter.md (2026-09-23)
+
+- SIGN_VARIANT x-position ranges (`_DEBITOS_RANGE`/`_CREDITOS_RANGE`, `api/adapters/bank/bac_debit/adapter.py:63-76`) are calibrated only against the synthetic fixture's own Courier-monospace geometry, not the real PDF's proportional-font geometry (already flagged in-code as a known gap). CI passing on the synthetic fixture doesn't prove the shipped ranges correctly resolve DÉBITOS/CRÉDITOS on a real BAC debit statement — needs a real-PDF calibration pass as separate follow-up work.
+- Multi-page footer termination (`api/adapters/bank/bac_debit/adapter.py:250-317`) stops processing all subsequent pages the moment a footer line (`SALDO AL CORTE`) is seen on any page. No multi-page fixture exists to confirm whether real multi-page BAC debit statements print the footer once at the true end (current behavior correct) or per page (would silently drop later pages' transactions). Deferred pending real multi-page evidence.

@@ -37,7 +37,10 @@ def _line(**overrides: object) -> CanonicalLine:
     return CanonicalLine(**defaults)  # type: ignore[arg-type]
 
 
-def test_line_types_contains_all_ten_prd_named_types() -> None:
+def test_line_types_contains_all_ten_prd_named_types_plus_debit_account_types() -> None:
+    # "withdrawal"/"deposit" added by Story 4.9.1 for debit-account (checking)
+    # rows — deliberately distinct from the ten original credit-card-product
+    # types above (see domain/line_types.py, adapters/bank/bac_debit).
     assert LINE_TYPES == {
         "purchase",
         "payment",
@@ -49,6 +52,8 @@ def test_line_types_contains_all_ten_prd_named_types() -> None:
         "balance_forward",
         "other",
         "classified_purchase_reversal",
+        "withdrawal",
+        "deposit",
     }
 
 
