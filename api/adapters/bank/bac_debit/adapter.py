@@ -54,9 +54,7 @@ _STATEMENT_HEADER_MARKER = "CUADRO RESUMEN"
 
 _DATE_FORMAT = "%b/%d"
 
-_CUT_OFF_DATE_RE = re.compile(
-    r"Fecha de [Cc]orte:\s*(\d{1,2}/[A-ZÁÉÍÓÚÑ]{3}/\d{2})", re.IGNORECASE
-)
+_CUT_OFF_DATE_RE = re.compile(r"Fecha de [Cc]orte:\s*(\d{1,2}/[A-ZÁÉÍÓÚÑ]{3}/\d{2})", re.IGNORECASE)
 _MONEDA_RE = re.compile(r"Moneda:\s*(COLONES|DOLARES)", re.IGNORECASE)
 _CURRENCY_BY_MONEDA = {"COLONES": "CRC", "DOLARES": "USD"}
 

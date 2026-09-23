@@ -75,9 +75,7 @@ def detect_bank_adapter(
     # already-ambiguous filename match stay ambiguous regardless of content.
     # Blanking it forces content to be the sole, authoritative signal for
     # this disambiguation pass.
-    content_matches = [
-        a for a in adapters if a.detect(filename="", content_sample=content_sample)
-    ]
+    content_matches = [a for a in adapters if a.detect(filename="", content_sample=content_sample)]
     if len(content_matches) == 1:
         return content_matches[0]
     if len(content_matches) > 1:
