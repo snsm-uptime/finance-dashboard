@@ -51,6 +51,8 @@ from application.lists import (
     GetListDetailService,
     GetListOriginSpendCommand,
     GetListOriginSpendService,
+    HideListCommand,
+    HideListService,
     ListMembershipsCommand,
     ListMembershipsService,
     RenameListCommand,
@@ -63,10 +65,13 @@ from application.lists import (
     SimplifyGroupPlanService,
     UnarchiveListCommand,
     UnarchiveListService,
+    UnhideListCommand,
+    UnhideListService,
 )
 from application.reassign_statement import ReassignStatementCommand, ReassignStatementService
 from domain.errors import (
     AlreadyListMemberError,
+    CannotHideOwnedListError,
     ExpenseNotDeletableError,
     FxAuthenticationError,
     FxCurrencyNotSupportedError,
@@ -1067,6 +1072,46 @@ def unarchive_list(
         )
     logger.info("list_unarchived list_id=%s", result.id)
     return _list_response(result.id, result.name, result.owner_id, result.is_archived)
+
+
+@router.post("/{list_id}/hide", response_model=None)
+def hide_list(
+    list_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> Response | JSONResponse:
+    service = HideListService(SqlAlchemyListRepository(db))
+    try:
+        service.execute(HideListCommand(actor_user_id=user_id, list_id=list_id))
+    except (ListNotFoundError, NotListMemberError):
+        return _access_denied()
+    except CannotHideOwnedListError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={"detail": str(exc), "code": "cannot_hide_owned_list"},
+        )
+    logger.info("list_hidden list_id=%s", list_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{list_id}/unhide", response_model=None)
+def unhide_list(
+    list_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> Response | JSONResponse:
+    service = UnhideListService(SqlAlchemyListRepository(db))
+    try:
+        service.execute(UnhideListCommand(actor_user_id=user_id, list_id=list_id))
+    except (ListNotFoundError, NotListMemberError):
+        return _access_denied()
+    except CannotHideOwnedListError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={"detail": str(exc), "code": "cannot_hide_owned_list"},
+        )
+    logger.info("list_unhidden list_id=%s", list_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(

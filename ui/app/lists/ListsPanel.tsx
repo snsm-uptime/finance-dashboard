@@ -46,10 +46,12 @@ import {
   formatCardBalance,
   deleteList,
   fetchLists,
+  hideList,
   memberLabel,
   renameList,
   setLastOpenedList,
   unarchiveList,
+  unhideList,
   type ListItem,
 } from "./listsClient";
 import {
@@ -413,6 +415,44 @@ export function ListsPanel({ initialLists, currentUserId, showArchived = false }
     }
   }
 
+  async function onHide(list: ListItem) {
+    if (archivingId) return;
+    setArchivingId(list.id);
+    setOpenMenuId(null);
+    try {
+      const result = await hideList(list.id, messages);
+      if (!result.ok) {
+        setArchiveActionError(result.error);
+      } else {
+        setArchiveActionError(null);
+      }
+      // hideList already removes the list from the shared membership
+      // store on success — useMembershipLists() re-renders this row away.
+    } finally {
+      setArchivingId(null);
+    }
+  }
+
+  async function onUnhide(list: ListItem) {
+    if (archivingId) return;
+    setArchivingId(list.id);
+    setOpenMenuId(null);
+    try {
+      const result = await unhideList(list.id, messages);
+      if (!result.ok) {
+        setArchiveActionError(result.error);
+        return;
+      }
+      setArchiveActionError(null);
+      setArchivedLists((prev) => prev.filter((item) => item.id !== list.id));
+      patchMembershipLists((prev) =>
+        prev.some((item) => item.id === list.id) ? prev : [...prev, list],
+      );
+    } finally {
+      setArchivingId(null);
+    }
+  }
+
   const anyOpening = openingId !== null;
 
   const startInvite = useCallback((listId: string) => {
@@ -613,7 +653,50 @@ export function ListsPanel({ initialLists, currentUserId, showArchived = false }
                     )}
                   </IconButtonPopup>
                 </div>
-              ) : null}
+              ) : (
+                <div className={styles.menuCol}>
+                  <IconButtonPopup
+                    panelClassName={styles.menuPanel}
+                    panelRole="menu"
+                    open={openMenuId === list.id}
+                    onOpenChange={(next) => {
+                      setOpenMenuId(next ? list.id : null);
+                    }}
+                    button={
+                      <IconButton
+                        type="button"
+                        variant="muted"
+                        className={styles.renameIcon}
+                        label={t.menuAria}
+                        disabled={anyOpening}
+                        icon={<DotsIcon />}
+                      />
+                    }
+                  >
+                    {showArchived ? (
+                      <IconButtonPopupItem
+                        onClick={() => void onUnhide(list)}
+                        disabled={anyOpening || archivingId !== null}
+                      >
+                        <span className="flex items-center gap-4">
+                          <ArchiveToggleIcon active className="h-4 w-4 shrink-0" />
+                          {t.listsUnarchive}
+                        </span>
+                      </IconButtonPopupItem>
+                    ) : (
+                      <IconButtonPopupItem
+                        onClick={() => void onHide(list)}
+                        disabled={anyOpening || archivingId !== null}
+                      >
+                        <span className="flex items-center gap-4">
+                          <ArchiveToggleIcon className="h-4 w-4 shrink-0" />
+                          {t.listsArchive}
+                        </span>
+                      </IconButtonPopupItem>
+                    )}
+                  </IconButtonPopup>
+                </div>
+              )}
             </>
           )}
         </div>

@@ -9,10 +9,14 @@ from uuid import UUID, uuid4
 
 import pytest
 from application.lists import (
+    ArchiveListCommand,
+    ArchiveListService,
     CreateOwnedListCommand,
     CreateOwnedListService,
     GetListDefaultSplitCommand,
     GetListDefaultSplitService,
+    HideListCommand,
+    HideListService,
     ListMembershipsCommand,
     ListMembershipsService,
     ListMembershipSummary,
@@ -23,10 +27,13 @@ from application.lists import (
     SetListDefaultSplitCommand,
     SetListDefaultSplitService,
     StoredDefaultSplit,
+    UnhideListCommand,
+    UnhideListService,
 )
 from application.ports import NewListRecord, NewMembershipRecord
 from domain.default_split import MODE_EVEN, MODE_PERCENTAGE, validate_percentage_shares
 from domain.errors import (
+    CannotHideOwnedListError,
     InvalidDefaultSplitError,
     InvalidListNameError,
     ListNotFoundError,
@@ -40,6 +47,7 @@ from domain.lists import validate_list_name
 class FakeListRepo:
     lists: dict[UUID, ListRecord] = field(default_factory=dict)
     memberships: list[MembershipRecord] = field(default_factory=list)
+    hidden_memberships: set[tuple[UUID, UUID]] = field(default_factory=set)
 
     def create_owned_list(
         self,
@@ -87,6 +95,12 @@ class FakeListRepo:
             id=current.id, name=current.name, owner_id=current.owner_id, is_archived=False
         )
 
+    def hide_list_for_member(self, list_id: UUID, user_id: UUID) -> None:
+        self.hidden_memberships.add((list_id, user_id))
+
+    def unhide_list_for_member(self, list_id: UUID, user_id: UUID) -> None:
+        self.hidden_memberships.discard((list_id, user_id))
+
     def list_for_user(
         self, user_id: UUID, *, archived: bool = False
     ) -> list[ListMembershipSummary]:
@@ -95,7 +109,12 @@ class FakeListRepo:
             if m.user_id != user_id:
                 continue
             lst = self.lists[m.list_id]
-            if lst.is_archived != archived:
+            effective_archived = (
+                lst.is_archived
+                if lst.owner_id == user_id
+                else lst.is_archived or (m.list_id, m.user_id) in self.hidden_memberships
+            )
+            if effective_archived != archived:
                 continue
             out.append(
                 ListMembershipSummary(
@@ -257,6 +276,132 @@ def test_rename_missing_list_raises_not_member() -> None:
         RenameListService(FakeListRepo()).execute(
             RenameListCommand(actor_user_id=uuid4(), list_id=uuid4(), name="X")
         )
+
+
+def test_member_hide_removes_list_from_default_view() -> None:
+    repo = FakeListRepo()
+    owner = uuid4()
+    member = uuid4()
+    list_id = uuid4()
+    repo.create_owned_list(
+        owned_list=NewListRecord(id=list_id, name="Household", owner_id=owner),
+        membership=NewMembershipRecord(id=uuid4(), list_id=list_id, user_id=owner, role="owner"),
+    )
+    repo.memberships.append(MembershipRecord(list_id=list_id, user_id=member, role="member"))
+
+    HideListService(repo).execute(HideListCommand(actor_user_id=member, list_id=list_id))
+
+    default_view = ListMembershipsService(repo).execute(
+        ListMembershipsCommand(actor_user_id=member)
+    )
+    archived_view = ListMembershipsService(repo).execute(
+        ListMembershipsCommand(actor_user_id=member, archived=True)
+    )
+    assert default_view == []
+    assert [s.id for s in archived_view] == [list_id]
+    # Owner's own view is untouched by another member hiding the list.
+    owner_view = ListMembershipsService(repo).execute(ListMembershipsCommand(actor_user_id=owner))
+    assert [s.id for s in owner_view] == [list_id]
+
+
+def test_member_unhide_restores_default_view() -> None:
+    repo = FakeListRepo()
+    owner = uuid4()
+    member = uuid4()
+    list_id = uuid4()
+    repo.create_owned_list(
+        owned_list=NewListRecord(id=list_id, name="Household", owner_id=owner),
+        membership=NewMembershipRecord(id=uuid4(), list_id=list_id, user_id=owner, role="owner"),
+    )
+    repo.memberships.append(MembershipRecord(list_id=list_id, user_id=member, role="member"))
+    HideListService(repo).execute(HideListCommand(actor_user_id=member, list_id=list_id))
+
+    UnhideListService(repo).execute(UnhideListCommand(actor_user_id=member, list_id=list_id))
+
+    default_view = ListMembershipsService(repo).execute(
+        ListMembershipsCommand(actor_user_id=member)
+    )
+    assert [s.id for s in default_view] == [list_id]
+
+
+def test_owner_hide_rejected() -> None:
+    repo = FakeListRepo()
+    owner = uuid4()
+    list_id = uuid4()
+    repo.create_owned_list(
+        owned_list=NewListRecord(id=list_id, name="Household", owner_id=owner),
+        membership=NewMembershipRecord(id=uuid4(), list_id=list_id, user_id=owner, role="owner"),
+    )
+
+    with pytest.raises(CannotHideOwnedListError):
+        HideListService(repo).execute(HideListCommand(actor_user_id=owner, list_id=list_id))
+    assert (list_id, owner) not in repo.hidden_memberships
+
+
+def test_non_member_hide_rejected() -> None:
+    with pytest.raises(NotListMemberError):
+        HideListService(FakeListRepo()).execute(
+            HideListCommand(actor_user_id=uuid4(), list_id=uuid4())
+        )
+
+
+def test_owner_unhide_rejected() -> None:
+    repo = FakeListRepo()
+    owner = uuid4()
+    list_id = uuid4()
+    repo.create_owned_list(
+        owned_list=NewListRecord(id=list_id, name="Household", owner_id=owner),
+        membership=NewMembershipRecord(id=uuid4(), list_id=list_id, user_id=owner, role="owner"),
+    )
+
+    with pytest.raises(CannotHideOwnedListError):
+        UnhideListService(repo).execute(UnhideListCommand(actor_user_id=owner, list_id=list_id))
+
+
+def test_owner_archiving_still_moves_list_to_archived_view_for_members_who_never_hid_it() -> None:
+    """Regression guard: a member's personal hide must be additive to, never a
+    replacement for, the owner's list-wide archive (Story 9.1 behavior)."""
+    repo = FakeListRepo()
+    owner = uuid4()
+    member = uuid4()
+    list_id = uuid4()
+    repo.create_owned_list(
+        owned_list=NewListRecord(id=list_id, name="Household", owner_id=owner),
+        membership=NewMembershipRecord(id=uuid4(), list_id=list_id, user_id=owner, role="owner"),
+    )
+    repo.memberships.append(MembershipRecord(list_id=list_id, user_id=member, role="member"))
+
+    ArchiveListService(repo).execute(ArchiveListCommand(actor_user_id=owner, list_id=list_id))
+
+    member_default = ListMembershipsService(repo).execute(
+        ListMembershipsCommand(actor_user_id=member)
+    )
+    member_archived = ListMembershipsService(repo).execute(
+        ListMembershipsCommand(actor_user_id=member, archived=True)
+    )
+    assert member_default == []
+    assert [s.id for s in member_archived] == [list_id]
+
+
+def test_member_hide_state_is_isolated_per_member() -> None:
+    repo = FakeListRepo()
+    owner = uuid4()
+    member_a = uuid4()
+    member_b = uuid4()
+    list_id = uuid4()
+    repo.create_owned_list(
+        owned_list=NewListRecord(id=list_id, name="Household", owner_id=owner),
+        membership=NewMembershipRecord(id=uuid4(), list_id=list_id, user_id=owner, role="owner"),
+    )
+    repo.memberships.append(MembershipRecord(list_id=list_id, user_id=member_a, role="member"))
+    repo.memberships.append(MembershipRecord(list_id=list_id, user_id=member_b, role="member"))
+
+    HideListService(repo).execute(HideListCommand(actor_user_id=member_a, list_id=list_id))
+
+    a_default = ListMembershipsService(repo).execute(ListMembershipsCommand(actor_user_id=member_a))
+    b_default = ListMembershipsService(repo).execute(ListMembershipsCommand(actor_user_id=member_b))
+    assert a_default == []
+    assert [s.id for s in b_default] == [list_id]
 
 
 # --- Story 2.5 default-split application (fake repo) ---

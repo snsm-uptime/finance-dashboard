@@ -238,6 +238,206 @@ def test_archiving_preserves_membership_and_balances(
     assert detail.json()["is_archived"] is True
 
 
+def test_member_hide_and_unhide_round_trip(client: TestClient, db_session: Session) -> None:
+    _register(client, "hideowner@example.com")
+    created = client.post("/lists", json={"name": "Family"})
+    list_id = created.json()["id"]
+    owner_id = created.json()["owner_id"]
+    list_uuid = UUID(list_id)
+
+    client.post("/auth/sign-out")
+    _register(client, "hidemember@example.com")
+    member_me = client.get("/auth/me")
+    member_id = UUID(member_me.json()["user_id"])
+    db_session.add(
+        ListMembershipModel(id=uuid4(), list_id=list_uuid, user_id=member_id, role="member")
+    )
+    db_session.flush()
+
+    hidden = client.post(f"/lists/{list_id}/hide")
+    assert hidden.status_code == 204, hidden.text
+
+    default_lists = client.get("/lists")
+    ids_default = {item["id"] for item in default_lists.json()["lists"]}
+    assert list_id not in ids_default
+
+    archived_lists = client.get("/lists", params={"archived": "true"})
+    ids_archived = {item["id"] for item in archived_lists.json()["lists"]}
+    assert list_id in ids_archived
+
+    unhidden = client.post(f"/lists/{list_id}/unhide")
+    assert unhidden.status_code == 204, unhidden.text
+
+    default_lists_again = client.get("/lists")
+    ids_default_again = {item["id"] for item in default_lists_again.json()["lists"]}
+    assert list_id in ids_default_again
+
+    # Owner's own view was never affected, at no point in the round trip.
+    client.post("/auth/sign-out")
+    client.post("/auth/sign-in", json={"email": "hideowner@example.com", "password": "password1"})
+    owner_lists = client.get("/lists")
+    owner_ids = {item["id"] for item in owner_lists.json()["lists"]}
+    assert list_id in owner_ids
+    assert owner_id == created.json()["owner_id"]
+
+
+def test_member_hide_preserves_membership_and_balances_and_is_owner_invisible(
+    client: TestClient, db_session: Session
+) -> None:
+    _register(client, "hidehistoryowner@example.com")
+    created = client.post("/lists", json={"name": "Shared"})
+    list_id = created.json()["id"]
+    list_uuid = UUID(list_id)
+
+    client.post("/auth/sign-out")
+    _register(client, "hidehistorymember@example.com")
+    member_me = client.get("/auth/me")
+    member_id = UUID(member_me.json()["user_id"])
+    db_session.add(
+        ListMembershipModel(id=uuid4(), list_id=list_uuid, user_id=member_id, role="member")
+    )
+    db_session.flush()
+
+    before_members = client.get(f"/lists/{list_id}/members")
+    assert before_members.status_code == 200
+
+    hidden = client.post(f"/lists/{list_id}/hide")
+    assert hidden.status_code == 204, hidden.text
+
+    after_members = client.get(f"/lists/{list_id}/members")
+    assert after_members.status_code == 200
+    assert after_members.json() == before_members.json()
+
+    # Detail endpoint stays unfiltered, same rule as owner archiving.
+    detail = client.get(f"/lists/{list_id}")
+    assert detail.status_code == 200
+
+    # Owner's default listing is unaffected by a member's personal hide.
+    client.post("/auth/sign-out")
+    client.post(
+        "/auth/sign-in",
+        json={"email": "hidehistoryowner@example.com", "password": "password1"},
+    )
+    owner_lists = client.get("/lists")
+    assert list_id in {item["id"] for item in owner_lists.json()["lists"]}
+
+
+def test_owner_hide_rejected(client: TestClient) -> None:
+    _register(client, "hideself@example.com")
+    created = client.post("/lists", json={"name": "Trip"})
+    list_id = created.json()["id"]
+
+    response = client.post(f"/lists/{list_id}/hide")
+    assert response.status_code == 403
+    assert response.json()["code"] == "cannot_hide_owned_list"
+
+
+def test_non_member_hide_denied(client: TestClient, db_session: Session) -> None:
+    _register(client, "hidestranger_owner@example.com")
+    created = client.post("/lists", json={"name": "Household"})
+    list_id = created.json()["id"]
+
+    client.post("/auth/sign-out")
+    _register(client, "hidestranger@example.com")
+    response = client.post(f"/lists/{list_id}/hide")
+    assert response.status_code == 403
+    assert response.json()["code"] == "not_list_member"
+
+
+def test_hide_unknown_list_same_as_non_member(client: TestClient) -> None:
+    _register(client, "hideprober@example.com")
+    response = client.post(f"/lists/{uuid4()}/hide")
+    assert response.status_code == 403
+    assert response.json()["code"] == "not_list_member"
+
+
+def test_owner_unhide_rejected(client: TestClient) -> None:
+    _register(client, "unhideself@example.com")
+    created = client.post("/lists", json={"name": "Trip"})
+    list_id = created.json()["id"]
+
+    response = client.post(f"/lists/{list_id}/unhide")
+    assert response.status_code == 403
+    assert response.json()["code"] == "cannot_hide_owned_list"
+
+
+def test_owner_archiving_still_hides_list_for_member_who_never_hid_it(
+    client: TestClient, db_session: Session
+) -> None:
+    """Regression guard: a member's personal hide is additive to, never a
+    replacement for, the owner's list-wide archive (Story 9.1 behavior)."""
+    _register(client, "archregowner@example.com")
+    created = client.post("/lists", json={"name": "Household"})
+    list_id = created.json()["id"]
+    list_uuid = UUID(list_id)
+
+    client.post("/auth/sign-out")
+    _register(client, "archregmember@example.com")
+    member_me = client.get("/auth/me")
+    member_id = UUID(member_me.json()["user_id"])
+    db_session.add(
+        ListMembershipModel(id=uuid4(), list_id=list_uuid, user_id=member_id, role="member")
+    )
+    db_session.flush()
+
+    default_before = client.get("/lists")
+    assert list_id in {item["id"] for item in default_before.json()["lists"]}
+
+    client.post("/auth/sign-out")
+    client.post(
+        "/auth/sign-in", json={"email": "archregowner@example.com", "password": "password1"}
+    )
+    archived = client.post(f"/lists/{list_id}/archive")
+    assert archived.status_code == 200, archived.text
+
+    client.post("/auth/sign-out")
+    client.post(
+        "/auth/sign-in", json={"email": "archregmember@example.com", "password": "password1"}
+    )
+    member_default = client.get("/lists")
+    assert list_id not in {item["id"] for item in member_default.json()["lists"]}
+    member_archived = client.get("/lists", params={"archived": "true"})
+    assert list_id in {item["id"] for item in member_archived.json()["lists"]}
+
+
+def test_member_hide_state_is_isolated_per_member(client: TestClient, db_session: Session) -> None:
+    _register(client, "isoowner@example.com")
+    created = client.post("/lists", json={"name": "Household"})
+    list_id = created.json()["id"]
+    list_uuid = UUID(list_id)
+
+    client.post("/auth/sign-out")
+    _register(client, "isomembera@example.com")
+    member_a_me = client.get("/auth/me")
+    member_a_id = UUID(member_a_me.json()["user_id"])
+    db_session.add(
+        ListMembershipModel(id=uuid4(), list_id=list_uuid, user_id=member_a_id, role="member")
+    )
+    db_session.flush()
+
+    client.post("/auth/sign-out")
+    _register(client, "isomemberb@example.com")
+    member_b_me = client.get("/auth/me")
+    member_b_id = UUID(member_b_me.json()["user_id"])
+    db_session.add(
+        ListMembershipModel(id=uuid4(), list_id=list_uuid, user_id=member_b_id, role="member")
+    )
+    db_session.flush()
+
+    client.post("/auth/sign-out")
+    client.post("/auth/sign-in", json={"email": "isomembera@example.com", "password": "password1"})
+    hidden = client.post(f"/lists/{list_id}/hide")
+    assert hidden.status_code == 204, hidden.text
+
+    a_default = client.get("/lists")
+    assert list_id not in {item["id"] for item in a_default.json()["lists"]}
+
+    client.post("/auth/sign-out")
+    client.post("/auth/sign-in", json={"email": "isomemberb@example.com", "password": "password1"})
+    b_default = client.get("/lists")
+    assert list_id in {item["id"] for item in b_default.json()["lists"]}
+
+
 def test_blank_name_rejected(client: TestClient) -> None:
     _register(client, "blank@example.com")
     for name in ("   ", ""):
