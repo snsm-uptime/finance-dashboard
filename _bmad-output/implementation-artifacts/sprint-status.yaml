@@ -42,7 +42,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-03T22:46:31
-last_updated: 2026-09-21 (story 10-1: parallelize list-detail fetching, done)
+last_updated: 2026-09-22 (story 10-2: loading skeleton list detail, review)
 
 project: finance-dashboard
 project_key: NOKEY
@@ -180,7 +180,7 @@ development_status:
   # review (2026-09-09) of ui/app/lists/[listId]/page.tsx's fetch waterfall.
   epic-10: in-progress
   10-1-parallelize-list-detail-fetching: done
-  10-2-loading-skeleton-list-detail: backlog
+  10-2-loading-skeleton-list-detail: review
   epic-10-retrospective: optional
 
 action_items:
