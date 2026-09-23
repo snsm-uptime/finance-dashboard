@@ -230,7 +230,7 @@ export function DateRangeField({
             type="button"
             disabled={disabled}
             onClick={openPopover}
-            className={`font-inherit text-[0.9rem] bg-transparent border-none outline-none ${start ? "text-foreground" : "text-muted"} cursor-pointer disabled:cursor-not-allowed`}
+            className={`flex-1 min-w-0 font-inherit text-[0.9rem] bg-transparent border-none outline-none ${start ? "text-foreground" : "text-muted"} cursor-pointer disabled:cursor-not-allowed`}
           >
             {start ? formatFull(start) : fromLabel}
           </button>
@@ -239,7 +239,7 @@ export function DateRangeField({
             type="button"
             disabled={disabled}
             onClick={openPopover}
-            className={`font-inherit text-[0.9rem] bg-transparent border-none outline-none ${end ? "text-foreground" : "text-muted"} cursor-pointer disabled:cursor-not-allowed`}
+            className={`flex-1 min-w-0 font-inherit text-[0.9rem] bg-transparent border-none outline-none ${end ? "text-foreground" : "text-muted"} cursor-pointer disabled:cursor-not-allowed`}
           >
             {end ? formatFull(end) : toLabel}
           </button>
