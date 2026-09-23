@@ -72,6 +72,40 @@ function rosterForCard(list: ListItem, currentUserId: string) {
     );
 }
 
+function Pulse({ className }: { className: string }) {
+  return <div className={`animate-pulse rounded-md bg-muted ${className}`} />;
+}
+
+function ArchivedListsSkeleton() {
+  return (
+    <div
+      className={styles.list}
+      role="status"
+      aria-live="polite"
+      aria-label="Loading archived lists"
+    >
+      {[0, 1, 2].map((i) => (
+        <div key={i} className={styles.row}>
+          <div className={styles.cardShell}>
+            <div className={styles.cardBody}>
+              <span className={styles.cardFace}>
+                <Pulse className="h-5 w-5 shrink-0 rounded-full" />
+                <span className={styles.cardFaceMain}>
+                  <Pulse className="h-4 w-2/5" />
+                  <Pulse className="h-3 w-1/4" />
+                </span>
+                <span className={styles.cardBalanceCol}>
+                  <Pulse className="h-4 w-16" />
+                </span>
+              </span>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ListRoleBookmark({ label, icon }: { label: string; icon: ReactNode }) {
   return (
     <span className={`${styles.roleBookmark} px-3`} aria-label={label}>
@@ -145,6 +179,7 @@ export function ListsPanel({ initialLists, currentUserId, showArchived = false }
   const t = listsMessages[locale];
   const router = useRouter();
   const [archivedLists, setArchivedLists] = useState<ListItem[]>([]);
+  const [archivedLoading, setArchivedLoading] = useState(false);
   const [archivedLoadError, setArchivedLoadError] = useState<string | null>(null);
   const [archiveActionError, setArchiveActionError] = useState<string | null>(null);
   const [archivingId, setArchivingId] = useState<string | null>(null);
@@ -195,6 +230,7 @@ export function ListsPanel({ initialLists, currentUserId, showArchived = false }
     if (!showArchived) return;
     let cancelled = false;
     async function loadArchived() {
+      setArchivedLoading(true);
       const result = await fetchLists(messages, { archived: true });
       if (cancelled) return;
       if (result.ok) {
@@ -204,6 +240,7 @@ export function ListsPanel({ initialLists, currentUserId, showArchived = false }
         setArchivedLoadError(result.error);
         setArchivedLists([]);
       }
+      setArchivedLoading(false);
     }
     void loadArchived();
     return () => {
@@ -770,6 +807,8 @@ export function ListsPanel({ initialLists, currentUserId, showArchived = false }
         itemKey={(list) => list.id}
         itemClassName={styles.row}
         listClassName={styles.list}
+        loading={showArchived && archivedLoading}
+        loadingContent={<ArchivedListsSkeleton />}
         error={showArchived ? archivedLoadError : null}
         errorClassName={styles.error}
         emptyLabel={showArchived ? t.listsArchivedEmpty : t.emptyHint}

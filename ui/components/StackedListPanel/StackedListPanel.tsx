@@ -22,6 +22,8 @@ export type StackedListPanelProps<T> = {
   loading?: boolean;
   loadingLabel?: string;
   loadingClassName?: string;
+  /** Overrides the default spinner (e.g. a row-shaped skeleton). */
+  loadingContent?: ReactNode;
   error?: string | null;
   errorClassName?: string;
   emptyLabel?: string;
@@ -48,6 +50,7 @@ export function StackedListPanel<T>({
   loading = false,
   loadingLabel,
   loadingClassName = DEFAULT_LOADING_CLASS,
+  loadingContent,
   error,
   errorClassName = DEFAULT_ERROR_CLASS,
   emptyLabel,
@@ -67,9 +70,11 @@ export function StackedListPanel<T>({
       {input}
 
       {loading ? (
-        <div className={loadingClassName} role="status" aria-label={loadingLabel}>
-          <SpinnerIcon className="h-5 w-5 animate-spin" />
-        </div>
+        loadingContent ?? (
+          <div className={loadingClassName} role="status" aria-label={loadingLabel}>
+            <SpinnerIcon className="h-5 w-5 animate-spin" />
+          </div>
+        )
       ) : error ? (
         <p className={errorClassName} role="alert">
           {error}
