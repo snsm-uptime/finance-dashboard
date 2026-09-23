@@ -1,4 +1,4 @@
-import { RefObject, useEffect } from "react";
+import { RefObject, useEffect, useRef } from "react";
 
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -16,6 +16,16 @@ export function useFocusTrap({
   defaultFocusRef,
   onEscapePress,
 }: UseFocusTrapOptions): void {
+  // Latest-ref for the escape callback so the effect below doesn't need it
+  // as a dependency — callers typically pass a fresh inline function each
+  // render (e.g. `onClose={() => ...}`), which would otherwise re-run the
+  // effect (and re-steal focus to `defaultFocusRef`) on every keystroke
+  // inside the sheet.
+  const onEscapePressRef = useRef(onEscapePress);
+  useEffect(() => {
+    onEscapePressRef.current = onEscapePress;
+  }, [onEscapePress]);
+
   useEffect(() => {
     if (!isActive || !containerRef.current) return;
 
@@ -29,7 +39,7 @@ export function useFocusTrap({
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         event.preventDefault();
-        onEscapePress?.();
+        onEscapePressRef.current?.();
         return;
       }
 
@@ -67,7 +77,7 @@ export function useFocusTrap({
       document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [isActive, containerRef, defaultFocusRef, onEscapePress]);
+  }, [isActive, containerRef, defaultFocusRef]);
 }
 
 function getFirstFocusable(container: HTMLElement): HTMLElement | null {

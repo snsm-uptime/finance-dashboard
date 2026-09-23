@@ -1,8 +1,5 @@
 "use client";
 
-// TODO; the focus ref being on by default is messing up the experience of writing to an input,
-// after every letter it focuses back. That should only be for the sheets containing a multi select
-// and should be used to focus items correctly using tab and shift tab.
 import {
   useEffect,
   useId,
