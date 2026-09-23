@@ -49,3 +49,15 @@ def test_no_year_token_same_year_when_not_after_reference() -> None:
         parse_statement_date("ENE/05", date_format="%b/%d", reference_date=date(2026, 1, 15))
         == "2026-01-05"
     )
+
+
+def test_parses_dd_mm_yyyy_numeric_month_and_four_digit_year() -> None:
+    assert parse_statement_date("23/12/2025", date_format="%d/%m/%Y") == "2025-12-23"
+
+
+def test_numeric_month_single_digit() -> None:
+    assert parse_statement_date("02/01/2026", date_format="%d/%m/%Y") == "2026-01-02"
+
+
+def test_existing_dd_mmm_yy_format_unaffected_by_numeric_month_token() -> None:
+    assert parse_statement_date("05-ENE-26", date_format="%d-%b-%y") == "2026-01-05"

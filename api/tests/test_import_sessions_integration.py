@@ -2186,7 +2186,7 @@ def test_delete_and_unassign_on_a_finalized_session_are_409(client_with_fx: Test
     assert unassign_response.json()["code"] == "import_row_not_available"
 
 
-_PARSE_FAILURE_MIXED_PDF = _FIXTURE_DIR / "promerica_stub_parse_failure_mixed.pdf"
+_PARSE_FAILURE_MIXED_PDF = _FIXTURE_DIR / "promerica_parse_failure_mixed.pdf"
 
 
 def test_upload_mixed_parse_failure_persists_evidence_no_candidate_rows_no_ledger(

@@ -1,10 +1,13 @@
 """Shared per-product date-format contract (AD-26).
 
 Adapters declare a date_format token string built from a small fixed
-vocabulary (%d day, %b Spanish month abbreviation, %y 2-digit year) joined
-by "-" or "/" — e.g. "%d-%b-%y" for BAC credit's DD-MMM-YY, "%b/%d" for BAC
-debit's MMM/DD. Resolved here against a fixed Spanish-month table, never
-against datetime's locale machinery (locale is not guaranteed es_CR).
+vocabulary (%d day, %b Spanish month abbreviation, %m numeric month, %y
+2-digit year, %Y 4-digit year) joined by "-" or "/" — e.g. "%d-%b-%y" for
+BAC credit's DD-MMM-YY, "%b/%d" for BAC debit's MMM/DD, "%d/%m/%Y" for
+Promerica credit's numeric DD/MM/YYYY (Story 4.9.2 — the first product
+whose printed date uses a numeric month rather than a Spanish abbreviation).
+Resolved here against a fixed Spanish-month table, never against datetime's
+locale machinery (locale is not guaranteed es_CR).
 
 Formats with no %y token require a reference_date (the source PDF's
 /CreationDate, read once per statement chunk) — the row's year is assigned
@@ -31,7 +34,7 @@ SPANISH_MONTHS: dict[str, int] = {
     "DIC": 12,
 }
 
-_SUPPORTED_TOKENS = frozenset({"%d", "%b", "%y"})
+_SUPPORTED_TOKENS = frozenset({"%d", "%b", "%m", "%y", "%Y"})
 
 
 def _split_on_declared_separator(value: str, date_format: str) -> list[str]:
@@ -60,16 +63,20 @@ def parse_statement_date(raw: str, *, date_format: str, reference_date: date | N
             day = int(value_token)
         elif fmt_token == "%b":
             month = SPANISH_MONTHS[value_token.upper()]
+        elif fmt_token == "%m":
+            month = int(value_token)
         elif fmt_token == "%y":
             year = 2000 + int(value_token)
+        elif fmt_token == "%Y":
+            year = int(value_token)
 
     if day is None or month is None:
-        raise ValueError(f"date_format {date_format!r} must declare both %d and %b")
+        raise ValueError(f"date_format {date_format!r} must declare a day and a month token")
 
     if year is None:
         if reference_date is None:
             raise ValueError(
-                f"date_format {date_format!r} has no %y token; reference_date is required"
+                f"date_format {date_format!r} has no year token; reference_date is required"
             )
         year = reference_date.year
         if date(year, month, day) > reference_date:
