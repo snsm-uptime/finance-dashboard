@@ -11,7 +11,8 @@ adapter already extracted.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from enum import StrEnum
 
 _SPANISH_MONTHS = "ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP|OCT|NOV|DIC"
@@ -40,6 +41,55 @@ class ExtractedRowTokens:
     date: str | None
     amounts: tuple[str, ...]
     description: str
+
+
+@dataclass(frozen=True, slots=True)
+class SignVariantRanges:
+    """Construction-time-validated x-position ranges for AD-28's SIGN_VARIANT role.
+
+    `ranges` maps an outcome name (e.g. "debitos"/"creditos") to an
+    (x0, x1) span. Validated eagerly here — missing, reversed, or
+    overlapping ranges raise `ValueError` at construction, never deferred to
+    resolution time (AD-28's construction-time validation rule). Adapters
+    call this from their own `__init__`/module load, not `parse()`.
+    """
+
+    ranges: Mapping[str, tuple[float, float]] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not self.ranges:
+            raise ValueError("SignVariantRanges requires at least one declared range.")
+
+        spans: list[tuple[str, float, float]] = []
+        for name, (low, high) in self.ranges.items():
+            if low >= high:
+                raise ValueError(
+                    f"Range {name!r} must be declared low < high (order matters): ({low}, {high})."
+                )
+            spans.append((name, low, high))
+
+        spans.sort(key=lambda item: item[1])
+        for (name_a, _, high_a), (name_b, low_b, _) in zip(spans, spans[1:], strict=False):
+            if high_a > low_b:
+                raise ValueError(f"Ranges {name_a!r} and {name_b!r} overlap.")
+
+
+def resolve_sign_variant_column(
+    x0: float, x1: float, ranges: Mapping[str, tuple[float, float]]
+) -> str:
+    """Resolve which declared range an amount token's x-position belongs to (AD-28).
+
+    Uses the fixed-metric rule: midpoint-to-midpoint distance, smallest wins —
+    never "inside range" containment, which would fail to resolve a token
+    that falls just outside a range due to documented page-to-page drift.
+    Callers validate `ranges` via `SignVariantRanges` at construction time;
+    this function assumes it has already been validated.
+    """
+    token_mid = (x0 + x1) / 2
+    return min(
+        ranges,
+        key=lambda name: abs(token_mid - (ranges[name][0] + ranges[name][1]) / 2),
+    )
 
 
 def _amount_re(amount_pattern: str | None) -> re.Pattern[str]:

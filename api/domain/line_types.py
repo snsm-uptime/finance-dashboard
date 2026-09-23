@@ -17,6 +17,15 @@ LINE_TYPE_BALANCE_FORWARD = "balance_forward"
 LINE_TYPE_OTHER = "other"
 LINE_TYPE_CLASSIFIED_PURCHASE_REVERSAL = "classified_purchase_reversal"
 
+# Debit-account (checking) line types (Story 4.9.1) — deliberately distinct
+# from the credit-card-specific types above: a debit-account row is money
+# leaving (DÉBITOS) or entering (CRÉDITOS) a checking account, which is not
+# the same semantics as a card purchase/payment. Not included in
+# domain/settle.py's INCLUDED_LINE_TYPES — no settle-math decision has been
+# made for debit-account rows yet (this story is adapter-output only).
+LINE_TYPE_WITHDRAWAL = "withdrawal"
+LINE_TYPE_DEPOSIT = "deposit"
+
 LINE_TYPES = frozenset(
     {
         LINE_TYPE_PURCHASE,
@@ -29,5 +38,7 @@ LINE_TYPES = frozenset(
         LINE_TYPE_BALANCE_FORWARD,
         LINE_TYPE_OTHER,
         LINE_TYPE_CLASSIFIED_PURCHASE_REVERSAL,
+        LINE_TYPE_WITHDRAWAL,
+        LINE_TYPE_DEPOSIT,
     }
 )
