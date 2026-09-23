@@ -88,7 +88,7 @@ FR-34: Primary identity is (product_id, posted_date, currency, amount, external_
 
 FR-35: For a supported BAC credit product, the synthetic BAC credit-card fixture import persists every must-parse line with required canonical fields and zero manual edits (v1 parsing exit bar).
 
-FR-36: v1 includes a Promerica stub or contract-test adapter proving extension without modifying core import/dedup/list logic, including multi-statement; real Promerica parsing is out of scope until samples exist.
+FR-36: v1 includes a Promerica stub or contract-test adapter proving extension without modifying core import/dedup/list logic, including multi-statement; real Promerica parsing is out of scope until samples exist. (Update 2026-09-22: a real sample now exists — see Story 4.9.2.)
 
 FR-37: Cards are registered with a user-chosen label and stable bank identity (primarily IBAN); matching IBAN reuses the card and its label as the import identifier; unknown IBAN prompts registration before destination routing; card registry is user-scoped generic vocabulary; fixed-list vs review-routing (FR-11) attaches to the registered card.
 
@@ -1279,6 +1279,78 @@ So that real BAC credit uploads parse successfully instead of silently yielding 
 **Given** this story's scope
 **When** a future bank/product needs SIGN_VARIANT (e.g. a BAC debit adapter)
 **Then** that remains out of scope — this story implements only the CURRENCY_VARIANT path (see ARCHITECTURE-SPINE.md Deferred table)
+
+### Story 4.9.1: BAC debit adapter (first SIGN_VARIANT implementation)
+
+As a developer extending statement import to deposit accounts,
+I want a BacDebitAdapter that recognizes real BAC debit statements (COLONES and DOLARES) and resolves DÉBITOS/CRÉDITOS by physical column position,
+So that debit-account uploads parse into CanonicalLine rows using the AD-28 SIGN_VARIANT contract this story implements for the first time.
+
+**Acceptance Criteria:**
+
+**Given** a real BAC debit statement (`BAC_DEB_COLONES_jun.pdf`, `BAC_DEB_DOLARES_jun.pdf`)
+**When** BacDebitAdapter's content sniff runs
+**Then** it detects the statement via a marker unique to debit statements (e.g. "CUADRO RESUMEN" + "DÉBITOS CRÉDITOS SALDOS") — distinct from BAC credit's `ESTADO DE CUENTA BAC CREDITO` marker
+
+**Given** BacDebitAdapter declares `date_format` per AD-26
+**When** a row's date token is read (e.g. `JUN/01`, `MAY/29`)
+**Then** it is parsed with the `"%b/%d"` format — no year token — using the PDF's `/CreationDate` metadata as `reference_date` and AD-26's nearest-prior-year resolution, never a private per-row heuristic
+
+**Given** BacDebitAdapter declares `AmountColumnRole = SIGN_VARIANT` per AD-28
+**When** a row carries exactly one amount token with no textual DB/CR marker
+**Then** the adapter resolves DÉBITOS vs. CRÉDITOS by comparing the token's x-position midpoint against two declared, non-overlapping x-position ranges (one per column) — the smallest-distance range wins, per AD-28's fixed-metric rule
+
+**Given** AD-28's construction-time validation rule
+**When** BacDebitAdapter is constructed with missing, non-1:1, or overlapping range declarations
+**Then** it raises at construction (`__init__`/module load), never deferring the check to `parse()`
+
+**Given** BAC debit statements print one continuous transaction table with no lettered section headers (unlike BAC credit's A–G sections)
+**When** BacDebitAdapter classifies rows
+**Then** it uses the shared `domain/statement_row_extraction.py` date+amount-token classifier (AD-28) directly against the `NO. REFERENCIA FECHA CONCEPTO DÉBITOS CRÉDITOS` table, with `CUADRO RESUMEN` (before) and `ÚLTIMA LÍNEA SALDO AL CORTE` (after) treated as non-data boilerplate, not parsed as transaction rows
+
+**Given** BacDebitAdapter's currency handling
+**When** a COLONES vs. a DOLARES statement is parsed
+**Then** both are accepted by the same adapter — currency is read from the statement's `Moneda:` field, not a separate adapter per currency
+
+**Given** the CI synthetic fixture gate (mirrors Story 4.9's pattern)
+**When** a BAC debit fixture is generated
+**Then** it uses real section-free table text shape and real date/amount token shapes matching real pdfplumber extraction, with goldens covering both a DÉBITOS-only and a CRÉDITOS-present row
+
+### Story 4.9.2: Real Promerica credit-card adapter
+
+As a developer extending statement import beyond the Promerica stub,
+I want a real PromericaAdapter that parses real Promerica credit-card statements into CanonicalLine rows,
+So that Promerica uploads stop routing through the deliberately-fake stub (Story 4.5, FR-36) and parse for real, now that a real sample exists (`bank_data/PROMERICA_CRED.pdf`).
+
+**Acceptance Criteria:**
+
+**Given** a real Promerica statement (`PROMERICA_CRED.pdf`)
+**When** PromericaAdapter's content sniff runs
+**Then** it detects the statement via a marker unique to real Promerica statements (e.g. "Banco Promerica de Costa Rica" + "MOVIMIENTOS DE LA TARJETA DE CRÉDITO") — replacing the stub's deliberately-fake `ESTADO DE CUENTA PROMERICA STUB` marker (Story 4.5)
+
+**Given** PromericaAdapter's declared `_SECTIONS`
+**When** compared against real printed section titles
+**Then** the title strings match real headers — "Detalle de pagos del periodo" (PAYMENT, MUST_PARSE), "Detalle de compras del periodo" (PURCHASE, MUST_PARSE), "Detalle de intereses" (INTEREST, MUST_PARSE), "Detalle de otros cargos" (FEE, MUST_PARSE), "Detalle de productos y servicios de elección voluntaria" (VOLUNTARY_SERVICE, BEST_EFFORT), "Cargos por gestión evidenciable de cobro" (IGNORE) — mirroring Story 4.9's real-header-matching fix for BAC credit, not invented text
+
+**Given** PromericaAdapter declares `date_format` per AD-26
+**When** a row's date token is read (e.g. `23/12/2025`)
+**Then** it is parsed as `DD/MM/YYYY` — the year token is present, so no `/CreationDate` reference-date fallback is needed for this product
+
+**Given** PromericaAdapter's dual colones/dólares amount columns (structurally identical in shape to BAC credit's, per real extracted text)
+**When** `AmountColumnRole` is declared for this product
+**Then** it declares `CURRENCY_VARIANT` — resolved via `normalize_dual_column_amount`, prefer nonzero, prefer CRC if both nonzero (FR-33, AD-28) — the same path Story 4.9 implemented for BAC credit, no new domain logic required
+
+**Given** the shared `domain/statement_row_extraction.py` date+amount-token classifier (AD-28)
+**When** a Promerica statement line is classified
+**Then** it is recognized as a data row without a private delimiter check, consistent with Story 4.9's fix
+
+**Given** the CI synthetic fixture gate (mirrors Story 4.9's pattern)
+**When** a Promerica fixture is generated from the real statement's section titles and row text shape
+**Then** it replaces or sits alongside the Story 4.5 stub fixture, with goldens updated for must-parse sections and zero manual edits required
+
+**Given** this story's scope
+**When** the Story 4.5 stub adapter still exists in the registry
+**Then** PromericaAdapter (real) supersedes the stub for detection — the stub's fake marker never collides with a real statement's marker, so registry precedence is not a hazard, but the stub module itself is removed once PromericaAdapter is registered (no dead fake-detection code left reachable)
 
 ### Story 4.10: Row-level review data model + per-row commit
 

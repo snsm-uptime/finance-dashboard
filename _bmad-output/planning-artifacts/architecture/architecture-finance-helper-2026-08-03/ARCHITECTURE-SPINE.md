@@ -464,5 +464,5 @@ erDiagram
 | `next/font` weight/subset/display pins | Single root loader; edit that file only (AD-24) — no second AD |
 | Class-attribute / JSX prop order | House style — `project-context.md` / linter, never an AD |
 | `BacCreditAdapter` applying AD-28 (fixing its wrong `_SECTIONS` title strings against real lettered headers, and its `parse()`'s pipe-delimiter row check) | AD-28 mints the contract; wiring an existing adapter onto it is implementation, scoped as a follow-up story, not a second decision |
-| A real BAC debit adapter (first concrete `SIGN_VARIANT` implementation) | Contract exists (AD-28); no BAC debit adapter has been built yet — out of this update's scope |
+| A real BAC debit adapter (first concrete `SIGN_VARIANT` implementation) | No longer deferred — scoped as Story 4.9.1 (Sprint Change Proposal 2026-09-22) |
 | Per-section `AmountColumnRole` variance within one product | No real statement has shown this yet (AD-28); resolve for a specific bank via the per-bank brainstorm loop (docs/bank-statement-parsing-agent-setup.md) if one ever does, not pre-decided here |
