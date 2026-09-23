@@ -4,7 +4,7 @@ baseline_commit: ba29215
 
 # Story 4.9.1: BAC debit adapter (first SIGN_VARIANT implementation)
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -59,6 +59,17 @@ so that debit-account uploads parse into `CanonicalLine` rows using the AD-28 `S
   - [x] Run the full `api` pytest suite. Confirm zero changes to `application/`, persistence, commit/dedup logic, and (per Task 2's line-type note) zero changes to `domain/settle.py`'s `INCLUDED_LINE_TYPES` unless a deliberate, documented decision is made to include the new line type(s) in settle math — default to NOT touching it; this story's ACs are adapter-output-only.
   - [x] `ruff check`/`ruff format` clean (Story 4.9's Task 6 precedent).
   - [x] If real PDFs are available locally (`bank_data/`, gitignored, never committed — both `BAC_DEB_COLONES_*.pdf` and `BAC_DEB_DOLARES_*.pdf` months exist), a manual smoke-test parse is encouraged but is **not** a merge gate — CI only gates on the synthetic fixture (project-context.md: "operator real PDFs never in repo/CI, never block merge").
+
+### Review Findings
+
+- [x] [Review][Patch] Bare `assert tokens.date is not None` inside the fail-loud `parse()` path — stripped under `python -O`, bypasses `fail_parse` [`api/adapters/bank/bac_debit/adapter.py:293`]
+- [x] [Review][Patch] Amount-token geometry lookup by text equality could grab the wrong word's x-position if another token in the row coincidentally has identical text (e.g. a reference number matching the amount digits), silently misclassifying DÉBITOS/CRÉDITOS [`api/adapters/bank/bac_debit/adapter.py:278-280`]
+- [x] [Review][Patch] `split()` returns `[]` silently when no boundary marker is found, instead of raising like `parse()` does [`api/adapters/bank/bac_debit/adapter.py:211-223`]
+- [x] [Review][Patch] Header-gate (`seen_column_header`) never triggering (e.g. header text drift) silently produces zero rows with no error [`api/adapters/bank/bac_debit/adapter.py:248-266`]
+- [x] [Review][Patch] Printed cut-off date regex accepted a 4-digit year but the `%d/%b/%y` parser always computes `2000 + int(value_token)`, silently producing a wrong year (e.g. 4026) instead of raising [`api/adapters/bank/bac_debit/adapter.py:57-59`, `api/domain/statement_dates.py:63-64`]
+- [x] [Review][Decision] Filename collision makes AC #1's own example files (`BAC_DEB_COLONES_jun.pdf`) unparseable — resolved by user: filename is not user-controllable, so `detect_bank_adapter` now falls through to content-only disambiguation whenever the filename-only pass is ambiguous, instead of raising immediately [`api/application/bank_adapters.py`]
+- [x] [Review][Defer] SIGN_VARIANT x-ranges calibrated only against the synthetic fixture's Courier geometry, not real-PDF proportional-font geometry — CI passing doesn't prove real-statement correctness — deferred, pre-existing tradeoff of the synthetic-fixture CI strategy, needs a real-PDF calibration follow-up [`api/adapters/bank/bac_debit/adapter.py:63-76`]
+- [x] [Review][Defer] Multi-page footer termination stops processing all subsequent pages once a footer line is seen anywhere — unverified whether real multi-page debit statements print the footer once or per page — deferred, needs real multi-page evidence [`api/adapters/bank/bac_debit/adapter.py:250-317`]
 
 ## Dev Notes
 

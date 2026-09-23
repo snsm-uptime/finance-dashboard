@@ -55,7 +55,7 @@ _STATEMENT_HEADER_MARKER = "CUADRO RESUMEN"
 _DATE_FORMAT = "%b/%d"
 
 _CUT_OFF_DATE_RE = re.compile(
-    r"Fecha de [Cc]orte:\s*(\d{1,2}/[A-ZÁÉÍÓÚÑ]{3}/\d{2,4})", re.IGNORECASE
+    r"Fecha de [Cc]orte:\s*(\d{1,2}/[A-ZÁÉÍÓÚÑ]{3}/\d{2})", re.IGNORECASE
 )
 _MONEDA_RE = re.compile(r"Moneda:\s*(COLONES|DOLARES)", re.IGNORECASE)
 _CURRENCY_BY_MONEDA = {"COLONES": "CRC", "DOLARES": "USD"}
@@ -211,6 +211,11 @@ class BacDebitAdapter:
         boundaries, method = detect_statement_boundaries(pages, marker=_STATEMENT_HEADER_MARKER)
         self.last_split_boundary_method = method
 
+        if not boundaries:
+            raise InvalidCanonicalLineError(
+                f"No {_STATEMENT_HEADER_MARKER!r} boundary marker found in statement PDF."
+            )
+
         src = pdfium.PdfDocument(pdf_bytes)
         chunks: list[bytes] = []
         for idx, start in enumerate(boundaries):
@@ -275,12 +280,26 @@ class BacDebitAdapter:
                         gap_raw=line,
                     )
                 amount_token = tokens.amounts[0]
-                amount_word = next(
-                    (w for w in row_words if w["text"].strip() == amount_token), None
-                )
+                # Rightmost match, not the first: the DÉBITOS/CRÉDITOS
+                # columns are the rightmost fields on the row, so if another
+                # word (e.g. a reference number) coincidentally has the same
+                # text as the amount, the true amount word is never to its
+                # left.
+                amount_candidates = [w for w in row_words if w["text"].strip() == amount_token]
+                amount_word = max(amount_candidates, key=lambda w: w["x0"], default=None)
                 if amount_word is None:
                     raise fail_parse(
                         f"Could not locate amount token geometry for row: {line!r}.",
+                        rows=rows,
+                        gap_raw=line,
+                    )
+
+                if tokens.date is None:
+                    # is_data_row(requires_date=True) should guarantee a date
+                    # token, but never let a fail-loud row silently slip
+                    # past on a stripped assert (python -O).
+                    raise fail_parse(
+                        f"Could not locate date token for row: {line!r}.",
                         rows=rows,
                         gap_raw=line,
                     )
@@ -289,8 +308,6 @@ class BacDebitAdapter:
                     outcome = resolve_sign_variant_column(
                         amount_word["x0"], amount_word["x1"], _SIGN_VARIANT_RANGES.ranges
                     )
-                    # is_data_row(requires_date=True) guarantees a date token.
-                    assert tokens.date is not None
                     posted_date = parse_statement_date(
                         tokens.date, date_format=_DATE_FORMAT, reference_date=reference_date
                     )
@@ -315,5 +332,13 @@ class BacDebitAdapter:
                 rows.append(canonical_line)
             if finished:
                 break
+
+        if not seen_column_header:
+            raise fail_parse(
+                "Could not locate the transaction table column header "
+                "('REFERENCIA'/'CONCEPTO') in statement PDF.",
+                rows=rows,
+                gap_raw="<no column header found>",
+            )
 
         return rows
