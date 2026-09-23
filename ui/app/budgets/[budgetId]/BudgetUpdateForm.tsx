@@ -8,6 +8,7 @@ import { chipClassName } from "@/components/Chip";
 import { DateRangeField } from "@/components/DateRangeField";
 import { FormIconSubmit } from "@/components/FormIconSubmit";
 import { IconButton } from "@/components/IconButton";
+import { GhostInput } from "@/components/soft-ledger/GhostInput";
 import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
 import { PencilIcon } from "@/app/icons/PencilIcon";
 import { Sheet } from "@/app/lists/Sheet";
@@ -189,7 +190,26 @@ export function BudgetUpdateForm({ budget, lists, rules, messages, locale }: Pro
         onClose={() => (confirmOpen ? setConfirmOpen(false) : setOpen(false))}
         fillBelowChrome={true}
         closeLabel={confirmOpen ? messages.budgetsPeriodChangeCancel : messages.cancelLabel}
-        title={confirmOpen ? messages.budgetsPeriodChangeConfirmTitle : messages.budgetsEditTitle}
+        title={
+          confirmOpen ? (
+            messages.budgetsPeriodChangeConfirmTitle
+          ) : (
+            <GhostInput
+              id={nameId}
+              form={formId}
+              aria-label={messages.budgetsNameLabel}
+              type="text"
+              value={name}
+              placeholder={messages.budgetsNameLabel}
+              required
+              disabled={pending}
+              onChange={(e) => {
+                setName(e.target.value);
+                setError(null);
+              }}
+            />
+          )
+        }
         cornerAction={
           confirmOpen ? (
             <FormIconSubmit
@@ -262,7 +282,7 @@ export function BudgetUpdateForm({ budget, lists, rules, messages, locale }: Pro
                 </label>
                 <input
                   id={capId}
-                  className={`${fieldInputClass} basis-[30%] flex-none`}
+                  className={fieldInputClass}
                   inputMode="decimal"
                   value={cap}
                   placeholder={messages.budgetsCapLabel}
@@ -270,23 +290,6 @@ export function BudgetUpdateForm({ budget, lists, rules, messages, locale }: Pro
                   disabled={pending}
                   onChange={(e) => {
                     setCap(e.target.value);
-                    setError(null);
-                  }}
-                />
-                <span className="h-5 w-px shrink-0 bg-border" aria-hidden="true" />
-                <label htmlFor={nameId} className="sr-only">
-                  {messages.budgetsNameLabel}
-                </label>
-                <input
-                  id={nameId}
-                  className={fieldInputClass}
-                  type="text"
-                  value={name}
-                  placeholder={messages.budgetsNameLabel}
-                  required
-                  disabled={pending}
-                  onChange={(e) => {
-                    setName(e.target.value);
                     setError(null);
                   }}
                 />

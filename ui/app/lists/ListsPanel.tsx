@@ -25,6 +25,7 @@ import {
 import { usePreferences } from "@/components/PreferencesProvider";
 import { StackedListPanel } from "@/components/StackedListPanel";
 import { GhostButton } from "@/components/soft-ledger/GhostButton";
+import { GhostInput } from "@/components/soft-ledger/GhostInput";
 import { listsMessages } from "@/lib/i18n/lists";
 import {
   ArchiveToggleIcon,
@@ -722,30 +723,28 @@ export function ListsPanel({ initialLists, currentUserId, showArchived = false }
           showArchived ? null : (
             <form className="flex w-full flex-col" onSubmit={onCreate}>
               <div className="flex items-stretch gap-2">
-                <div className="flex flex-1 items-center gap-2 rounded-[8px] border-2 border-border bg-background px-[0.65rem] py-[0.5rem]">
-                  <label htmlFor={createNameId} className="sr-only">
-                    {t.createLabel}
-                  </label>
-                  <input
-                    id={createNameId}
-                    className="min-w-0 flex-1 font-inherit text-[0.9rem] bg-transparent text-foreground placeholder:text-muted outline-none"
-                    type="text"
-                    name="name"
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    maxLength={200}
-                    autoComplete="off"
-                    disabled={creating}
-                    placeholder={t.createLabel}
-                  />
-                  <IconButton
-                    className="h-7 w-7 shrink-0 !p-0 !rounded-[4px]"
-                    type="submit"
-                    disabled={!canCreate}
-                    label={creating ? t.creating : t.createSubmit}
-                    icon={<PlusIcon />}
-                  />
-                </div>
+                <GhostInput
+                  wrapperClassName="flex-1"
+                  id={createNameId}
+                  aria-label={t.createLabel}
+                  type="text"
+                  name="name"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  maxLength={200}
+                  autoComplete="off"
+                  disabled={creating}
+                  placeholder={t.createLabel}
+                  trailing={
+                    <IconButton
+                      className="h-7 w-7 shrink-0 !p-0 !rounded-[4px]"
+                      type="submit"
+                      disabled={!canCreate}
+                      label={creating ? t.creating : t.createSubmit}
+                      icon={<PlusIcon />}
+                    />
+                  }
+                />
                 {/* Same chrome as FormIconSubmit (bordered surface + accent
                     glyph, shared hover/focus rules), stretched to the input
                     row's height instead of FormIconSubmit's own fixed 2.5rem —
