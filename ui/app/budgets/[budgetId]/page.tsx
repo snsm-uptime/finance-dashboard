@@ -370,6 +370,7 @@ export default async function BudgetDetailPage({
               messages={{ ...t, cancelLabel: t.receiptMoveCancel }}
               editAction={
                 <BudgetUpdateForm
+                  key="budget-update-form"
                   budget={budget}
                   lists={sourceLists}
                   messages={{ ...t, cancelLabel: t.receiptMoveCancel }}
