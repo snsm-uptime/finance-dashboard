@@ -6,7 +6,12 @@ function Pulse({ className }: { className: string }) {
 
 export default function ListDetailLoading() {
   return (
-    <main className={styles.softMain}>
+    <main
+      className={styles.softMain}
+      role="status"
+      aria-live="polite"
+      aria-label="Loading list"
+    >
       <div className={styles.softBody}>
         <div className={styles.detailLayout}>
           <div className={styles.detailPrimary}>
@@ -41,15 +46,23 @@ export default function ListDetailLoading() {
             </div>
           </div>
           <aside className={styles.detailSidebar}>
-            <div className="flex flex-col gap-[var(--space-2)] bg-surface border border-border rounded-md px-[var(--space-4)] py-[var(--space-4)]">
-              <Pulse className="h-4 w-24" />
-              <Pulse className="h-9 w-full" />
+            <div className="flex w-fit items-center gap-px overflow-hidden border border-border rounded-lg bg-surface">
+              <Pulse className="h-11 w-11" />
+              <Pulse className="h-11 w-11" />
             </div>
-            <div className="flex flex-col gap-[var(--space-2)] bg-surface border border-border rounded-md px-[var(--space-4)] py-[var(--space-4)]">
-              <Pulse className="h-4 w-32" />
-              <Pulse className="h-9 w-full" />
-              <Pulse className="h-9 w-full" />
-              <Pulse className="h-9 w-2/3" />
+            <div className="flex flex-col gap-[0.85rem] w-full">
+              <div className="flex flex-col gap-[0.35rem]">
+                <Pulse className="h-3.5 w-24" />
+                <Pulse className="h-9 w-full rounded-[var(--rounded-sm)]" />
+              </div>
+              <div className="flex flex-col gap-[0.35rem]">
+                <Pulse className="h-3.5 w-32" />
+                <Pulse className="h-9 w-full rounded-[var(--rounded-sm)]" />
+              </div>
+              <div className="flex flex-col gap-[0.35rem]">
+                <Pulse className="h-3.5 w-28" />
+                <Pulse className="h-9 w-2/3 rounded-[var(--rounded-sm)]" />
+              </div>
             </div>
           </aside>
         </div>

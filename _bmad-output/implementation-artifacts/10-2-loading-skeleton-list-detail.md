@@ -4,7 +4,7 @@ baseline_commit: 9df8162
 
 # Story 10.2: Loading skeleton for list detail page
 
-Status: review
+Status: done
 
 ## Story
 
@@ -230,8 +230,17 @@ Claude Sonnet 5 (claude-sonnet-5)
 
 - `ui/app/lists/[listId]/loading.tsx` (new)
 
+### Review Findings
+
+- [x] [Review][Patch] Sidebar placeholders don't match TemporalNavigation's/ManualExpenseForm's real shapes [ui/app/lists/[listId]/loading.tsx:48-67] — replaced the full-width bar guess with a compact fit-content pair of squares (matching `TemporalNavigation.module.scss`'s segmented icon-button group) and un-carded stacked label/input fields (matching `ManualExpenseForm.module.scss`, which has no outer bordered card).
+- [x] [Review][Patch] No accessible loading semantics [ui/app/lists/[listId]/loading.tsx:9-14] — added `role="status" aria-live="polite" aria-label="Loading list"` on the root `<main>`.
+
 ## Change Log
 
 - 2026-09-22: Implemented Story 10.2 — added `ui/app/lists/[listId]/loading.tsx`
   skeleton; full `ui/` test suite green (809 tests), no other files
   touched. Status moved to review.
+- 2026-09-22: Code review — fixed sidebar placeholder shapes (now matches
+  `TemporalNavigation`'s compact segmented control and `ManualExpenseForm`'s
+  un-carded field stack) and added `role="status"`/`aria-live` accessible
+  loading semantics. Status moved to done.
