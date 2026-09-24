@@ -147,7 +147,7 @@ export function CardsPanel({ refreshToken = 0 }: Props = {}) {
     setRegisteredStatus(t.cardRegistered);
   }
 
-  function onRoutingUpdated(updated: CardItem) {
+  function onCardUpdated(updated: CardItem) {
     setCards((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
   }
 
@@ -226,8 +226,10 @@ export function CardsPanel({ refreshToken = 0 }: Props = {}) {
             routingListLabel: t.routingListLabel,
             routingSave: t.routingSave,
             routingSaving: t.routingSaving,
+            renameLabel: t.renameLabel,
           }}
-          onUpdated={onRoutingUpdated}
+          onUpdated={onCardUpdated}
+          onLabelUpdated={onCardUpdated}
         />
       )}
     />
