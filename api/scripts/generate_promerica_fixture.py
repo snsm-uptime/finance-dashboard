@@ -12,6 +12,16 @@ asterisks on the two footnoted ones), the payments section's four amount
 columns, the interest section's two-line concept/amount pairing, a preamble
 before the first declared section, a mid-section card-number marker line,
 and each section's own totals line (must not be double-counted as a row).
+
+Also includes every section's own printed column sub-header line(s) (e.g.
+"Monto en Monto en" / "Fecha de la transacción Concepto / Descripción Lugar
+/ Moneda colones US$") — the original fixture omitted these for every
+section except payments, which meant the adapter's boilerplate allowlist
+gap (only the payment section's sub-headers were recognized) went uncaught
+until a real full statement surfaced it (2026-09-23 code-review session):
+an unrecognized sub-header line under an already-open section was
+misclassified as an unknown section title, flipping the cursor to
+"unmapped" and failing the very next real data row.
 """
 
 from __future__ import annotations
@@ -57,21 +67,31 @@ def build_fixture() -> bytes:
             "06/01/2026 PAGO SINPE -297,986.99 0.00 0.00 0.00",
             "Total de pagos del periodo de 19/12/2025 al 19/01/2026 -337,963.91 -3,564.56",
             "Detalle de compras del periodo",
+            "Monto en Monto en",
+            "Fecha de la transacción Concepto / Descripción Lugar / Moneda colones US$",
             "XXXX-XXXX-XXXX-9485 SOTO MADRIGAL SEBASTIAN NOE",
             "17/12/2025 PARQUEOS REAL CARIARI BELEN CRI 2,100.00 0.00",
             "20/01/2026 BONO DE BIENVENIDA 15,000 San Jose CRI -30,000.00 0.00",
             "Total de compras del periodo de 19/12/2025 al 19/01/2026 591,158.06 23.00",
             "Detalle de intereses",
+            "Interés en Interés en",
+            "Concepto / Descripción colones US$",
             "MONTO POR INTERESES CORRIENTES",
             "99.59 0.00",
             "REVERSIÓN DE INTERESES CORRIENTES DEL PERIODO ANTERIOR",
             "-3,564.56 0.00",
             "Total por concepto de intereses 5,964.99 0.08",
             "Detalle de otros cargos",
+            "Monto en Monto en",
+            "Fecha de Pagos Concepto / Descripción Lugar / Moneda colones US$",
             "02/01/2026 COSTO OPERATIVO POR ADM DE CUENTA SAN JOSE CRI 760.50 0.00",
             "Detalle de productos y servicios de elección voluntaria*",
+            "Monto en Monto en",
+            "Fecha Concepto / Descripción Lugar / Moneda Colones US$",
             "02/01/2026 SEGURO PROTECCIÓN FINANC. TC 1 - SAGICOR SAN JOSE CRI 3,400.00 0.00",
             "Cargos por gestión evidenciable de cobro**",
+            "Monto en Monto en",
+            "Fecha Concepto / Descripción Lugar / Moneda colones US$",
             "Total cargos por gestión evidenciable de cobro Monto en 0.00 0.00",
         ],
     )

@@ -119,15 +119,35 @@ _AMOUNT_TOKEN_RE = re.compile(r"-?\d{1,3}(?:,\d{3})*\.\d{2}")
 _CUTOFF_DATE_RE = re.compile(r"Fecha de Corte\s*(\d{1,2}/\d{1,2}/\d{4})", re.IGNORECASE)
 
 # Known non-data boilerplate lines that are not section titles: card-number
-# marker lines printed mid-section, and the payment section's two column
-# sub-header lines (real evidence, 2026-09-22 session). Recognized here so
-# they don't get mistaken for an unrecognized section (see the "elif
-# seen_section_header" branch in parse()).
+# marker lines printed mid-section, and every section's own column
+# sub-header line(s) (real evidence, 2026-09-22 session for the payment
+# section; 2026-09-23 session, against a real full statement, for the
+# remaining five — every declared section prints its own column-header
+# line(s) directly under its title, not just the payment section). Recognized
+# here so they don't get mistaken for an unrecognized section (see the "elif
+# seen_section_header" branch in parse()). "Monto en Monto en" is the shared
+# first sub-header line for compras/otros cargos/voluntaria/cobro — each of
+# those four sections then differs in its second line, so each is listed
+# individually rather than assumed identical.
 _CARD_NUMBER_MARKER_RE = re.compile(r"^X{4}-X{4}-X{4}-")
 _KNOWN_BOILERPLATE_LINES = frozenset(
     {
+        # Detalle de pagos del periodo (payment)
         "Transacción en Interés en Transacciones Interés en",
         "Fecha de Pagos Concepto / Descripción colones colones en US$ US$",
+        # Shared first sub-header line: compras / otros cargos / voluntaria / cobro
+        "Monto en Monto en",
+        # Detalle de compras del periodo
+        "Fecha de la transacción Concepto / Descripción Lugar / Moneda colones US$",
+        # Detalle de intereses
+        "Interés en Interés en",
+        "Concepto / Descripción colones US$",
+        # Detalle de otros cargos
+        "Fecha de Pagos Concepto / Descripción Lugar / Moneda colones US$",
+        # Detalle de productos y servicios de elección voluntaria*
+        "Fecha Concepto / Descripción Lugar / Moneda Colones US$",
+        # Cargos por gestión evidenciable de cobro**
+        "Fecha Concepto / Descripción Lugar / Moneda colones US$",
     }
 )
 
