@@ -47,9 +47,15 @@ def detect_bank_adapter(
 ) -> BankAdapter:
     """Resolve which adapter applies to an upload (AC #2, FR-14).
 
-    Priority: explicit override > unambiguous filename-only match > unambiguous
-    content-inclusive match. Unknown/ambiguous detection fails loudly — no
-    silent mis-association (NFR-8).
+    Priority: explicit override > unambiguous filename-only match > content
+    sniff. A filename is user-supplied and out of our control, so it can
+    never be the sole tie-breaker between adapters: an unambiguous filename
+    match is accepted as a fast path, but an ambiguous one (two or more
+    adapters both matching on filename alone) always falls through to
+    content sniff to resolve, rather than failing immediately — content is
+    authoritative whenever filename can't decide on its own. Unknown/still-
+    ambiguous-after-content detection fails loudly — no silent
+    mis-association (NFR-8).
     """
     if override is not None:
         matches = [a for a in adapters if a.bank_id == override]
@@ -62,15 +68,20 @@ def detect_bank_adapter(
     filename_matches = [a for a in adapters if a.detect(filename=filename, content_sample=b"")]
     if len(filename_matches) == 1:
         return filename_matches[0]
-    if len(filename_matches) > 1:
-        raise AmbiguousBankAdapterError()
 
-    content_matches = [
-        a for a in adapters if a.detect(filename=filename, content_sample=content_sample)
-    ]
+    # Blank out filename here (rather than passing the real one alongside
+    # content_sample): an adapter's own detect() typically ORs its filename
+    # check back in when content_sample is non-empty, which would make an
+    # already-ambiguous filename match stay ambiguous regardless of content.
+    # Blanking it forces content to be the sole, authoritative signal for
+    # this disambiguation pass.
+    content_matches = [a for a in adapters if a.detect(filename="", content_sample=content_sample)]
     if len(content_matches) == 1:
         return content_matches[0]
     if len(content_matches) > 1:
+        raise AmbiguousBankAdapterError()
+
+    if len(filename_matches) > 1:
         raise AmbiguousBankAdapterError()
 
     raise UnknownBankAdapterError()
