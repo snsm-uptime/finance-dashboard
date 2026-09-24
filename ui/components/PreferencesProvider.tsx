@@ -112,9 +112,11 @@ function resolveDefaultOriginCardId(
 
 export function PreferencesProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
-  const [locale, setLocale] = useState<Locale>(() =>
-    typeof window === "undefined" ? "en" : browserLocale(),
-  );
+  // Always "en" on first render (client and server alike) — matches SSR
+  // output so hydration never diverges. The real locale (cached or
+  // browser-detected) is applied in an effect below, after hydration, then
+  // superseded by the account API's answer via `refresh()`.
+  const [locale, setLocale] = useState<Locale>("en");
   const [theme, setThemeState] = useState<ThemePreference>("system");
   const [me, setMe] = useState<MePreferences | null>(null);
   const refreshGen = useRef(0);
@@ -189,6 +191,22 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
         setReady(true);
       }
     }
+  }, []);
+
+  useEffect(() => {
+    // Runs once, post-hydration: safe to read window/localStorage/navigator
+    // here since this can no longer diverge from the SSR-matched first
+    // render. Narrows the "en" flash before the account API answers.
+    let cached: string | null = null;
+    try {
+      cached = localStorage.getItem(LANG_CACHE_KEY);
+    } catch {
+      /* ignore quota / private mode */
+    }
+    const initial = resolveLocale(cached ?? browserLocale());
+    setLocale(initial);
+    applyDom(initial, theme);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
