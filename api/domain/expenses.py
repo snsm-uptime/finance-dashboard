@@ -150,6 +150,7 @@ def validate_manual_expense(
     now: datetime | None = None,
     origin_kind: str | None = None,
     origin_card_id: UUID | None = None,
+    posted_date: str | None = None,
 ) -> ManualExpenseDraft:
     """Validate a manual (hand) expense create. v1 supports CRC and USD (Story 3.5 FX)."""
     cur = (currency or "").strip().upper()
@@ -197,6 +198,14 @@ def validate_manual_expense(
         validated_origin_kind = None
         validated_origin_card_id = None
 
+    if posted_date is None:
+        resolved_posted_date = today_costa_rica_iso(now)
+    else:
+        try:
+            resolved_posted_date = date.fromisoformat(posted_date).isoformat()
+        except ValueError as exc:
+            raise InvalidManualExpenseError("Posted date must be an ISO calendar date.") from exc
+
     return ManualExpenseDraft(
         amount=parsed,
         currency=cur,
@@ -204,7 +213,7 @@ def validate_manual_expense(
         payer_id=payer_id,
         provenance=PROVENANCE_HAND,
         line_type=LINE_TYPE_PURCHASE,
-        posted_date=today_costa_rica_iso(now),
+        posted_date=resolved_posted_date,
         origin_kind=validated_origin_kind,
         origin_card_id=validated_origin_card_id,
     )

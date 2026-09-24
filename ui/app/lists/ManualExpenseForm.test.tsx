@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { act } from "react";
+import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -95,6 +95,10 @@ const members = [
 const messages = {
   expenseTitle: listsMessages.en.expenseTitle,
   expenseAmount: listsMessages.en.expenseAmount,
+  expenseCurrency: listsMessages.en.expenseCurrency,
+  expenseCurrencyCrc: listsMessages.en.expenseCurrencyCrc,
+  expenseCurrencyUsd: listsMessages.en.expenseCurrencyUsd,
+  expenseDateLabel: listsMessages.en.expenseDateLabel,
   expenseDescription: listsMessages.en.expenseDescription,
   expensePayer: listsMessages.en.expensePayer,
   expenseSubmit: listsMessages.en.expenseSubmit,
@@ -957,6 +961,163 @@ describe("ManualExpenseForm", () => {
     expect(
       container.querySelector(`[aria-label="${messages.expenseAdjustSplit}"]`),
     ).not.toBeNull();
+  });
+
+  it("renders with zero members: payer select is empty (not omitted), canSubmit stays false", async () => {
+    const onCanSubmitChange = vi.fn();
+    await act(async () => {
+      root.render(
+        <ManualExpenseForm
+          listId="list-1"
+          currentUserId="user-a"
+          members={[]}
+          messages={messages}
+          onCanSubmitChange={onCanSubmitChange}
+        />,
+      );
+    });
+
+    const payerSelect = container.querySelector('select[name="payer_id"]') as HTMLSelectElement;
+    expect(payerSelect).not.toBeNull();
+    expect(payerSelect.querySelectorAll("option").length).toBe(0);
+    expect(onCanSubmitChange).toHaveBeenCalledWith(false);
+
+    const form = container.querySelector("form") as HTMLFormElement;
+    const submitButton = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+    expect(submitButton.disabled).toBe(true);
+
+    const amount = container.querySelector('input[name="amount"]') as HTMLInputElement;
+    const description = container.querySelector(
+      'input[name="description"]',
+    ) as HTMLInputElement;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(amount, "10.00");
+      amount.dispatchEvent(new Event("input", { bubbles: true }));
+      setter?.call(description, "Coffee");
+      description.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    // Amount/description alone still can't submit: no valid payer exists yet.
+    expect(submitButton.disabled).toBe(true);
+    expect(container.querySelector(`[aria-label="${messages.expenseAdjustSplit}"]`)).toBeNull();
+  });
+
+  it("populates payer options via a members rerender without remounting other field values", async () => {
+    await act(async () => {
+      root.render(
+        <ManualExpenseForm
+          listId="list-1"
+          currentUserId="user-a"
+          members={[]}
+          messages={messages}
+        />,
+      );
+    });
+
+    const amount = container.querySelector('input[name="amount"]') as HTMLInputElement;
+    const description = container.querySelector(
+      'input[name="description"]',
+    ) as HTMLInputElement;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(amount, "10.00");
+      amount.dispatchEvent(new Event("input", { bubbles: true }));
+      setter?.call(description, "Coffee");
+      description.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    await act(async () => {
+      root.render(
+        <ManualExpenseForm
+          listId="list-1"
+          currentUserId="user-a"
+          members={members}
+          messages={messages}
+        />,
+      );
+    });
+
+    const payerSelect = container.querySelector('select[name="payer_id"]') as HTMLSelectElement;
+    expect(payerSelect.querySelectorAll("option").length).toBe(2);
+    expect(payerSelect.value).toBe("user-a");
+    expect((container.querySelector('input[name="amount"]') as HTMLInputElement).value).toBe(
+      "10.00",
+    );
+    expect(
+      (container.querySelector('input[name="description"]') as HTMLInputElement).value,
+    ).toBe("Coffee");
+  });
+
+  it("resyncs the percentage split baseline when members arrive after mounting empty, so submit succeeds", async () => {
+    createExpense.mockResolvedValue({
+      ok: true,
+      expense: {
+        id: "e6",
+        list_id: "list-1",
+        amount: "1000.00",
+        currency: "CRC",
+        description: "Groceries",
+        payer_id: "user-a",
+        provenance: "hand",
+        line_type: "purchase",
+        posted_date: "2026-08-06",
+        created_at: "2026-08-06T12:00:00Z",
+      },
+    });
+
+    function Wrapper() {
+      const [members2, setMembers2] = useState<typeof members>([]);
+      return (
+        <>
+          <button type="button" onClick={() => setMembers2(members)}>
+            load-members
+          </button>
+          <ManualExpenseForm
+            listId="list-1"
+            currentUserId="user-a"
+            members={members2}
+            messages={messages}
+          />
+        </>
+      );
+    }
+
+    await act(async () => {
+      root.render(<Wrapper />);
+    });
+
+    const amount = container.querySelector('input[name="amount"]') as HTMLInputElement;
+    const description = container.querySelector(
+      'input[name="description"]',
+    ) as HTMLInputElement;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(amount, "1000.00");
+      amount.dispatchEvent(new Event("input", { bubbles: true }));
+      setter?.call(description, "Groceries");
+      description.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    const loadButton = Array.from(container.querySelectorAll("button")).find(
+      (el) => el.textContent === "load-members",
+    );
+    await act(async () => {
+      loadButton?.click();
+    });
+
+    const form = container.querySelector("form") as HTMLFormElement;
+    await act(async () => {
+      form.requestSubmit();
+    });
+
+    expect(createExpense).toHaveBeenCalledWith(
+      "list-1",
+      expect.objectContaining({ amount: "1000.00", description: "Groceries" }),
+      expect.anything(),
+    );
+    const body = createExpense.mock.calls[0][1] as { split_override?: unknown };
+    expect(body.split_override).toBeUndefined();
   });
 
   it("does not submit a payer id that is missing from memberships", async () => {

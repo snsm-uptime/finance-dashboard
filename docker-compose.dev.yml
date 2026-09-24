@@ -60,7 +60,16 @@ services:
     # on PID 1 and auto-starts a second inspector on port+1 (9230) for that
     # child, bound to the same host. Breakpoints in app code only bind on
     # that child's inspector, so 9230 must be published too. See JS-DAP.md.
-    command: ["node", "--inspect=0.0.0.0:9229", "node_modules/next/dist/bin/next", "dev", "--webpack", "-H", "0.0.0.0", "-p", "3000"]
+    # --turbopack, not --webpack: webpack's `eval-*` dev devtool crashes
+    # importing pdfjs-dist's ESM build (react-pdf, ParseComparisonPanel.tsx)
+    # with "Object.defineProperty called on non-object" — a confirmed
+    # webpack bug (webpack/webpack#20095, fixed in 5.103.0, not yet bundled
+    # by this Next.js version) that Next.js dev mode can't work around
+    # (overriding `devtool` is hard-blocked and reverted). Turbopack isn't
+    # affected. JS-DAP.md already documents Turbopack-specific chunk
+    # layout/skipFiles handling, so this debug setup expects Turbopack to
+    # work — but verify breakpoints still resolve after switching.
+    command: ["node", "--inspect=0.0.0.0:9229", "node_modules/next/dist/bin/next", "dev", "--turbopack", "-H", "0.0.0.0", "-p", "3000"]
     ports:
       - "${UI_DEBUG_PORT:-9229}:9229"
       - "${UI_DEBUG_WORKER_PORT:-9230}:9230"

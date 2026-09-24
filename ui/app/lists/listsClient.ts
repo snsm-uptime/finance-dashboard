@@ -583,6 +583,7 @@ export type CreateExpenseBody = {
   currency: string;
   description: string;
   payer_id: string;
+  posted_date?: string;
   split_override?: {
     kind: "whole_assignee" | "absolute_amounts" | "percentage";
     assignee_id?: string;
@@ -704,6 +705,7 @@ export async function createExpense(
     currency: body.currency,
     description: body.description,
     payer_id: body.payer_id,
+    ...(body.posted_date !== undefined ? { posted_date: body.posted_date } : {}),
     ...(body.split_override ? { split_override: body.split_override } : {}),
     ...(body.origin_kind !== undefined ? { origin_kind: body.origin_kind } : {}),
     ...(body.origin_card_id !== undefined ? { origin_card_id: body.origin_card_id } : {}),

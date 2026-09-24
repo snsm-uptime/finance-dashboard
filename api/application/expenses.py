@@ -165,6 +165,7 @@ class CreateManualExpenseCommand:
     split_override: SplitOverrideInput | None = None
     origin_kind: str | None = None
     origin_card_id: UUID | None = None
+    posted_date: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -275,6 +276,7 @@ class CreateManualExpenseService:
             member_ids=members,
             origin_kind=command.origin_kind,
             origin_card_id=command.origin_card_id,
+            posted_date=command.posted_date,
         )
         _reject_unowned_card_origin(
             self._repo,

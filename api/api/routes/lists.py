@@ -529,6 +529,7 @@ def create_list_expense(
                 split_override=parsed_override,
                 origin_kind=body.origin_kind,
                 origin_card_id=body.origin_card_id,
+                posted_date=body.posted_date,
             )
         )
     except InvalidManualExpenseError as exc:

@@ -48,6 +48,19 @@ export type ManualExpenseMessages = ListsClientMessages & {
   expenseOriginLabel: string;
   expenseOriginBlank: string;
   expenseOriginCash: string;
+  expenseCurrency: string;
+  expenseCurrencyCrc: string;
+  expenseCurrencyUsd: string;
+  expenseDateLabel: string;
+};
+
+/** Pre-fills a create with values already known (e.g. a failed statement's
+ * extracted evidence) — every field stays user-editable before submit. */
+export type ManualExpenseInitialValues = {
+  amount?: string;
+  description?: string;
+  currency?: string;
+  postedDate?: string;
 };
 
 type Props = {
@@ -56,6 +69,7 @@ type Props = {
   members: ListMember[];
   defaultSplit?: DefaultSplitPayload | null;
   messages: ManualExpenseMessages;
+  initialValues?: ManualExpenseInitialValues;
   /** Callback fired when expense is successfully created */
   onSuccess?: () => void;
   /** Ref to form element for button submission */
@@ -63,6 +77,10 @@ type Props = {
   /** Callback to update button disabled state (called with canSubmit value) */
   onCanSubmitChange?: (canSubmit: boolean) => void;
 };
+
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
 type SplitMode = "whole_assignee" | "absolute_amounts" | "percentage";
 
@@ -130,6 +148,7 @@ export function ManualExpenseForm({
   members,
   defaultSplit = null,
   messages,
+  initialValues,
   onSuccess,
   formRef,
   onCanSubmitChange,
@@ -146,8 +165,10 @@ export function ManualExpenseForm({
     label: memberLabel(m),
   }));
 
-  const [amount, setAmount] = useState("");
-  const [description, setDescription] = useState("");
+  const [amount, setAmount] = useState(initialValues?.amount ?? "");
+  const [description, setDescription] = useState(initialValues?.description ?? "");
+  const [currency, setCurrency] = useState(initialValues?.currency ?? "CRC");
+  const [postedDate, setPostedDate] = useState(initialValues?.postedDate ?? todayIso());
   const [payerId, setPayerId] = useState(currentUserId);
   // Preselects the account's default origin (Cash, "None", or a specific
   // card) — the user can still change or clear it before submitting.
@@ -195,12 +216,15 @@ export function ManualExpenseForm({
 
   // The split-adjust UI is hidden once membership drops to 1 (this story),
   // so a stale mode/split from before the drop would otherwise submit
-  // silently with no visible control left to correct it.
+  // silently with no visible control left to correct it. Symmetrically, a
+  // form mounted with zero members (5.2.1: list not chosen yet) computed an
+  // empty percentages baseline — once members arrive, that stale baseline no
+  // longer matches percentMapFromDefault(members, ...) and submit fails.
   const previousMemberCountRef = useRef(members.length);
   useEffect(() => {
     const previousCount = previousMemberCountRef.current;
     previousMemberCountRef.current = members.length;
-    if (members.length <= 1 && previousCount > 1) {
+    if ((members.length <= 1 && previousCount > 1) || (members.length > 0 && previousCount === 0)) {
       resetAdjustFields();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -271,8 +295,10 @@ export function ManualExpenseForm({
     },
     {
       onSuccess: () => {
-        setAmount("");
-        setDescription("");
+        setAmount(initialValues?.amount ?? "");
+        setDescription(initialValues?.description ?? "");
+        setCurrency(initialValues?.currency ?? "CRC");
+        setPostedDate(initialValues?.postedDate ?? todayIso());
         setPayerId(currentUserId);
         setOriginValue("");
         resetAdjustFields();
@@ -286,6 +312,7 @@ export function ManualExpenseForm({
     amount.trim().length > 0 &&
     description.trim().length > 0 &&
     !!activePayerId &&
+    postedDate.trim().length > 0 &&
     (mode !== "whole_assignee" || !!activeAssigneeId) &&
     !pending;
 
@@ -303,9 +330,10 @@ export function ManualExpenseForm({
     if (mode === "whole_assignee" && !activeAssigneeId) return;
     await submit({
       amount: amount.trim(),
-      currency: "CRC",
+      currency,
       description: description.trim(),
       payer_id: activePayerId,
+      posted_date: postedDate,
       split_override: undefined,
       ...originFields(),
     });
@@ -333,6 +361,47 @@ export function ManualExpenseForm({
             aria-describedby={error ? errorId : undefined}
             onChange={(e) => {
               setAmount(e.target.value);
+              clearError();
+            }}
+          />
+        </div>
+
+        <div className={styles.field}>
+          <span className={styles.label} id={`${baseId}-currency-label`}>
+            {messages.expenseCurrency}
+          </span>
+          <SoftLedgerSelect
+            id={`${baseId}-currency`}
+            value={currency}
+            options={[
+              { value: "CRC", label: messages.expenseCurrencyCrc },
+              { value: "USD", label: messages.expenseCurrencyUsd },
+            ]}
+            disabled={pending}
+            aria-labelledby={`${baseId}-currency-label`}
+            onChange={(next) => {
+              setCurrency(next);
+              clearError();
+            }}
+          />
+        </div>
+
+        <div className={styles.field}>
+          <label className={styles.label} htmlFor={`${baseId}-posted-date`}>
+            {messages.expenseDateLabel}
+          </label>
+          <input
+            id={`${baseId}-posted-date`}
+            type="date"
+            className={styles.input}
+            name="posted_date"
+            required
+            value={postedDate}
+            disabled={pending}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? errorId : undefined}
+            onChange={(e) => {
+              setPostedDate(e.target.value);
               clearError();
             }}
           />
@@ -465,7 +534,7 @@ export function ManualExpenseForm({
                 disabled={pending}
                 defaultPercents={percentMapFromDefault(members, effectiveSplit)}
                 amount={amount}
-                currency="CRC"
+                currency={currency}
               />
             ) : null}
 

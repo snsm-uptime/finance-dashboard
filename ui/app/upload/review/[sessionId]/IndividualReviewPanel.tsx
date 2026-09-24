@@ -962,6 +962,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
           sessionId={sessionId}
           statement={step.statement}
           locale={locale}
+          defaultListId={session?.landing_list_id ?? null}
           onContinue={() =>
             setAcknowledgedFailedIds((prev) => {
               const next = new Set(prev);
