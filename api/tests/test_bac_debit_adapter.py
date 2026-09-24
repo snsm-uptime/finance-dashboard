@@ -176,6 +176,18 @@ def test_parse_printed_cutoff_date_from_header_lines() -> None:
     assert parse_printed_cutoff_date(["unrelated"]) is None
 
 
+def test_parse_printed_cutoff_date_when_label_and_date_are_on_separate_lines() -> None:
+    # Real BAC debit PDFs wrap this two-column header: pdfplumber extracts
+    # the "Fecha de Corte:" label at the end of one line and the date at
+    # the end of the next.
+    assert parse_printed_cutoff_date(
+        [
+            "Tasas de interés escalonadas Banco BAC San José SA Fecha de Corte:",
+            "Nombre: SEBASTIAN NOE SOTO MADRIGAL Para el rango de su Tasa anual: 3101012009 31/ENE/26",
+        ]
+    ) == datetime(2026, 1, 31, tzinfo=UTC).date()
+
+
 def test_statement_reference_date_prefers_printed_cutoff_over_creation_date() -> None:
     assert (
         statement_reference_date(
@@ -192,6 +204,8 @@ def test_statement_reference_date_prefers_printed_cutoff_over_creation_date() ->
 def test_detect_statement_currency_reads_colones_and_dolares() -> None:
     assert detect_statement_currency(["Moneda: COLONES"]) == "CRC"
     assert detect_statement_currency(["Moneda: DOLARES"]) == "USD"
+    # Real BAC dollar-account statements print "U.S. DOLLAR", not "DOLARES".
+    assert detect_statement_currency(["Moneda: U.S. DOLLAR"]) == "USD"
     assert detect_statement_currency(["unrelated"]) is None
 
 

@@ -54,9 +54,10 @@ _STATEMENT_HEADER_MARKER = "CUADRO RESUMEN"
 
 _DATE_FORMAT = "%b/%d"
 
-_CUT_OFF_DATE_RE = re.compile(r"Fecha de [Cc]orte:\s*(\d{1,2}/[A-ZÁÉÍÓÚÑ]{3}/\d{2})", re.IGNORECASE)
-_MONEDA_RE = re.compile(r"Moneda:\s*(COLONES|DOLARES)", re.IGNORECASE)
-_CURRENCY_BY_MONEDA = {"COLONES": "CRC", "DOLARES": "USD"}
+_CUT_OFF_DATE_LABEL_RE = re.compile(r"Fecha de [Cc]orte:", re.IGNORECASE)
+_CUT_OFF_DATE_VALUE_RE = re.compile(r"(\d{1,2}/[A-ZÁÉÍÓÚÑ]{3}/\d{2})", re.IGNORECASE)
+_MONEDA_RE = re.compile(r"Moneda:\s*(COLONES|DOLARES|U\.S\.\s*DOLLAR)", re.IGNORECASE)
+_CURRENCY_BY_MONEDA = {"COLONES": "CRC", "DOLARES": "USD", "U.S. DOLLAR": "USD"}
 
 # Physical x-position ranges for the transaction-table DÉBITOS/CRÉDITOS
 # columns (AD-28 SIGN_VARIANT). Calibrated against this story's own
@@ -107,13 +108,26 @@ def _parse_pdf_creation_date(raw: str) -> date:
 
 def parse_printed_cutoff_date(lines: list[str]) -> date | None:
     """Parse the printed `Fecha de Corte:` header (DD/MMM/YY — a different
-    token order/separator than the row date format, `%b/%d`)."""
-    for line in lines:
-        match = _CUT_OFF_DATE_RE.search(line)
-        if match is None:
+    token order/separator than the row date format, `%b/%d`).
+
+    Real BAC debit PDFs wrap this two-column header across lines: the
+    `Fecha de Corte:` label ends one line and the date itself is on the
+    next (see project-context.md). Once the label line is found, the date
+    is searched on that same line first, then the following line.
+    """
+    for index, line in enumerate(lines):
+        if _CUT_OFF_DATE_LABEL_RE.search(line) is None:
             continue
-        iso = parse_statement_date(match.group(1), date_format="%d/%b/%y")
-        return date.fromisoformat(iso)
+        candidates = [line]
+        if index + 1 < len(lines):
+            candidates.append(lines[index + 1])
+        for candidate in candidates:
+            match = _CUT_OFF_DATE_VALUE_RE.search(candidate)
+            if match is None:
+                continue
+            iso = parse_statement_date(match.group(1), date_format="%d/%b/%y")
+            return date.fromisoformat(iso)
+        return None
     return None
 
 
@@ -142,7 +156,8 @@ def detect_statement_currency(lines: list[str]) -> str | None:
     for line in lines:
         match = _MONEDA_RE.search(line)
         if match is not None:
-            return _CURRENCY_BY_MONEDA[match.group(1).upper()]
+            normalized = " ".join(match.group(1).upper().split())
+            return _CURRENCY_BY_MONEDA[normalized]
     return None
 
 
