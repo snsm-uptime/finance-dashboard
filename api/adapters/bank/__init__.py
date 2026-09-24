@@ -12,6 +12,8 @@ from __future__ import annotations
 from application.bank_adapters import BankAdapter
 
 from adapters.bank.bac_credit.adapter import BacCreditAdapter
+from adapters.bank.bac_debit.adapter import BacDebitAdapter
 from adapters.bank.promerica.adapter import PromericaAdapter
+from adapters.bank.promerica_stub import PromericaStubAdapter
 
-ADAPTERS: list[BankAdapter] = [BacCreditAdapter(), PromericaAdapter()]
+ADAPTERS: list[BankAdapter] = [BacCreditAdapter(), BacDebitAdapter(), PromericaStubAdapter(), PromericaAdapter()]
