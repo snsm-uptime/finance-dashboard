@@ -373,6 +373,12 @@
 
 - `detail`'s payload is parsed via `response.json() as Promise<DetailPayload>` with no runtime validation, unlike the sibling `split`/`members`/`cycles` fetches which go through `asDefaultSplit`/`asMembers`/`asCycles`. Pre-existing — the same unchecked cast existed before this story, just moved into the `Promise.all`; a malformed/unexpected `detail` body still silently propagates `undefined` fields (e.g. `detail?.owner_id`) rather than being caught with an equivalent `detailLoadError` flag.
 
+## Deferred from: code review of 5-2-1-manually-enter-a-failed-statement.md (2026-09-23)
+
+- `ImportReviewSheet`'s empty state shows `t.importReviewSheetEmpty` ("All routed items were deleted.") whenever `groups.length === 0 && discardedRows.length === 0` — but that condition also covers the case where nothing was ever routed (e.g. a session's only statement was dismissed via Story 5.2/5.2.1's flow without any row ever being assigned to a list). Found live by manual testing this story's dismiss-statement action: reaching the "Confirm placements" sheet with a same-session zero-routed history reports a false "deleted" claim. Pre-existing copy bug from Story 4.13.1's `ImportReviewSheet.tsx:420`; not introduced or touched by 5.2.1's diff, but this story's flow is one of the paths that reaches it.
+- `posted_date` has no bounds validation (accepts arbitrarily far future/past ISO dates) — pre-existing backend groundwork per this story's own Dev Notes ("do not touch `api/` for this story"), not introduced by 5.2.1's UI recomposition (`api/domain/expenses.py:39`).
+- `todayIso()` computes the default posted date from client-local midnight rather than Costa Rica's timezone, which can be off by one day near midnight for users outside CR — pre-existing ad-hoc groundwork (currency/date fields shipped ahead of this story), out of 5.2.1's UI-recomposition scope (`ui/app/lists/ManualExpenseForm.tsx:81`).
+
 ## Deferred from: code review of 4-9-1-bac-debit-adapter.md (2026-09-23)
 
 - SIGN_VARIANT x-position ranges (`_DEBITOS_RANGE`/`_CREDITOS_RANGE`, `api/adapters/bank/bac_debit/adapter.py:63-76`) are calibrated only against the synthetic fixture's own Courier-monospace geometry, not the real PDF's proportional-font geometry (already flagged in-code as a known gap). CI passing on the synthetic fixture doesn't prove the shipped ranges correctly resolve DÉBITOS/CRÉDITOS on a real BAC debit statement — needs a real-PDF calibration pass as separate follow-up work.

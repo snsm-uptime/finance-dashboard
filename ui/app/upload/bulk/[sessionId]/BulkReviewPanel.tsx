@@ -235,6 +235,7 @@ export function BulkReviewPanel({ sessionId }: BulkReviewPanelProps) {
         sessionId={sessionId}
         statement={failedStatement}
         locale={locale}
+        defaultListId={listId || null}
         onContinue={() =>
           setAcknowledgedFailedIds((prev) => {
             const next = new Set(prev);

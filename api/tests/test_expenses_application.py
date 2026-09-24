@@ -30,6 +30,7 @@ from application.expenses import (
 )
 from application.fx_service import MaterializeFxService
 from application.lists import ListRecord, MembershipRecord
+from domain.dates import today_costa_rica_iso
 from domain.errors import (
     ExpenseNotDeletableError,
     InvalidManualExpenseError,
@@ -206,6 +207,7 @@ def _command(
     payer: UUID | None = None,
     origin_kind: str | None = None,
     origin_card_id: UUID | None = None,
+    posted_date: str | None = None,
 ) -> CreateManualExpenseCommand:
     return CreateManualExpenseCommand(
         actor_user_id=actor,
@@ -216,6 +218,7 @@ def _command(
         payer_id=payer if payer is not None else actor,
         origin_kind=origin_kind,
         origin_card_id=origin_card_id,
+        posted_date=posted_date,
     )
 
 
@@ -257,6 +260,35 @@ def test_create_with_cash_origin_succeeds() -> None:
 
     assert result.origin_kind == "cash"
     assert result.origin_card_id is None
+
+
+def test_create_with_explicit_posted_date_uses_it() -> None:
+    actor = uuid4()
+    repo = _FakeExpenseRepo(list_id=uuid4(), member_ids=[actor])
+    service = CreateManualExpenseService(repo, MaterializeFxService(_FakeBccrClient()))
+
+    result = service.execute(_command(repo, actor, posted_date="2026-01-15"))
+
+    assert result.posted_date.isoformat() == "2026-01-15"
+
+
+def test_create_with_no_posted_date_defaults_to_today() -> None:
+    actor = uuid4()
+    repo = _FakeExpenseRepo(list_id=uuid4(), member_ids=[actor])
+    service = CreateManualExpenseService(repo, MaterializeFxService(_FakeBccrClient()))
+
+    result = service.execute(_command(repo, actor))
+
+    assert result.posted_date.isoformat() == today_costa_rica_iso(None)
+
+
+def test_create_with_malformed_posted_date_fails_loud() -> None:
+    actor = uuid4()
+    repo = _FakeExpenseRepo(list_id=uuid4(), member_ids=[actor])
+    service = CreateManualExpenseService(repo, MaterializeFxService(_FakeBccrClient()))
+
+    with pytest.raises(InvalidManualExpenseError):
+        service.execute(_command(repo, actor, posted_date="not-a-date"))
 
 
 def test_create_with_no_origin_succeeds() -> None:

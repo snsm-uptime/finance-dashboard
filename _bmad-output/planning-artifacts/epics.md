@@ -1747,6 +1747,21 @@ So that nothing partial enters the ledger and I'm not blocked from reviewing sta
 **When** a statement fails to parse
 **Then** hand-editing unresolved rows is out of scope — there is no unresolved-row bucket; a corrected re-upload or a manual expense entry (FR-21) are the available paths to capture that data
 
+### Story 5.2.1: Manually enter a failed statement
+
+As a user facing a failed parse,
+I want to hand-enter the statement's transaction as a manual expense right on the comparison surface,
+So that I don't have to leave the review flow, re-find the list, and re-type what the PDF already shows me.
+
+**Acceptance Criteria:**
+
+1. **Given** the comparison surface from Story 5.1, **when** I activate "Add manually," **then** on desktop a third column appears alongside the existing extracted-items and PDF columns (no overlay/Sheet) — on phone, the extracted-items region (top) is replaced by the form; the PDF region stays fixed in its existing position (lower half on phone) throughout, unaffected (FR-25, FR-55).
+2. **Given** the manual-entry form is showing, **when** it first renders, **then** every field (list picker, amount, currency, date, description, payer, split) is visible immediately — it is not withheld until a list is chosen (FR-55). Amount/description/currency/date are pre-filled from the failed statement's `parse_evidence` (first `kind: "row"` item, when one exists) — same pre-fill this story's earlier draft already established.
+3. **Given** no list is yet chosen, **when** the form is showing, **then** the payer selector and split controls render with no options / are inert (no valid payer to submit) rather than being hidden — choosing a list populates them from that list's members without re-rendering the rest of the form.
+4. **Given** the manual-entry form is showing, **when** I activate its back/close control, **then** the prior view returns (extracted items on phone, two-column layout on desktop) and nothing is dismissed or discarded — equivalent to never having opened it.
+5. **Given** a list and a valid payer are chosen and the form is submitted, **when** the expense is created successfully, **then** the statement is also dismissed (Story 5.2's dismiss-statement action) in the same flow — the user does not perform two separate actions.
+6. **Given** the currency/date fields added to `ManualExpenseForm` by this story's groundwork, **when** they render outside this flow (the existing list-detail "Add expense" entry points), **then** their behavior is unchanged from today except for the new visible currency/date controls — no regression to the existing manual-expense flow.
+
 ### Story 5.3: Reassign statement to another list
 
 As a list member,

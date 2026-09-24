@@ -727,6 +727,10 @@ export default async function ListDetailPage({
       expenseMessages={{
         expenseTitle: t.expenseTitle,
         expenseAmount: t.expenseAmount,
+        expenseCurrency: t.expenseCurrency,
+        expenseCurrencyCrc: t.expenseCurrencyCrc,
+        expenseCurrencyUsd: t.expenseCurrencyUsd,
+        expenseDateLabel: t.expenseDateLabel,
         expenseDescription: t.expenseDescription,
         expensePayer: t.expensePayer,
         expenseSubmit: t.expenseSubmit,
@@ -1077,6 +1081,10 @@ export default async function ListDetailPage({
                     messages={{
                       expenseTitle: t.expenseTitle,
                       expenseAmount: t.expenseAmount,
+                      expenseCurrency: t.expenseCurrency,
+                      expenseCurrencyCrc: t.expenseCurrencyCrc,
+                      expenseCurrencyUsd: t.expenseCurrencyUsd,
+                      expenseDateLabel: t.expenseDateLabel,
                       expenseDescription: t.expenseDescription,
                       expensePayer: t.expensePayer,
                       expenseSubmit: t.expenseSubmit,

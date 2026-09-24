@@ -106,6 +106,7 @@ class CreateExpenseBody(BaseModel):
     currency: str = "CRC"
     description: str
     payer_id: UUID
+    posted_date: str | None = None
     split_override: SetSplitOverrideBody | None = None
     origin_kind: Literal["card", "cash"] | None = None
     origin_card_id: UUID | None = None

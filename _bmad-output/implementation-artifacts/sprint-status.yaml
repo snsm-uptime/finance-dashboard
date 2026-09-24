@@ -42,7 +42,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-03T22:46:31
-last_updated: 2026-09-23 (story 11-1: avatar crop & zoom control, review)
+last_updated: 2026-09-23 (story 5-2-1: manually enter a failed statement, done)
 
 project: finance-dashboard
 project_key: NOKEY
@@ -136,6 +136,11 @@ development_status:
   epic-5: in-progress
   5-1-parse-failure-side-by-side-comparison: done
   5-2-dismiss-failed-statement-or-file: done
+  # Added 2026-09-23 (Sprint Change Proposal 2026-09-23-manual-entry-parse-failure): a
+  # manual-entry capability was built ad hoc against the Story 5.1 comparison surface but
+  # used a Sheet overlay and list-first gating that didn't fit; this formalizes the
+  # corrected inline layout as its own story.
+  5-2-1-manually-enter-a-failed-statement: done
   5-3-reassign-statement-to-another-list: done
   5-4-roll-back-an-import-batch: done
   5-5-same-price-conflict-review-manual-parsed: done
