@@ -20,6 +20,8 @@ from application.cards import (
     ListCardsService,
     RegisterCardCommand,
     RegisterCardService,
+    SetCardLabelCommand,
+    SetCardLabelService,
     SetCardRoutingCommand,
     SetCardRoutingService,
     UnarchiveCardCommand,
@@ -42,6 +44,7 @@ from api.schemas.cards import (
     CardResponse,
     CardsListResponse,
     RegisterCardBody,
+    SetCardLabelBody,
     SetCardRoutingBody,
 )
 
@@ -141,6 +144,32 @@ def set_card_routing(
         user_id,
         result.routing_mode,
     )
+    return _card_response(result)
+
+
+@router.patch("/{card_id}/label", response_model=CardResponse)
+def set_card_label(
+    card_id: uuid.UUID,
+    body: SetCardLabelBody,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> CardResponse | JSONResponse:
+    service = SetCardLabelService(SqlAlchemyCardRepository(db))
+    try:
+        result = service.execute(
+            SetCardLabelCommand(actor_user_id=user_id, card_id=card_id, label=body.label)
+        )
+    except InvalidCardLabelError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            content={"detail": str(exc), "code": "invalid_card_label"},
+        )
+    except CardNotFoundError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": str(exc), "code": "card_not_found"},
+        )
+    logger.info("card_label_updated card_id=%s user_id=%s", result.id, user_id)
     return _card_response(result)
 
 

@@ -48,6 +48,8 @@ class CardRepository(Protocol):
 
     def unarchive_card(self, card_id: UUID, user_id: UUID) -> CardRecord: ...
 
+    def update_label(self, *, card_id: UUID, user_id: UUID, label: str) -> CardRecord: ...
+
 
 @dataclass(frozen=True, slots=True)
 class RegisterCardCommand:
@@ -166,6 +168,33 @@ class SetCardRoutingService:
             user_id=command.actor_user_id,
             routing_mode=mode,
             fixed_list_id=fixed_list_id,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class SetCardLabelCommand:
+    actor_user_id: UUID
+    card_id: UUID
+    label: str
+
+
+class SetCardLabelService:
+    """Rename a registered card's label — inline rename on the Cards page."""
+
+    def __init__(self, repo: CardRepository) -> None:
+        self._repo = repo
+
+    def execute(self, command: SetCardLabelCommand) -> CardRecord:
+        label = validate_card_label(command.label)
+
+        card = self._repo.get_card(command.card_id, command.actor_user_id)
+        if card is None:
+            raise CardNotFoundError()
+
+        return self._repo.update_label(
+            card_id=command.card_id,
+            user_id=command.actor_user_id,
+            label=label,
         )
 
 

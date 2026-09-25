@@ -197,15 +197,19 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     // Runs once, post-hydration: safe to read window/localStorage/navigator
     // here since this can no longer diverge from the SSR-matched first
     // render. Narrows the "en" flash before the account API answers.
-    let cached: string | null = null;
-    try {
-      cached = localStorage.getItem(LANG_CACHE_KEY);
-    } catch {
-      /* ignore quota / private mode */
-    }
-    const initial = resolveLocale(cached ?? browserLocale());
-    setLocale(initial);
-    applyDom(initial, theme);
+    // Deferred to a microtask so the state update isn't synchronous within
+    // the effect body itself (avoids cascading-render lint/perf concerns).
+    queueMicrotask(() => {
+      let cached: string | null = null;
+      try {
+        cached = localStorage.getItem(LANG_CACHE_KEY);
+      } catch {
+        /* ignore quota / private mode */
+      }
+      const initial = resolveLocale(cached ?? browserLocale());
+      setLocale(initial);
+      applyDom(initial, theme);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

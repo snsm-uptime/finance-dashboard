@@ -110,3 +110,13 @@ class SqlAlchemyCardRepository:
         row.is_archived = False
         self._session.flush()
         return _card_record(row)
+
+    def update_label(self, *, card_id: UUID, user_id: UUID, label: str) -> CardRecord:
+        row = self._session.scalar(
+            select(CardModel).where(CardModel.id == card_id, CardModel.user_id == user_id).limit(1)
+        )
+        if row is None:
+            raise CardNotFoundError()
+        row.label = label
+        self._session.flush()
+        return _card_record(row)

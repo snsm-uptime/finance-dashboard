@@ -220,6 +220,41 @@ def test_archive_card_preserves_routing(client: TestClient) -> None:
     assert archived.json()["fixed_list_id"] == list_id
 
 
+def test_set_card_label_success(client: TestClient) -> None:
+    _register(client, "cardlabel@example.com")
+    created = client.post("/cards", json={"label": "My Visa", "iban": "CR40"})
+    card_id = created.json()["id"]
+
+    response = client.patch(f"/cards/{card_id}/label", json={"label": "  Renamed  "})
+    assert response.status_code == 200, response.text
+    assert response.json()["label"] == "Renamed"
+
+    listed = client.get("/cards")
+    assert listed.json()["cards"][0]["label"] == "Renamed"
+
+
+def test_set_card_label_unauthenticated_rejected(client: TestClient) -> None:
+    response = client.patch(f"/cards/{uuid4()}/label", json={"label": "New Label"})
+    assert response.status_code == 401
+
+
+def test_set_card_label_unknown_card_not_found(client: TestClient) -> None:
+    _register(client, "cardlabelnotfound@example.com")
+    response = client.patch(f"/cards/{uuid4()}/label", json={"label": "New Label"})
+    assert response.status_code == 404
+    assert response.json()["code"] == "card_not_found"
+
+
+def test_set_card_label_invalid_label_rejected(client: TestClient) -> None:
+    _register(client, "cardlabelinvalid@example.com")
+    created = client.post("/cards", json={"label": "My Visa", "iban": "CR41"})
+    card_id = created.json()["id"]
+
+    response = client.patch(f"/cards/{card_id}/label", json={"label": "   "})
+    assert response.status_code == 422
+    assert response.json()["code"] == "invalid_card_label"
+
+
 def test_archive_unowned_card_not_found(client: TestClient) -> None:
     _register(client, "cardarchiveownera@example.com")
     created = client.post("/cards", json={"label": "My Visa", "iban": "CR32"})

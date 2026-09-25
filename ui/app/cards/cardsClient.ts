@@ -159,6 +159,31 @@ export async function setCardRouting(
   return { ok: true, card };
 }
 
+export async function setCardLabel(
+  cardId: string,
+  body: { label: string },
+  messages: CardsClientMessages,
+): Promise<OkCard | ErrorResult> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/cards/${encodeURIComponent(cardId)}/label`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify(body),
+    });
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  if (!response.ok) {
+    const parsed = (await parseJson(response)) as { detail?: unknown; code?: unknown } | null;
+    return { ok: false, error: mapError(response.status, parsed, messages) };
+  }
+  const card = asCard(await parseJson(response));
+  if (!card) return { ok: false, error: messages.errorGeneric };
+  return { ok: true, card };
+}
+
 async function postCardAction(
   cardId: string,
   action: "archive" | "unarchive",

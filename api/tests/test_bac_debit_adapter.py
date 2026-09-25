@@ -180,11 +180,14 @@ def test_parse_printed_cutoff_date_when_label_and_date_are_on_separate_lines() -
     # Real BAC debit PDFs wrap this two-column header: pdfplumber extracts
     # the "Fecha de Corte:" label at the end of one line and the date at
     # the end of the next.
+    name_line = (
+        "Nombre: SEBASTIAN NOE SOTO MADRIGAL Para el rango de su Tasa anual: 3101012009 31/ENE/26"
+    )
     assert (
         parse_printed_cutoff_date(
             [
                 "Tasas de interés escalonadas Banco BAC San José SA Fecha de Corte:",
-                "Nombre: SEBASTIAN NOE SOTO MADRIGAL Para el rango de su Tasa anual: 3101012009 31/ENE/26",
+                name_line,
             ]
         )
         == datetime(2026, 1, 31, tzinfo=UTC).date()
