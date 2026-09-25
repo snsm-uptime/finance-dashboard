@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 
 import { Sheet } from "@/app/lists/Sheet";
 import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 import { SoftLedgerRadio } from "@/components/soft-ledger/Radio";
-import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
 import { IconButton } from "@/components/IconButton";
 import { SingleChipPicker, type ChipOption } from "@/components/ChipPicker";
 import { useChromeHeader } from "@/components/ChromeBack";
@@ -20,7 +19,6 @@ import { DocsHelpButton } from "@/app/docs/DocsHelpButton";
 import { uploadCopy } from "@/lib/i18n/upload";
 import type { Locale } from "@/lib/i18n/locale";
 import {
-  assignRow,
   bulkCommitSession,
   deleteRow,
   fetchImportSession,
@@ -88,9 +86,10 @@ const STICKY_BUTTON_STYLE = {
  * behavior, restyled as a sibling sheet rather than a mode on
  * `ImportReviewSheet` itself — see spec-bulk-assign-sheet-reuse.md). All
  * pending rows are treated as bulk-assigned to whichever list the chip
- * picker below the title currently holds; per-row/bulk move to a different
- * list and staged/undoable discard (spec-9-24's multiselect, upgraded to
- * staged discard) remain as escape hatches. Save deletes staged discards,
+ * picker below the title currently holds; staged/undoable discard
+ * (spec-9-24's multiselect, upgraded to staged discard) remains as an escape
+ * hatch — moving a row to a different list is Individual Review's job. Save
+ * deletes staged discards,
  * then bulk-commits remaining pending rows to the chosen list (or finalizes
  * directly when every row was individually moved elsewhere).
  */
@@ -99,7 +98,6 @@ export function BulkAssignSheet({ sessionId }: BulkAssignSheetProps) {
   const t = uploadCopy(locale);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const selectId = useId();
   useChromeHeader({
     trailing: <DocsHelpButton pageName="Upload" docsAnchor="/docs#cards-imports" />,
   });
@@ -111,10 +109,8 @@ export function BulkAssignSheet({ sessionId }: BulkAssignSheetProps) {
   const [sessionReady, setSessionReady] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
   const [acknowledgedFailedIds, setAcknowledgedFailedIds] = useState<Set<string>>(() => new Set());
-  const [actingRowId, setActingRowId] = useState<string | null>(null);
   const [rowActionError, setRowActionError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
-  const [bulkBusy, setBulkBusy] = useState(false);
   const { staged } = useStagedImportDiscards(sessionId);
   // Save keeps awaiting network calls after Close/Esc/backdrop unmounts the
   // sheet; skip the success side-effects so a late success does not write
@@ -279,20 +275,6 @@ export function BulkAssignSheet({ sessionId }: BulkAssignSheetProps) {
     return result;
   });
 
-  async function handleMoveRow(rowId: string, targetListId: string) {
-    if (!targetListId) return;
-    setActingRowId(rowId);
-    setRowActionError(null);
-    commit.clearError();
-    const result = await assignRow(sessionId, rowId, targetListId, reviewMessages);
-    setActingRowId(null);
-    if (result.ok) {
-      setSession(result.session);
-    } else {
-      setRowActionError(result.error);
-    }
-  }
-
   function toggleRowSelected(rowId: string, selected: boolean) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -315,36 +297,13 @@ export function BulkAssignSheet({ sessionId }: BulkAssignSheetProps) {
     restoreStagedDiscard(sessionId, rowId);
   }
 
-  async function handleBulkMove(targetListId: string) {
-    if (!targetListId) return;
-    const ids = [...visibleSelectedIds];
-    setBulkBusy(true);
-    setRowActionError(null);
-    commit.clearError();
-    for (const rowId of ids) {
-      const result = await assignRow(sessionId, rowId, targetListId, reviewMessages);
-      if (!result.ok) {
-        setRowActionError(result.error);
-        setBulkBusy(false);
-        return;
-      }
-      setSession(result.session);
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        next.delete(rowId);
-        return next;
-      });
-    }
-    setBulkBusy(false);
-  }
-
   const listOptions = (lists ?? []).map((l) => ({ value: l.id, label: l.name }));
   const chipOptions: ChipOption[] = [
     { value: "", label: t.bulkAssignChooseListPlaceholder, tone: "warning" },
     ...listOptions,
   ];
   const failedStatement = nextUnacknowledgedFailedStatement(session, acknowledgedFailedIds);
-  const busy = commit.pending || bulkBusy || actingRowId !== null;
+  const busy = commit.pending;
   const errorMessage = rowActionError ?? commit.error;
 
   if (!sessionReady) {
@@ -405,18 +364,6 @@ export function BulkAssignSheet({ sessionId }: BulkAssignSheetProps) {
           {t.bulkReviewSelectedCount.replace("{count}", String(visibleSelectedIds.size))}
         </span>
         <div className="ml-auto flex flex-1 items-center gap-2">
-          <div className="w-[10rem]">
-            <SoftLedgerSelect
-              id={`${selectId}-bulk-move`}
-              value=""
-              options={[
-                { value: "", label: t.bulkReviewBulkMovePlaceholder },
-                ...listOptions.filter((option) => option.value !== listId),
-              ]}
-              onChange={handleBulkMove}
-              disabled={busy}
-            />
-          </div>
           <button
             type="button"
             disabled={busy}
@@ -510,18 +457,6 @@ export function BulkAssignSheet({ sessionId }: BulkAssignSheetProps) {
                           <p className="m-0 text-[0.78rem] text-muted">
                             {formatRowAmount(row.amount, row.currency, locale)}
                           </p>
-                        </div>
-                        <div className="w-[9rem] shrink-0">
-                          <SoftLedgerSelect
-                            id={`${selectId}-move-${row.id}`}
-                            value=""
-                            options={[
-                              { value: "", label: t.bulkReviewMoveRowPlaceholder },
-                              ...listOptions.filter((option) => option.value !== listId),
-                            ]}
-                            onChange={(targetListId) => handleMoveRow(row.id, targetListId)}
-                            disabled={busy}
-                          />
                         </div>
                         <IconButton
                           variant="ghost"

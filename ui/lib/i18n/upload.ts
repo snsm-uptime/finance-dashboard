@@ -80,11 +80,9 @@ export const uploadMessages = {
     bulkReviewErrorFxUnavailable: "Currency conversion is unavailable right now. Try again later.",
     // Per-row exceptions ahead of a fixed-list bulk commit (Story 4.19)
     bulkReviewRowsHeading: "Move or delete the ones that don't belong here",
-    bulkReviewMoveRowPlaceholder: "Move to…",
     bulkReviewDeleteRow: "Delete",
     bulkReviewSelectedCount: "{count} selected",
     bulkReviewBulkDelete: "Delete selected",
-    bulkReviewBulkMovePlaceholder: "Move selected to…",
     bulkAssignChooseListPlaceholder: "Choose list",
     bulkAssignChooseListLabel: "Target list",
     // Individual review (Story 4.8; row-level rewrite Story 4.13)
@@ -232,11 +230,9 @@ export const uploadMessages = {
       "La conversión de moneda no está disponible ahora. Inténtalo más tarde.",
     // Per-row exceptions ahead of a fixed-list bulk commit (Story 4.19)
     bulkReviewRowsHeading: "Mueve o elimina las que no correspondan aquí",
-    bulkReviewMoveRowPlaceholder: "Mover a…",
     bulkReviewDeleteRow: "Eliminar",
     bulkReviewSelectedCount: "{count} seleccionadas",
     bulkReviewBulkDelete: "Eliminar seleccionadas",
-    bulkReviewBulkMovePlaceholder: "Mover seleccionadas a…",
     bulkAssignChooseListPlaceholder: "Elegir lista",
     bulkAssignChooseListLabel: "Lista destino",
     // Individual review (Story 4.8; row-level rewrite Story 4.13)

@@ -41,7 +41,6 @@ vi.mock("../../conflictsClient", async () => {
 
 const bulkCommitSession = vi.fn();
 const fetchImportSession = vi.fn();
-const assignRow = vi.fn();
 const deleteRow = vi.fn();
 const finalizeSession = vi.fn();
 vi.mock("../../uploadClient", async () => {
@@ -50,7 +49,6 @@ vi.mock("../../uploadClient", async () => {
     ...actual,
     bulkCommitSession: (...args: unknown[]) => bulkCommitSession(...args),
     fetchImportSession: (...args: unknown[]) => fetchImportSession(...args),
-    assignRow: (...args: unknown[]) => assignRow(...args),
     deleteRow: (...args: unknown[]) => deleteRow(...args),
     finalizeSession: (...args: unknown[]) => finalizeSession(...args),
   };
@@ -181,7 +179,6 @@ describe("BulkAssignSheet", () => {
     fetchLists.mockReset();
     bulkCommitSession.mockReset();
     fetchImportSession.mockReset();
-    assignRow.mockReset();
     deleteRow.mockReset();
     finalizeSession.mockReset();
     routeAfterImportLanding.mockReset();
@@ -309,54 +306,6 @@ describe("BulkAssignSheet", () => {
     expect(deleteRow).toHaveBeenCalledWith("s1", "r-coffee", expect.anything());
     expect(bulkCommitSession).toHaveBeenCalledWith("s1", "l1", expect.anything());
     expect(localStorage.getItem("finance-helper.staged-import-discards.s1")).toBeNull();
-  });
-
-  it("finalizes directly (no bulkCommitSession) once every row was moved individually", async () => {
-    const afterMove = {
-      ...session,
-      statements: [{ ...session.statements[0], rows: [] }],
-    };
-    assignRow.mockResolvedValueOnce({
-      ok: true,
-      session: {
-        ...session,
-        statements: [
-          { ...session.statements[0], rows: [session.statements[0].rows[1]] },
-        ],
-      },
-    });
-    assignRow.mockResolvedValueOnce({ ok: true, session: afterMove });
-    finalizeSession.mockResolvedValue({ ok: true, session: { ...afterMove, finalized_at: "2026-08-24T00:00:00Z" } });
-
-    await renderSheet();
-    await chooseListViaChip(container, "Groceries");
-
-    async function moveFirstRowTo(label: string) {
-      const rowTrigger = [...container.querySelectorAll("li")]
-        .map((li) => li.querySelector('button[aria-haspopup="listbox"]'))
-        .find((btn): btn is HTMLButtonElement => !!btn);
-      await act(async () => {
-        rowTrigger?.click();
-      });
-      const option = [...container.querySelectorAll('[role="option"]')].find(
-        (el) => el.textContent === label,
-      ) as HTMLElement;
-      await act(async () => {
-        option.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
-      });
-    }
-
-    await moveFirstRowTo("Trip");
-    await moveFirstRowTo("Trip");
-
-    await act(async () => {
-      findButtonByText(container, "Commit to this list")?.click();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(bulkCommitSession).not.toHaveBeenCalled();
-    expect(finalizeSession).toHaveBeenCalledTimes(1);
   });
 
   it("finalizes directly (no bulkCommitSession) once every row was discard-staged, not moved", async () => {
