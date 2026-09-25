@@ -35,6 +35,7 @@ export const cardsMessages = {
     cardsArchivedEmpty: "No archived cards.",
     cardsArchive: "Archive card",
     cardsUnarchive: "Unarchive card",
+    renameLabel: "Double-click to rename",
   },
   es: {
     title: "Tarjetas",
@@ -69,6 +70,7 @@ export const cardsMessages = {
     cardsArchivedEmpty: "No hay tarjetas archivadas.",
     cardsArchive: "Archivar tarjeta",
     cardsUnarchive: "Desarchivar tarjeta",
+    renameLabel: "Haz doble clic para renombrar",
   },
 } as const;
 

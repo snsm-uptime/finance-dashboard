@@ -38,3 +38,7 @@ class CardsListResponse(BaseModel):
 class SetCardRoutingBody(BaseModel):
     routing_mode: Literal["fixed", "review"]
     fixed_list_id: UUID | None = None
+
+
+class SetCardLabelBody(BaseModel):
+    label: str = Field(max_length=CARD_LABEL_MAX_LENGTH)

@@ -17,6 +17,8 @@ from application.cards import (
     MatchCardByIbanService,
     RegisterCardCommand,
     RegisterCardService,
+    SetCardLabelCommand,
+    SetCardLabelService,
     SetCardRoutingCommand,
     SetCardRoutingService,
     UnarchiveCardCommand,
@@ -96,6 +98,14 @@ class _FakeCardRepo:
         for i, card in enumerate(self.cards):
             if card.id == card_id and card.user_id == user_id:
                 updated = replace(card, is_archived=False)
+                self.cards[i] = updated
+                return updated
+        raise CardNotFoundError()
+
+    def update_label(self, *, card_id: UUID, user_id: UUID, label: str) -> CardRecord:
+        for i, card in enumerate(self.cards):
+            if card.id == card_id and card.user_id == user_id:
+                updated = replace(card, label=label)
                 self.cards[i] = updated
                 return updated
         raise CardNotFoundError()
@@ -418,6 +428,74 @@ def test_unarchive_card_unowned_card_not_found() -> None:
         UnarchiveCardService(repo).execute(
             UnarchiveCardCommand(actor_user_id=stranger, card_id=card.id)
         )
+
+
+def test_set_card_label_success() -> None:
+    repo = _FakeCardRepo()
+    actor = uuid4()
+    card = RegisterCardService(repo).execute(
+        RegisterCardCommand(actor_user_id=actor, label="My Visa", iban="CR05")
+    )
+
+    result = SetCardLabelService(repo).execute(
+        SetCardLabelCommand(actor_user_id=actor, card_id=card.id, label="  Renamed  ")
+    )
+
+    assert result.label == "Renamed"
+    assert repo.cards[0].label == "Renamed"
+
+
+def test_set_card_label_rejects_blank_label() -> None:
+    repo = _FakeCardRepo()
+    actor = uuid4()
+    card = RegisterCardService(repo).execute(
+        RegisterCardCommand(actor_user_id=actor, label="My Visa", iban="CR05")
+    )
+
+    with pytest.raises(InvalidCardLabelError):
+        SetCardLabelService(repo).execute(
+            SetCardLabelCommand(actor_user_id=actor, card_id=card.id, label="   ")
+        )
+    assert repo.cards[0].label == "My Visa"
+
+
+def test_set_card_label_rejects_too_long_label() -> None:
+    repo = _FakeCardRepo()
+    actor = uuid4()
+    card = RegisterCardService(repo).execute(
+        RegisterCardCommand(actor_user_id=actor, label="My Visa", iban="CR05")
+    )
+
+    with pytest.raises(InvalidCardLabelError):
+        SetCardLabelService(repo).execute(
+            SetCardLabelCommand(actor_user_id=actor, card_id=card.id, label="x" * 101)
+        )
+    assert repo.cards[0].label == "My Visa"
+
+
+def test_set_card_label_unknown_card_not_found() -> None:
+    repo = _FakeCardRepo()
+    actor = uuid4()
+
+    with pytest.raises(CardNotFoundError):
+        SetCardLabelService(repo).execute(
+            SetCardLabelCommand(actor_user_id=actor, card_id=uuid4(), label="New Label")
+        )
+
+
+def test_set_card_label_unowned_card_not_found() -> None:
+    repo = _FakeCardRepo()
+    owner = uuid4()
+    stranger = uuid4()
+    card = RegisterCardService(repo).execute(
+        RegisterCardCommand(actor_user_id=owner, label="My Visa", iban="CR05")
+    )
+
+    with pytest.raises(CardNotFoundError):
+        SetCardLabelService(repo).execute(
+            SetCardLabelCommand(actor_user_id=stranger, card_id=card.id, label="New Label")
+        )
+    assert repo.cards[0].label == "My Visa"
 
 
 def test_list_cards_archived_filter() -> None:
