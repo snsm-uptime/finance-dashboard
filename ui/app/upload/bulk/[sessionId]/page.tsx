@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { fetchSession } from "@/lib/session";
-import { BulkReviewPanel } from "./BulkReviewPanel";
+import { BulkAssignSheet } from "./BulkAssignSheet";
 
 export const dynamic = "force-dynamic";
 
@@ -22,5 +22,5 @@ export default async function BulkReviewPage({ params }: PageProps) {
     redirect(`/sign-in?returnTo=/upload/bulk/${encodeURIComponent(sessionId)}`);
   }
 
-  return <BulkReviewPanel sessionId={sessionId} />;
+  return <BulkAssignSheet sessionId={sessionId} />;
 }
