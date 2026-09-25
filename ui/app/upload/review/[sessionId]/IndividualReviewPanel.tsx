@@ -16,6 +16,7 @@ import dynamic from "next/dynamic";
 import { useDrag } from "@use-gesture/react";
 
 import { SoftLedgerSelect, type SoftLedgerSelectHandle } from "@/components/soft-ledger/Select";
+import { GhostTextArea } from "@/components/soft-ledger/GhostTextField";
 import { IconButton } from "@/components/IconButton";
 import { useChromeHeader } from "@/components/ChromeBack";
 import { usePreferences } from "@/components/PreferencesProvider";
@@ -1061,7 +1062,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
                   }`}
               >
                 {titleState === "editing" ? (
-                  <textarea
+                  <GhostTextArea
                     ref={titleInputRef}
                     value={titleDraft}
                     rows={1}
@@ -1071,7 +1072,14 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
                     disabled={titleSubmitting}
                     autoComplete="off"
                     aria-label={t.individualReviewTitleFieldLabel}
-                    className={`${TITLE_TEXT_CLASS} block resize-none overflow-hidden border-0 bg-transparent p-0 outline-none disabled:opacity-55`}
+                    className="font-[550] text-[1.05rem] leading-snug resize-none overflow-hidden outline-none"
+                    // Zero padding via inline style (guaranteed to win over the
+                    // module's own padding regardless of stylesheet order) —
+                    // the outer container already carries its own padding, and
+                    // resizeTitleTextarea's scrollHeight-based stepping was
+                    // tuned against an unpadded textarea; adding padding here
+                    // would double up on both.
+                    style={{ padding: 0 }}
                   />
                 ) : (
                   <h2 className={`${TITLE_TEXT_CLASS} whitespace-normal overflow-visible`}>
