@@ -323,42 +323,6 @@
   white-space: nowrap;
 }
 
-.listNameEdit {
-  display: block;
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0.2rem 0.4rem;
-  border: none;
-  border-radius: 6px;
-  background: var(--background);
-  appearance: none;
-  font-family: inherit;
-  font-weight: 650;
-  font-size: 1.05rem;
-  line-height: 1.3;
-  text-align: left;
-  color: var(--muted);
-  caret-color: var(--accent);
-}
-
-.listNameEdit::placeholder {
-  color: var(--muted);
-  opacity: 0.7;
-}
-
-.listNameEdit:focus {
-  outline: none;
-  color: var(--foreground);
-  background: var(--background);
-}
-
-.listNameEdit:disabled {
-  opacity: 0.65;
-  cursor: not-allowed;
-}
-
 .cardBalanceCol {
   display: flex;
   flex: 0 0 auto;

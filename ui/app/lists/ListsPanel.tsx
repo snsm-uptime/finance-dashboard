@@ -26,6 +26,7 @@ import { usePreferences } from "@/components/PreferencesProvider";
 import { StackedListPanel } from "@/components/StackedListPanel";
 import { GhostButton } from "@/components/soft-ledger/GhostButton";
 import { GhostInput } from "@/components/soft-ledger/GhostInput";
+import { GhostTextField } from "@/components/soft-ledger/GhostTextField";
 import { listsMessages } from "@/lib/i18n/lists";
 import {
   ArchiveToggleIcon,
@@ -543,9 +544,9 @@ export function ListsPanel({ initialLists, currentUserId, showArchived = false }
               <ListCardFace
                 {...faceProps}
                 title={
-                  <input
+                  <GhostTextField
                     ref={renameInputRef}
-                    className={styles.listNameEdit}
+                    className="font-[650] text-[1.05rem] leading-[1.3]"
                     type="text"
                     value={draft}
                     placeholder={list.name}

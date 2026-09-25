@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 import { ChipOptionsPanel, ChipTrigger, useChipPicker, type ChipOption } from "@/components/ChipPicker";
-import { GhostInput } from "@/components/soft-ledger/GhostInput";
+import { GhostTextField } from "@/components/soft-ledger/GhostTextField";
 import { useFormSubmission } from "@/hooks";
 import type { ListItem } from "../lists/listsClient";
 import { setCardLabel, setCardRouting, type CardItem, type CardsClientMessages } from "./cardsClient";
@@ -216,7 +216,7 @@ export function CardRoutingControl({
             className={`min-w-0 rounded-sm -mx-1 -my-1 px-1 py-1 ${titleState !== "idle" ? "border border-accent" : ""}`}
           >
             {titleState === "editing" ? (
-              <GhostInput
+              <GhostTextField
                 ref={titleInputRef}
                 value={titleDraft}
                 maxLength={CARD_LABEL_MAX_LENGTH}
@@ -225,7 +225,6 @@ export function CardRoutingControl({
                 onKeyDown={onTitleKeyDown}
                 onBlur={cancelTitleEdit}
                 aria-label={messages.renameLabel}
-                wrapperClassName="border-0 p-0"
                 className="font-[550] text-[0.95rem]"
               />
             ) : (
