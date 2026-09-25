@@ -901,7 +901,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   // statement shape, same OR'd fallback for a matched-but-not-yet-flagged card.
   const needsCardRegistration =
     card.needsRegistration ||
-    (!card.cardMatched && Boolean(current?.statement.iban) && !current?.statement.card_id);
+    (!card.cardMatched && Boolean(current?.statement.iban) && !card.cardLabel);
   const savedCardName = card.cardLabel || t.newCardTitle;
   const period = current ? statementPeriodBounds(current.statement) : { start: null, end: null };
 

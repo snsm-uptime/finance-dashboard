@@ -562,6 +562,153 @@ describe("BulkReviewPanel", () => {
     expect(assignRow).toHaveBeenCalledWith("s1", "r1", "l2", expect.anything());
   });
 
+  const twoPendingRowsSession = {
+    id: "s1",
+    created_at: "2026-01-01T00:00:00Z",
+    discarded_at: null,
+    undo: null,
+    statements: [
+      {
+        id: "st1",
+        product_id: "bac_credit",
+        status: "staged",
+        candidate_row_count: 2,
+        iban: null,
+        filename: "a.pdf",
+        card_id: null,
+        rows: [
+          {
+            id: "r1",
+            sequence: 0,
+            description: "Coffee shop",
+            amount: "4.50",
+            currency: "USD",
+            posted_date: "2026-01-02",
+            status: "pending",
+          },
+          {
+            id: "r2",
+            sequence: 1,
+            description: "Taxi ride",
+            amount: "12.00",
+            currency: "USD",
+            posted_date: "2026-01-03",
+            status: "pending",
+          },
+        ],
+        assigned_rows: [],
+        zero_amount_excluded_count: 0,
+      },
+    ],
+    finalized_at: null,
+    imported_new_count: 0,
+    skipped_duplicate_count: 0,
+    landing_list_id: null,
+    deleted_count: 0,
+    zero_amount_excluded_count: 0,
+    failed_statements: [],
+    committed_by_list: [],
+  };
+
+  it("selecting multiple pending rows shows a bulk-action bar; bulk delete removes them all", async () => {
+    fetchImportSession.mockResolvedValue({ ok: true, session: twoPendingRowsSession });
+    fetchLists.mockResolvedValue({
+      ok: true,
+      lists: [{ id: "l1", name: "Groceries", owner_id: "u1", role: "owner" }],
+    });
+    deleteRow.mockResolvedValueOnce({ ok: true, session: twoPendingRowsSession }).mockResolvedValueOnce({
+      ok: true,
+      session: emptiedSession,
+    });
+
+    await act(async () => {
+      root.render(<BulkReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await openAndChoose(container, "Groceries");
+
+    const checkboxes = Array.from(
+      container.querySelectorAll('input[type="checkbox"]'),
+    ) as HTMLInputElement[];
+    expect(checkboxes).toHaveLength(2);
+
+    await act(async () => {
+      checkboxes[0].click();
+      checkboxes[1].click();
+    });
+
+    expect(container.textContent).toContain("2 selected");
+
+    const bulkDeleteButton = selectByText(container, "Delete selected");
+    await act(async () => {
+      bulkDeleteButton.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(deleteRow).toHaveBeenCalledWith("s1", "r1", expect.anything());
+    expect(deleteRow).toHaveBeenCalledWith("s1", "r2", expect.anything());
+    expect(deleteRow).toHaveBeenCalledTimes(2);
+    expect(container.textContent).not.toContain("selected");
+  });
+
+  it("bulk move-to-list assigns every selected row to the picked list", async () => {
+    fetchImportSession.mockResolvedValue({ ok: true, session: twoPendingRowsSession });
+    fetchLists.mockResolvedValue({
+      ok: true,
+      lists: [
+        { id: "l1", name: "Groceries", owner_id: "u1", role: "owner" },
+        { id: "l2", name: "Trip", owner_id: "u1", role: "member" },
+      ],
+    });
+    assignRow.mockResolvedValue({ ok: true, session: emptiedSession });
+
+    await act(async () => {
+      root.render(<BulkReviewPanel sessionId="s1" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await openAndChoose(container, "Groceries");
+
+    const checkboxes = Array.from(
+      container.querySelectorAll('input[type="checkbox"]'),
+    ) as HTMLInputElement[];
+    await act(async () => {
+      checkboxes[0].click();
+      checkboxes[1].click();
+    });
+
+    // The bulk-move select is the first listbox trigger not already claimed
+    // by the main list picker or a per-row move select.
+    const bulkMoveTrigger = Array.from(
+      container.querySelectorAll('button[aria-haspopup="listbox"]'),
+    ).find((el) => el.textContent === "Move selected to…") as HTMLButtonElement;
+    await act(async () => {
+      bulkMoveTrigger.click();
+    });
+    const option = Array.from(container.querySelectorAll('[role="option"]')).find(
+      (el) => el.textContent === "Trip",
+    ) as HTMLElement;
+    await act(async () => {
+      option.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(assignRow).toHaveBeenCalledWith("s1", "r1", "l2", expect.anything());
+    expect(assignRow).toHaveBeenCalledWith("s1", "r2", "l2", expect.anything());
+    expect(assignRow).toHaveBeenCalledTimes(2);
+  });
+
   it("finalizes instead of bulk-committing once every row was resolved individually", async () => {
     fetchLists.mockResolvedValue({
       ok: true,

@@ -385,7 +385,7 @@ function StatementCard({
 
   const needsRegistration =
     card.needsRegistration ||
-    (!card.cardMatched && Boolean(statement.iban) && !statement.card_id);
+    (!card.cardMatched && Boolean(statement.iban) && !card.cardLabel);
   const savedName = card.cardLabel || t.newCardTitle;
 
   // Reports this statement's resolved card (or null, when it carries none)

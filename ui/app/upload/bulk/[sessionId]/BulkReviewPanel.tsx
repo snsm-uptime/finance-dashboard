@@ -4,7 +4,9 @@ import { useEffect, useId, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 
+import { GhostButton } from "@/components/soft-ledger/GhostButton";
 import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
+import { SoftLedgerRadio } from "@/components/soft-ledger/Radio";
 import { SoftLedgerSelect } from "@/components/soft-ledger/Select";
 import { IconButton } from "@/components/IconButton";
 import { useChromeHeader } from "@/components/ChromeBack";
@@ -66,6 +68,8 @@ export function BulkReviewPanel({ sessionId }: BulkReviewPanelProps) {
   );
   const [actingRowId, setActingRowId] = useState<string | null>(null);
   const [rowActionError, setRowActionError] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const reviewMessages: IndividualReviewMessages = {
     errorForbidden: t.bulkReviewErrorForbidden,
@@ -150,6 +154,14 @@ export function BulkReviewPanel({ sessionId }: BulkReviewPanelProps) {
     [session],
   );
 
+  // Selection can only reference rows still pending — filter out ids for rows
+  // moved/deleted by another action (including this session's own bulk loops)
+  // instead of syncing selectedIds itself, so this stays a pure derivation.
+  const visibleSelectedIds = useMemo(() => {
+    const pendingIds = new Set(pendingRows.map((row) => row.id));
+    return new Set([...selectedIds].filter((id) => pendingIds.has(id)));
+  }, [pendingRows, selectedIds]);
+
   const commit = useFormSubmission(async () => {
     if (pendingRows.length === 0) {
       // Every row was resolved individually via the exception controls
@@ -193,6 +205,58 @@ export function BulkReviewPanel({ sessionId }: BulkReviewPanelProps) {
     } else {
       setRowActionError(result.error);
     }
+  }
+
+  function toggleRowSelected(rowId: string, selected: boolean) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (selected) next.add(rowId);
+      else next.delete(rowId);
+      return next;
+    });
+  }
+
+  async function handleBulkDelete() {
+    const ids = [...visibleSelectedIds];
+    setBulkBusy(true);
+    setRowActionError(null);
+    for (const rowId of ids) {
+      const result = await deleteRow(sessionId, rowId, reviewMessages);
+      if (!result.ok) {
+        setRowActionError(result.error);
+        setBulkBusy(false);
+        return;
+      }
+      setSession(result.session);
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(rowId);
+        return next;
+      });
+    }
+    setBulkBusy(false);
+  }
+
+  async function handleBulkMove(targetListId: string) {
+    if (!targetListId) return;
+    const ids = [...visibleSelectedIds];
+    setBulkBusy(true);
+    setRowActionError(null);
+    for (const rowId of ids) {
+      const result = await assignRow(sessionId, rowId, targetListId, reviewMessages);
+      if (!result.ok) {
+        setRowActionError(result.error);
+        setBulkBusy(false);
+        return;
+      }
+      setSession(result.session);
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(rowId);
+        return next;
+      });
+    }
+    setBulkBusy(false);
   }
 
   const listOptions = (lists ?? []).map((l) => ({ value: l.id, label: l.name }));
@@ -296,6 +360,34 @@ export function BulkReviewPanel({ sessionId }: BulkReviewPanelProps) {
         {listId && pendingRows.length > 0 ? (
           <div className="flex flex-col gap-2">
             <p className="m-0 text-[0.8rem] text-muted">{t.bulkReviewRowsHeading}</p>
+            {visibleSelectedIds.size > 0 ? (
+              <div className="sticky top-0 z-10 flex items-center gap-2 rounded-[8px] border border-border bg-surface px-3 py-2">
+                <span className="text-[0.8rem] text-muted">
+                  {t.bulkReviewSelectedCount.replace("{count}", String(visibleSelectedIds.size))}
+                </span>
+                <div className="ml-auto flex items-center gap-2">
+                  <div className="w-[10rem]">
+                    <SoftLedgerSelect
+                      id={`${selectId}-bulk-move`}
+                      value=""
+                      options={[
+                        { value: "", label: t.bulkReviewBulkMovePlaceholder },
+                        ...listOptions.filter((option) => option.value !== listId),
+                      ]}
+                      onChange={handleBulkMove}
+                      disabled={bulkBusy || actingRowId !== null}
+                    />
+                  </div>
+                  <GhostButton
+                    disabled={bulkBusy || actingRowId !== null}
+                    loading={bulkBusy}
+                    onClick={handleBulkDelete}
+                  >
+                    {t.bulkReviewBulkDelete}
+                  </GhostButton>
+                </div>
+              </div>
+            ) : null}
             <ul className="m-0 flex list-none flex-col gap-2 p-0">
               {pendingRows.map((row) => (
                 <PendingRowItem
@@ -305,7 +397,9 @@ export function BulkReviewPanel({ sessionId }: BulkReviewPanelProps) {
                   moveOptions={listOptions.filter((option) => option.value !== listId)}
                   movePlaceholder={t.bulkReviewMoveRowPlaceholder}
                   deleteLabel={t.bulkReviewDeleteRow}
-                  disabled={actingRowId !== null}
+                  disabled={actingRowId !== null || bulkBusy}
+                  selected={visibleSelectedIds.has(row.id)}
+                  onSelectedChange={(selected) => toggleRowSelected(row.id, selected)}
                   onDelete={() => handleDeleteRow(row.id)}
                   onMove={(targetListId) => handleMoveRow(row.id, targetListId)}
                 />
@@ -359,6 +453,8 @@ function PendingRowItem({
   movePlaceholder,
   deleteLabel,
   disabled,
+  selected,
+  onSelectedChange,
   onDelete,
   onMove,
 }: {
@@ -368,12 +464,22 @@ function PendingRowItem({
   movePlaceholder: string;
   deleteLabel: string;
   disabled: boolean;
+  selected: boolean;
+  onSelectedChange: (selected: boolean) => void;
   onDelete: () => void;
   onMove: (targetListId: string) => void;
 }) {
   const moveSelectId = useId();
   return (
     <li className="flex items-center gap-2 rounded-[8px] border border-border bg-surface px-3 py-2">
+      <SoftLedgerRadio
+        type="checkbox"
+        className="shrink-0"
+        checked={selected}
+        disabled={disabled}
+        aria-label={row.description}
+        onChange={(event) => onSelectedChange(event.target.checked)}
+      />
       <div className="min-w-0 flex-1">
         <p className="m-0 truncate text-[0.85rem] font-[550] text-foreground">
           {row.description}

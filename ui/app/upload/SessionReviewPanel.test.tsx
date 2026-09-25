@@ -31,8 +31,8 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace, push: vi.fn() }),
 }));
 
-vi.mock("@/hooks/useCardIdentification", () => ({
-  useCardIdentification: (
+const { mockUseCardIdentification, defaultCardIdentification } = vi.hoisted(() => {
+  const defaultCardIdentification = (
     _sessionId: string,
     statement: { card_id: string | null; iban: string | null } | null,
   ) => ({
@@ -44,7 +44,11 @@ vi.mock("@/hooks/useCardIdentification", () => ({
     error: null,
     needsRegistration: Boolean(statement?.iban && !statement?.card_id),
     registerCard: vi.fn(),
-  }),
+  });
+  return { mockUseCardIdentification: vi.fn(defaultCardIdentification), defaultCardIdentification };
+});
+vi.mock("@/hooks/useCardIdentification", () => ({
+  useCardIdentification: mockUseCardIdentification,
 }));
 
 vi.mock("@/components/PreferencesProvider", () => ({
@@ -143,6 +147,7 @@ describe("SessionReviewPanel", () => {
     root = createRoot(container);
     vi.clearAllMocks();
     fetchCards.mockResolvedValue({ ok: true, cards: [] });
+    mockUseCardIdentification.mockImplementation(defaultCardIdentification);
   });
 
   afterEach(() => {
@@ -175,6 +180,47 @@ describe("SessionReviewPanel", () => {
     expect(container.textContent).toContain("IBAN: ES91 2100 0418 4502 0005 1332");
     expect(container.textContent).toContain("statement2.pdf");
     expect(container.querySelector('button[aria-label="Register"]')).not.toBeNull();
+  });
+
+  it("still offers the name input when a statement's card has a card_id but no real label", async () => {
+    // Regression for the "New Card" gate bug: an auto-created card can carry
+    // a card_id before it ever gets a real label — the gate must key off
+    // cardLabel, not card_id, or the static fallback text sticks forever.
+    mockUseCardIdentification.mockImplementation(
+      (_sessionId: string, statement: { id: string; card_id: string | null; iban: string | null } | null) => {
+        if (statement?.id === "st1") {
+          return {
+            cardMatched: false,
+            cardId: statement.card_id ?? undefined,
+            cardLabel: undefined,
+            iban: statement.iban,
+            loading: false,
+            error: null,
+            needsRegistration: false,
+            registerCard: vi.fn(),
+          };
+        }
+        return {
+          cardMatched: Boolean(statement?.card_id),
+          cardId: statement?.card_id ?? undefined,
+          cardLabel: statement?.card_id ? "My Visa" : undefined,
+          iban: statement?.iban ?? null,
+          loading: false,
+          error: null,
+          needsRegistration: Boolean(statement?.iban && !statement?.card_id),
+          registerCard: vi.fn(),
+        };
+      },
+    );
+
+    await act(async () => {
+      root.render(<SessionReviewPanel session={mockSession} />);
+    });
+
+    const cards = Array.from(container.querySelectorAll("li"));
+    const st1Card = cards[0];
+    expect(st1Card.querySelector('input[name="label"]')).not.toBeNull();
+    expect(st1Card.textContent).not.toContain("New card!");
   });
 
   it("puts a close control on each card and hides assign until the card is saved", async () => {
