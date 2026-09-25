@@ -34,7 +34,7 @@ vi.mock("next/navigation", () => ({
 const { mockUseCardIdentification, defaultCardIdentification } = vi.hoisted(() => {
   const defaultCardIdentification = (
     _sessionId: string,
-    statement: { card_id: string | null; iban: string | null } | null,
+    statement: { id: string; card_id: string | null; iban: string | null } | null,
   ) => ({
     cardMatched: Boolean(statement?.card_id),
     cardId: statement?.card_id ?? undefined,

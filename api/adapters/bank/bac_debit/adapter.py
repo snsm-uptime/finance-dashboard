@@ -58,6 +58,9 @@ _CUT_OFF_DATE_LABEL_RE = re.compile(r"Fecha de [Cc]orte:", re.IGNORECASE)
 _CUT_OFF_DATE_VALUE_RE = re.compile(r"(\d{1,2}/[A-ZÁÉÍÓÚÑ]{3}/\d{2})", re.IGNORECASE)
 _MONEDA_RE = re.compile(r"Moneda:\s*(COLONES|DOLARES|U\.S\.\s*DOLLAR)", re.IGNORECASE)
 _CURRENCY_BY_MONEDA = {"COLONES": "CRC", "DOLARES": "USD", "U.S. DOLLAR": "USD"}
+# Debit's header prints a single unqualified "Cuenta IBAN:" (one account, no
+# colones/dólares split like bac_credit's currency-qualified card IBAN).
+_IBAN_RE = re.compile(r"Cuenta IBAN:\s*([A-Z0-9\s]+)", re.IGNORECASE)
 
 # Physical x-position ranges for the transaction-table DÉBITOS/CRÉDITOS
 # columns (AD-28 SIGN_VARIANT). Calibrated against this story's own
@@ -161,6 +164,21 @@ def detect_statement_currency(lines: list[str]) -> str | None:
     return None
 
 
+def extract_iban_from_statement(lines: list[str]) -> str | None:
+    """Extract IBAN from a debit statement header. Mirrors bac_credit's
+    `extract_iban_from_statement`, but this product prints a single
+    unqualified "Cuenta IBAN:" line rather than a colones/dólares pair.
+    Whitespace-only IBANs are treated as absent (returns None)."""
+    for line in lines:
+        match = _IBAN_RE.search(line)
+        if match is not None:
+            iban = match.group(1).strip()
+            _logger.debug("iban_found iban_raw=%r", iban)
+            return iban if iban else None
+    _logger.debug("iban_extraction_not_found total_lines=%d", len(lines))
+    return None
+
+
 def _group_words_into_rows(
     words: list[dict], *, y_tolerance: float = _Y_TOLERANCE
 ) -> list[list[dict]]:
@@ -239,6 +257,28 @@ class BacDebitAdapter:
             dst.save(buf)
             chunks.append(buf.getvalue())
         return chunks
+
+    def extract_iban(self, statement_bytes: bytes) -> str | None:
+        """Extract statement IBAN for card identification, mirroring
+        bac_credit's `extract_iban` (Story 4.8.1, AC #1).
+
+        Returns raw (not normalized) IBAN string if found; None otherwise.
+        Normalization happens in the application layer using normalize_iban().
+        """
+        try:
+            lines: list[str] = []
+            with pdfplumber.open(io.BytesIO(statement_bytes)) as doc:
+                for page in doc.pages:
+                    text = page.extract_text() or ""
+                    lines.extend(text.splitlines())
+        except Exception as e:
+            _logger.debug("iban_extraction_pdf_read_error error=%s", e)
+            return None
+
+        stripped_lines = [raw.strip() for raw in lines if raw.strip()]
+        result = extract_iban_from_statement(stripped_lines)
+        _logger.debug("iban_extraction_final_result result=%r", result)
+        return result
 
     def parse(self, statement_bytes: bytes) -> list[CanonicalLine]:
         try:

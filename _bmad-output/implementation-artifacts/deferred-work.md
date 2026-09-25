@@ -386,3 +386,8 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-cards-inline-label-rename.md`
   summary: Rename PATCH requests (card label rename, and pre-existing list rename) have no optimistic-concurrency check, so a concurrent edit from another tab/session can be silently overwritten (last-write-wins), and a component can theoretically unmount mid-request if its row disappears while a rename PATCH is in flight, risking a React state-update-after-unmount warning.
   evidence: Surfaced by adversarial review of the card-label-rename diff; same risk shape already exists in ListsPanel's rename flow, so this is a pre-existing app-wide pattern rather than something new introduced by this story — not worth blocking this change on, but worth a focused pass later.
+
+## Deferred from: code review of spec-bulk-assign-sheet-reuse.md (2026-09-25)
+
+- `handleMoveRow`/`handleBulkMove` (`ui/app/upload/bulk/[sessionId]/BulkAssignSheet.tsx`) have no request-in-flight token beyond the `busy` flag disabling controls — a per-row move and a bulk move fired in the same render tick before React re-renders `busy` could interleave overlapping `assignRow` calls and drop one's `setSession` result. Inherited verbatim from `BulkReviewPanel`'s identical `handleMoveRow`/`handleBulkMove` (pre-4.7 pattern), not introduced by this story's diff.
+- `stagedImportDiscards.ts`'s staged ids are never pruned against rows that vanish from the session entirely (e.g. deleted via a concurrent action/tab) — a stale id can linger in `localStorage` with no resolving row, silently dropped from both `BulkAssignSheet`'s pending list and its Discarded section with no error surfaced. Shared behavior with `ImportReviewSheet`'s identical staged-discard module (Story 4.13.1), not new to this diff.

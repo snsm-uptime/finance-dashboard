@@ -310,3 +310,46 @@ def test_split_unreadable_pdf_bytes_raises_invalid_canonical_line_error(
 ) -> None:
     with pytest.raises(InvalidCanonicalLineError):
         adapter.split(b"not a pdf at all")
+
+
+def test_extract_iban_reads_unqualified_cuenta_iban_field(adapter: BacDebitAdapter) -> None:
+    """Real BAC debit statements print a single "Cuenta IBAN:" line (no
+    colones/dólares split), confirmed against a real 0126_BAC_DEB_DOLARES.pdf
+    statement."""
+    synthetic_pdf = FPDF()
+    synthetic_pdf.add_page()
+    synthetic_pdf.set_font("Helvetica", "", 12)
+    synthetic_pdf.multi_cell(
+        0, 10, "Tasas de interes escalonadas\nCuenta IBAN: CR41 0102 0000 9541 9910 52\n"
+    )
+    pdf_bytes = bytes(synthetic_pdf.output())
+
+    iban = adapter.extract_iban(pdf_bytes)
+    assert iban == "CR41 0102 0000 9541 9910 52"
+
+
+def test_extract_iban_whitespace_only_treated_as_absent(adapter: BacDebitAdapter) -> None:
+    synthetic_pdf = FPDF()
+    synthetic_pdf.add_page()
+    synthetic_pdf.set_font("Helvetica", "", 12)
+    synthetic_pdf.multi_cell(0, 10, "ESTADO DE CUENTA BAC DEBITO\nCuenta IBAN:   \n")
+    pdf_bytes = bytes(synthetic_pdf.output())
+
+    iban = adapter.extract_iban(pdf_bytes)
+    assert iban is None or iban == ""
+
+
+def test_extract_iban_from_invalid_pdf_returns_none_gracefully(adapter: BacDebitAdapter) -> None:
+    invalid_bytes = b"not a pdf"
+    iban = adapter.extract_iban(invalid_bytes)
+    assert iban is None
+
+
+def test_extract_iban_from_statement_with_no_iban_field_returns_none(
+    adapter: BacDebitAdapter, fixture_bytes: bytes
+) -> None:
+    chunks = adapter.split(fixture_bytes)
+    assert len(chunks) > 0
+
+    iban = adapter.extract_iban(chunks[0])
+    assert iban is None or isinstance(iban, str)

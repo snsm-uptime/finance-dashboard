@@ -85,6 +85,8 @@ export const uploadMessages = {
     bulkReviewSelectedCount: "{count} selected",
     bulkReviewBulkDelete: "Delete selected",
     bulkReviewBulkMovePlaceholder: "Move selected to…",
+    bulkAssignChooseListPlaceholder: "Choose list",
+    bulkAssignChooseListLabel: "Target list",
     // Individual review (Story 4.8; row-level rewrite Story 4.13)
     individualReviewTitle: "Review statements",
     individualReviewProgress: "{count} left",
@@ -235,6 +237,8 @@ export const uploadMessages = {
     bulkReviewSelectedCount: "{count} seleccionadas",
     bulkReviewBulkDelete: "Eliminar seleccionadas",
     bulkReviewBulkMovePlaceholder: "Mover seleccionadas a…",
+    bulkAssignChooseListPlaceholder: "Elegir lista",
+    bulkAssignChooseListLabel: "Lista destino",
     // Individual review (Story 4.8; row-level rewrite Story 4.13)
     individualReviewTitle: "Revisar estados de cuenta",
     individualReviewProgress: "{count} restantes",
