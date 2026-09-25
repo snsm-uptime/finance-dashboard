@@ -41,6 +41,17 @@ def client_with_fx(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> Iter
     yield from make_client(db_session, monkeypatch, smtp=False, bccr_client=FakeUsdBccrClient())
 
 
+@pytest.fixture
+def client_without_bccr(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[TestClient]:
+    """BCCR unavailable (transport failure) — the real client is the app default
+    now, so this scenario must be requested explicitly (AD-7 fail loud)."""
+    from adapters.fx.bccr_client import UnavailableBccrClient
+
+    yield from make_client(db_session, monkeypatch, smtp=False, bccr_client=UnavailableBccrClient())
+
+
 def _register(client: TestClient, email: str) -> str:
     response = client.post(
         "/auth/register",
@@ -209,8 +220,9 @@ def test_unsupported_currency_rejected(client: TestClient) -> None:
     assert bad.json()["code"] == "invalid_manual_expense"
 
 
-def test_usd_without_bccr_wired_fails_loud(client: TestClient) -> None:
-    """No live BCCR adapter yet (Dev Notes) — USD must 503, never silently use 1:1."""
+def test_usd_without_bccr_wired_fails_loud(client_without_bccr: TestClient) -> None:
+    """BCCR transport unavailable — USD must 503, never silently use 1:1 (AD-7)."""
+    client = client_without_bccr
     owner_id = _register(client, "owner-usd-unwired@example.com")
     created = client.post("/lists", json={"name": "FX unwired"})
     list_id = created.json()["id"]

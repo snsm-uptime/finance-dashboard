@@ -86,6 +86,17 @@ def client_with_fx(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> Iter
     yield from make_client(db_session, monkeypatch, smtp=False, bccr_client=_FakeUsdBccrClient())
 
 
+@pytest.fixture
+def client_without_bccr(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[TestClient]:
+    """BCCR unavailable (transport failure) — the real client is the app default
+    now, so this scenario must be requested explicitly (AD-7 fail loud)."""
+    from adapters.fx.bccr_client import UnavailableBccrClient
+
+    yield from make_client(db_session, monkeypatch, smtp=False, bccr_client=UnavailableBccrClient())
+
+
 _FIXTURE_DIR = Path(__file__).parent / "fixtures" / "pdf"
 _ACCEPTANCE_BAR_PDF = _FIXTURE_DIR / "bac_credit_acceptance_bar.pdf"
 _GOLDENS_PATH = _FIXTURE_DIR / "bac_credit_acceptance_bar_goldens.py"
@@ -336,9 +347,12 @@ def test_upload_multi_statement_pdf_completes_within_interactive_session(
 # --- Story 4.7: Bulk review assign & commit path ------------------------------------
 
 
-def test_bulk_commit_non_crc_row_without_bccr_wired_fails_loud_503(client: TestClient) -> None:
-    """No live BCCR adapter yet (Dev Notes) — a non-CRC candidate row must 503,
-    never silently commit at a 1:1 rate (AD-7 fail loud)."""
+def test_bulk_commit_non_crc_row_without_bccr_wired_fails_loud_503(
+    client_without_bccr: TestClient,
+) -> None:
+    """BCCR transport unavailable — a non-CRC candidate row must 503, never
+    silently commit at a 1:1 rate (AD-7 fail loud)."""
+    client = client_without_bccr
     _register(client, "bulknofx@example.com")
     session_id = _upload_bac_session(client)
     list_id = _own_list_id(client)

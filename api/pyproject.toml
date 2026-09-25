@@ -14,6 +14,7 @@ dependencies = [
   "aiosmtplib==5.1.2",
   "pdfplumber==0.11.10",
   "python-multipart==0.0.20",
+  "bccr>=2026.8.22",
 ]
 
 [dependency-groups]

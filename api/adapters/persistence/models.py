@@ -446,6 +446,24 @@ class DescriptionAliasModel(Base):
     )
 
 
+class FxRateCacheModel(Base):
+    """Cached BCCR daily FX rate per (rate_date, currency) — avoids re-hitting
+    BCCR for the same date across multiple commits (Story: real BCCR client)."""
+
+    __tablename__ = "fx_rate_cache"
+    __table_args__ = (
+        UniqueConstraint("rate_date", "currency", name="uq_fx_rate_cache_date_currency"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    rate_date: Mapped[date] = mapped_column(Date, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    rate: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 class SplitOverrideModel(Base):
     """Persisted split override configuration (not computed share cents)."""
 
