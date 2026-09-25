@@ -26,9 +26,7 @@ def _series(values: dict[date, float]) -> pd.Series:
 
 
 class TestBccrSwClient:
-    def test_get_rate_returns_decimal_for_exact_date(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_get_rate_returns_decimal_for_exact_date(self, monkeypatch: pytest.MonkeyPatch) -> None:
         target = date(2026, 1, 6)
         monkeypatch.setattr(
             bccr.SW, "descargar_indicador", lambda *a, **kw: _series({target: 620.5})
@@ -187,9 +185,11 @@ class TestCachedBccrClient:
         client = CachedBccrClient(delegate, db_session)
 
         assert client.get_rate(target, "USD") is None
-        count = db_session.execute(
-            select(FxRateCacheModel).where(FxRateCacheModel.rate_date == target)
-        ).scalars().all()
+        count = (
+            db_session.execute(select(FxRateCacheModel).where(FxRateCacheModel.rate_date == target))
+            .scalars()
+            .all()
+        )
         assert count == []
 
     def test_get_nearest_prior_rate_hits_cache_without_calling_delegate(
