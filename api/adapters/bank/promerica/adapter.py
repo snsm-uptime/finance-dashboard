@@ -111,6 +111,13 @@ _TOTAL_LINE_RE = re.compile(r"^Total\b", re.IGNORECASE)
 _DATE_TOKEN_RE = re.compile(r"\b\d{1,2}/\d{1,2}/\d{4}\b")
 _AMOUNT_TOKEN_RE = re.compile(r"-?\d{1,3}(?:,\d{3})*\.\d{2}")
 
+# IBAN extraction for the CRC (colones) account; fallback to USD dólares if
+# CRC is absent (mirrors bac_credit's Story 4.8.1 pattern — real evidence,
+# `bank_data/0126 CRED_PROMERICA_BLACK.pdf`: "Número de Cuenta IBAN COLONES"
+# / "Número de Cuenta IBAN DÓLARES" print on the account-summary preamble).
+_IBAN_CRC_RE = re.compile(r"N[uú]mero de Cuenta IBAN COLONES\s+([A-Z0-9]+)", re.IGNORECASE)
+_IBAN_USD_RE = re.compile(r"N[uú]mero de Cuenta IBAN D[OÓ]LARES\s+([A-Z0-9]+)", re.IGNORECASE)
+
 # Printed reference date for the "Detalle de intereses" section's dateless
 # rows (mirrors BacCreditAdapter's "Fecha de emisión:" pattern). Not PDF
 # metadata: pypdfium2's split() rewrites a fresh /CreationDate onto each
@@ -158,6 +165,25 @@ def _is_section_header_line(line: str) -> bool:
 
 def _is_known_boilerplate_line(line: str) -> bool:
     return bool(_CARD_NUMBER_MARKER_RE.match(line)) or line in _KNOWN_BOILERPLATE_LINES
+
+
+def extract_iban_from_statement(lines: list[str]) -> str | None:
+    """Extract IBAN from statement preamble (mirrors bac_credit's extractor).
+
+    Tries "Número de Cuenta IBAN COLONES" first; falls back to "... IBAN
+    DÓLARES" if CRC is absent. Whitespace-only IBANs are treated as absent.
+    """
+    for line in lines:
+        match = _IBAN_CRC_RE.search(line)
+        if match is not None:
+            iban = match.group(1).strip()
+            return iban if iban else None
+    for line in lines:
+        match = _IBAN_USD_RE.search(line)
+        if match is not None:
+            iban = match.group(1).strip()
+            return iban if iban else None
+    return None
 
 
 def _printed_cutoff_date(lines: list[str]) -> date | None:
@@ -260,6 +286,25 @@ class PromericaAdapter:
             dst.save(buf)
             chunks.append(buf.getvalue())
         return chunks
+
+    def extract_iban(self, statement_bytes: bytes) -> str | None:
+        """Extract statement IBAN for card identification (mirrors bac_credit).
+
+        Returns raw (not normalized) IBAN string if found; None otherwise.
+        Normalization happens in the application layer using normalize_iban().
+        """
+        try:
+            lines: list[str] = []
+            with pdfplumber.open(io.BytesIO(statement_bytes)) as doc:
+                for page in doc.pages:
+                    text = page.extract_text() or ""
+                    lines.extend(text.splitlines())
+        except Exception as exc:
+            _logger.debug("iban_extraction_pdf_read_error error=%s", exc)
+            return None
+
+        stripped_lines = [raw.strip() for raw in lines if raw.strip()]
+        return extract_iban_from_statement(stripped_lines)
 
     def parse(self, statement_bytes: bytes) -> list[CanonicalLine]:
         try:
