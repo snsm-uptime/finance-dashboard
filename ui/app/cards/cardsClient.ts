@@ -26,6 +26,7 @@ export type CardsClientMessages = {
 type ErrorResult = { ok: false; error: string };
 type OkCards = { ok: true; cards: CardItem[] };
 type OkCard = { ok: true; card: CardItem };
+type OkSimple = { ok: true };
 
 function mapError(
   status: number,
@@ -220,4 +221,26 @@ export async function unarchiveCard(
   messages: CardsClientMessages,
 ): Promise<OkCard | ErrorResult> {
   return postCardAction(cardId, "unarchive", messages);
+}
+
+/** Deletes a card the caller owns — the backend unlinks its ledger entries to "No Origin" first. */
+export async function deleteCard(
+  cardId: string,
+  messages: CardsClientMessages,
+): Promise<OkSimple | ErrorResult> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/cards/${encodeURIComponent(cardId)}`, {
+      method: "DELETE",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+    });
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  if (!response.ok) {
+    const body = (await parseJson(response)) as { detail?: unknown; code?: unknown } | null;
+    return { ok: false, error: mapError(response.status, body, messages) };
+  }
+  return { ok: true };
 }

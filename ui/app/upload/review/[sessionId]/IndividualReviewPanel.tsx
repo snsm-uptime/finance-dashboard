@@ -1058,8 +1058,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
                       }
                     : undefined
                 }
-                className={`cursor-text rounded-sm -mx-1 -my-1 min-w-0 py-1 pl-1 pr-8 ${titleState !== "idle" ? "border border-accent" : ""
-                  }`}
+                className="cursor-text rounded-sm -mx-1 -my-1 min-w-0 py-1 pl-1 pr-8"
               >
                 {titleState === "editing" ? (
                   <GhostTextArea

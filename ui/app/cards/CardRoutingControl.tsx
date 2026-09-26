@@ -211,10 +211,7 @@ export function CardRoutingControl({
     <div className="flex flex-col" onKeyDown={onRootKeyDown}>
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
-          <div
-            ref={titleContainerRef}
-            className={`min-w-0 rounded-sm -mx-1 -my-1 px-1 py-1 ${titleState !== "idle" ? "border border-accent" : ""}`}
-          >
+          <div ref={titleContainerRef} className="min-w-0 -mx-1 -my-1 px-1 py-1">
             {titleState === "editing" ? (
               <GhostTextField
                 ref={titleInputRef}

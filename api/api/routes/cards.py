@@ -16,6 +16,8 @@ from application.cards import (
     ArchiveCardCommand,
     ArchiveCardService,
     CardRecord,
+    DeleteCardCommand,
+    DeleteCardService,
     ListCardsCommand,
     ListCardsService,
     RegisterCardCommand,
@@ -35,7 +37,7 @@ from domain.errors import (
     InvalidCardRoutingModeError,
     NotListMemberError,
 )
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
@@ -207,3 +209,21 @@ def unarchive_card(
         )
     logger.info("card_unarchived card_id=%s user_id=%s", result.id, user_id)
     return _card_response(result)
+
+
+@router.delete("/{card_id}", response_model=None, status_code=status.HTTP_204_NO_CONTENT)
+def delete_card(
+    card_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> Response | JSONResponse:
+    service = DeleteCardService(SqlAlchemyCardRepository(db))
+    try:
+        service.execute(DeleteCardCommand(actor_user_id=user_id, card_id=card_id))
+    except CardNotFoundError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": str(exc), "code": "card_not_found"},
+        )
+    logger.info("card_deleted card_id=%s user_id=%s", card_id, user_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

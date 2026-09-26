@@ -5,11 +5,16 @@ import { useEffect, useMemo, useState } from "react";
 import { CopyButton } from "@/components/CopyButton";
 import { useChromeHeader } from "@/components/ChromeBack";
 import { ChromeAvatarLink } from "@/components/ChromeAvatarLink";
+import { GhostButton } from "@/components/soft-ledger/GhostButton";
 import { IconButton } from "@/components/IconButton";
+import {
+  IconButtonPopup,
+  IconButtonPopupItem,
+} from "@/components/IconButtonPopup";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { StackedListPanel } from "@/components/StackedListPanel";
 import { cardsCopy } from "@/lib/i18n/cards";
-import { ArchiveToggleIcon } from "@/app/icons";
+import { ArchiveToggleIcon, DotsIcon, TrashIcon } from "@/app/icons";
 import { DocsHelpButton } from "@/app/docs/DocsHelpButton";
 import { fetchLists } from "../lists/listsClient";
 import {
@@ -19,6 +24,7 @@ import {
 } from "../lists/membershipListsStore";
 import {
   archiveCard,
+  deleteCard,
   fetchCards,
   unarchiveCard,
   type CardItem,
@@ -26,6 +32,7 @@ import {
 } from "./cardsClient";
 import { CardRoutingControl } from "./CardRoutingControl";
 import { RegisterCardForm } from "./RegisterCardForm";
+import styles from "./cards.module.scss";
 
 function maskIban(iban: string): string {
   return `•••• ${iban.slice(-4)}`;
@@ -48,6 +55,9 @@ export function CardsPanel({ refreshToken = 0 }: Props = {}) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [registeredStatus, setRegisteredStatus] = useState("");
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const defaultListId = me?.default_import_list_id ?? "";
   useChromeHeader({
     leading: me ? (
@@ -86,6 +96,33 @@ export function CardsPanel({ refreshToken = 0 }: Props = {}) {
     }),
     [t],
   );
+
+  function showDeleteConfirm(cardId: string) {
+    setDeleteConfirmId(cardId);
+    setOpenMenuId(null);
+  }
+
+  function cancelDeleteConfirm() {
+    setDeleteConfirmId(null);
+  }
+
+  async function confirmDelete(card: CardItem) {
+    if (deletingId === card.id) return;
+    setDeletingId(card.id);
+    try {
+      const result = await deleteCard(card.id, messages);
+      if (!result.ok) {
+        setLoadError(result.error);
+        return;
+      }
+      setLoadError(null);
+      setDeleteConfirmId(null);
+      setCards((prev) => prev.filter((c) => c.id !== card.id));
+      setArchivedCards((prev) => prev.filter((c) => c.id !== card.id));
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -207,13 +244,72 @@ export function CardsPanel({ refreshToken = 0 }: Props = {}) {
                   {maskIban(card.iban)}
                 </span>
               </CopyButton>
-              <IconButton
-                icon={<ArchiveToggleIcon active={showArchived} className="size-5" />}
-                label={showArchived ? t.cardsUnarchive : t.cardsArchive}
-                onClick={() =>
-                  void (showArchived ? onUnarchive(card) : onArchive(card))
+              <IconButtonPopup
+                panelClassName={
+                  deleteConfirmId === card.id ? styles.confirmPanel : styles.menuPanel
                 }
-              />
+                panelRole={deleteConfirmId === card.id ? "alertdialog" : "menu"}
+                open={openMenuId === card.id || deleteConfirmId === card.id}
+                onOpenChange={(next) => {
+                  if (next) {
+                    setOpenMenuId(card.id);
+                    setDeleteConfirmId(null);
+                  } else {
+                    setOpenMenuId((current) => (current === card.id ? null : current));
+                    setDeleteConfirmId((current) => (current === card.id ? null : current));
+                  }
+                }}
+                button={
+                  <IconButton
+                    type="button"
+                    variant="muted"
+                    label={t.menuAria}
+                    icon={<DotsIcon />}
+                  />
+                }
+              >
+                {deleteConfirmId === card.id ? (
+                  <>
+                    <p className={styles.confirmText}>{t.deleteConfirm}</p>
+                    <div className={styles.confirmActions}>
+                      <GhostButton onClick={cancelDeleteConfirm} disabled={deletingId !== null}>
+                        {t.deleteCancel}
+                      </GhostButton>
+                      <button
+                        type="button"
+                        className={`${styles.primary} ${styles.primaryDanger}`}
+                        onClick={() => void confirmDelete(card)}
+                        disabled={deletingId !== null}
+                      >
+                        {deletingId === card.id ? t.deletingAction : t.deleteAction}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <IconButtonPopupItem
+                      onClick={() =>
+                        void (showArchived ? onUnarchive(card) : onArchive(card))
+                      }
+                    >
+                      <span className="flex items-center gap-4">
+                        <ArchiveToggleIcon active={showArchived} className="h-4 w-4 shrink-0" />
+                        {showArchived ? t.cardsUnarchive : t.cardsArchive}
+                      </span>
+                    </IconButtonPopupItem>
+                    <IconButtonPopupItem
+                      danger
+                      stayOpen
+                      onClick={() => showDeleteConfirm(card.id)}
+                    >
+                      <span className="flex items-center gap-4">
+                        <TrashIcon className="h-4 w-4 shrink-0" />
+                        {t.deleteAria}
+                      </span>
+                    </IconButtonPopupItem>
+                  </>
+                )}
+              </IconButtonPopup>
             </>
           }
           messages={{

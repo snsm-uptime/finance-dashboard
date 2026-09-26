@@ -1,0 +1,67 @@
+.confirmPanel {
+  --icon-button-popup-min-width: 16rem;
+  padding: 1rem;
+}
+
+.menuPanel {
+  --icon-button-popup-min-width: 12rem;
+}
+
+.confirmText {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  color: var(--foreground);
+  line-height: 1.4;
+  font-weight: 500;
+}
+
+.confirmActions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.confirmActions button {
+  flex: 0 0 auto;
+  font-size: 0.85rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.primary {
+  font-family: var(--font-ui), system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1.2;
+  border-radius: 8px;
+  padding: 9px 12px;
+  cursor: pointer;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  border: none;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.primary:not(:disabled):hover {
+  filter: brightness(1.05);
+}
+
+.primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.primaryDanger {
+  background: var(--danger-strong) !important;
+  color: #fff !important;
+  font-weight: 600;
+}
+
+.primaryDanger:not(:disabled):hover {
+  filter: brightness(1.1) !important;
+}
+
+.primaryDanger:not(:disabled):focus-visible {
+  outline: 2px solid var(--danger-strong) !important;
+  outline-offset: 2px !important;
+}

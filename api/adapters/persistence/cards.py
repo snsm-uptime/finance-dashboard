@@ -10,7 +10,7 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from adapters.persistence.models import CardModel
+from adapters.persistence.models import CardModel, LedgerEntryModel
 
 
 def _card_record(row: CardModel) -> CardRecord:
@@ -120,3 +120,24 @@ class SqlAlchemyCardRepository:
         row.label = label
         self._session.flush()
         return _card_record(row)
+
+    def delete_card(self, card_id: UUID, user_id: UUID) -> None:
+        row = self._session.scalar(
+            select(CardModel).where(CardModel.id == card_id, CardModel.user_id == user_id).limit(1)
+        )
+        if row is None:
+            raise CardNotFoundError()
+        # users.default_origin_card_id and import_statements.card_id are
+        # ON DELETE SET NULL FKs — the DB clears those on its own. But
+        # ledger_entries.origin_kind is a plain string column alongside the
+        # FK, so the DB's SET NULL on origin_card_id alone would leave
+        # orphaned rows with origin_kind="card" and no card behind it,
+        # breaking the origin invariant (domain.expenses._validate_origin).
+        # Unlink those to "No Origin" explicitly before deleting the card.
+        self._session.execute(
+            update(LedgerEntryModel)
+            .where(LedgerEntryModel.origin_card_id == card_id)
+            .values(origin_kind=None, origin_card_id=None)
+        )
+        self._session.delete(row)
+        self._session.flush()

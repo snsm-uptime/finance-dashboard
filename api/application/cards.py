@@ -50,6 +50,8 @@ class CardRepository(Protocol):
 
     def update_label(self, *, card_id: UUID, user_id: UUID, label: str) -> CardRecord: ...
 
+    def delete_card(self, card_id: UUID, user_id: UUID) -> None: ...
+
 
 @dataclass(frozen=True, slots=True)
 class RegisterCardCommand:
@@ -78,6 +80,12 @@ class ArchiveCardCommand:
 
 @dataclass(frozen=True, slots=True)
 class UnarchiveCardCommand:
+    actor_user_id: UUID
+    card_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class DeleteCardCommand:
     actor_user_id: UUID
     card_id: UUID
 
@@ -224,3 +232,22 @@ class UnarchiveCardService:
             raise CardNotFoundError()
 
         return self._repo.unarchive_card(command.card_id, command.actor_user_id)
+
+
+class DeleteCardService:
+    """Delete a card — registering user only; any other user's card is 404.
+
+    The repository unlinks every ledger entry, statement and default-origin
+    setting that pointed at this card before removing it, so deletion never
+    leaves a dangling "card" origin behind (see repository docstring).
+    """
+
+    def __init__(self, repo: CardRepository) -> None:
+        self._repo = repo
+
+    def execute(self, command: DeleteCardCommand) -> None:
+        card = self._repo.get_card(command.card_id, command.actor_user_id)
+        if card is None:
+            raise CardNotFoundError()
+
+        self._repo.delete_card(command.card_id, command.actor_user_id)

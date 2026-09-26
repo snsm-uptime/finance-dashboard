@@ -258,8 +258,21 @@ describe("CardsPanel", () => {
     });
     await waitForDom(() => container.textContent?.includes(card.label));
 
-    const archiveButton = container.querySelector(
-      `button[aria-label="${t.cardsArchive}"]`,
+    const menuButton = container.querySelector(
+      `button[aria-label="${t.menuAria}"]`,
+    ) as HTMLButtonElement;
+    await act(async () => {
+      menuButton.click();
+    });
+    await waitForDom(
+      () =>
+        Array.from(container.querySelectorAll('[role="menuitem"]')).some(
+          (el) => el.textContent === t.cardsArchive,
+        ),
+    );
+
+    const archiveButton = Array.from(container.querySelectorAll('[role="menuitem"]')).find(
+      (el) => el.textContent === t.cardsArchive,
     ) as HTMLButtonElement;
     expect(archiveButton).toBeTruthy();
     await act(async () => {
@@ -297,8 +310,21 @@ describe("CardsPanel", () => {
     });
     await waitForDom(() => container.textContent?.includes(archivedCard.label));
 
-    const unarchiveButton = container.querySelector(
-      `button[aria-label="${t.cardsUnarchive}"]`,
+    const unarchiveMenuButton = container.querySelector(
+      `button[aria-label="${t.menuAria}"]`,
+    ) as HTMLButtonElement;
+    await act(async () => {
+      unarchiveMenuButton.click();
+    });
+    await waitForDom(
+      () =>
+        Array.from(container.querySelectorAll('[role="menuitem"]')).some(
+          (el) => el.textContent === t.cardsUnarchive,
+        ),
+    );
+
+    const unarchiveButton = Array.from(container.querySelectorAll('[role="menuitem"]')).find(
+      (el) => el.textContent === t.cardsUnarchive,
     ) as HTMLButtonElement;
     expect(unarchiveButton).toBeTruthy();
     await act(async () => {

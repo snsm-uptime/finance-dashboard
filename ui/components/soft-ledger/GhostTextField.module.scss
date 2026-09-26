@@ -27,6 +27,10 @@
 .field:focus {
   outline: none;
   color: var(--foreground);
+  // Contrast fill while editing, not a border — the field visually lifts off
+  // whatever ambient surface it sits on (var(--surface) in ListsPanel,
+  // CardRoutingControl, IndividualReviewPanel) instead of drawing an outline.
+  background: var(--background);
 }
 
 .field:disabled {

@@ -36,6 +36,13 @@ export const cardsMessages = {
     cardsArchive: "Archive card",
     cardsUnarchive: "Unarchive card",
     renameLabel: "Double-click to rename",
+    deleteAria: "Delete card",
+    deleteConfirm:
+      "Are you sure you want to delete this card? Transactions assigned to it will move to No Origin.",
+    deleteAction: "Delete",
+    deletingAction: "Deleting…",
+    deleteCancel: "Cancel",
+    menuAria: "Card options",
   },
   es: {
     title: "Tarjetas",
@@ -71,6 +78,13 @@ export const cardsMessages = {
     cardsArchive: "Archivar tarjeta",
     cardsUnarchive: "Desarchivar tarjeta",
     renameLabel: "Haz doble clic para renombrar",
+    deleteAria: "Eliminar tarjeta",
+    deleteConfirm:
+      "¿Estás seguro de que quieres eliminar esta tarjeta? Las transacciones asignadas a ella pasarán a Sin origen.",
+    deleteAction: "Eliminar",
+    deletingAction: "Eliminando…",
+    deleteCancel: "Cancelar",
+    menuAria: "Opciones de la tarjeta",
   },
 } as const;
 
