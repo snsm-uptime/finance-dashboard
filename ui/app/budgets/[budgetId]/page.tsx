@@ -153,13 +153,6 @@ function asMembers(data: unknown): ListMember[] {
   return out;
 }
 
-/** Border/text color for the status badge below the progress bar — mirrors the bar's own severity tiers. */
-function budgetStatusChipClassName(state: BudgetItem["state"]): string {
-  if (state === "over") return "border-owe text-owe";
-  if (state === "near") return "border-warn text-warn";
-  return "border-border text-muted";
-}
-
 function asRuleRow(data: unknown): BudgetRuleRow | null {
   if (!data || typeof data !== "object") return null;
   const row = data as Partial<BudgetRuleRow>;
@@ -381,9 +374,6 @@ export default async function BudgetDetailPage({
             />
 
             <section className="flex items-center justify-start gap-(--space-2)">
-              <Chip className={budgetStatusChipClassName(budget.state)}>
-                {budgetStateLabel(budget.state, t)}
-              </Chip>
               {budget.period_start || budget.period_end ? (
                 <span className="text-[0.75rem] font-[550] text-muted">
                   {budget.period_start
