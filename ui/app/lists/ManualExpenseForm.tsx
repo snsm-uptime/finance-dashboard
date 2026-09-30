@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useId, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { useFormSubmission, useFormStateSync } from "@/hooks";
@@ -280,7 +280,17 @@ export function ManualExpenseForm({
     return { ok: true, value: { kind: "percentage", percentages: pct } };
   }
 
-  const { pending, error, submit, clearError } = useFormSubmission(
+  const [isRefreshing, startRefresh] = useTransition();
+  const wasRefreshingRef = useRef(false);
+
+  useEffect(() => {
+    if (wasRefreshingRef.current && !isRefreshing) {
+      onSuccess?.();
+    }
+    wasRefreshingRef.current = isRefreshing;
+  }, [isRefreshing, onSuccess]);
+
+  const { pending: submitPending, error, submit, clearError } = useFormSubmission(
     async (body: CreateExpenseBody) => {
       const override = buildSplitOverride();
       if (!override.ok) {
@@ -302,11 +312,18 @@ export function ManualExpenseForm({
         setPayerId(currentUserId);
         setOriginValue("");
         resetAdjustFields();
-        router.refresh();
-        onSuccess?.();
+        // Keep the sheet open (and fields disabled) until the refreshed
+        // server data actually lands — closing on request-success alone let
+        // the sheet dismiss before the list re-fetch resolved, making a
+        // just-added expense appear to not show up.
+        startRefresh(() => {
+          router.refresh();
+        });
       },
     }
   );
+
+  const pending = submitPending || isRefreshing;
 
   const canSubmit =
     amount.trim().length > 0 &&
