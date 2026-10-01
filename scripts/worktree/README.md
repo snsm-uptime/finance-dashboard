@@ -123,7 +123,7 @@ For a **UI-only story** — a copy tweak, a layout fix, a component prop, anythi
 - **No `uv sync`** — the API isn't touched at all.
 - Drop/build/restart/stop in this worktree only ever affects its own `ui` container — the primary's `db`/`api`/`ui` and any other worktree's stack are never started, stopped, or rebuilt by `--lite`.
 
-**When to use it:** whenever the story is UI-only (no `api/` changes). This is meant to be the automatic choice for such stories, not something to ask about each time — see [BMad dev-story integration](#bmad-dev-story-integration) below. Fall back to the full bootstrap the moment a story touches `api/`.
+**When to use it:** whenever the story is UI-only (no `api/` changes). This is meant to be the automatic choice for such stories, not something to ask about each time — see [BMad build integration](#bmad-build-integration) below. Fall back to the full bootstrap the moment a story touches `api/`.
 
 Usage:
 ```bash
@@ -139,9 +139,9 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose
 ```
 (`worktree-remove.sh <slug>` does this automatically as part of removing the worktree, same as full mode.)
 
-### BMad dev-story integration
+### BMad build integration
 
-When `bmad-dev-story` (or `bmad-quick-dev`) is about to work a story, check the story's file-change scope first: if it's entirely under `ui/` (no `api/` changes), bootstrap the worktree with `--lite` automatically instead of asking. If the scope is mixed or touches `api/`, use the full bootstrap.
+When `bmad-build` (or `bmad-build-auto`) is about to work a story, check the story's file-change scope first: if it's entirely under `ui/` (no `api/` changes), bootstrap the worktree with `--lite` automatically instead of asking. If the scope is mixed or touches `api/`, use the full bootstrap.
 
 ---
 

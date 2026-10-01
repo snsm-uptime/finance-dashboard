@@ -38,7 +38,7 @@ is a derived checklist, not a second contract.
 4. Walk the four-AD checklist below against the reviewed mapping. Each
    answer is either "the existing contract covers this as-is" or "this is
    a real per-bank decision to make in the brainstorm session."
-5. Implement via a normal story (`bmad-create-story` → `bmad-dev-story`).
+5. Implement via a normal story (`bmad-create-epics-and-stories` → `bmad-build`).
 
 ## AD checklist
 

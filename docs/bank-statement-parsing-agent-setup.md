@@ -69,11 +69,9 @@ filling in a contract, not by inventing per-adapter special cases. Output
 lands under `_bmad-output/planning-artifacts/architecture/` (exact path
 depends on how the session runs — check there after).
 
-### 2. Write the brainstorm playbook (tech writer — Paige)
+### 2. Write the brainstorm playbook
 
-Invoke `bmad-agent-tech-writer` with the **Write Document** action (ask
-Paige, or use the `WD` menu code). This produces the actual "documentation
-for an agent" — a playbook that:
+Write the actual "documentation for an agent" directly — a playbook that:
 
 - Explains the repeatable process: locate real examples in `bank_data/`,
   run `statement_recon.py`, review the resulting `mapping.yaml` against the
@@ -108,5 +106,5 @@ For each new bank/product:
 4. Bring the reviewed mapping + the playbook (step 2 above) into a
    brainstorm session to decide how this bank's adapter should be built
    against the abstract contract (step 1 above).
-5. Implement via a normal story (`bmad-create-story` → `bmad-dev-story`),
+5. Implement via a normal story (`bmad-create-epics-and-stories` → `bmad-build`),
    same as Story 4.4/4.5.
