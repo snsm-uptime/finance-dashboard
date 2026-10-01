@@ -43,6 +43,8 @@ class ReassignStatementRepository(Protocol):
 
     def list_statement_ledger_moves(self, statement_id: UUID) -> list[StatementLedgerMove]: ...
 
+    def get_ledger_entry_move(self, entry_id: UUID) -> StatementLedgerMove | None: ...
+
     def atomic(self) -> AbstractContextManager[None]: ...
 
     def apply_statement_reassign(
@@ -54,6 +56,15 @@ class ReassignStatementRepository(Protocol):
         candidate_ids: tuple[UUID, ...],
         receipt_ids: tuple[UUID, ...],
         from_list_ids: tuple[UUID, ...],
+        override_keys: tuple[tuple[str, UUID], ...],
+    ) -> None: ...
+
+    def apply_entry_reassign(
+        self,
+        *,
+        destination_list_id: UUID,
+        entry_id: UUID,
+        from_list_id: UUID,
         override_keys: tuple[tuple[str, UUID], ...],
     ) -> None: ...
 
@@ -71,6 +82,21 @@ class ReassignStatementResult:
     ledger_entry_ids: tuple[UUID, ...]
     batch_ids: tuple[UUID, ...]
     from_list_ids: tuple[UUID, ...]
+    destination_list_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class ReassignLedgerEntryCommand:
+    acting_user_id: UUID
+    source_list_id: UUID
+    entry_id: UUID
+    destination_list_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class ReassignLedgerEntryResult:
+    ledger_entry_id: UUID
+    from_list_id: UUID
     destination_list_id: UUID
 
 
@@ -173,3 +199,68 @@ class ReassignStatementService:
                     seen.add(receipt_key)
                     keys.append(receipt_key)
         return tuple(keys)
+
+
+class ReassignLedgerEntryService:
+    def __init__(self, repo: ReassignStatementRepository) -> None:
+        self._repo = repo
+        self._acl = AuthorizeListAccessService(repo)
+
+    def execute(self, command: ReassignLedgerEntryCommand) -> ReassignLedgerEntryResult:
+        move = self._repo.get_ledger_entry_move(command.entry_id)
+        if move is None:
+            raise ImportStatementNotFoundError()
+
+        from_list_id = move.list_id
+        if command.source_list_id != from_list_id:
+            raise ImportStatementNotFoundError()
+
+        self._acl.execute(
+            AuthorizeListAccessCommand(
+                acting_user_id=command.acting_user_id,
+                list_id=from_list_id,
+                action="reassign_statement",
+            )
+        )
+        self._acl.execute(
+            AuthorizeListAccessCommand(
+                acting_user_id=command.acting_user_id,
+                list_id=command.destination_list_id,
+                action="import_to_list",
+            )
+        )
+
+        result = ReassignLedgerEntryResult(
+            ledger_entry_id=move.entry_id,
+            from_list_id=from_list_id,
+            destination_list_id=command.destination_list_id,
+        )
+
+        if from_list_id == command.destination_list_id:
+            return result
+
+        dest_members = self._repo.list_member_ids(command.destination_list_id)
+        if move.payer_id is not None and move.payer_id not in dest_members:
+            raise InvalidSplitOverrideError("Payer is not a member of the destination list.")
+
+        override_keys: list[tuple[str, UUID]] = []
+        item_key = (SUBJECT_ITEM, move.entry_id)
+        stored = self._repo.get_split_override(from_list_id, SUBJECT_ITEM, move.entry_id)
+        if stored is not None:
+            parse_split_spec(
+                kind=stored.kind,
+                member_ids=dest_members,
+                assignee_id=stored.assignee_id,
+                amounts=stored.amounts,
+                percentages=stored.percentages,
+            )
+            override_keys.append(item_key)
+
+        with self._repo.atomic():
+            self._repo.apply_entry_reassign(
+                destination_list_id=command.destination_list_id,
+                entry_id=move.entry_id,
+                from_list_id=from_list_id,
+                override_keys=tuple(override_keys),
+            )
+        return result

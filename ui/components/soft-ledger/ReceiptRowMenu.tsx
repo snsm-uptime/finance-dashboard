@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { DotsIcon, FolderIcon, PencilIcon, TrashIcon } from "@/app/icons";
+import { DotsIcon, FolderIcon, PencilIcon, SendIcon, TrashIcon } from "@/app/icons";
 import { IconButton } from "@/components/IconButton";
 import {
   IconButtonPopup,
@@ -18,6 +18,7 @@ export type ReceiptRowMenuMessages = {
   menuAria: string;
   editLabel: string;
   deleteLabel: string;
+  moveItemLabel: string;
   moveStatementLabel?: string;
 };
 
@@ -48,6 +49,7 @@ export type ReceiptRowDeleteEntry = {
 
 type Props = {
   messages: ReceiptRowMenuMessages;
+  onMoveItem?: () => void;
   onMoveStatement?: () => void;
   onEdit?: () => void;
   rollback?: ReceiptRowRollback;
@@ -60,7 +62,7 @@ type Props = {
  * single-entry hard delete (`deleteEntry`, hand rows) or a confirmed batch rollback (`rollback`,
  * parsed rows) — callers pass at most one of the two.
  */
-export function ReceiptRowMenu({ messages, onMoveStatement, onEdit, rollback, deleteEntry }: Props) {
+export function ReceiptRowMenu({ messages, onMoveItem, onMoveStatement, onEdit, rollback, deleteEntry }: Props) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const canDelete = Boolean(deleteEntry || rollback);
 
@@ -92,6 +94,14 @@ export function ReceiptRowMenu({ messages, onMoveStatement, onEdit, rollback, de
             {messages.deleteLabel}
           </span>
         </IconButtonPopupItem>
+        {onMoveItem ? (
+          <IconButtonPopupItem onClick={onMoveItem}>
+            <span className="flex items-center gap-4">
+              <SendIcon className="h-4 w-4 shrink-0" />
+              {messages.moveItemLabel}
+            </span>
+          </IconButtonPopupItem>
+        ) : null}
         {messages.moveStatementLabel && onMoveStatement ? (
           <IconButtonPopupItem onClick={onMoveStatement}>
             <span className="flex items-center gap-4">

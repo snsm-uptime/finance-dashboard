@@ -68,7 +68,12 @@ from application.lists import (
     UnhideListCommand,
     UnhideListService,
 )
-from application.reassign_statement import ReassignStatementCommand, ReassignStatementService
+from application.reassign_statement import (
+    ReassignLedgerEntryCommand,
+    ReassignLedgerEntryService,
+    ReassignStatementCommand,
+    ReassignStatementService,
+)
 from domain.errors import (
     AlreadyListMemberError,
     CannotHideOwnedListError,
@@ -123,6 +128,8 @@ from api.schemas.lists import (
     OriginSpendItemResponse,
     PairwiseEdgeResponse,
     PeriodResponse,
+    ReassignEntryBody,
+    ReassignEntryResponse,
     ReassignStatementBody,
     ReassignStatementResponse,
     RenameListBody,
@@ -1158,6 +1165,51 @@ def reassign_statement(
         ledger_entry_ids=list(result.ledger_entry_ids),
         batch_ids=list(result.batch_ids),
         from_list_ids=list(result.from_list_ids),
+        destination_list_id=result.destination_list_id,
+    )
+
+
+@router.post(
+    "/{list_id}/entries/{entry_id}/reassign",
+    response_model=ReassignEntryResponse,
+)
+def reassign_entry(
+    list_id: uuid.UUID,
+    entry_id: uuid.UUID,
+    body: ReassignEntryBody,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> ReassignEntryResponse | JSONResponse:
+    service = ReassignLedgerEntryService(SqlAlchemyListRepository(db))
+    try:
+        result = service.execute(
+            ReassignLedgerEntryCommand(
+                acting_user_id=user_id,
+                source_list_id=list_id,
+                entry_id=entry_id,
+                destination_list_id=body.destination_list_id,
+            )
+        )
+    except ImportStatementNotFoundError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": str(exc), "code": "entry_not_found"},
+        )
+    except InvalidSplitOverrideError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"detail": str(exc), "code": "invalid_split_override"},
+        )
+    except (ListNotFoundError, NotListMemberError):
+        return _access_denied()
+    logger.info(
+        "entry_reassigned entry_id=%s destination_list_id=%s",
+        entry_id,
+        result.destination_list_id,
+    )
+    return ReassignEntryResponse(
+        ledger_entry_id=result.ledger_entry_id,
+        from_list_id=result.from_list_id,
         destination_list_id=result.destination_list_id,
     )
 

@@ -123,6 +123,10 @@ export const listsMessages = {
     deleteExpenseConfirmBody: "This removes it from the list permanently.",
     deleteExpenseConfirmAction: "Delete",
     deleteExpenseConfirmCancel: "Cancel",
+    receiptMoveItem: "Move this item",
+    receiptMoveItemConfirm:
+      "This item will move to {list}. Shares will follow the destination list’s default split unless this item already has its own split.",
+    receiptMoveItemConfirmAction: "Move item",
     receiptMoveStatement: "Move statement to another list",
     receiptMoveConfirm:
       "Shares will follow the destination list’s default split unless this statement’s items already have their own split.",
@@ -346,6 +350,10 @@ export const listsMessages = {
     deleteExpenseConfirmAction: "Eliminar",
     deleteExpenseConfirmCancel: "Cancelar",
     receiptNewBadge: "Nuevo",
+    receiptMoveItem: "Mover este ítem",
+    receiptMoveItemConfirm:
+      "Este ítem se moverá a {list}. Las participaciones seguirán la división predeterminada de la lista de destino, salvo que este ítem ya tenga su propia división.",
+    receiptMoveItemConfirmAction: "Mover ítem",
     receiptMoveStatement: "Mover el estado de cuenta a otra lista",
     receiptMoveConfirm:
       "Las participaciones seguirán la división predeterminada de la lista de destino, salvo que los ítems de este estado de cuenta ya tengan su propia división.",

@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { FormIconSubmit } from "@/components/FormIconSubmit/FormIconSubmit";
+import { ItemChipSelector } from "@/components/ItemChipSelector";
 import { GhostButton } from "@/components/soft-ledger/GhostButton";
 import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 import {
@@ -15,6 +17,7 @@ import { EditExpenseForm, type EditExpenseFormMessages } from "./EditExpenseForm
 import { Sheet } from "./Sheet";
 import {
   fetchLists,
+  reassignEntry,
   reassignStatement,
   type ExpenseItem,
   type ListItem,
@@ -27,7 +30,10 @@ export type ListReceiptMenuMessages = ListsClientMessages &
     menuAria: string;
     editLabel: string;
     deleteLabel: string;
+    moveItemLabel: string;
     moveStatementLabel: string;
+    moveItemConfirm: string;
+    moveItemConfirmAction: string;
     moveConfirm: string;
     pickerTitle: string;
     confirmAction: string;
@@ -61,6 +67,7 @@ export function ListReceiptMenu({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [moveItemOpen, setMoveItemOpen] = useState(false);
   const [lists, setLists] = useState<ListItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -96,6 +103,14 @@ export function ListReceiptMenu({
     setOpen(true);
   }
 
+  async function openMoveItemPicker() {
+    const result = await fetchLists(messages);
+    if (result.ok) {
+      setLists(result.lists.filter((item) => item.id !== listId));
+    }
+    setMoveItemOpen(true);
+  }
+
   async function confirmMove() {
     if (!statementId || !selectedId) return;
     setBusy(true);
@@ -110,6 +125,21 @@ export function ListReceiptMenu({
     router.refresh();
   }
 
+  async function handleMoveItem(selectedListNames: string[]) {
+    const selectedListName = selectedListNames[0];
+    if (!selectedListName) return;
+
+    // Find the list ID from the name
+    const selectedListId = lists.find((l) => l.name === selectedListName)?.id;
+    if (!selectedListId) return;
+
+    const result = await reassignEntry(listId, expense.id, selectedListId, messages);
+    if (!result.ok) {
+      throw new Error(result.error);
+    }
+    router.refresh();
+  }
+
   return (
     <>
       <ReceiptRowMenu
@@ -117,8 +147,10 @@ export function ListReceiptMenu({
           menuAria: messages.menuAria,
           editLabel: messages.editLabel,
           deleteLabel: messages.deleteLabel,
+          moveItemLabel: messages.moveItemLabel,
           moveStatementLabel: statementId ? messages.moveStatementLabel : undefined,
         }}
+        onMoveItem={openMoveItemPicker}
         onMoveStatement={statementId ? openPicker : undefined}
         onEdit={() => setEditOpen(true)}
         rollback={rollback}
@@ -178,6 +210,17 @@ export function ListReceiptMenu({
             </PrimaryButton>
           </div>
         }
+      />
+      <ItemChipSelector
+        open={moveItemOpen}
+        onOpenChange={setMoveItemOpen}
+        labels={lists.map((l) => l.name)}
+        mode="single"
+        defaultLabel=""
+        onChange={handleMoveItem}
+        cancelLabel={messages.cancelLabel}
+        confirmLabel={messages.moveItemConfirmAction}
+        sheetTitle={messages.pickerTitle}
       />
     </>
   );
