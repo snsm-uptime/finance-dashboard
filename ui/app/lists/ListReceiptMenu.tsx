@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { FormIconSubmit } from "@/components/FormIconSubmit/FormIconSubmit";
+import { ItemChipSelector } from "@/components/ItemChipSelector";
 import { GhostButton } from "@/components/soft-ledger/GhostButton";
 import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 import {
@@ -69,11 +70,8 @@ export function ListReceiptMenu({
   const [moveItemOpen, setMoveItemOpen] = useState(false);
   const [lists, setLists] = useState<ListItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [moveItemSelectedId, setMoveItemSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [moveItemError, setMoveItemError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [moveItemBusy, setMoveItemBusy] = useState(false);
 
   const deleteEntry: ReceiptRowDeleteEntry | undefined =
     expense.provenance === "hand"
@@ -106,17 +104,10 @@ export function ListReceiptMenu({
   }
 
   async function openMoveItemPicker() {
-    setMoveItemError(null);
-    setMoveItemSelectedId(null);
     const result = await fetchLists(messages);
-    if (!result.ok) {
-      setLists([]);
-      setMoveItemSelectedId(null);
-      setMoveItemError(result.error);
-      setMoveItemOpen(true);
-      return;
+    if (result.ok) {
+      setLists(result.lists.filter((item) => item.id !== listId));
     }
-    setLists(result.lists.filter((item) => item.id !== listId));
     setMoveItemOpen(true);
   }
 
@@ -134,17 +125,18 @@ export function ListReceiptMenu({
     router.refresh();
   }
 
-  async function confirmMoveItem() {
-    if (!moveItemSelectedId) return;
-    setMoveItemBusy(true);
-    setMoveItemError(null);
-    const result = await reassignEntry(listId, expense.id, moveItemSelectedId, messages);
-    setMoveItemBusy(false);
+  async function handleMoveItem(selectedListNames: string[]) {
+    const selectedListName = selectedListNames[0];
+    if (!selectedListName) return;
+
+    // Find the list ID from the name
+    const selectedListId = lists.find((l) => l.name === selectedListName)?.id;
+    if (!selectedListId) return;
+
+    const result = await reassignEntry(listId, expense.id, selectedListId, messages);
     if (!result.ok) {
-      setMoveItemError(result.error);
-      return;
+      throw new Error(result.error);
     }
-    setMoveItemOpen(false);
     router.refresh();
   }
 
@@ -219,55 +211,16 @@ export function ListReceiptMenu({
           </div>
         }
       />
-      <Sheet
+      <ItemChipSelector
         open={moveItemOpen}
-        onClose={() => setMoveItemOpen(false)}
-        closeLabel={messages.cancelLabel}
-        title={messages.pickerTitle}
-        body={
-          <div className="flex flex-col gap-[var(--space-3)]">
-            <p className="m-0 text-muted" style={{ fontFamily: "var(--type-body-face)" }}>
-              {messages.moveItemConfirm}
-            </p>
-            <ul className="m-0 list-none p-0">
-              {lists.length === 0 ? (
-                <li className="py-[var(--space-3)] text-muted">{messages.emptyDestLabel}</li>
-              ) : (
-                lists.map((item) => (
-                <li key={item.id} className="border-b border-border">
-                  <button
-                    type="button"
-                    className="w-full cursor-pointer border-none bg-transparent px-0 py-[var(--space-3)] text-left text-foreground"
-                    aria-pressed={moveItemSelectedId === item.id}
-                    onClick={() => setMoveItemSelectedId(item.id)}
-                  >
-                    {item.name}
-                  </button>
-                </li>
-                ))
-              )}
-            </ul>
-            {moveItemError ? (
-              <p role="alert" className="m-0 text-owe">
-                {moveItemError}
-              </p>
-            ) : null}
-          </div>
-        }
-        footer={
-          <div className="flex justify-end gap-[var(--space-2)]">
-            <GhostButton onClick={() => setMoveItemOpen(false)}>
-              {messages.cancelLabel}
-            </GhostButton>
-            <FormIconSubmit
-              variant="send"
-              label={messages.moveItemConfirmAction}
-              onClick={confirmMoveItem}
-              disabled={!moveItemSelectedId || moveItemBusy}
-              type="button"
-            />
-          </div>
-        }
+        onOpenChange={setMoveItemOpen}
+        labels={lists.map((l) => l.name)}
+        mode="single"
+        defaultLabel={lists[0]?.name ?? ""}
+        onChange={handleMoveItem}
+        cancelLabel={messages.cancelLabel}
+        confirmLabel={messages.moveItemConfirmAction}
+        sheetTitle={messages.pickerTitle}
       />
     </>
   );

@@ -19,8 +19,8 @@ type Props = {
   onChange: (selected: string[]) => void | Promise<void>;
   /** Currently selected value (for single) or values (for multiple) */
   defaultLabel: string | string[];
-  /** Label for the trigger button */
-  triggerLabel: string;
+  /** Label for the trigger button (omit to hide trigger and use controlled open state) */
+  triggerLabel?: string;
   /** Label for the confirm action button */
   confirmLabel?: string;
   /** Label for the cancel button */
@@ -29,6 +29,10 @@ type Props = {
   sheetTitle: string;
   /** Whether the component is disabled */
   disabled?: boolean;
+  /** Controlled open state (optional — if provided, triggerLabel is ignored) */
+  open?: boolean;
+  /** Callback when sheet should close (required if open is provided) */
+  onOpenChange?: (isOpen: boolean) => void;
 };
 
 /**
@@ -46,9 +50,22 @@ export function ItemChipSelector({
   cancelLabel,
   sheetTitle,
   disabled = false,
+  open: controlledOpen,
+  onOpenChange,
 }: Props) {
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const [open, setOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = isControlled ? controlledOpen : internalOpen;
+
+  const handleOpenChange = (newOpen: boolean) => {
+    if (isControlled) {
+      onOpenChange?.(newOpen);
+    } else {
+      setInternalOpen(newOpen);
+    }
+  };
+
   const [selected, setSelected] = useState<string[]>(
     mode === "single" ? [defaultLabel as string] : (defaultLabel as string[])
   );
@@ -77,7 +94,7 @@ export function ItemChipSelector({
     setBusy(true);
     try {
       await onChange(selected);
-      setOpen(false);
+      handleOpenChange(false);
     } finally {
       setBusy(false);
     }
@@ -88,22 +105,24 @@ export function ItemChipSelector({
     setSelected(
       mode === "single" ? [defaultLabel as string] : (defaultLabel as string[])
     );
-    setOpen(false);
+    handleOpenChange(false);
   };
 
   const displayLabels = getDisplayLabels();
 
   return (
     <>
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={() => setOpen(true)}
-        disabled={disabled}
-        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-surface text-foreground text-sm font-medium hover:bg-surface/80 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-      >
-        {triggerLabel}
-      </button>
+      {triggerLabel && !isControlled && (
+        <button
+          ref={triggerRef}
+          type="button"
+          onClick={() => handleOpenChange(true)}
+          disabled={disabled}
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-surface text-foreground text-sm font-medium hover:bg-surface/80 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+        >
+          {triggerLabel}
+        </button>
+      )}
 
       <Sheet
         open={open}
