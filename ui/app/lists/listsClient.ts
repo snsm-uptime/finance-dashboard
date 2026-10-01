@@ -915,6 +915,37 @@ export async function reassignStatement(
   return { ok: true };
 }
 
+export async function reassignEntry(
+  listId: string,
+  entryId: string,
+  destinationListId: string,
+  messages: ListsClientMessages,
+): Promise<OkSimple | ErrorResult> {
+  let response: Response;
+  try {
+    response = await fetch(
+      `/api/lists/${encodeURIComponent(listId)}/entries/${encodeURIComponent(entryId)}/reassign`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ destination_list_id: destinationListId }),
+      },
+    );
+  } catch {
+    return { ok: false, error: messages.errorGeneric };
+  }
+  if (!response.ok) {
+    const body = (await parseJson(response)) as { detail?: unknown; code?: unknown } | null;
+    const code = typeof body?.code === "string" ? body.code : "";
+    if (response.status === 409 && code === "invalid_split_override") {
+      return { ok: false, error: messages.errorReassignSplit ?? messages.errorGeneric };
+    }
+    return { ok: false, error: mapError(response.status, body, messages) };
+  }
+  return { ok: true };
+}
+
 export async function rollbackImportBatch(
   listId: string,
   batchId: string,

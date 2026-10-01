@@ -252,3 +252,13 @@ class ReassignStatementResponse(BaseModel):
     batch_ids: list[UUID]
     from_list_ids: list[UUID]
     destination_list_id: UUID
+
+
+class ReassignEntryBody(BaseModel):
+    destination_list_id: UUID
+
+
+class ReassignEntryResponse(BaseModel):
+    ledger_entry_id: UUID
+    from_list_id: UUID
+    destination_list_id: UUID

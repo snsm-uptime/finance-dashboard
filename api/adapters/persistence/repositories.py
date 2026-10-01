@@ -869,6 +869,30 @@ class SqlAlchemyListRepository:
             )
         return moves
 
+    def get_ledger_entry_move(self, entry_id: UUID):
+        from application.reassign_statement import StatementLedgerMove
+
+        stmt = select(LedgerEntryModel).where(LedgerEntryModel.id == entry_id)
+        entry = self._session.execute(stmt).scalar_one_or_none()
+        if entry is None or entry.import_batch_id is None:
+            return None
+
+        batch_stmt = select(ImportBatchModel).where(ImportBatchModel.id == entry.import_batch_id)
+        batch = self._session.execute(batch_stmt).scalar_one()
+
+        return StatementLedgerMove(
+            entry_id=entry.id,
+            list_id=entry.list_id,
+            batch_id=batch.id,
+            candidate_row_id=entry.import_candidate_row_id,
+            receipt_id=entry.receipt_id,
+            payer_id=entry.payer_id,
+            amount_crc=Decimal(str(entry.amount_crc)),
+            fx_rate=Decimal(str(entry.fx_rate)),
+            fx_fallback=entry.fx_fallback,
+            import_identity=entry.import_identity,
+        )
+
     def apply_statement_reassign(
         self,
         *,
@@ -915,6 +939,35 @@ class SqlAlchemyListRepository:
                         SplitOverrideModel.subject_kind == kind,
                         SplitOverrideModel.subject_id.in_(subject_ids),
                         SplitOverrideModel.list_id.in_(from_list_ids),
+                    )
+                    .values(list_id=destination_list_id)
+                )
+        self._session.flush()
+
+    def apply_entry_reassign(
+        self,
+        *,
+        destination_list_id: UUID,
+        entry_id: UUID,
+        from_list_id: UUID,
+        override_keys: tuple[tuple[str, UUID], ...],
+    ) -> None:
+        self._session.execute(
+            update(LedgerEntryModel)
+            .where(LedgerEntryModel.id == entry_id)
+            .values(list_id=destination_list_id)
+        )
+        if override_keys:
+            subject_ids_by_kind: dict[str, list[UUID]] = {}
+            for kind, subject_id in override_keys:
+                subject_ids_by_kind.setdefault(kind, []).append(subject_id)
+            for kind, subject_ids in subject_ids_by_kind.items():
+                self._session.execute(
+                    update(SplitOverrideModel)
+                    .where(
+                        SplitOverrideModel.subject_kind == kind,
+                        SplitOverrideModel.subject_id.in_(subject_ids),
+                        SplitOverrideModel.list_id == from_list_id,
                     )
                     .values(list_id=destination_list_id)
                 )

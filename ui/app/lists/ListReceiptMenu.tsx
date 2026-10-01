@@ -15,6 +15,7 @@ import { EditExpenseForm, type EditExpenseFormMessages } from "./EditExpenseForm
 import { Sheet } from "./Sheet";
 import {
   fetchLists,
+  reassignEntry,
   reassignStatement,
   type ExpenseItem,
   type ListItem,
@@ -27,7 +28,9 @@ export type ListReceiptMenuMessages = ListsClientMessages &
     menuAria: string;
     editLabel: string;
     deleteLabel: string;
+    moveItemLabel: string;
     moveStatementLabel: string;
+    moveItemConfirm: string;
     moveConfirm: string;
     pickerTitle: string;
     confirmAction: string;
@@ -61,10 +64,14 @@ export function ListReceiptMenu({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [moveItemOpen, setMoveItemOpen] = useState(false);
   const [lists, setLists] = useState<ListItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [moveItemSelectedId, setMoveItemSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [moveItemError, setMoveItemError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [moveItemBusy, setMoveItemBusy] = useState(false);
 
   const deleteEntry: ReceiptRowDeleteEntry | undefined =
     expense.provenance === "hand"
@@ -96,6 +103,21 @@ export function ListReceiptMenu({
     setOpen(true);
   }
 
+  async function openMoveItemPicker() {
+    setMoveItemError(null);
+    setMoveItemSelectedId(null);
+    const result = await fetchLists(messages);
+    if (!result.ok) {
+      setLists([]);
+      setMoveItemSelectedId(null);
+      setMoveItemError(result.error);
+      setMoveItemOpen(true);
+      return;
+    }
+    setLists(result.lists.filter((item) => item.id !== listId));
+    setMoveItemOpen(true);
+  }
+
   async function confirmMove() {
     if (!statementId || !selectedId) return;
     setBusy(true);
@@ -110,6 +132,20 @@ export function ListReceiptMenu({
     router.refresh();
   }
 
+  async function confirmMoveItem() {
+    if (!moveItemSelectedId) return;
+    setMoveItemBusy(true);
+    setMoveItemError(null);
+    const result = await reassignEntry(listId, expense.id, moveItemSelectedId, messages);
+    setMoveItemBusy(false);
+    if (!result.ok) {
+      setMoveItemError(result.error);
+      return;
+    }
+    setMoveItemOpen(false);
+    router.refresh();
+  }
+
   return (
     <>
       <ReceiptRowMenu
@@ -117,8 +153,10 @@ export function ListReceiptMenu({
           menuAria: messages.menuAria,
           editLabel: messages.editLabel,
           deleteLabel: messages.deleteLabel,
+          moveItemLabel: messages.moveItemLabel,
           moveStatementLabel: statementId ? messages.moveStatementLabel : undefined,
         }}
+        onMoveItem={openMoveItemPicker}
         onMoveStatement={statementId ? openPicker : undefined}
         onEdit={() => setEditOpen(true)}
         rollback={rollback}
@@ -174,6 +212,52 @@ export function ListReceiptMenu({
               {messages.cancelLabel}
             </GhostButton>
             <PrimaryButton onClick={confirmMove} disabled={!selectedId || busy} loading={busy}>
+              {messages.confirmAction}
+            </PrimaryButton>
+          </div>
+        }
+      />
+      <Sheet
+        open={moveItemOpen}
+        onClose={() => setMoveItemOpen(false)}
+        closeLabel={messages.cancelLabel}
+        title={messages.pickerTitle}
+        body={
+          <div className="flex flex-col gap-[var(--space-3)]">
+            <p className="m-0 text-muted" style={{ fontFamily: "var(--type-body-face)" }}>
+              {messages.moveItemConfirm}
+            </p>
+            <ul className="m-0 list-none p-0">
+              {lists.length === 0 ? (
+                <li className="py-[var(--space-3)] text-muted">{messages.emptyDestLabel}</li>
+              ) : (
+                lists.map((item) => (
+                <li key={item.id} className="border-b border-border">
+                  <button
+                    type="button"
+                    className="w-full cursor-pointer border-none bg-transparent px-0 py-[var(--space-3)] text-left text-foreground"
+                    aria-pressed={moveItemSelectedId === item.id}
+                    onClick={() => setMoveItemSelectedId(item.id)}
+                  >
+                    {item.name}
+                  </button>
+                </li>
+                ))
+              )}
+            </ul>
+            {moveItemError ? (
+              <p role="alert" className="m-0 text-owe">
+                {moveItemError}
+              </p>
+            ) : null}
+          </div>
+        }
+        footer={
+          <div className="flex justify-end gap-[var(--space-2)]">
+            <GhostButton onClick={() => setMoveItemOpen(false)}>
+              {messages.cancelLabel}
+            </GhostButton>
+            <PrimaryButton onClick={confirmMoveItem} disabled={!moveItemSelectedId || moveItemBusy} loading={moveItemBusy}>
               {messages.confirmAction}
             </PrimaryButton>
           </div>

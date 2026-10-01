@@ -68,6 +68,7 @@ vi.mock("./PercentageSplitTrack.module.scss", () => ({
 
 const fetchLists = vi.fn();
 const reassignStatement = vi.fn();
+const reassignEntry = vi.fn();
 
 vi.mock("./listsClient", async () => {
   const actual = await vi.importActual<typeof import("./listsClient")>("./listsClient");
@@ -75,6 +76,7 @@ vi.mock("./listsClient", async () => {
     ...actual,
     fetchLists: (...args: unknown[]) => fetchLists(...args),
     reassignStatement: (...args: unknown[]) => reassignStatement(...args),
+    reassignEntry: (...args: unknown[]) => reassignEntry(...args),
   };
 });
 
@@ -82,7 +84,9 @@ const messages = {
   menuAria: listsMessages.en.receiptMenuAria,
   editLabel: listsMessages.en.receiptEdit,
   deleteLabel: listsMessages.en.receiptDelete,
+  moveItemLabel: listsMessages.en.receiptMoveItem,
   moveStatementLabel: listsMessages.en.receiptMoveStatement,
+  moveItemConfirm: listsMessages.en.receiptMoveItemConfirm,
   moveConfirm: listsMessages.en.receiptMoveConfirm,
   pickerTitle: listsMessages.en.receiptMovePickerTitle,
   confirmAction: listsMessages.en.receiptMoveConfirmAction,
