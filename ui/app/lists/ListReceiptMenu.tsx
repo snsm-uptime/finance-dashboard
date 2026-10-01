@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { FormIconSubmit } from "@/components/FormIconSubmit/FormIconSubmit";
 import { GhostButton } from "@/components/soft-ledger/GhostButton";
 import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
 import {
@@ -31,6 +32,7 @@ export type ListReceiptMenuMessages = ListsClientMessages &
     moveItemLabel: string;
     moveStatementLabel: string;
     moveItemConfirm: string;
+    moveItemConfirmAction: string;
     moveConfirm: string;
     pickerTitle: string;
     confirmAction: string;
@@ -257,9 +259,13 @@ export function ListReceiptMenu({
             <GhostButton onClick={() => setMoveItemOpen(false)}>
               {messages.cancelLabel}
             </GhostButton>
-            <PrimaryButton onClick={confirmMoveItem} disabled={!moveItemSelectedId || moveItemBusy} loading={moveItemBusy}>
-              {messages.confirmAction}
-            </PrimaryButton>
+            <FormIconSubmit
+              variant="send"
+              label={messages.moveItemConfirmAction}
+              onClick={confirmMoveItem}
+              disabled={!moveItemSelectedId || moveItemBusy}
+              type="button"
+            />
           </div>
         }
       />

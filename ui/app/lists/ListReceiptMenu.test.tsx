@@ -87,6 +87,7 @@ const messages = {
   moveItemLabel: listsMessages.en.receiptMoveItem,
   moveStatementLabel: listsMessages.en.receiptMoveStatement,
   moveItemConfirm: listsMessages.en.receiptMoveItemConfirm,
+  moveItemConfirmAction: listsMessages.en.receiptMoveItemConfirmAction,
   moveConfirm: listsMessages.en.receiptMoveConfirm,
   pickerTitle: listsMessages.en.receiptMovePickerTitle,
   confirmAction: listsMessages.en.receiptMoveConfirmAction,

@@ -379,7 +379,7 @@ describe("Soft-Ledger primitives", () => {
           directionLabel="you lent"
           netLabel="₡900"
           netPolarity="owed"
-          menu={{ menuAria: "Expense options", editLabel: "Edit", deleteLabel: "Delete" }}
+          menu={{ menuAria: "Expense options", editLabel: "Edit", deleteLabel: "Delete", moveItemLabel: "Move this item" }}
         />,
       );
     });
@@ -435,7 +435,7 @@ describe("Soft-Ledger primitives", () => {
         <ReceiptRow
           title="Parser coffee"
           amount="₡10"
-          menu={{ menuAria: "Expense options", editLabel: "Edit", deleteLabel: "Delete" }}
+          menu={{ menuAria: "Expense options", editLabel: "Edit", deleteLabel: "Delete", moveItemLabel: "Move this item" }}
           rollback={{
             listId: "list-1",
             batchId: "batch-9",
@@ -484,7 +484,7 @@ describe("Soft-Ledger primitives", () => {
         <ReceiptRow
           title="Hand coffee"
           amount="₡10"
-          menu={{ menuAria: "Expense options", editLabel: "Edit", deleteLabel: "Delete" }}
+          menu={{ menuAria: "Expense options", editLabel: "Edit", deleteLabel: "Delete", moveItemLabel: "Move this item" }}
         />,
       );
     });
