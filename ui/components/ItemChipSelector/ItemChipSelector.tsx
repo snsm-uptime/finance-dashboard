@@ -3,10 +3,8 @@
 import { useRef, useState } from "react";
 
 import { chipClassName } from "@/components/Chip";
-import { GhostButton } from "@/components/soft-ledger/GhostButton";
-import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
+import { ActionDialog } from "@/components/ActionDialog";
 import { SpinnerIcon } from "@/app/icons";
-import { useFocusTrap } from "@/hooks";
 
 export type ItemChipSelectorMode = "single" | "multiple";
 
@@ -25,19 +23,18 @@ type Props = {
   confirmLabel?: string;
   /** Label for the cancel button */
   cancelLabel: string;
-  /** Label for the sheet title/dialog heading */
+  /** Label for the dialog title/heading */
   sheetTitle: string;
   /** Whether the component is disabled */
   disabled?: boolean;
   /** Controlled open state (optional — if provided, triggerLabel is ignored) */
   open?: boolean;
-  /** Callback when sheet should close (required if open is provided) */
+  /** Callback when dialog should close (required if open is provided) */
   onOpenChange?: (isOpen: boolean) => void;
 };
 
 /**
- * Generic single/multi-select chip picker that opens a Sheet dialog.
- * In single-select mode, the current selection is hidden from the options.
+ * Generic single/multi-select chip picker that opens a modal dialog via ActionDialog.
  * Supports async onChange for API calls with loading state.
  */
 export function ItemChipSelector({
@@ -54,8 +51,6 @@ export function ItemChipSelector({
   onOpenChange,
 }: Props) {
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
-  const cancelRef = useRef<HTMLButtonElement>(null);
 
   const isControlled = controlledOpen !== undefined;
   const [internalOpen, setInternalOpen] = useState(false);
@@ -82,18 +77,6 @@ export function ItemChipSelector({
     handleOpenChange(false);
   };
 
-  useFocusTrap({
-    isActive: open,
-    containerRef: panelRef,
-    defaultFocusRef: cancelRef,
-    onEscapePress: handleCancel,
-  });
-
-  const getDisplayLabels = () => {
-    // Always show all labels; selection is indicated by visual styling
-    return labels;
-  };
-
   const handleToggle = (label: string) => {
     if (mode === "single") {
       setSelected([label]);
@@ -114,8 +97,6 @@ export function ItemChipSelector({
     }
   };
 
-  const displayLabels = getDisplayLabels();
-
   return (
     <>
       {triggerLabel && !isControlled && (
@@ -130,62 +111,38 @@ export function ItemChipSelector({
         </button>
       )}
 
-      {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 px-6"
-          role="presentation"
-          onClick={handleCancel}
-        >
-          <div
-            ref={panelRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="chip-selector-title"
-            className="w-full max-w-[28rem] rounded-md border border-border bg-surface p-5 shadow-none"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <h2 id="chip-selector-title" className="m-0 text-[1.05rem] font-[550] text-foreground">
-              {sheetTitle}
-            </h2>
-
-            {busy ? (
-              <div className="flex items-center justify-center py-8">
-                <SpinnerIcon className="w-6 h-6 animate-spin text-accent" />
-              </div>
-            ) : (
-              <div className="mt-4 flex flex-wrap gap-2">
-                {displayLabels.map((label) => {
-                  const isSelected = selected.includes(label);
-                  return (
-                    <button
-                      key={label}
-                      type="button"
-                      onClick={() => handleToggle(label)}
-                      disabled={busy}
-                      className={isSelected ? `${chipClassName.accent} cursor-pointer hover:bg-accent/10 transition-colors disabled:cursor-not-allowed disabled:opacity-60` : `${chipClassName.muted} cursor-pointer hover:bg-border/10 transition-colors disabled:cursor-not-allowed disabled:opacity-60`}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            <div className="mt-5 flex flex-wrap justify-end gap-2">
-              <GhostButton ref={cancelRef} onClick={handleCancel} disabled={busy}>
-                {cancelLabel}
-              </GhostButton>
-              <PrimaryButton
-                onClick={handleConfirm}
-                disabled={busy || selected.length === 0}
-                loading={busy}
-              >
-                {confirmLabel}
-              </PrimaryButton>
-            </div>
+      <ActionDialog
+        open={open}
+        title={sheetTitle}
+        cancelLabel={cancelLabel}
+        confirmLabel={confirmLabel}
+        onOpenChange={handleOpenChange}
+        onConfirm={handleConfirm}
+        pending={busy}
+      >
+        {busy ? (
+          <div className="flex items-center justify-center py-8">
+            <SpinnerIcon className="w-6 h-6 animate-spin text-accent" />
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {labels.map((label) => {
+              const isSelected = selected.includes(label);
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => handleToggle(label)}
+                  disabled={busy}
+                  className={isSelected ? `${chipClassName.accent} cursor-pointer hover:bg-accent/10 transition-colors disabled:cursor-not-allowed disabled:opacity-60` : `${chipClassName.muted} cursor-pointer hover:bg-border/10 transition-colors disabled:cursor-not-allowed disabled:opacity-60`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </ActionDialog>
     </>
   );
 }
