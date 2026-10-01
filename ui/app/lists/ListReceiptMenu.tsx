@@ -216,7 +216,7 @@ export function ListReceiptMenu({
         onOpenChange={setMoveItemOpen}
         labels={lists.map((l) => l.name)}
         mode="single"
-        defaultLabel={lists[0]?.name ?? ""}
+        defaultLabel=""
         onChange={handleMoveItem}
         cancelLabel={messages.cancelLabel}
         confirmLabel={messages.moveItemConfirmAction}

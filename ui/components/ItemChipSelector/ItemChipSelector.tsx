@@ -72,11 +72,7 @@ export function ItemChipSelector({
   const [busy, setBusy] = useState(false);
 
   const getDisplayLabels = () => {
-    if (mode === "single") {
-      // Single select: show all except current
-      return labels.filter((label) => label !== selected[0]);
-    }
-    // Multiple: show all
+    // Always show all labels; selection is indicated by visual styling
     return labels;
   };
 
@@ -145,9 +141,7 @@ export function ItemChipSelector({
                     type="button"
                     onClick={() => handleToggle(label)}
                     disabled={busy}
-                    className={`${chipClassName.accent} cursor-pointer hover:bg-accent/10 transition-colors ${
-                      isSelected ? "ring-2 ring-accent ring-offset-1" : ""
-                    } disabled:cursor-not-allowed disabled:opacity-60`}
+                    className={isSelected ? `${chipClassName.accent} cursor-pointer hover:bg-accent/10 transition-colors disabled:cursor-not-allowed disabled:opacity-60` : `${chipClassName.muted} cursor-pointer hover:bg-border/10 transition-colors disabled:cursor-not-allowed disabled:opacity-60`}
                   >
                     {label}
                   </button>
