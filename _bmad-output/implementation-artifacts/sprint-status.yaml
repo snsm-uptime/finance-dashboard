@@ -1,5 +1,5 @@
 # generated: 2026-08-03T22:46:31
-# last_updated: 2026-09-05 (story 9-3: archive toggle cards panel, review)
+# last_updated: 2026-09-30 (story 5-10: ready-for-dev; 4-17 ready-for-dev; 12-1 ready-for-dev, epic-12 in-progress)
 
 # project: finance-dashboard
 # project_key: NOKEY
@@ -131,6 +131,9 @@ development_status:
   4-14-resume-entry-point-session-completion-summary: done
   4-15-new-badge-on-freshly-imported-rows: done
   4-16-multi-file-upload-pending-queue-dedup: done
+  # Added 2026-09-30 (Sprint Change Proposal 2026-09-30): list-scoped direct-import
+  # entry point, FR-58. Part of the same batch as 5-10 and Epic 12.
+  4-17-import-statement-directly-into-this-list: ready-for-dev
   epic-4-retrospective: optional
 
   epic-5: in-progress
@@ -148,6 +151,10 @@ development_status:
   5-7-wire-incomplete-balance-disclosure-on-strip: done
   5-8-settle-up-simplify-suggested-transfers: done # 5.8 title 2026-08-26: pairwise grid + group plan + copy + payable-clean settle
   5-9-statement-cycle-period-selector: done
+  # Added 2026-09-30 (Sprint Change Proposal 2026-09-30): single-item move alongside
+  # 5-3's whole-statement reassign, FR-56. Part of the same batch as 4-17 and Epic 12;
+  # Epic 12's 12-2 depends on this story's move action.
+  5-10-move-a-single-item-to-another-list: ready-for-dev
   epic-5-retrospective: optional
 
   # Epic 6 — individual-list (post-v1). Do not start until Epic 5 is done unless product pulls it.
@@ -199,6 +206,14 @@ development_status:
   # UI" boundary. Client-only.
   epic-11: in-progress
   11-1-avatar-crop-zoom-control: review
+
+  # Epic 12 — Statement browsing & retouch. Sprint Change Proposal 2026-09-30, refined
+  # via bmad-ux pass (ux-designs/ux-finance-dashboard-2026-09-30/). Cross-references
+  # 4-17 and 5-10 from the same batch; 12-2 depends on 5-10 being done first.
+  epic-12: in-progress
+  12-1-statements-tab-statement-list-surface: ready-for-dev
+  12-2-retouch-a-committed-statements-items: backlog
+  epic-12-retrospective: optional
 
 action_items:
   - epic: 1

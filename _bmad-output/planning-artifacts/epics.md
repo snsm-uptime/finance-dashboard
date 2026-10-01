@@ -108,6 +108,12 @@ FR-44: v1 balances are computed from per-transaction share allocations and payer
 
 FR-45: Only included line types (purchases and classified purchase reversals) contribute to shared settle-up; excluded types may be stored but do not affect who owes whom; posted-date and period boundaries use America/Costa_Rica.
 
+FR-56: A list member can move a single ledger item (not the whole statement) to another list they belong to; the item keeps its originating statement_id/batch_id, and split allocations follow destination-list default rules unless item-level overrides already exist (same continuity rule as FR-29). *(New 2026-09-30 — Sprint Change Proposal 2026-09-30.)*
+
+FR-57: A user can browse their previously-imported bank statements, grouped by card, from a dedicated tab; opening one shows a period summary before drilling into a retouch list where committed items can be edited, deleted, or moved individually. *(New 2026-09-30 — Sprint Change Proposal 2026-09-30.)*
+
+FR-58: From a list's detail page, a user can start an import whose destination list is that page's list, without going through card-routing or default-list resolution; the statement still passes through the normal review flow (parse, comparison, individual/bulk review) unchanged. *(New 2026-09-30 — Sprint Change Proposal 2026-09-30.)*
+
 ### NonFunctional Requirements
 
 NFR-1: Passwords are hashed with a modern adaptive algorithm; plaintext passwords are never stored or logged.
@@ -265,6 +271,9 @@ FR-47: Epic 6 (post-v1) — Solo spend-by-origin for statement-cycle period
 FR-48: Epic 6 (post-v1) — Solo budgets tab, caps, detail + related history
 FR-49: Epic 6 (post-v1) — Budget attribution manual + rules (later in epic); loans out
 FR-50: Epic 6 (post-v1) — Second member flips chrome to shared settle
+FR-56: Epic 5 — Move a single item to another list (new 2026-09-30)
+FR-57: Epic 12 — Statement browsing & retouch (new 2026-09-30)
+FR-58: Epic 4 — Import statement directly into this list (new 2026-09-30)
 
 ## Epic List
 
@@ -298,7 +307,7 @@ Migrate `ui` from CSS Modules to Tailwind-first co-located styles, with SCSS onl
 
 ### Epic 4: Statement upload & review
 Users register cards by IBAN, set optional manual-expense origin (card / Cash / blank) with a no-origin filter, upload PDFs, detect/split/parse via adapters (BAC credit-card acceptance + Promerica stub), choose routing/review modes, commit with dedup summary. Reuses Epic 3 payer + Soft-Ledger strip — exit = commit updates same settle strip.
-**FRs covered:** FR-11, FR-12, FR-13, FR-14, FR-15, FR-16, FR-17, FR-18, FR-19 (import), FR-20, FR-21 (origin + no-origin filter), FR-31, FR-32, FR-33, FR-34, FR-35, FR-36, FR-37
+**FRs covered:** FR-11, FR-12, FR-13, FR-14, FR-15, FR-16, FR-17, FR-18, FR-19 (import), FR-20, FR-21 (origin + no-origin filter), FR-31, FR-32, FR-33, FR-34, FR-35, FR-36, FR-37, FR-58 (new 2026-09-30)
 **Demo gate:** J1 climax on Soft-Ledger strip
 **Sequencing note:** Do not start Epic 4 until Epic 3.5 demo gate passes.
 **Scope change (2026-08-20):** Stories 4.10, 4.11, 4.13, 4.14 and 4.15 replace Story 4.8's statement-level individual review with per-transaction routing; Story 4.12's ACs are amended by the same change. FR-17, FR-18, AD-4 and AD-9 are amended by Sprint Change Proposal 2026-08-20; 4.8 stays `done` and is annotated as superseded. AD-4's batch boundary must be amended before 4.10 starts.
@@ -321,10 +330,13 @@ Users register cards by IBAN, set optional manual-expense origin (card / Cash / 
 | 4.16 | **4.15** | "New" badge on freshly imported rows |
 | 4.10 | **4.16** | Multi-file upload |
 
+**Addition (2026-09-30):** Story **4.17** (Import statement directly into this list) added — a list-scoped shortcut into the existing upload/review flow (FR-58, new 2026-09-30). Sprint Change Proposal 2026-09-30.
+
 ### Epic 5: Import resilience (then settle polish)
 Ordered: parse failure/quarantine/hand-fix → wire FR-43 on strip → reassign/rollback → same-price + aliases → then settle polish (FR-41) + statement-cycle selector (FR-39).
-**FRs covered:** FR-22, FR-23, FR-24, FR-25, FR-26, FR-27, FR-28, FR-29, FR-30, FR-39, FR-41, FR-43 (wire)
+**FRs covered:** FR-22, FR-23, FR-24, FR-25, FR-26, FR-27, FR-28, FR-29, FR-30, FR-39, FR-41, FR-43 (wire), FR-56 (new 2026-09-30)
 **Demo gate:** J3 + J7 before simplify stories
+**Addition (2026-09-30):** Story **5.5** (Move a single item to another list) added alongside Story 5.3's whole-statement reassign — FR-56, new 2026-09-30. Sprint Change Proposal 2026-09-30.
 
 ### Epic 6: individual-list (post-v1)
 When a list has one member, list detail is a personal spend surface (origin totals, then budgets)—not settle-up. Same list entity; chrome follows member count.
@@ -347,6 +359,12 @@ Extends the archive box-icon toggle pattern (Story 7.6) to lists and cards: an o
 Renegotiates the frozen profile-photo spec's "no cropping UI" boundary: adds `react-easy-crop` so the user positions/zooms their photo before saving, at both upload entry points (Account Menu, Alias Setup). Client-only, no API change.
 **FRs covered:** none new
 **Demo gate:** uploading a photo from either entry point opens a crop/zoom control before saving; saved avatar reflects the chosen framing
+
+### Epic 12: Statement browsing & retouch
+Adds a persistent way to look back at previously-imported bank statements after their one-time upload/review flow is done, and retouch (edit/delete/move) their committed items via a plain, accessible list — reusing only the identification and title-edit-in-place pieces of the import review experience, not its swipe interaction. UX spines: `ux-designs/ux-finance-dashboard-2026-09-30/`.
+**FRs covered:** FR-57 (new 2026-09-30)
+**Demo gate:** from the TabBar, a user opens a past statement's period summary, views its items, and edits/moves/deletes one of them; every list involved reflects the change immediately
+**Sequencing note:** independent of other epics; benefits from Story 5.5 (single-item move) existing first, since Story 12.2 reuses that same move action — new 2026-09-30, Sprint Change Proposal 2026-09-30.
 
 ## Epic 1: Accounts & personal workspace
 
@@ -1667,6 +1685,28 @@ So that I can queue several statements in one pass instead of uploading them one
 **Then** each file's detect/split/parse still runs synchronously in-process, one file at a time — this story only shapes the API/UI boundary (one upload call per file, independent per-file status) so that a later move to concurrent/background processing per file is additive
 **And** actual concurrent or background ("separate threads") processing is explicitly out of scope for this story and requires its own architecture decision (correct-course) before being adopted — it is not decided or implemented here
 
+### Story 4.17: Import statement directly into this list
+
+*(New 2026-09-30 — Sprint Change Proposal 2026-09-30, refined via `bmad-ux` pass at `ux-designs/ux-finance-dashboard-2026-09-30/`.)*
+
+As a list member,
+I want to start a statement import right from a list's detail page,
+So that I don't have to rely on card-routing or a default-list setting to land a statement where I already know it belongs.
+
+**Acceptance Criteria:**
+
+**Given** I am viewing a list's detail page
+**When** I activate its "Import statement" entry point
+**Then** the existing upload/review flow opens (parse, comparison, individual/bulk review) exactly as it does from the global Upload entry — no destination-list picker step is shown or needed, because this list is already the destination (FR-58)
+
+**Given** a statement imported this way
+**When** parse failures, same-price conflicts, or quarantine would normally apply
+**Then** they apply identically to today's behavior — this entry point changes only how the destination list is chosen, nothing about review/safety behavior
+
+**Given** the list detail page's "Import statement" control
+**When** a screen-reader user encounters it alongside the app's global Upload control
+**Then** its accessible name names the destination list (e.g. "Import statement to {list name}"), distinct from the global Upload button's label
+
 ## Epic 5: Import resilience (then settle polish)
 
 Ordered: parse failure → dismiss → reassign/rollback → same-price + aliases → wire FR-43 on strip → then settle polish (FR-41 pairwise grid, simplify group plan, copy, payable-clean settle) + statement-cycle selector (FR-39).
@@ -2001,6 +2041,34 @@ So that settle-up matches the statement window I care about.
 **Then** chrome is localized; card labels remain free text (UX-DR18)
 
 **Deferral (2026-08-26):** Cycle selection is **shared-expenses** in v1. Epic 6.2 reuses the same period for solo spend-by-origin.
+
+### Story 5.10: Move a single item to another list
+
+*(New 2026-09-30 — Sprint Change Proposal 2026-09-30, refined via `bmad-ux` pass at `ux-designs/ux-finance-dashboard-2026-09-30/`.)*
+
+As a list member,
+I want to move one ledger item to a different list I belong to,
+So that a single mis-filed transaction can be corrected without disturbing the rest of its bank statement's items.
+
+**Acceptance Criteria:**
+
+**Given** a committed ledger item on list A that originated from a statement (or was entered by hand)
+**When** I move it to list B that I belong to
+**Then** only that item moves — its statement_id and batch_id are unchanged, and every other item from the same statement/batch stays on list A
+**And** balances on both lists reflect the move (FR-56)
+**And** share allocations on the moved item follow list B's default split rules unless an item-level override already exists (FR-56, FR-9/10 continuity)
+
+**Given** I am not a member of the destination list
+**When** I attempt the move
+**Then** the action is rejected (NFR-3), mirroring Story 5.3's ACL check
+
+**Given** the list detail page's per-row menu, on a row that belongs to a statement
+**When** I open it
+**Then** I see two distinct actions — "Move this item" and "Move whole statement" — each with its own confirm copy naming what will move, and each with a distinct, fully-worded `aria-label` (never a shared "Move") so they're distinguishable to assistive tech, not just visually — the existing statement-reassign action (Story 5.3) is not replaced, only joined
+
+**Given** `ListReceiptMenu.tsx`'s messages today
+**When** this story is implemented
+**Then** `moveItemLabel` is added as a sibling of the existing `moveStatementLabel`; `moveStatementLabel`'s flow (confirm copy, picker, `reassignStatement` call) is unchanged
 
 ## Epic 6: individual-list (post-v1)
 
@@ -2717,4 +2785,74 @@ so that my avatar isn't limited to an automatic center-crop that may cut off the
 **Given** both Account Menu and Alias Setup need the same crop sheet
 **When** this story is implemented
 **Then** the crop `Sheet` + `Cropper` wiring is built once as a shared component (not duplicated in both call sites) and imported by both `AccountMenu.tsx` and `AliasSetupForm.tsx`
+
+## Epic 12: Statement browsing & retouch
+
+*(New 2026-09-30 — Sprint Change Proposal 2026-09-30, refined via `bmad-ux` pass; spines at `ux-designs/ux-finance-dashboard-2026-09-30/DESIGN.md` and `.../EXPERIENCE.md`, both `status: final`.)*
+
+Adds a persistent way to look back at previously-imported bank statements after their one-time upload/review flow is done, and retouch (edit/delete/move) their committed items via a plain, accessible list — reusing only the identification and title-edit-in-place pieces of the import review experience, not its swipe interaction.
+**FRs covered:** FR-57 (new 2026-09-30)
+**Demo gate:** from the TabBar, a user opens a past statement's period summary, views its items, and edits/moves/deletes one of them; every list involved reflects the change immediately
+**Sequencing note:** independent of other epics; benefits from Story 5.10 (single-item move) existing first, since Story 12.2 reuses that same move action.
+**Cross-reference (2026-09-30):** Stories 5.10 (Epic 5 — Move a single item to another list) and 4.17 (Epic 4 — Import statement directly into this list) were proposed together with this epic in the same Sprint Change Proposal (2026-09-30) and ship as one backlog batch with it, even though they live under Epic 4/5 for FR-coverage/sequencing coherence. Track all three (5.10, 4.17, 12.1, 12.2) together for this batch's backlog visibility.
+
+### Story 12.1: Statements tab + statement list surface
+
+As a user,
+I want a "Statements" tab in the app's bottom navigation,
+So that I can find and revisit any bank statement I've previously imported.
+
+**Acceptance Criteria:**
+
+**Given** the app's `TabBar`
+**When** it renders for an authenticated user
+**Then** a new "Statements" entry is visible alongside Home/Budgets/Cards, backed by a new icon in the `FileImportIcon` visual family (see DESIGN.md)
+
+**Given** the Statements tab
+**When** it loads
+**Then** statements the user has visibility into are grouped by card/IBAN (mirroring the Cards panel's own grouping), most-recent period first within each group; statements with no card get their own "No card"/"Manual entries" trailing group — each group rendered as a real heading (e.g. `<h2>`), not just a visual section break, so a screen-reader user can jump between groups
+
+**Given** a period row within a group
+**When** I select it
+**Then** a period-summary screen opens (period dates, item count, destination list(s), a "View items" action) — not a direct jump into the retouch list
+
+**Given** the period summary screen
+**When** I activate "View items"
+**Then** the retouch view (Story 12.2) opens for that statement, and focus moves to the retouch list's heading (or first row); backing out of the retouch list returns focus to the "View items" trigger on the period summary card
+
+**Given** no statements exist yet for the user
+**When** the Statements tab loads
+**Then** an empty state is shown with a short hint + link to `/upload`, matching the tone of other first-run empty states in the app — never a bare blank screen
+
+### Story 12.2: Retouch a committed statement's items
+
+As a user,
+I want to revisit a statement I already committed and adjust its items,
+So that I can fix mistakes noticed after the fact without re-uploading.
+
+**Acceptance Criteria:**
+
+**Given** the retouch view opened from a period summary
+**When** it renders
+**Then** the statement's committed items show as a plain, scrollable list using the existing `ReceiptRow` shell — not the four-direction swipe card from `IndividualReviewPanel`; no swipe gesture or directional keyboard legend is introduced
+
+**Given** a row in the retouch list
+**When** I open its menu
+**Then** I see edit (existing `EditExpenseForm` path), delete (existing confirm-delete path), and move-to-another-list actions — the move action reuses Story 5.10's "Move this item" label and confirm copy verbatim, not a third distinct move string
+
+**Given** the statement's card carries an IBAN needing identification/registration
+**When** the retouch view renders
+**Then** it reuses `IndividualReviewPanel`'s card-identification banner and title-edit-in-place interaction for that purpose — these are the only two pieces of `IndividualReviewPanel` reused here
+
+**Given** I remove a row from the retouch list (via move or delete)
+**When** the removal completes
+**Then** a polite live-region announcement fires on the retouch list itself (e.g. "Item moved to {list}" / "Item deleted"), independent of the period summary's own item-count update
+
+**Given** a statement's retouch list reaches zero items
+**When** I view its period summary
+**Then** the summary still shows (period, zero item count, destination list) rather than disappearing — the statement's history remains inspectable even with nothing left in it
+
+**Given** an edit, delete, or move performed from the retouch view
+**When** it completes
+**Then** every list's Soft-Ledger balance affected updates immediately, via the same balance path as Epic 3/4/5 — no parallel settle math is introduced for this surface
 
