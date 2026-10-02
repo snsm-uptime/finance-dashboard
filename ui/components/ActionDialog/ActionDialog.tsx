@@ -5,6 +5,7 @@ import { useRef, type ReactNode } from "react";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { GhostButton } from "@/components/soft-ledger/GhostButton";
 import { PrimaryButton } from "@/components/soft-ledger/PrimaryButton";
+import { SpinnerIcon } from "@/app/icons";
 
 export type ActionDialogProps = {
   /** Whether the dialog is open */
@@ -76,7 +77,7 @@ export function ActionDialog({
           {title}
         </h2>
         <div className="mt-4">{children}</div>
-        <div className="mt-5 flex flex-wrap justify-end gap-2">
+        <div className="mt-5 flex flex-wrap justify-end gap-2" style={{ visibility: pending ? "hidden" : "visible" }}>
           <GhostButton
             ref={cancelRef}
             onClick={() => onOpenChange(false)}
@@ -88,6 +89,11 @@ export function ActionDialog({
             {confirmLabel}
           </PrimaryButton>
         </div>
+        {pending && (
+          <div className="mt-5 flex justify-center">
+            <SpinnerIcon className="size-5 text-muted" />
+          </div>
+        )}
       </div>
     </div>
   );
