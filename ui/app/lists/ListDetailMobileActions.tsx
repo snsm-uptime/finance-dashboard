@@ -39,9 +39,10 @@ type Props = {
 };
 
 /**
- * Mobile-only list actions. Renders as a ghost cluster for BalanceStrip's
- * right-edge slot (no FAB, so receipt-row menus stay tappable). Hidden from
- * md up — sidebar owns the same forms there. Sheets portal to document.
+ * List actions cluster. Renders as a ghost cluster for BalanceStrip's
+ * right-edge slot (no FAB, so receipt-row menus stay tappable). On mobile,
+ * shows all actions via sheets. On md+, hides add-expense (sidebar owns that
+ * form) but keeps split, invite, and import buttons. Sheets portal to document.
  */
 export function ListDetailMobileActions({
   listId,
@@ -72,9 +73,9 @@ export function ListDetailMobileActions({
   const [expenseCanSubmit, setExpenseCanSubmit] = useState(false);
   const [splitCanSave, setSplitCanSave] = useState(false);
 
-  if (!canAddExpense && !canInvite) return null;
-
   const canShowSplit = isOwner && defaultSplit && members.length > 1;
+  if (!canAddExpense && !canInvite && !canShowSplit) return null;
+
   const parts = [];
   if (canAddExpense) parts.push(addExpenseAria);
   if (canShowSplit) parts.push(splitMessages.defaultSplitTitle);
@@ -94,6 +95,7 @@ export function ListDetailMobileActions({
             aria-expanded={sheet === "expense"}
             onClick={() => setSheet("expense")}
             icon={<PlusIcon className={styles.icon} />}
+            className={styles.addExpenseButton}
           />
         ) : null}
         {canShowSplit ? (
