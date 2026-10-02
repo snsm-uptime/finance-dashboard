@@ -2240,4 +2240,64 @@ describe("IndividualReviewPanel", () => {
     expect(container.textContent).toContain("Import complete");
     expect(container.textContent).not.toContain("All caught up for now.");
   });
+
+  describe("Task 3: Override review-routing default-list fallback with boundListId", () => {
+    it("uses boundListId as defaultListId when provided (AC #2)", async () => {
+      fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
+      fetchLists.mockResolvedValue({
+        ok: true,
+        lists: [{ id: "bound-list", name: "Bound List", owner_id: "u1", role: "owner" }],
+      });
+      assignRow.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
+
+      await act(async () => {
+        root.render(<IndividualReviewPanel sessionId="s1" boundListId="bound-list" />);
+      });
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      await act(async () => {
+        window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+      });
+      await waitOutThrow();
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(assignRow).toHaveBeenCalledWith("s1", "r1", "bound-list", expect.anything());
+    });
+
+    it("prefers boundListId over /api/auth/me default when both are present (AC #2)", async () => {
+      fetchImportSession.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
+      fetchLists.mockResolvedValue({
+        ok: true,
+        lists: [
+          { id: "bound-list", name: "Bound List", owner_id: "u1", role: "owner" },
+          { id: "account-default", name: "Account Default", owner_id: "u1", role: "owner" },
+        ],
+      });
+      stubAuthMeFetch("account-default");
+      assignRow.mockResolvedValue({ ok: true, session: SESSION_ONE_PENDING });
+
+      await act(async () => {
+        root.render(<IndividualReviewPanel sessionId="s1" boundListId="bound-list" />);
+      });
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      await act(async () => {
+        window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+      });
+      await waitOutThrow();
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(assignRow).toHaveBeenCalledWith("s1", "r1", "bound-list", expect.anything());
+    });
+  });
 });

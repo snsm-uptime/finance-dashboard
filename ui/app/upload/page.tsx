@@ -41,12 +41,19 @@ async function fetchActiveImportSessionOnServer(): Promise<ImportSession | null>
 /** Upload PDF → detect/split → Import Session (Story 4.6). Auth-gated only —
  * upload is a global entry point (EXPERIENCE.md), not list-scoped, so no
  * alias gate here (mirrors api's import_sessions router). */
-export default async function UploadPage() {
+type UploadPageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default async function UploadPage({ searchParams }: UploadPageProps) {
   const session = await fetchSession();
   if (!session) {
     redirect("/sign-in?returnTo=/upload");
   }
 
+  const params = await searchParams;
+  const listId = typeof params.listId === "string" ? params.listId : undefined;
+
   const initialSession = await fetchActiveImportSessionOnServer();
-  return <UploadPanel initialSession={initialSession} />;
+  return <UploadPanel initialSession={initialSession} boundListId={listId} />;
 }

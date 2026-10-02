@@ -13,6 +13,7 @@ import { SessionReviewPanel } from "../../SessionReviewPanel";
 
 type SessionReviewRouteProps = {
   sessionId: string;
+  boundListId?: string;
 };
 
 /**
@@ -22,7 +23,7 @@ type SessionReviewRouteProps = {
  * (Story 4.19) as a fresh upload instead of jumping straight to individual
  * review.
  */
-export function SessionReviewRoute({ sessionId }: SessionReviewRouteProps) {
+export function SessionReviewRoute({ sessionId, boundListId }: SessionReviewRouteProps) {
   const { locale } = usePreferences();
   const t = uploadCopy(locale);
   const router = useRouter();
@@ -96,6 +97,7 @@ export function SessionReviewRoute({ sessionId }: SessionReviewRouteProps) {
   return (
     <SessionReviewPanel
       session={session}
+      boundListId={boundListId}
       onSessionChanged={setSession}
       onDiscarded={() => router.push("/upload")}
     />

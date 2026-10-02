@@ -64,6 +64,7 @@ function sessionAutoRoute(
 
 type SessionReviewPanelProps = {
   session: ImportSession;
+  boundListId?: string;
   onSessionChanged?: (session: ImportSession) => void;
   onDiscarded?: () => void;
 };
@@ -72,6 +73,7 @@ const statementCardClass = "relative flex w-full max-w-[26rem] flex-col items-st
 
 export function SessionReviewPanel({
   session,
+  boundListId,
   onSessionChanged,
   onDiscarded,
 }: SessionReviewPanelProps) {
@@ -162,7 +164,11 @@ export function SessionReviewPanel({
   useEffect(() => {
     if (autoRoute.kind !== "fixed") {
       if (autoRoute.kind === "review") {
-        router.replace(`/upload/review/${encodeURIComponent(session.id)}`);
+        const url = new URL(`/upload/review/${encodeURIComponent(session.id)}`, window.location.origin);
+        if (boundListId) {
+          url.searchParams.set("listId", boundListId);
+        }
+        router.replace(url.pathname + url.search);
       }
       return;
     }
@@ -183,14 +189,20 @@ export function SessionReviewPanel({
           if (!result.ok) break outer;
         }
       }
-      if (!cancelled) router.replace(`/upload/review/${encodeURIComponent(sessionId)}`);
+      if (!cancelled) {
+        const url = new URL(`/upload/review/${encodeURIComponent(sessionId)}`, window.location.origin);
+        if (boundListId) {
+          url.searchParams.set("listId", boundListId);
+        }
+        router.replace(url.pathname + url.search);
+      }
     }
     void autoAssignToFixedList();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoRoute.kind, autoRoute.kind === "fixed" ? autoRoute.listId : null, session.id]);
+  }, [autoRoute.kind, autoRoute.kind === "fixed" ? autoRoute.listId : null, session.id, boundListId]);
 
   const discard = useFormSubmission(async (sessionId: string) => {
     const result = await discardSession(sessionId, messages);

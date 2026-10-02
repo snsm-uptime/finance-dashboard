@@ -133,7 +133,7 @@ development_status:
   4-16-multi-file-upload-pending-queue-dedup: done
   # Added 2026-09-30 (Sprint Change Proposal 2026-09-30): list-scoped direct-import
   # entry point, FR-58. Part of the same batch as 5-10 and Epic 12.
-  4-17-import-statement-directly-into-this-list: ready-for-dev
+  4-17-import-statement-directly-into-this-list: review
   epic-4-retrospective: optional
 
   epic-5: in-progress

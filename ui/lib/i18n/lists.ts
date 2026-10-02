@@ -226,6 +226,7 @@ export const listsMessages = {
     listsArchivedEmpty: "No archived lists.",
     listsArchive: "Archive",
     listsUnarchive: "Unarchive",
+    importStatementAria: "Import statement to {list}",
   },
   es: {
     title: "Listas",
@@ -453,6 +454,7 @@ export const listsMessages = {
     listsArchivedEmpty: "No hay listas archivadas.",
     listsArchive: "Archivar",
     listsUnarchive: "Desarchivar",
+    importStatementAria: "Importar estado a {list}",
   },
 } as const;
 

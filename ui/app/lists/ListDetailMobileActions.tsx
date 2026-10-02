@@ -5,8 +5,9 @@ import {
   useRef,
   useState,
 } from "react";
+import Link from "next/link";
 
-import { PlusIcon, PieChartIcon, ShareIcon } from "@/app/icons";
+import { PlusIcon, PieChartIcon, ShareIcon, UploadIcon } from "@/app/icons";
 import type { InviteFormMessages } from "./InviteForm";
 import { InviteForm } from "./InviteForm";
 import type { ManualExpenseMessages } from "./ManualExpenseForm";
@@ -34,6 +35,7 @@ type Props = {
   splitMessages: DefaultSplitMessages;
   addExpenseAria: string;
   inviteAria: string;
+  importStatementAria: string;
   closeLabel: string;
 };
 
@@ -55,6 +57,7 @@ export function ListDetailMobileActions({
   splitMessages,
   addExpenseAria,
   inviteAria,
+  importStatementAria,
   closeLabel,
 }: Props) {
   const [sheet, setSheet] = useState<SheetKind>(null);
@@ -63,6 +66,7 @@ export function ListDetailMobileActions({
   const expenseButtonRef = useRef<HTMLButtonElement>(null);
   const splitButtonRef = useRef<HTMLButtonElement>(null);
   const inviteButtonRef = useRef<HTMLButtonElement>(null);
+  const importStatementLinkRef = useRef<HTMLAnchorElement>(null);
 
   const expenseFormRef = useRef<HTMLFormElement>(null);
   const splitSaveRequestRef = useRef<() => void>(() => {});
@@ -72,14 +76,12 @@ export function ListDetailMobileActions({
   if (!canAddExpense && !canInvite) return null;
 
   const canShowSplit = isOwner && defaultSplit && members.length > 1;
-  const groupLabel =
-    canAddExpense && canInvite && canShowSplit
-      ? `${addExpenseAria}, ${splitMessages.defaultSplitTitle}, ${inviteAria}`
-      : canAddExpense && canInvite
-        ? `${addExpenseAria}, ${inviteAria}`
-        : canAddExpense
-          ? addExpenseAria
-          : inviteAria;
+  const parts = [];
+  if (canAddExpense) parts.push(addExpenseAria);
+  if (canShowSplit) parts.push(splitMessages.defaultSplitTitle);
+  if (canInvite) parts.push(inviteAria);
+  parts.push(importStatementAria);
+  const groupLabel = parts.join(", ");
 
   return (
     <div className={styles.chrome}>
@@ -117,6 +119,20 @@ export function ListDetailMobileActions({
             icon={<ShareIcon className={styles.icon} />}
           />
         ) : null}
+        <Link
+          ref={importStatementLinkRef}
+          href={`/upload?listId=${encodeURIComponent(listId)}`}
+          passHref
+          legacyBehavior
+        >
+          <IconButton
+            as="a"
+            type="button"
+            variant="ghost"
+            label={importStatementAria}
+            icon={<UploadIcon className={styles.icon} />}
+          />
+        </Link>
       </div>
 
       {canAddExpense ? (
