@@ -124,7 +124,7 @@ describe("loadImage", () => {
     // never fire on their own — fire `onload` manually once `src` is set.
     const fakeImg = document.createElement("img");
     Object.defineProperty(fakeImg, "src", {
-      set(_value: string) {
+      set() {
         queueMicrotask(() => fakeImg.onload?.(new Event("load") as unknown as globalThis.Event));
       },
     });
@@ -149,7 +149,7 @@ describe("loadImage", () => {
 
     const fakeImg = document.createElement("img");
     Object.defineProperty(fakeImg, "src", {
-      set(_value: string) {
+      set() {
         queueMicrotask(() => fakeImg.onerror?.(new Event("error") as unknown as string | globalThis.Event));
       },
     });

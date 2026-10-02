@@ -34,7 +34,7 @@ vi.mock("@/components/IconButtonPopup/IconButtonPopup.module.scss", () => ({
 }));
 
 vi.mock("@/app/upload/DiscardConfirmDialog", () => ({
-  DiscardConfirmDialog: ({ title, body, confirmLabel }: any) => (
+  DiscardConfirmDialog: ({ title, body, confirmLabel }: { title: string; body: string; confirmLabel: string }) => (
     <dialog>
       <h2>{title}</h2>
       <p>{body}</p>

@@ -151,7 +151,7 @@ describe("AccountMenu", () => {
 
     const fakeImg = document.createElement("img");
     Object.defineProperty(fakeImg, "src", {
-      set(_value: string) {
+      set() {
         queueMicrotask(() => fakeImg.onload?.(new Event("load")));
       },
     });

@@ -69,14 +69,6 @@ export function ItemChipSelector({
     }
   };
 
-  const handleCancel = () => {
-    // Reset to default on cancel
-    setSelected(
-      mode === "single" ? [defaultLabel as string] : (defaultLabel as string[])
-    );
-    handleOpenChange(false);
-  };
-
   const handleToggle = (label: string) => {
     if (mode === "single") {
       setSelected([label]);
