@@ -71,11 +71,15 @@ async function hashFile(file: File): Promise<{ contentHash?: string; fallbackKey
   }
 }
 
-function reviewHrefFor(entry: QueueEntry): string | null {
+function reviewHrefFor(entry: QueueEntry, boundListId?: string): string | null {
   const sessionId =
     entry.state === "staged" && entry.session ? entry.session.id : entry.duplicateSessionId;
   if (!sessionId) return null;
-  return `/upload/session/${encodeURIComponent(sessionId)}`;
+  const url = new URL(`/upload/session/${encodeURIComponent(sessionId)}`, window.location.origin);
+  if (boundListId) {
+    url.searchParams.set("listId", boundListId);
+  }
+  return url.pathname + url.search;
 }
 
 function isInQueueDuplicate(
@@ -150,7 +154,12 @@ function reconcileWithLiveActive(queue: QueueEntry[], live: ImportSession | null
   return next;
 }
 
-export function UploadPanel({ initialSession = null }: { initialSession?: ImportSession | null }) {
+type UploadPanelProps = {
+  initialSession?: ImportSession | null;
+  boundListId?: string;
+};
+
+export function UploadPanel({ initialSession = null, boundListId }: UploadPanelProps) {
   const { locale, me } = usePreferences();
   const t = uploadCopy(locale);
   const inputId = useId();
@@ -377,7 +386,7 @@ export function UploadPanel({ initialSession = null }: { initialSession?: Import
           {queue.length > 0 ? (
             <ul className="m-0 p-0 list-none flex flex-col gap-2">
               {queue.map((entry) => {
-                const reviewHref = reviewHrefFor(entry);
+                const reviewHref = reviewHrefFor(entry, boundListId);
                 const discardSessionId = entry.session?.id ?? entry.duplicateSessionId;
                 return (
                   <li

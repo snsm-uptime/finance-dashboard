@@ -1,13 +1,11 @@
 "use client";
 
-import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
+import Link from "next/link";
+import { forwardRef, type AnchorHTMLAttributes, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { Tooltip } from "@/components/Tooltip";
 import styles from "./IconButton.module.scss";
 
-type Props = Omit<
-  ButtonHTMLAttributes<HTMLButtonElement>,
-  "children" | "aria-label"
-> & {
+type BaseProps = {
   icon: ReactNode;
   label: string;
   /**
@@ -42,19 +40,38 @@ type Props = Omit<
   tooltipDisabled?: boolean;
 };
 
+type ButtonProps = Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  "children" | "aria-label"
+> &
+  BaseProps & {
+    href?: never;
+  };
+
+type LinkProps = Omit<
+  AnchorHTMLAttributes<HTMLAnchorElement>,
+  "children" | "aria-label"
+> &
+  BaseProps & {
+    href: string;
+  };
+
+type Props = ButtonProps | LinkProps;
+
 const baseClasses =
   "inline-flex flex-shrink-0 items-center justify-center m-0 p-1 border-0 rounded-[8px] bg-transparent text-muted cursor-pointer leading-none transition-all duration-150 disabled:text-muted disabled:opacity-45 disabled:cursor-not-allowed";
 const captionLayoutClasses = "flex-col gap-1";
 const fillClasses = "!w-full min-w-0";
 
-export const IconButton = forwardRef<HTMLButtonElement, Props>(
+export const IconButton = forwardRef<
+  HTMLButtonElement | HTMLAnchorElement,
+  Props
+>(
   (
     {
       icon,
       label,
       caption,
-      disabled,
-      onClick,
       variant = "default",
       fill = false,
       active = false,
@@ -75,33 +92,59 @@ export const IconButton = forwardRef<HTMLButtonElement, Props>(
       .filter(Boolean)
       .join(" ");
     const tooltipDisabled =
-      Boolean(disabled) ||
       Boolean(caption) ||
       rest["aria-expanded"] === true ||
       !label ||
       tooltipDisabledProp;
 
+    const content = (
+      <>
+        {icon}
+        {caption ? (
+          <span
+            aria-hidden
+            className="max-w-full text-center font-[550] text-[0.7rem] leading-tight"
+          >
+            {caption}
+          </span>
+        ) : null}
+      </>
+    );
+
+    const isLink = "href" in rest && rest.href;
+
+    if (isLink) {
+      const { href, disabled: _, ...linkProps } = rest as any;
+      return (
+        <Tooltip label={label} disabled={tooltipDisabled}>
+          <Link
+            ref={ref as any}
+            href={href}
+            className={classes}
+            aria-label={label}
+            data-active={active || undefined}
+            {...linkProps}
+          >
+            {content}
+          </Link>
+        </Tooltip>
+      );
+    }
+
+    const { disabled, onClick, ...buttonProps } = rest as any;
     return (
       <Tooltip label={label} disabled={tooltipDisabled}>
         <button
-          ref={ref}
+          ref={ref as any}
           type="button"
           className={classes}
           disabled={disabled}
           aria-label={label}
           onClick={onClick}
           data-active={active || undefined}
-          {...rest}
+          {...buttonProps}
         >
-          {icon}
-          {caption ? (
-            <span
-              aria-hidden
-              className="max-w-full text-center font-[550] text-[0.7rem] leading-tight"
-            >
-              {caption}
-            </span>
-          ) : null}
+          {content}
         </button>
       </Tooltip>
     );

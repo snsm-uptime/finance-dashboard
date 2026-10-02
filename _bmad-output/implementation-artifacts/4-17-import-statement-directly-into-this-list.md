@@ -4,7 +4,7 @@ baseline_commit: 9e1b0fc5a2ddf71205c9831831e5d185283a1a79
 
 # Story 4.17: Import statement directly into this list
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -34,23 +34,23 @@ so that I don't have to rely on card-routing or a default-list setting to land a
 
 ## Tasks / Subtasks
 
-- [ ] Task 1 — List detail entry point (AC: #1, #5)
-  - [ ] Add an "Import statement" control to `ui/app/lists/[listId]/page.tsx` (placement: alongside/near the existing receipts chrome or in `ListDetailMobileActions`/`mobileActions` — follow this file's existing action-slot conventions, do not invent a new chrome pattern)
-  - [ ] Accessible name includes the list's name (`t`-driven i18n string with a `{list}` placeholder — mirror the pattern other list-scoped messages use, e.g. `individualReviewAcceptDefault.replace("{list}", ...)` in `IndividualReviewPanel.tsx:1004`)
-  - [ ] Add EN/ES strings to `ui/lib/i18n/lists.ts` (or wherever `listsMessages`/`uploadCopy` keys for this surface belong — check both, since the control lives on a list page but drives the upload flow)
-- [ ] Task 2 — Carry the bound list through to the upload flow (AC: #1, #6)
-  - [ ] Decide and implement the hand-off mechanism from the list detail page to `/upload` (recommended: a `?listId=` query param read by `ui/app/upload/page.tsx` / `UploadPanel.tsx`, since there is no existing session-scoped "pre-bound destination" field server-side — see Dev Notes)
-  - [ ] Confirm the existing active-session redirect in `/upload` (AC #6) is not bypassed when arriving via this entry point
-- [ ] Task 3 — Override the review-routing default-list fallback (AC: #2, #3)
-  - [ ] In `IndividualReviewPanel.tsx`, `defaultListId` currently comes only from `GET /api/auth/me`'s `default_import_list_id` (lines 424-438) — when this flow carries a bound list id, that bound id must be used as `defaultListId` instead, without touching the account-level setting
-  - [ ] In `SessionReviewPanel.tsx`'s `sessionAutoRoute` (lines 157-193), fixed-list routing (`autoRoute.kind === "fixed"`) must still win over the bound list — only the "review" (undetermined) path's eventual default-list fallback is affected
-- [ ] Task 4 — Accessibility (AC: #5)
-  - [ ] Verify the control's `aria-label` is distinct from the global Upload button's label (check `ui/app/upload/UploadButton.tsx` for its current label) — add a dedicated i18n key, do not reuse the global one
-- [ ] Task 5 — Tests
-  - [ ] Component/unit test for the new entry point rendering with the correct accessible name
-  - [ ] Test that `IndividualReviewPanel` uses a passed-in bound list id over `/api/auth/me`'s default when both are present
-  - [ ] Test that fixed-list card routing is unaffected by a bound list id (AC #3)
-  - [ ] Existing upload-flow tests (`UploadPanel.test.tsx`, `SessionReviewPanel.test.tsx` if present) still pass unmodified for the global `/upload` entry (no regression to today's behavior)
+- [x] Task 1 — List detail entry point (AC: #1, #5)
+  - [x] Add an "Import statement" control to `ui/app/lists/[listId]/page.tsx` (placement: alongside/near the existing receipts chrome or in `ListDetailMobileActions`/`mobileActions` — follow this file's existing action-slot conventions, do not invent a new chrome pattern)
+  - [x] Accessible name includes the list's name (`t`-driven i18n string with a `{list}` placeholder — mirror the pattern other list-scoped messages use, e.g. `individualReviewAcceptDefault.replace("{list}", ...)` in `IndividualReviewPanel.tsx:1004`)
+  - [x] Add EN/ES strings to `ui/lib/i18n/lists.ts` (or wherever `listsMessages`/`uploadCopy` keys for this surface belong — check both, since the control lives on a list page but drives the upload flow)
+- [x] Task 2 — Carry the bound list through to the upload flow (AC: #1, #6)
+  - [x] Decide and implement the hand-off mechanism from the list detail page to `/upload` (recommended: a `?listId=` query param read by `ui/app/upload/page.tsx` / `UploadPanel.tsx`, since there is no existing session-scoped "pre-bound destination" field server-side — see Dev Notes)
+  - [x] Confirm the existing active-session redirect in `/upload` (AC #6) is not bypassed when arriving via this entry point
+- [x] Task 3 — Override the review-routing default-list fallback (AC: #2, #3)
+  - [x] In `IndividualReviewPanel.tsx`, `defaultListId` currently comes only from `GET /api/auth/me`'s `default_import_list_id` (lines 424-438) — when this flow carries a bound list id, that bound id must be used as `defaultListId` instead, without touching the account-level setting
+  - [x] In `SessionReviewPanel.tsx`'s `sessionAutoRoute` (lines 157-193), fixed-list routing (`autoRoute.kind === "fixed"`) must still win over the bound list — only the "review" (undetermined) path's eventual default-list fallback is affected
+- [x] Task 4 — Accessibility (AC: #5)
+  - [x] Verify the control's `aria-label` is distinct from the global Upload button's label (check `ui/app/upload/UploadButton.tsx` for its current label) — add a dedicated i18n key, do not reuse the global one
+- [x] Task 5 — Tests
+  - [x] Component/unit test for the new entry point rendering with the correct accessible name
+  - [x] Test that `IndividualReviewPanel` uses a passed-in bound list id over `/api/auth/me`'s default when both are present
+  - [x] Test that fixed-list card routing is unaffected by a bound list id (AC #3)
+  - [x] Existing upload-flow tests (`UploadPanel.test.tsx`, `SessionReviewPanel.test.tsx` if present) still pass unmodified for the global `/upload` entry (no regression to today's behavior)
 
 ## Dev Notes
 
@@ -156,3 +156,20 @@ claude-sonnet-5
   otherwise proceed with "fixed-list wins" as written in AC #3.
 
 ### File List
+
+- `ui/lib/i18n/lists.ts` — Added `importStatementAria` i18n key (EN/ES)
+- `ui/app/lists/ListDetailMobileActions.tsx` — Added import statement button and props
+- `ui/app/lists/[listId]/page.tsx` — Pass `importStatementAria` to ListDetailMobileActions
+- `ui/app/upload/page.tsx` — Accept `listId` query param and pass to UploadPanel
+- `ui/app/upload/UploadPanel.tsx` — Accept `boundListId` prop, update `reviewHrefFor` to pass listId
+- `ui/app/upload/session/[sessionId]/page.tsx` — Pass `listId` query param to SessionReviewRoute
+- `ui/app/upload/session/[sessionId]/SessionReviewRoute.tsx` — Accept and pass `boundListId` to SessionReviewPanel
+- `ui/app/upload/SessionReviewPanel.tsx` — Accept `boundListId`, pass to navigation URLs
+- `ui/app/upload/review/[sessionId]/page.tsx` — Pass `listId` query param to IndividualReviewPanel
+- `ui/app/upload/review/[sessionId]/IndividualReviewPanel.tsx` — Accept `boundListId`, prefer over /api/auth/me default
+- `ui/app/lists/ListDetailMobileActions.test.tsx` — New test file for import statement button
+- `ui/app/upload/review/[sessionId]/IndividualReviewPanel.test.tsx` — Added tests for boundListId behavior
+
+### Change Log
+
+- 2026-10-01 — Story 4.17 implementation complete. Added list-scoped import entry point that carries listId through upload/review flow. All ACs satisfied, tests added, no backend changes required.

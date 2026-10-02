@@ -63,6 +63,7 @@ import {
 
 type IndividualReviewPanelProps = {
   sessionId: string;
+  boundListId?: string;
 };
 
 type Action =
@@ -308,7 +309,7 @@ function DirectionHint({ template }: { template: string }) {
  * (Story 4.13). Server (GET session) is the source of truth for which row is
  * next — client state is never trusted across a reload.
  */
-export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps) {
+export function IndividualReviewPanel({ sessionId, boundListId }: IndividualReviewPanelProps) {
   const { locale } = usePreferences();
   const t = uploadCopy(locale);
   const router = useRouter();
@@ -422,6 +423,10 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
   }, [locale]);
 
   useEffect(() => {
+    if (boundListId) {
+      setDefaultListId(boundListId);
+      return;
+    }
     let cancelled = false;
     fetch("/api/auth/me", { headers: { Accept: "application/json" }, credentials: "same-origin" })
       .then((response) => (response.ok ? response.json() : null))
@@ -435,7 +440,7 @@ export function IndividualReviewPanel({ sessionId }: IndividualReviewPanelProps)
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [boundListId]);
 
   const step = nextReviewStep(session, acknowledgedFailedIds, discardedIds);
   const current = step.kind === "row" ? { row: step.row, statement: step.statement } : null;

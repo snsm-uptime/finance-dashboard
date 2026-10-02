@@ -778,6 +778,7 @@ export default async function ListDetailPage({
       }}
       addExpenseAria={t.mobileAddExpenseAria}
       inviteAria={t.mobileInviteAria}
+      importStatementAria={t.importStatementAria.replace("{list}", listTitle || "")}
       closeLabel={t.mobileSheetClose}
     />
   );

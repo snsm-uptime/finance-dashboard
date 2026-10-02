@@ -6,7 +6,7 @@ import {
   useState,
 } from "react";
 
-import { PlusIcon, PieChartIcon, ShareIcon } from "@/app/icons";
+import { PlusIcon, PieChartIcon, ShareIcon, UploadIcon } from "@/app/icons";
 import type { InviteFormMessages } from "./InviteForm";
 import { InviteForm } from "./InviteForm";
 import type { ManualExpenseMessages } from "./ManualExpenseForm";
@@ -34,13 +34,15 @@ type Props = {
   splitMessages: DefaultSplitMessages;
   addExpenseAria: string;
   inviteAria: string;
+  importStatementAria: string;
   closeLabel: string;
 };
 
 /**
- * Mobile-only list actions. Renders as a ghost cluster for BalanceStrip's
- * right-edge slot (no FAB, so receipt-row menus stay tappable). Hidden from
- * md up — sidebar owns the same forms there. Sheets portal to document.
+ * List actions cluster. Renders as a ghost cluster for BalanceStrip's
+ * right-edge slot (no FAB, so receipt-row menus stay tappable). On mobile,
+ * shows all actions via sheets. On md+, hides add-expense (sidebar owns that
+ * form) but keeps split, invite, and import buttons. Sheets portal to document.
  */
 export function ListDetailMobileActions({
   listId,
@@ -55,6 +57,7 @@ export function ListDetailMobileActions({
   splitMessages,
   addExpenseAria,
   inviteAria,
+  importStatementAria,
   closeLabel,
 }: Props) {
   const [sheet, setSheet] = useState<SheetKind>(null);
@@ -63,23 +66,22 @@ export function ListDetailMobileActions({
   const expenseButtonRef = useRef<HTMLButtonElement>(null);
   const splitButtonRef = useRef<HTMLButtonElement>(null);
   const inviteButtonRef = useRef<HTMLButtonElement>(null);
+  const importStatementLinkRef = useRef<HTMLAnchorElement>(null);
 
   const expenseFormRef = useRef<HTMLFormElement>(null);
   const splitSaveRequestRef = useRef<() => void>(() => {});
   const [expenseCanSubmit, setExpenseCanSubmit] = useState(false);
   const [splitCanSave, setSplitCanSave] = useState(false);
 
-  if (!canAddExpense && !canInvite) return null;
-
   const canShowSplit = isOwner && defaultSplit && members.length > 1;
-  const groupLabel =
-    canAddExpense && canInvite && canShowSplit
-      ? `${addExpenseAria}, ${splitMessages.defaultSplitTitle}, ${inviteAria}`
-      : canAddExpense && canInvite
-        ? `${addExpenseAria}, ${inviteAria}`
-        : canAddExpense
-          ? addExpenseAria
-          : inviteAria;
+  if (!canAddExpense && !canInvite && !canShowSplit) return null;
+
+  const parts = [];
+  if (canAddExpense) parts.push(addExpenseAria);
+  if (canShowSplit) parts.push(splitMessages.defaultSplitTitle);
+  if (canInvite) parts.push(inviteAria);
+  parts.push(importStatementAria);
+  const groupLabel = parts.join(", ");
 
   return (
     <div className={styles.chrome}>
@@ -93,6 +95,7 @@ export function ListDetailMobileActions({
             aria-expanded={sheet === "expense"}
             onClick={() => setSheet("expense")}
             icon={<PlusIcon className={styles.icon} />}
+            className={styles.addExpenseButton}
           />
         ) : null}
         {canShowSplit ? (
@@ -117,6 +120,13 @@ export function ListDetailMobileActions({
             icon={<ShareIcon className={styles.icon} />}
           />
         ) : null}
+        <IconButton
+          ref={importStatementLinkRef}
+          href={`/upload?listId=${encodeURIComponent(listId)}`}
+          variant="ghost"
+          label={importStatementAria}
+          icon={<UploadIcon className={styles.icon} />}
+        />
       </div>
 
       {canAddExpense ? (
