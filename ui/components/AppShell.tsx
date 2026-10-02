@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { BackIcon, FolderIcon, HomeIcon, WalletIcon } from "@/app/icons";
+import { BackIcon, FileImportIcon, FolderIcon, HomeIcon, WalletIcon } from "@/app/icons";
 import {
   ChromeBackProvider,
   chromeHeaderIsActive,
@@ -43,6 +43,7 @@ function AppShellFrame({ children }: { children: ReactNode }) {
     { key: "home", href: "/home", label: t.tabList, Icon: HomeIcon },
     { key: "budgets", href: "/budgets", label: t.budgetsEntryLabel, Icon: FolderIcon },
     { key: "cards", href: "/cards", label: cards.title, Icon: WalletIcon },
+    { key: "statements", href: "/statements", label: t.statementsTabLabel, Icon: FileImportIcon },
   ];
 
   if (!showHeader && !showTabBar) {
@@ -56,11 +57,10 @@ function AppShellFrame({ children }: { children: ReactNode }) {
         {showHeader ? (
           <header
             data-app-chrome="header"
-            className={`flex shrink-0 items-center gap-2 ${
-              header.progressBar
+            className={`flex shrink-0 items-center gap-2 ${header.progressBar
                 ? "pt-[max(1rem,env(safe-area-inset-top))]"
                 : "pt-[max(0.5rem,env(safe-area-inset-top))]"
-            } pr-[max(1rem,env(safe-area-inset-right))] pb-1 pl-[max(0.5rem,env(safe-area-inset-left))]`}
+              } pr-[max(1rem,env(safe-area-inset-right))] pb-1 pl-[max(0.5rem,env(safe-area-inset-left))]`}
           >
             <div className="flex w-10 shrink-0 items-center justify-start self-center">
               {header.onBack || header.backHref ? (
