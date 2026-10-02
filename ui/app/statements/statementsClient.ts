@@ -48,6 +48,8 @@ async function parseJson(response: Response): Promise<unknown | null> {
   }
 }
 
+const ISO8601_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
 function asStatementSummary(data: unknown): StatementSummary | null {
   if (!data || typeof data !== "object") return null;
   const row = data as Partial<StatementSummary>;
@@ -55,7 +57,11 @@ function asStatementSummary(data: unknown): StatementSummary | null {
     typeof row.statement_id !== "string" ||
     typeof row.period_start !== "string" ||
     typeof row.period_end !== "string" ||
-    typeof row.item_count !== "number"
+    typeof row.item_count !== "number" ||
+    !ISO8601_DATE.test(row.period_start) ||
+    !ISO8601_DATE.test(row.period_end) ||
+    row.item_count < 0 ||
+    !Number.isInteger(row.item_count)
   ) {
     return null;
   }

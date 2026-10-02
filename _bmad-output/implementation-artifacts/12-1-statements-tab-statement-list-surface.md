@@ -218,3 +218,25 @@ None — clean implementation with no blockers.
 - ui/components/AppShell.tsx (imported StatementsIcon, added statements tab)
 - ui/lib/appChrome.ts (added /statements to APP_CHROME_PREFIXES and tabKeyFromPath)
 - ui/lib/i18n/lists.ts (added statementsTabLabel EN/ES)
+
+## Review Findings
+
+### ⚠️ Patch Items (Action Required)
+
+- [ ] [Review][Patch] AC #4 Focus Restoration Not Wired — sessionStorage flag written in StatementSummaryCard but never read in items page. Focus is never moved to heading, violating AC #4 requirement. [ui/app/statements/[statementId]/items/page.tsx]
+
+- [ ] [Review][Patch] Race Condition: Membership Revocation Between Fetch and Response — user could be removed from list between initial membership join and subsequent get_list call, leaking access. [api/application/statements.py:580-633]
+
+- [ ] [Review][Patch] N+1 Query Problem in Card/List Caching — per-request caching doesn't prevent spike if 100 statements have 100 unique cards + 50 unique lists. [api/application/statements.py:50-145]
+
+- [ ] [Review][Patch] Inconsistent Null Handling in destination_list_names — sometimes "" sometimes None; frontend may render literal "null" string. [api/application/statements.py + ui/app/statements/StatementsPanel.tsx]
+
+- [ ] [Review][Patch] Unhandled Exception in Detail Route — only ImportStatementNotFoundError caught; other exceptions return 500. [api/api/routes/statements.py:358-377]
+
+- [ ] [Review][Patch] Locale Staleness During Load — message closure captures old locale at render time; language switch mid-load shows wrong locale. [ui/app/statements/StatementsPanel.tsx + [statementId]/page.tsx]
+
+- [ ] [Review][Patch] Date Format Validation Missing — period_start/period_end not validated as ISO 8601; malformed dates pass silently. [ui/app/statements/statementsClient.ts:1294-1319]
+
+- [ ] [Review][Patch] Item Count Not Validated — negative or overflow counts pass through without validation. [ui/app/statements/statementsClient.ts]
+
+- [ ] [Review][Patch] Buttons Hidden Instead of Disabled — using visibility:hidden instead of disabled keeps buttons focusable (accessibility issue). [ui/components/ActionDialog/ActionDialog.tsx]

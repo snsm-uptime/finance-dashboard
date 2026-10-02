@@ -110,9 +110,9 @@ export function StatementsPanel({ refreshToken = 0 }: Props = {}) {
                             <div className="text-xs text-muted mt-1">
                               {stmt.item_count} {t.periodSummaryItemCount}
                             </div>
-                            {stmt.destination_list_names.length > 0 && (
+                            {stmt.destination_list_names.filter(Boolean).length > 0 && (
                               <div className="text-xs text-muted mt-1">
-                                {t.periodSummaryDestination}: {stmt.destination_list_names.join(", ")}
+                                {t.periodSummaryDestination}: {stmt.destination_list_names.filter(Boolean).join(", ")}
                               </div>
                             )}
                           </div>

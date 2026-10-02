@@ -77,21 +77,21 @@ export function ActionDialog({
           {title}
         </h2>
         <div className="mt-4">{children}</div>
-        <div className="mt-5 flex flex-wrap justify-end gap-2" style={{ visibility: pending ? "hidden" : "visible" }}>
-          <GhostButton
-            ref={cancelRef}
-            onClick={() => onOpenChange(false)}
-            disabled={pending}
-          >
-            {cancelLabel}
-          </GhostButton>
-          <PrimaryButton onClick={onConfirm} disabled={pending} loading={pending}>
-            {confirmLabel}
-          </PrimaryButton>
-        </div>
-        {pending && (
+        {pending ? (
           <div className="mt-5 flex justify-center">
             <SpinnerIcon className="size-5 text-muted" />
+          </div>
+        ) : (
+          <div className="mt-5 flex flex-wrap justify-end gap-2">
+            <GhostButton
+              ref={cancelRef}
+              onClick={() => onOpenChange(false)}
+            >
+              {cancelLabel}
+            </GhostButton>
+            <PrimaryButton onClick={onConfirm}>
+              {confirmLabel}
+            </PrimaryButton>
           </div>
         )}
       </div>

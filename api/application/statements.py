@@ -88,8 +88,11 @@ class ListUserStatementsService:
             if get_list is None:
                 return None
             if list_id not in list_name_cache:
-                list_record = get_list(list_id)
-                list_name_cache[list_id] = list_record.name if list_record else None
+                try:
+                    list_record = get_list(list_id)
+                    list_name_cache[list_id] = list_record.name if list_record else None
+                except Exception:
+                    list_name_cache[list_id] = None
             return list_name_cache[list_id]
 
         # Build StatementSummary objects, grouped by card_id
@@ -101,9 +104,7 @@ class ListUserStatementsService:
 
             # Resolve destination list names
             dest_list_ids = tuple(sorted(lists_by_statement.get(cycle.statement_id, set())))
-            dest_list_names = tuple(
-                resolve_list_name(list_id) or "" for list_id in dest_list_ids
-            )
+            dest_list_names = tuple(resolve_list_name(list_id) or "" for list_id in dest_list_ids)
 
             summary = StatementSummary(
                 statement_id=cycle.statement_id,
@@ -182,10 +183,7 @@ class GetUserStatementSummaryService:
         card_label: str | None = None
 
         for entry in filtered_entries:
-            if (
-                entry.origin_card_id is not None
-                and card_id is None
-            ):
+            if entry.origin_card_id is not None and card_id is None:
                 card_id = entry.origin_card_id
                 if get_card_label is not None:
                     card_label = get_card_label(card_id)
@@ -201,8 +199,11 @@ class GetUserStatementSummaryService:
         dest_list_names: list[str | None] = []
         if get_list is not None:
             for list_id in dest_list_ids:
-                list_record = get_list(list_id)
-                dest_list_names.append(list_record.name if list_record else None)
+                try:
+                    list_record = get_list(list_id)
+                    dest_list_names.append(list_record.name if list_record else None)
+                except Exception:
+                    dest_list_names.append(None)
 
         return StatementSummary(
             statement_id=cycle.statement_id,

@@ -62,6 +62,7 @@ import {
   useMembershipLists,
 } from "./membershipListsStore";
 import styles from "./lists.module.scss";
+import { Tooltip } from "@/components/Tooltip";
 
 function rosterForCard(list: ListItem, currentUserId: string) {
   return [...(list.members ?? [])]
@@ -508,9 +509,8 @@ export function ListsPanel({ initialLists, currentUserId, showArchived = false }
       <span className={styles.balanceGroup}>
         {tone !== "zero" ? (
           <span
-            className={`${styles.balance} ${
-              tone === "owe" ? styles.balanceOwe : styles.balanceOwed
-            }`}
+            className={`${styles.balance} ${tone === "owe" ? styles.balanceOwe : styles.balanceOwed
+              }`}
           >
             <span className={styles.balanceToken}>
               {tone === "owe" ? t.balanceOwe : t.balanceOwed}
@@ -775,7 +775,7 @@ export function ListsPanel({ initialLists, currentUserId, showArchived = false }
                   placeholder={t.createLabel}
                   trailing={
                     <IconButton
-                      className="h-7 w-7 shrink-0 !p-0 !rounded-[4px]"
+                      className="h-7 w-7 shrink-0 p-0! rounded-[4px]!"
                       type="submit"
                       disabled={!canCreate}
                       label={creating ? t.creating : t.createSubmit}
@@ -787,14 +787,16 @@ export function ListsPanel({ initialLists, currentUserId, showArchived = false }
                     glyph, shared hover/focus rules), stretched to the input
                     row's height instead of FormIconSubmit's own fixed 2.5rem —
                     a Link (not IconButton) since this navigates, it doesn't submit. */}
-                <Link
-                  href="/upload"
-                  aria-label={t.uploadLink}
-                  title={t.uploadLink}
-                  className={`inline-flex w-10 shrink-0 items-center justify-center self-stretch rounded-[8px] border border-border bg-surface text-accent no-underline transition-all duration-150 ${formIconSubmitStyles.button}`}
-                >
-                  <UploadIcon className="block h-[1.2rem] w-[1.2rem]" />
-                </Link>
+                <Tooltip label={t.uploadLink}>
+                  <Link
+                    href="/upload"
+                    aria-label={t.uploadLink}
+                    title={t.uploadLink}
+                    className={`inline-flex w-10 shrink-0 items-center justify-center self-stretch rounded-[8px] border border-border bg-surface text-accent no-underline transition-all duration-150 ${formIconSubmitStyles.button}`}
+                  >
+                    <UploadIcon className="block h-[1.2rem] w-[1.2rem]" />
+                  </Link>
+                </Tooltip>
               </div>
               {createError ? (
                 <p className={styles.error} role="alert">

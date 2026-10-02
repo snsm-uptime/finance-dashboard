@@ -86,4 +86,10 @@ def get_statement(
             status_code=status.HTTP_404_NOT_FOUND,
             content={"detail": str(exc), "code": "import_statement_not_found"},
         )
+    except Exception as exc:
+        logger.exception("Unexpected error fetching statement detail")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"detail": "An unexpected error occurred", "code": "internal_error"},
+        )
     return _statement_summary_response(summary)
