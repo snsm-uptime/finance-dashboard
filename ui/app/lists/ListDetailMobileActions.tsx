@@ -5,7 +5,6 @@ import {
   useRef,
   useState,
 } from "react";
-import Link from "next/link";
 
 import { PlusIcon, PieChartIcon, ShareIcon, UploadIcon } from "@/app/icons";
 import type { InviteFormMessages } from "./InviteForm";
@@ -119,20 +118,13 @@ export function ListDetailMobileActions({
             icon={<ShareIcon className={styles.icon} />}
           />
         ) : null}
-        <Link
+        <IconButton
           ref={importStatementLinkRef}
           href={`/upload?listId=${encodeURIComponent(listId)}`}
-          passHref
-          legacyBehavior
-        >
-          <IconButton
-            as="a"
-            type="button"
-            variant="ghost"
-            label={importStatementAria}
-            icon={<UploadIcon className={styles.icon} />}
-          />
-        </Link>
+          variant="ghost"
+          label={importStatementAria}
+          icon={<UploadIcon className={styles.icon} />}
+        />
       </div>
 
       {canAddExpense ? (
