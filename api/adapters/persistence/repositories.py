@@ -604,6 +604,30 @@ class SqlAlchemyListRepository:
             result.append(_ledger_entry_record(row, statement_id))
         return result
 
+    def list_ledger_entries_for_user(self, user_id: UUID):
+        from application.expenses import LedgerEntryRecord
+
+        stmt = (
+            select(LedgerEntryModel, ImportBatchModel.statement_id)
+            .outerjoin(ImportBatchModel, ImportBatchModel.id == LedgerEntryModel.import_batch_id)
+            .join(ListMembershipModel, ListMembershipModel.list_id == LedgerEntryModel.list_id)
+            .where(ListMembershipModel.user_id == user_id)
+            .order_by(LedgerEntryModel.created_at.desc(), LedgerEntryModel.id.desc())
+        )
+        result: list[LedgerEntryRecord] = []
+        for row, statement_id in self._session.execute(stmt).all():
+            if (
+                row.normalized_description is None
+                or row.payer_id is None
+                or row.provenance is None
+                or row.line_type is None
+                or row.posted_date is None
+            ):
+                # Skip incomplete stub rows from pre-3.2 seeds (tests only).
+                continue
+            result.append(_ledger_entry_record(row, statement_id))
+        return result
+
     def get_card_for_owner(self, user_id: UUID, card_id: UUID) -> CardRecord | None:
         row = self._session.scalar(
             select(CardModel).where(CardModel.id == card_id, CardModel.user_id == user_id).limit(1)

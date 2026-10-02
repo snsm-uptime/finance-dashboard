@@ -21,6 +21,7 @@ from api.routes.import_sessions import router as import_sessions_router
 from api.routes.invites import router as invites_router
 from api.routes.lists import router as lists_router
 from api.routes.splits import router as splits_router
+from api.routes.statements import router as statements_router
 from api.settings import load_auth_settings
 
 logging.basicConfig(
@@ -63,6 +64,7 @@ def create_app() -> FastAPI:
     application.include_router(lists_router, dependencies=[Depends(require_user_alias)])
     application.include_router(splits_router, dependencies=[Depends(require_user_alias)])
     application.include_router(budgets_router, dependencies=[Depends(require_user_alias)])
+    application.include_router(statements_router, dependencies=[Depends(require_user_alias)])
     application.include_router(invites_router)
     # Cards are a personal resource, not a list-roster surface — no alias gate.
     application.include_router(cards_router)

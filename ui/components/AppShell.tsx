@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { BackIcon, FolderIcon, HomeIcon, WalletIcon } from "@/app/icons";
+import { BackIcon, FolderIcon, HomeIcon, StatementsIcon, WalletIcon } from "@/app/icons";
 import {
   ChromeBackProvider,
   chromeHeaderIsActive,
@@ -43,6 +43,7 @@ function AppShellFrame({ children }: { children: ReactNode }) {
     { key: "home", href: "/home", label: t.tabList, Icon: HomeIcon },
     { key: "budgets", href: "/budgets", label: t.budgetsEntryLabel, Icon: FolderIcon },
     { key: "cards", href: "/cards", label: cards.title, Icon: WalletIcon },
+    { key: "statements", href: "/statements", label: t.statementsTabLabel, Icon: StatementsIcon },
   ];
 
   if (!showHeader && !showTabBar) {

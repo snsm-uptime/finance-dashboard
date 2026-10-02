@@ -6,6 +6,7 @@ const APP_CHROME_PREFIXES = [
   "/upload",
   "/cards",
   "/budgets",
+  "/statements",
   "/account",
 ] as const;
 
@@ -28,6 +29,7 @@ export function tabKeyFromPath(pathname: string): TabKey | undefined {
   if (pathname === "/upload" || pathname.startsWith("/upload/")) return "upload";
   if (pathname === "/cards" || pathname.startsWith("/cards/")) return "cards";
   if (pathname === "/budgets" || pathname.startsWith("/budgets/")) return "budgets";
+  if (pathname === "/statements" || pathname.startsWith("/statements/")) return "statements";
   if (pathname === "/account" || pathname.startsWith("/account/")) return "account";
   return undefined;
 }
