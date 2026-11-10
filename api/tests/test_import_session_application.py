@@ -12,6 +12,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from decimal import Decimal
+from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
@@ -35,29 +36,38 @@ from application.import_session import (
     EditCandidateRowService,
     FinalizeImportSessionCommand,
     FinalizeImportSessionService,
+    FlaggedRowRecord,
     GetActiveImportSessionService,
     GetStatementPdfCommand,
     GetStatementPdfService,
     ImportBatchRecord,
     ImportSessionRecord,
+    ReviewFlaggedRowCommand,
+    ReviewFlaggedRowService,
+    SectionTotalRecord,
     StagedStatementRecord,
+    StatementNoteRecord,
     UnassignCandidateRowCommand,
     UnassignCandidateRowService,
     UndoLastResolutionCommand,
     UndoLastResolutionService,
     UploadStatementPdfCommand,
     UploadStatementPdfService,
+    reconcile_section_totals,
     run_import_pipeline,
 )
 from domain.canonical_line import CanonicalLine, canonical_identity_key
 from domain.errors import (
     AmbiguousBankAdapterError,
     DuplicateStatementUploadError,
+    ImportFlaggedRowAlreadyReviewedError,
+    ImportFlaggedRowNotFoundError,
     ImportRowNotAvailableError,
     ImportRowNotDiscardableError,
     ImportRowNotFoundError,
     ImportSessionDiscardedError,
     ImportSessionHasPendingRowsError,
+    ImportSessionHasUnreviewedFlagsError,
     ImportSessionNotFoundError,
     ImportStatementNotFailedError,
     ImportStatementNotFoundError,
@@ -69,6 +79,8 @@ from domain.errors import (
 )
 from domain.expenses import ORIGIN_KIND_CARD
 from domain.import_session import (
+    FLAGGED_ROW_DISMISSED,
+    FLAGGED_ROW_FIXED,
     ROW_STATUS_COMMITTED,
     ROW_STATUS_DELETED,
     ROW_STATUS_EXCLUDED_ZERO_AMOUNT,
@@ -77,6 +89,7 @@ from domain.import_session import (
     STATEMENT_STATUS_FAILED,
     STATEMENT_STATUS_SKIPPED,
     STATEMENT_STATUS_STAGED,
+    has_unreviewed_flags,
     row_is_zero_amount,
     statement_is_fully_resolved,
 )
@@ -291,8 +304,10 @@ class _FakeImportSessionRepo:
         for index, detected in enumerate(statements):
             rows = _candidate_records(detected.candidate_rows)
             status = detected.status
-            if status == STATEMENT_STATUS_STAGED and statement_is_fully_resolved(
-                [row.status for row in rows]
+            if (
+                status == STATEMENT_STATUS_STAGED
+                and statement_is_fully_resolved([row.status for row in rows])
+                and not has_unreviewed_flags([flag.review_status for flag in detected.flagged_rows])
             ):
                 status = STATEMENT_STATUS_COMMITTED
             staged.append(
@@ -308,6 +323,9 @@ class _FakeImportSessionRepo:
                     original_filename=detected.original_filename,
                     candidate_rows=rows,
                     parse_evidence=detected.parse_evidence,
+                    flagged_rows=list(detected.flagged_rows),
+                    statement_notes=list(detected.statement_notes),
+                    section_totals=list(detected.section_totals),
                 )
             )
         record = ImportSessionRecord(
@@ -325,6 +343,58 @@ class _FakeImportSessionRepo:
         if record is None or record.user_id != user_id:
             return None
         return record
+
+    def resolve_flagged_row(
+        self,
+        *,
+        session_id: UUID,
+        user_id: UUID,
+        statement_id: UUID,
+        flagged_index: int,
+        review_status: str,
+        corrected_line: CanonicalLine | None,
+    ) -> ImportSessionRecord:
+        record = self.sessions[session_id]
+        assert record.user_id == user_id
+        statements: list[StagedStatementRecord] = []
+        for statement in record.statements:
+            if statement.id != statement_id:
+                statements.append(statement)
+                continue
+            flags = list(statement.flagged_rows)
+            flags[flagged_index] = replace(flags[flagged_index], review_status=review_status)
+            rows = list(statement.candidate_rows)
+            status = statement.status
+            if corrected_line is not None:
+                rows.append(
+                    CandidateRowRecord(
+                        id=uuid4(),
+                        sequence=len(rows),
+                        status=ROW_STATUS_PENDING,
+                        resolved_list_id=None,
+                        line=corrected_line,
+                    )
+                )
+                if status == STATEMENT_STATUS_COMMITTED:
+                    status = STATEMENT_STATUS_STAGED
+            if (
+                status == STATEMENT_STATUS_STAGED
+                and statement_is_fully_resolved([r.status for r in rows])
+                and not has_unreviewed_flags([flag.review_status for flag in flags])
+            ):
+                status = STATEMENT_STATUS_COMMITTED
+            statements.append(
+                replace(
+                    statement,
+                    flagged_rows=flags,
+                    candidate_rows=rows,
+                    candidate_row_count=len(rows),
+                    status=status,
+                )
+            )
+        updated = replace(record, statements=statements)
+        self.sessions[session_id] = updated
+        return updated
 
     def find_active_session_by_content_hash(self, user_id: UUID, content_hash: str) -> UUID | None:
         for session_id, record in self.sessions.items():
@@ -2516,3 +2586,303 @@ def test_get_statement_pdf_empty_bytes_is_not_found() -> None:
                 actor_user_id=actor, session_id=session_id, statement_id=statement.id
             )
         )
+
+
+# --- Spec 001 (Promerica partial import): flagged rows, review, retention, totals ---
+
+
+class _FakePartialAdapter:
+    """Stands in for an adapter with partial import (`parse_statement`), e.g. Promerica."""
+
+    bank_id = "fake_partial"
+    product_id = "fake_partial_product"
+    account_kind = "credit"
+
+    def __init__(
+        self,
+        *,
+        rows: list[CanonicalLine],
+        flagged: list[SimpleNamespace],
+        notes: list[StatementNoteRecord] | None = None,
+        totals: list[SectionTotalRecord] | None = None,
+    ) -> None:
+        self._result = SimpleNamespace(
+            rows=rows,
+            flagged=flagged,
+            notes=notes or [],
+            section_totals=totals or [],
+        )
+
+    def detect(self, *, filename: str, content_sample: bytes) -> bool:
+        return True
+
+    def split(self, pdf_bytes: bytes) -> list[bytes]:
+        return [PDF_BYTES]
+
+    def parse(self, statement_bytes: bytes) -> list[CanonicalLine]:
+        raise AssertionError("partial adapters are read through parse_statement")
+
+    def parse_statement(self, statement_bytes: bytes) -> SimpleNamespace:
+        return self._result
+
+
+_PURCHASE_SECTION = "Detalle de compras del periodo"
+
+
+def _flag(status: str = "unreviewed") -> SimpleNamespace:
+    return SimpleNamespace(
+        raw_text="12/01/2026 SYNTHETIC MERCHANT WITHOUT AMOUNT",
+        section=_PURCHASE_SECTION,
+        page=1,
+        reason="amount missing",
+        review_status=status,
+    )
+
+
+def _amount_row(amount: str, currency: str, line_type: str = "purchase") -> CanonicalLine:
+    return CanonicalLine(
+        posted_date="2026-01-05",
+        amount=Decimal(amount),
+        currency=currency,
+        product_id="fake_partial_product",
+        line_type=line_type,
+        normalized_description=f"ROW {amount} {currency}",
+    )
+
+
+def _upload_partial(
+    repo: _FakeImportSessionRepo,
+    storage: _FakePdfStorage,
+    user_id: UUID,
+    adapter: _FakePartialAdapter,
+) -> ImportSessionRecord:
+    return UploadStatementPdfService(storage, [adapter], repo, _FakeCardMatch()).execute(
+        UploadStatementPdfCommand(
+            actor_user_id=user_id, filename="statement.pdf", content=PDF_BYTES
+        )
+    )
+
+
+def test_partial_import_stores_readable_rows_and_flagged_row() -> None:
+    repo, storage, user = _FakeImportSessionRepo(), _FakePdfStorage(), uuid4()
+    adapter = _FakePartialAdapter(rows=[_row("readable")], flagged=[_flag()])
+
+    session = _upload_partial(repo, storage, user, adapter)
+
+    statement = session.statements[0]
+    assert [c.line.normalized_description for c in statement.candidate_rows] == ["readable"]
+    assert len(statement.flagged_rows) == 1
+    assert statement.flagged_rows[0].reason == "amount missing"
+    assert statement.flagged_rows[0].review_status == "unreviewed"
+    assert statement.status == STATEMENT_STATUS_STAGED
+
+
+def test_pdf_kept_while_flag_unreviewed_then_released_after_review_and_finalize() -> None:
+    repo, storage, user = _FakeImportSessionRepo(), _FakePdfStorage(), uuid4()
+    session = _upload_partial(repo, storage, user, _FakePartialAdapter(rows=[], flagged=[_flag()]))
+    statement = session.statements[0]
+    finalize = FinalizeImportSessionService(repo, storage)
+
+    assert storage.deleted == []
+    with pytest.raises(ImportSessionHasUnreviewedFlagsError):
+        finalize.execute(FinalizeImportSessionCommand(actor_user_id=user, session_id=session.id))
+    assert storage.deleted == []
+
+    ReviewFlaggedRowService(repo).execute(
+        ReviewFlaggedRowCommand(
+            actor_user_id=user,
+            session_id=session.id,
+            statement_id=statement.id,
+            flagged_index=0,
+            review_status=FLAGGED_ROW_DISMISSED,
+        )
+    )
+    finalize.execute(FinalizeImportSessionCommand(actor_user_id=user, session_id=session.id))
+    assert statement.pdf_path in storage.deleted
+
+
+def test_fixed_flag_becomes_a_pending_transaction_row() -> None:
+    repo, storage, user = _FakeImportSessionRepo(), _FakePdfStorage(), uuid4()
+    session = _upload_partial(repo, storage, user, _FakePartialAdapter(rows=[], flagged=[_flag()]))
+    corrected = _amount_row("-500.00", "CRC")
+
+    updated = ReviewFlaggedRowService(repo).execute(
+        ReviewFlaggedRowCommand(
+            actor_user_id=user,
+            session_id=session.id,
+            statement_id=session.statements[0].id,
+            flagged_index=0,
+            review_status=FLAGGED_ROW_FIXED,
+            corrected_line=corrected,
+        )
+    )
+
+    statement = updated.statements[0]
+    assert statement.flagged_rows[0].review_status == FLAGGED_ROW_FIXED
+    assert [c.status for c in statement.candidate_rows] == [ROW_STATUS_PENDING]
+    assert statement.candidate_rows[0].line.amount == Decimal("-500.00")
+
+
+def test_dismissed_flag_stays_in_record_and_adds_no_transaction() -> None:
+    repo, storage, user = _FakeImportSessionRepo(), _FakePdfStorage(), uuid4()
+    session = _upload_partial(repo, storage, user, _FakePartialAdapter(rows=[], flagged=[_flag()]))
+
+    updated = ReviewFlaggedRowService(repo).execute(
+        ReviewFlaggedRowCommand(
+            actor_user_id=user,
+            session_id=session.id,
+            statement_id=session.statements[0].id,
+            flagged_index=0,
+            review_status=FLAGGED_ROW_DISMISSED,
+        )
+    )
+
+    statement = updated.statements[0]
+    assert statement.flagged_rows[0].review_status == FLAGGED_ROW_DISMISSED
+    assert statement.candidate_rows == []
+
+
+def test_review_rejects_unknown_index_repeat_review_and_bad_fix_payload() -> None:
+    repo, storage, user = _FakeImportSessionRepo(), _FakePdfStorage(), uuid4()
+    session = _upload_partial(repo, storage, user, _FakePartialAdapter(rows=[], flagged=[_flag()]))
+    statement_id = session.statements[0].id
+    service = ReviewFlaggedRowService(repo)
+
+    with pytest.raises(ImportFlaggedRowNotFoundError):
+        service.execute(
+            ReviewFlaggedRowCommand(
+                actor_user_id=user,
+                session_id=session.id,
+                statement_id=statement_id,
+                flagged_index=5,
+                review_status=FLAGGED_ROW_DISMISSED,
+            )
+        )
+    with pytest.raises(InvalidCanonicalLineError):
+        service.execute(
+            ReviewFlaggedRowCommand(
+                actor_user_id=user,
+                session_id=session.id,
+                statement_id=statement_id,
+                flagged_index=0,
+                review_status=FLAGGED_ROW_FIXED,
+            )
+        )
+
+    service.execute(
+        ReviewFlaggedRowCommand(
+            actor_user_id=user,
+            session_id=session.id,
+            statement_id=statement_id,
+            flagged_index=0,
+            review_status=FLAGGED_ROW_DISMISSED,
+        )
+    )
+    with pytest.raises(ImportFlaggedRowAlreadyReviewedError):
+        service.execute(
+            ReviewFlaggedRowCommand(
+                actor_user_id=user,
+                session_id=session.id,
+                statement_id=statement_id,
+                flagged_index=0,
+                review_status=FLAGGED_ROW_DISMISSED,
+            )
+        )
+
+
+def _totals_statement(
+    *,
+    rows: list[CanonicalLine],
+    printed_crc: str,
+    flagged: list[SimpleNamespace] | None = None,
+) -> StagedStatementRecord:
+    return StagedStatementRecord(
+        id=uuid4(),
+        session_id=uuid4(),
+        product_id="fake_partial_product",
+        status=STATEMENT_STATUS_STAGED,
+        candidate_row_count=len(rows),
+        pdf_path=None,
+        candidate_rows=_candidate_records(rows),
+        flagged_rows=[
+            FlaggedRowRecord(
+                raw_text=f.raw_text,
+                section=f.section,
+                page=f.page,
+                reason=f.reason,
+                review_status=f.review_status,
+            )
+            for f in flagged or []
+        ],
+        statement_notes=[
+            StatementNoteRecord(
+                label="Traslado de puntos a cuenta crédito",
+                section=_PURCHASE_SECTION,
+                currency="CRC",
+                amount=Decimal("-80133.00"),
+            )
+        ],
+        section_totals=[
+            SectionTotalRecord(
+                section=_PURCHASE_SECTION,
+                line_type="purchase",
+                crc=Decimal(printed_crc),
+                usd=Decimal("25.50"),
+            )
+        ],
+    )
+
+
+_IMPORTED_PURCHASES = [
+    _amount_row("12500.00", "CRC"),
+    _amount_row("-4000.00", "CRC"),
+    _amount_row("25.50", "USD"),
+]
+
+
+def test_section_total_matches_once_notes_are_added_back() -> None:
+    # Printed -71,633 = imported 8,500 + points-transfer note -80,133 (FR-012, FR-013).
+    statement = _totals_statement(rows=_IMPORTED_PURCHASES, printed_crc="-71633.00")
+
+    crc = next(r for r in reconcile_section_totals(statement) if r.currency == "CRC")
+
+    assert crc.matches is True
+    assert crc.open_flags == ()
+
+
+def test_section_mismatch_shows_unreviewed_flags_as_its_reason() -> None:
+    statement = _totals_statement(
+        rows=_IMPORTED_PURCHASES, printed_crc="-71000.00", flagged=[_flag()]
+    )
+
+    crc = next(r for r in reconcile_section_totals(statement) if r.currency == "CRC")
+
+    assert crc.matches is False
+    assert len(crc.open_flags) == 1
+    assert crc.open_flags[0].reason == "amount missing"
+
+
+def test_section_mismatch_passes_once_its_flags_are_reviewed() -> None:
+    statement = _totals_statement(
+        rows=_IMPORTED_PURCHASES,
+        printed_crc="-71000.00",
+        flagged=[_flag(status=FLAGGED_ROW_DISMISSED)],
+    )
+
+    crc = next(r for r in reconcile_section_totals(statement) if r.currency == "CRC")
+
+    assert crc.matches is True
+
+
+def test_section_mismatch_without_flags_is_reported_with_no_reason() -> None:
+    statement = _totals_statement(rows=_IMPORTED_PURCHASES, printed_crc="-71000.00")
+
+    crc = next(r for r in reconcile_section_totals(statement) if r.currency == "CRC")
+
+    assert crc.matches is False
+    assert crc.open_flags == ()
+
+
+def test_has_unreviewed_flags_only_counts_unreviewed() -> None:
+    assert has_unreviewed_flags(["unreviewed", "fixed"]) is True
+    assert has_unreviewed_flags(["fixed", "dismissed"]) is False

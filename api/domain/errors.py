@@ -560,6 +560,38 @@ class ImportRowNotFoundError(DomainError):
         super().__init__(self.MESSAGE)
 
 
+class ImportSessionHasUnreviewedFlagsError(DomainError):
+    """Raised when finalize is called while a flagged row is still unreviewed
+    (spec 001-promerica-statement-layout, FR-009). A flagged row is reviewed
+    when it is fixed into a transaction or dismissed as not a transaction."""
+
+    MESSAGE = "This import session still has flagged rows to review."
+    CODE = "import_session_has_unreviewed_flags"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
+class ImportFlaggedRowNotFoundError(DomainError):
+    """Raised when a review action names a flagged row index that does not exist."""
+
+    MESSAGE = "Flagged row not found."
+    CODE = "import_flagged_row_not_found"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
+class ImportFlaggedRowAlreadyReviewedError(DomainError):
+    """Raised when a review action targets a flagged row that is already fixed or dismissed."""
+
+    MESSAGE = "This flagged row has already been reviewed."
+    CODE = "import_flagged_row_already_reviewed"
+
+    def __init__(self) -> None:
+        super().__init__(self.MESSAGE)
+
+
 class ImportSessionHasPendingRowsError(DomainError):
     """Raised when finalize is called while rows are still pending (Story
     4.12, AC #8) — dropping the source PDF mid-review would strand the user

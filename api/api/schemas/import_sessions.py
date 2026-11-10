@@ -6,6 +6,8 @@ Also card identification endpoint (Story 4.8.1).
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -51,11 +53,33 @@ class UndoPointerResponse(BaseModel):
     action: str
 
 
+class FlaggedRowResponse(BaseModel):
+    """A row the import could not read (spec 001, FR-009). `index` names it in review calls."""
+
+    index: int
+    raw_text: str
+    section: str
+    page: int
+    reason: str
+    review_status: str
+
+
+class StatementNoteResponse(BaseModel):
+    """A printed amount that is not a transaction, e.g. a points transfer (FR-013)."""
+
+    label: str
+    section: str
+    currency: str
+    amount: str
+
+
 class StagedStatementResponse(BaseModel):
     id: UUID
     product_id: str
     status: str
     candidate_row_count: int
+    flagged_rows: list[FlaggedRowResponse] = Field(default_factory=list)
+    statement_notes: list[StatementNoteResponse] = Field(default_factory=list)
     iban: str | None = None  # Story 4.8.1: IBAN for card identification
     filename: str | None = None  # Story 4.8.2: original uploaded filename
     card_id: UUID | None = None  # Story 4.8.3: identified card (if IBAN matched)
@@ -118,6 +142,20 @@ class AssignRowBody(BaseModel):
 
 class EditRowBody(BaseModel):
     description: str
+
+
+class ReviewFlaggedRowBody(BaseModel):
+    """Review one flagged row (spec 001, FR-009).
+
+    `fix` needs the corrected transaction fields; `dismiss` takes none.
+    """
+
+    action: Literal["fix", "dismiss"]
+    posted_date: str | None = None
+    amount: Decimal | None = None
+    currency: str | None = None
+    line_type: str | None = None
+    description: str | None = None
 
 
 class ImportBatchResponse(BaseModel):

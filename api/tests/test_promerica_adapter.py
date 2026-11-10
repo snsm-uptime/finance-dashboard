@@ -346,3 +346,175 @@ def test_detect_bank_adapter_picks_promerica_via_filename(fixture_bytes: bytes) 
     )
     assert resolved.bank_id == "promerica"
     assert resolved.product_id == "promerica_credit"
+
+
+_NEWER_LAYOUT_FIXTURE_PATH = _FIXTURE_DIR / "promerica_newer_layout_clean_synthetic.pdf"
+_NEWER_LAYOUT_UNREADABLE_FIXTURE_PATH = _FIXTURE_DIR / "promerica_newer_layout_synthetic.pdf"
+_NEWER_LAYOUT_GOLDENS_PATH = _FIXTURE_DIR / "promerica_newer_layout_goldens.py"
+_BAC_DEBIT_FIXTURE_PATH = _FIXTURE_DIR / "bac_debit_synthetic.pdf"
+
+
+def _load_newer_layout_goldens_module():
+    spec = importlib.util.spec_from_file_location(
+        "promerica_newer_layout_goldens", _NEWER_LAYOUT_GOLDENS_PATH
+    )
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+_newer_layout = _load_newer_layout_goldens_module()
+
+
+@pytest.fixture
+def newer_layout_bytes() -> bytes:
+    return _NEWER_LAYOUT_FIXTURE_PATH.read_bytes()
+
+
+@pytest.fixture
+def newer_layout_unreadable_bytes() -> bytes:
+    return _NEWER_LAYOUT_UNREADABLE_FIXTURE_PATH.read_bytes()
+
+
+def test_newer_layout_fixture_detected_as_promerica_by_content(
+    adapter: PromericaAdapter, newer_layout_bytes: bytes
+) -> None:
+    assert adapter.detect(filename="statement.pdf", content_sample=newer_layout_bytes)
+
+
+def test_newer_layout_fixture_detected_as_promerica_by_filename(
+    adapter: PromericaAdapter, newer_layout_bytes: bytes
+) -> None:
+    assert adapter.detect(filename="promerica_newer_layout.pdf", content_sample=newer_layout_bytes)
+
+
+def test_bac_fixtures_are_not_detected_as_promerica(adapter: PromericaAdapter) -> None:
+    for path in (_BAC_FIXTURE_PATH, _BAC_DEBIT_FIXTURE_PATH):
+        assert not adapter.detect(filename="", content_sample=path.read_bytes()), path.name
+
+
+def test_newer_layout_rows_match_goldens_row_for_row(
+    adapter: PromericaAdapter, newer_layout_bytes: bytes
+) -> None:
+    result = adapter.parse_statement(newer_layout_bytes)
+    assert len(result.rows) == _newer_layout.PROMERICA_NEWER_LAYOUT_EXPECTED_ROW_COUNT
+    for line, golden in zip(result.rows, _newer_layout.PROMERICA_NEWER_LAYOUT_GOLDENS, strict=True):
+        _assert_matches_golden(line, golden)
+
+
+def test_newer_layout_section_totals_match_goldens_per_currency(
+    adapter: PromericaAdapter, newer_layout_bytes: bytes
+) -> None:
+    totals: dict[tuple[str, str], Decimal] = {}
+    for line in adapter.parse_statement(newer_layout_bytes).rows:
+        key = (line.line_type, line.currency)
+        totals[key] = totals.get(key, Decimal("0")) + line.amount
+    expected = {
+        (section, currency): amount
+        for section, by_currency in _newer_layout.PROMERICA_NEWER_LAYOUT_SECTION_TOTALS.items()
+        for currency, amount in by_currency.items()
+    }
+    assert totals == expected
+
+
+def test_newer_layout_points_transfer_is_a_note_not_a_transaction(
+    adapter: PromericaAdapter, newer_layout_bytes: bytes
+) -> None:
+    result = adapter.parse_statement(newer_layout_bytes)
+    assert not any("Traslado de puntos" in line.normalized_description for line in result.rows)
+    assert len(result.notes) == 1
+    note = result.notes[0]
+    golden = _newer_layout.PROMERICA_NEWER_LAYOUT_POINTS_TRANSFER_NOTE
+    assert note.label == golden["label"]
+    assert note.section == golden["section"]
+    assert note.currency == golden["currency"]
+    assert note.amount == golden["amount"]
+
+
+def test_newer_layout_summary_total_card_and_footer_lines_never_become_transactions(
+    adapter: PromericaAdapter, newer_layout_bytes: bytes
+) -> None:
+    descriptions = [
+        line.normalized_description for line in adapter.parse_statement(newer_layout_bytes).rows
+    ]
+    for leaked in ("Total", "Saldo anterior", "XXXX-XXXX", "Fecha de Corte", "Monto en"):
+        assert not any(leaked in description for description in descriptions), leaked
+
+
+def test_newer_layout_four_column_payment_records_only_transaction_amount_per_currency(
+    adapter: PromericaAdapter, newer_layout_bytes: bytes
+) -> None:
+    payments = [
+        line
+        for line in adapter.parse_statement(newer_layout_bytes).rows
+        if line.line_type == LINE_TYPE_PAYMENT
+    ]
+    # Row "23/01/2026 PAGO SINPE -50,000.00 -1,200.00 0.00 0.00": the -1,200.00
+    # interest column is not a second payment.
+    assert [(p.amount, p.currency) for p in payments] == [
+        (Decimal("-50000.00"), "CRC"),
+        (Decimal("-200.00"), "USD"),
+    ]
+
+
+def test_newer_layout_usd_only_purchase_records_usd_amount_not_zero_colones(
+    adapter: PromericaAdapter, newer_layout_bytes: bytes
+) -> None:
+    usd_purchases = [
+        line
+        for line in adapter.parse_statement(newer_layout_bytes).rows
+        if line.line_type == LINE_TYPE_PURCHASE and line.currency == "USD"
+    ]
+    assert [(p.amount, p.currency) for p in usd_purchases] == [(Decimal("25.50"), "USD")]
+
+
+def test_newer_layout_unreadable_row_is_flagged_with_raw_text_section_and_reason(
+    adapter: PromericaAdapter, newer_layout_unreadable_bytes: bytes
+) -> None:
+    result = adapter.parse_statement(newer_layout_unreadable_bytes)
+    assert len(result.flagged) == 1
+    flagged = result.flagged[0]
+    assert flagged.raw_text == _newer_layout.PROMERICA_NEWER_LAYOUT_FLAGGED_RAW_TEXT
+    assert flagged.section == _newer_layout.PROMERICA_NEWER_LAYOUT_FLAGGED_SECTION
+    assert flagged.page == 1
+    assert flagged.reason == "amount missing"
+    assert flagged.review_status == "unreviewed"
+
+
+def test_newer_layout_parse_contract_still_fails_loud_on_unreadable_row(
+    adapter: PromericaAdapter, newer_layout_unreadable_bytes: bytes
+) -> None:
+    # BankAdapter.parse() keeps raising until the import session can store flags.
+    with pytest.raises(InvalidCanonicalLineError):
+        adapter.parse(newer_layout_unreadable_bytes)
+
+
+def test_interest_concept_without_amount_line_is_flagged_not_dropped(
+    adapter: PromericaAdapter,
+) -> None:
+    pdf_bytes = _one_page_statement_pdf(
+        [
+            "Banco Promerica de Costa Rica, S.A.",
+            "Fecha de Corte 19/01/2026",
+            "MOVIMIENTOS DE LA TARJETA DE CRÉDITO",
+            "Detalle de intereses",
+            "Interés en Interés en",
+            "MONTO SIN MONTO",
+            "MONTO POR INTERESES CORRIENTES",
+            "99.59 0.00",
+        ]
+    )
+    result = adapter.parse_statement(pdf_bytes)
+    assert [row.normalized_description for row in result.rows] == ["MONTO POR INTERESES CORRIENTES"]
+    assert [flag.raw_text for flag in result.flagged] == ["MONTO SIN MONTO"]
+    assert result.flagged[0].reason == "interest concept with no amount line"
+
+
+def test_earlier_layout_fixture_has_no_notes_and_no_flagged_rows(
+    adapter: PromericaAdapter, fixture_bytes: bytes
+) -> None:
+    result = adapter.parse_statement(fixture_bytes)
+    assert result.notes == []
+    assert result.flagged == []
+    assert result.rows == adapter.parse(fixture_bytes)

@@ -2201,6 +2201,52 @@ def test_delete_and_unassign_on_a_finalized_session_are_409(client_with_fx: Test
 
 
 _PARSE_FAILURE_MIXED_PDF = _FIXTURE_DIR / "promerica_parse_failure_mixed.pdf"
+_NEWER_LAYOUT_UNREADABLE_PDF = _FIXTURE_DIR / "promerica_newer_layout_synthetic.pdf"
+
+
+def test_flagged_row_blocks_finalize_until_reviewed_then_finalizes(
+    client: TestClient, db_session: Session
+) -> None:
+    # Spec 001, FR-009: a flagged row blocks finalizing until it is reviewed (FR-014).
+    _register(client, "flaggedrows@example.com")
+    created = client.post(
+        "/import/sessions",
+        files={
+            "file": (
+                "promerica_estado.pdf",
+                _NEWER_LAYOUT_UNREADABLE_PDF.read_bytes(),
+                "application/pdf",
+            )
+        },
+    )
+    assert created.status_code == 201, created.text
+    body = created.json()
+    session_id = body["id"]
+    statement = body["statements"][0]
+    assert len(statement["flagged_rows"]) == 1
+    flag = statement["flagged_rows"][0]
+    assert flag["review_status"] == "unreviewed"
+    assert flag["reason"] == "amount missing"
+
+    # Clear the readable rows, so only the flagged row can block finalizing.
+    for row in statement["rows"]:
+        deleted = client.post(f"/import/sessions/{session_id}/rows/{row['id']}/delete")
+        assert deleted.status_code == 200, deleted.text
+
+    blocked = client.post(f"/import/sessions/{session_id}/finalize")
+    assert blocked.status_code == 409
+    assert blocked.json()["code"] == "import_session_has_unreviewed_flags"
+
+    reviewed = client.post(
+        f"/import/sessions/{session_id}/statements/{statement['id']}"
+        f"/flagged-rows/{flag['index']}/review",
+        json={"action": "dismiss"},
+    )
+    assert reviewed.status_code == 200, reviewed.text
+    assert reviewed.json()["statements"][0]["flagged_rows"][0]["review_status"] == "dismissed"
+
+    finalized = client.post(f"/import/sessions/{session_id}/finalize")
+    assert finalized.status_code == 200, finalized.text
 
 
 def test_upload_mixed_parse_failure_persists_evidence_no_candidate_rows_no_ledger(
