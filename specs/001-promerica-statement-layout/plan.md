@@ -99,3 +99,12 @@ api/
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |-----------|------------|-------------------------------------|
 | Flagged-row path crosses the adapter and import-session layers (Q1) | The user chose partial import, and the adapter currently has no way to return unreadable rows alongside readable ones | Keeping `fail_parse` would contradict Q1. Putting the flagged list only in the adapter's logs would hide rows from the user, which Q1 rules out. |
+
+## Quickstart Verification Record (T032)
+
+Run from `api/` on the implementation branch (Postgres 16 in a local container for the DB-backed suites):
+
+- Steps 1–3 (adapter tests, earlier layout, other banks): pass.
+- Step 4 (import session): pass, including the DB-backed flagged-row integration test.
+- Full suite with `DATABASE_URL` set: 1193 passed, 0 skipped. Without it: 835 passed, 358 skipped (DB-backed).
+- Step 5 (manual smoke test with a real statement): **not run.** It needs a real statement file from outside the repo, so this record stays open until it is done.

@@ -676,6 +676,10 @@ class ImportStatementModel(Base):
     original_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     parse_evidence: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # Promerica partial import (spec 001, FR-009/FR-012/FR-013): JSON lists.
+    flagged_rows: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    statement_notes: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    section_totals: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

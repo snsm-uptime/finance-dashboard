@@ -205,6 +205,37 @@ def session_needs_source_pdf(statement_statuses: Sequence[str]) -> bool:
     return any(status in _PDF_RETAIN_STATUSES for status in statement_statuses)
 
 
+FLAGGED_ROW_UNREVIEWED = "unreviewed"
+FLAGGED_ROW_FIXED = "fixed"
+FLAGGED_ROW_DISMISSED = "dismissed"
+FLAGGED_ROW_STATUSES = frozenset({FLAGGED_ROW_UNREVIEWED, FLAGGED_ROW_FIXED, FLAGGED_ROW_DISMISSED})
+
+
+def has_unreviewed_flags(flagged_statuses: Sequence[str]) -> bool:
+    """True while any flagged row still needs review (spec 001, FR-009)."""
+    return any(status == FLAGGED_ROW_UNREVIEWED for status in flagged_statuses)
+
+
+def session_pdf_still_needed(
+    statement_statuses: Sequence[str], flagged_statuses: Sequence[str]
+) -> bool:
+    """AD-3 retention plus the flagged-row rule (spec 001, FR-014).
+
+    The PDF stays while any statement is staged or failed, and also while any
+    flagged row is unreviewed, even when its statement is already committed.
+    """
+    return session_needs_source_pdf(statement_statuses) or has_unreviewed_flags(flagged_statuses)
+
+
+def section_total_matches(printed: Decimal, imported: Decimal, statement_notes: Decimal) -> bool:
+    """FR-012: printed total == imported rows + notes.
+
+    Points-transfer notes are printed inside the section total but kept out of
+    imports (FR-013), so they are added back before comparing.
+    """
+    return printed == imported + statement_notes
+
+
 def retained_source_pdf_paths(statements: Sequence[tuple[str, str | None]]) -> frozenset[str]:
     """Paths still needed by staged or failed statements (AD-3 refcount)."""
     return frozenset(path for status, path in statements if status in _PDF_RETAIN_STATUSES and path)

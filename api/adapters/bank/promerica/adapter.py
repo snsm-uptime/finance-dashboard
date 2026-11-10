@@ -37,6 +37,7 @@ from __future__ import annotations
 import io
 import logging
 import re
+from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
@@ -51,6 +52,7 @@ from domain.canonical_line import (
     validate_canonical_line,
 )
 from domain.errors import InvalidCanonicalLineError
+from domain.import_session import FLAGGED_ROW_UNREVIEWED
 from domain.line_types import (
     LINE_TYPE_FEE,
     LINE_TYPE_INTEREST,
@@ -94,6 +96,7 @@ _SECTIONS = [
 ]
 
 _SECTION_TITLES = frozenset(spec.title for spec in _SECTIONS)
+_LINE_TYPE_BY_TITLE = {spec.title: spec.line_type for spec in _SECTIONS}
 
 # Section total lines (e.g. "Total de compras del periodo de ... 591,158.06
 # 23.00") are themselves date+amount shaped and print right after a
@@ -103,13 +106,21 @@ _SECTION_TITLES = frozenset(spec.title for spec in _SECTIONS)
 # concept line). Real evidence: every declared section prints one.
 _TOTAL_LINE_RE = re.compile(r"^Total\b", re.IGNORECASE)
 
+# Points transfer rows ("Traslado de puntos a cuenta crédito") sit in the
+# purchases section with a negative amount printed with a space after the
+# minus ("- 80,133.00"). They are not transactions: they become statement notes.
+_POINTS_TRANSFER_RE = re.compile(r"Traslado de puntos")
+_CONCEPT_WITHOUT_AMOUNT = "interest concept with no amount line"
+
 # Own token regexes rather than domain's shared amount pattern: Promerica
 # encodes negative amounts with a LEADING minus (unlike BAC credit's
 # trailing-minus convention), which the shared DEFAULT_AMOUNT_PATTERN does
 # not capture. is_data_row() (sign-agnostic) remains the shared classifier
 # per AC #5; only the final signed value is extracted with this regex.
 _DATE_TOKEN_RE = re.compile(r"\b\d{1,2}/\d{1,2}/\d{4}\b")
-_AMOUNT_TOKEN_RE = re.compile(r"-?\d{1,3}(?:,\d{3})*\.\d{2}")
+_LEADING_DATE_RE = re.compile(r"^\d{1,2}/\d{1,2}/\d{4}\b")
+# The minus may be followed by a space ("- 80,133.00", points transfer rows).
+_AMOUNT_TOKEN_RE = re.compile(r"(?:-\s?)?\d{1,3}(?:,\d{3})*\.\d{2}")
 
 # IBAN extraction for the CRC (colones) account; fallback to USD dólares if
 # CRC is absent (mirrors bac_credit's Story 4.8.1 pattern — real evidence,
@@ -197,7 +208,50 @@ def _printed_cutoff_date(lines: list[str]) -> date | None:
 
 
 def _parse_amount(raw: str) -> Decimal:
-    return Decimal(raw.replace(",", ""))
+    return Decimal(raw.replace(",", "").replace(" ", ""))
+
+
+@dataclass(frozen=True)
+class FlaggedRow:
+    """A transaction-looking row the adapter could not read (FR-009). Never a CanonicalLine.
+
+    `review_status` starts as `unreviewed`. The import session moves it to `fixed`
+    (re-imported as a transaction) or `dismissed` (not a transaction).
+    """
+
+    raw_text: str
+    section: str
+    page: int
+    reason: str
+    review_status: str = FLAGGED_ROW_UNREVIEWED
+
+
+@dataclass(frozen=True)
+class StatementNote:
+    """A printed amount that is not a transaction, e.g. a points transfer (FR-013)."""
+
+    label: str
+    section: str
+    currency: str
+    amount: Decimal
+
+
+@dataclass(frozen=True)
+class SectionTotal:
+    """The total printed at the end of a transaction section (FR-012), per currency."""
+
+    section: str
+    line_type: str | None
+    crc: Decimal
+    usd: Decimal
+
+
+@dataclass(frozen=True)
+class PromericaParseResult:
+    rows: list[CanonicalLine]
+    flagged: list[FlaggedRow]
+    notes: list[StatementNote]
+    section_totals: list[SectionTotal] = field(default_factory=list)
 
 
 def _row_shape(line: str) -> tuple[str | None, list[str], str]:
@@ -307,34 +361,99 @@ class PromericaAdapter:
         return extract_iban_from_statement(stripped_lines)
 
     def parse(self, statement_bytes: bytes) -> list[CanonicalLine]:
+        """BankAdapter contract: transaction rows only, fail loud on any unreadable row.
+
+        Callers that can show flagged rows and statement notes use `parse_statement`.
+        """
+        result = self.parse_statement(statement_bytes)
+        if result.flagged:
+            first = result.flagged[0]
+            raise fail_parse(
+                f"Statement row could not be read: {first.raw_text!r}.",
+                rows=result.rows,
+                gap_raw=first.raw_text,
+            )
+        return result.rows
+
+    def parse_statement(self, statement_bytes: bytes) -> PromericaParseResult:
         try:
-            lines: list[str] = []
+            numbered_lines: list[tuple[int, str]] = []
             metadata: dict | None = None
             with pdfplumber.open(io.BytesIO(statement_bytes)) as doc:
                 metadata = doc.metadata
-                for page in doc.pages:
+                for page_no, page in enumerate(doc.pages, start=1):
                     text = page.extract_text() or ""
-                    lines.extend(text.splitlines())
+                    numbered_lines.extend((page_no, raw) for raw in text.splitlines())
         except Exception as exc:
             raise fail_parse(
                 "Could not read statement PDF.", gap_raw="Could not read statement PDF."
             ) from exc
 
-        stripped_lines = [raw.strip() for raw in lines if raw.strip()]
+        stripped_lines = [(page_no, raw.strip()) for page_no, raw in numbered_lines if raw.strip()]
         try:
-            reference_date = _printed_cutoff_date(stripped_lines) or _creation_date(metadata)
+            reference_date = _printed_cutoff_date([line for _, line in stripped_lines]) or (
+                _creation_date(metadata)
+            )
         except ValueError as exc:
             raise fail_parse(
                 "Could not resolve statement reference date.",
                 gap_raw="Could not resolve statement reference date.",
             ) from exc
+
         rows: list[CanonicalLine] = []
+        flagged: list[FlaggedRow] = []
+        notes: list[StatementNote] = []
+        section_totals: list[SectionTotal] = []
         cursor = SectionCursor(_SECTIONS)
         seen_section_header = False
-        pending_interest_concept: str | None = None
+        section_title = ""
+        pending_interest: tuple[str, int] | None = None  # (concept line, page)
 
-        for line in stripped_lines:
+        def flag(raw_text: str, page: int, reason: str) -> None:
+            flagged.append(
+                FlaggedRow(raw_text=raw_text, section=section_title, page=page, reason=reason)
+            )
+
+        for page_no, line in stripped_lines:
             if _TOTAL_LINE_RE.match(line):
+                # Printed total: last two amount tokens are colones, then US$.
+                amount_tokens = _AMOUNT_TOKEN_RE.findall(line)
+                if section_title and len(amount_tokens) >= 2:
+                    section_totals.append(
+                        SectionTotal(
+                            section=section_title,
+                            line_type=_LINE_TYPE_BY_TITLE.get(section_title),
+                            crc=_parse_amount(amount_tokens[-2]),
+                            usd=_parse_amount(amount_tokens[-1]),
+                        )
+                    )
+                continue
+
+            if _POINTS_TRANSFER_RE.search(line):
+                # Kept out of transactions and reported as a statement note (FR-013).
+                _, amount_tokens, description = _row_shape(line)
+                try:
+                    if len(amount_tokens) == 1:
+                        currency, amount = "CRC", _parse_amount(amount_tokens[0])
+                    elif len(amount_tokens) == 2:
+                        currency, amount = normalize_dual_column_amount(
+                            _parse_amount(amount_tokens[0]), _parse_amount(amount_tokens[1])
+                        )
+                    else:
+                        raise ValueError(
+                            f"expected 1 or 2 amount columns, got {len(amount_tokens)}"
+                        )
+                except (ValueError, InvalidOperation) as exc:
+                    flag(line, page_no, str(exc))
+                    continue
+                notes.append(
+                    StatementNote(
+                        label=description,
+                        section=section_title,
+                        currency=currency,
+                        amount=amount,
+                    )
+                )
                 continue
 
             _, active_spec = cursor.classify_data_row()
@@ -345,35 +464,34 @@ class PromericaAdapter:
 
             if not is_data_row(line, requires_date=requires_date):
                 if _is_section_header_line(line):
+                    if pending_interest is not None:
+                        flag(pending_interest[0], pending_interest[1], _CONCEPT_WITHOUT_AMOUNT)
                     cursor.see_header_line(line)
                     seen_section_header = True
-                    pending_interest_concept = None
+                    section_title = line
+                    pending_interest = None
                 elif _is_known_boilerplate_line(line):
                     pass  # column sub-header / card-number marker: no cursor change.
                 elif in_interest_section:
-                    # Task 3: buffer the concept line for the next amount-only
-                    # interest data row to pair with (two-line shape). Fail
-                    # loud rather than silently overwrite an unpaired concept
-                    # line already buffered (AD-25/NFR-8) — a real amount-only
-                    # row is always expected to follow the concept line it
-                    # pairs with.
-                    if pending_interest_concept is not None:
-                        raise fail_parse(
-                            "Interest concept line found with no preceding "
-                            f"amount row for buffered concept: {pending_interest_concept!r}.",
-                            rows=rows,
-                            gap_raw=pending_interest_concept,
-                        )
-                    pending_interest_concept = line
+                    # Buffer the concept line for the next amount-only interest
+                    # row to pair with (two-line shape). A second concept before
+                    # an amount line leaves the first one unpaired: flag it.
+                    if pending_interest is not None:
+                        flag(pending_interest[0], pending_interest[1], _CONCEPT_WITHOUT_AMOUNT)
+                    pending_interest = (line, page_no)
                 elif seen_section_header:
-                    # Promerica titles have no common lettered prefix (unlike
-                    # BAC's "A)".."G)"), so an unrecognized header-ish line
-                    # can only be caught once we're past the initial preamble
-                    # (AD-25): route it through SectionCursor's own
-                    # unrecognized-title path so a row under it fails loud
-                    # instead of silently staying attributed to the last
-                    # real section.
-                    cursor.see_header_line(line)
+                    if _LEADING_DATE_RE.match(line) and active_spec is not None:
+                        # A dated transaction-looking line with no amount: unreadable (FR-009).
+                        flag(line, page_no, "amount missing")
+                    else:
+                        # Promerica titles have no common lettered prefix (unlike
+                        # BAC's "A)".."G)"), so an unrecognized header-ish line
+                        # can only be caught once we're past the initial preamble
+                        # (AD-25): route it through SectionCursor's own
+                        # unrecognized-title path so a row under it fails loud
+                        # instead of silently staying attributed to the last
+                        # real section.
+                        cursor.see_header_line(line)
                 continue
 
             kind, spec = cursor.classify_data_row()
@@ -395,10 +513,9 @@ class PromericaAdapter:
 
             try:
                 if line_type == LINE_TYPE_INTEREST:
-                    if pending_interest_concept is None:
-                        raise ValueError(
-                            "interest amount row with no preceding concept line buffered"
-                        )
+                    if pending_interest is None:
+                        flag(line, page_no, "interest amount with no concept line")
+                        continue
                     _, amount_tokens, _ = _row_shape(line)
                     if len(amount_tokens) != 2:
                         raise ValueError(
@@ -407,8 +524,8 @@ class PromericaAdapter:
                     currency, amount = normalize_dual_column_amount(
                         _parse_amount(amount_tokens[0]), _parse_amount(amount_tokens[1])
                     )
-                    description = pending_interest_concept
-                    pending_interest_concept = None
+                    description = pending_interest[0]
+                    pending_interest = None
                     if reference_date is None:
                         raise ValueError("interest row requires a statement reference date")
                     posted_date = reference_date.isoformat()
@@ -438,11 +555,8 @@ class PromericaAdapter:
                     )
                     posted_date = parse_statement_date(date_token, date_format=_DATE_FORMAT)
             except (ValueError, KeyError, InvalidOperation) as exc:
-                raise fail_parse(
-                    f"Malformed statement row: {line!r}.",
-                    rows=rows,
-                    gap_raw=line,
-                ) from exc
+                flag(line, page_no, str(exc))
+                continue
 
             canonical_line = CanonicalLine(
                 posted_date=posted_date,
@@ -452,7 +566,16 @@ class PromericaAdapter:
                 line_type=line_type,
                 normalized_description=description,
             )
-            validate_canonical_line(canonical_line)
+            try:
+                validate_canonical_line(canonical_line)
+            except InvalidCanonicalLineError as exc:
+                flag(line, page_no, str(exc))
+                continue
             rows.append(canonical_line)
 
-        return rows
+        if pending_interest is not None:
+            flag(pending_interest[0], pending_interest[1], _CONCEPT_WITHOUT_AMOUNT)
+
+        return PromericaParseResult(
+            rows=rows, flagged=flagged, notes=notes, section_totals=section_totals
+        )

@@ -13,17 +13,21 @@ import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Protocol
 from uuid import UUID, uuid4
 
-from domain.canonical_line import CanonicalLine, canonical_identity_key
+from domain.canonical_line import CanonicalLine, canonical_identity_key, validate_canonical_line
 from domain.cards import normalize_iban
 from domain.errors import (
     DuplicateStatementUploadError,
+    ImportFlaggedRowAlreadyReviewedError,
+    ImportFlaggedRowNotFoundError,
     ImportRowNotAvailableError,
     ImportRowNotFoundError,
     ImportSessionDiscardedError,
     ImportSessionHasPendingRowsError,
+    ImportSessionHasUnreviewedFlagsError,
     ImportSessionNotFoundError,
     ImportStatementNotFoundError,
     InvalidCanonicalLineError,
@@ -31,15 +35,21 @@ from domain.errors import (
 )
 from domain.expenses import ORIGIN_KIND_CARD, ManualExpenseDraft
 from domain.import_session import (
+    FLAGGED_ROW_DISMISSED,
+    FLAGGED_ROW_FIXED,
+    FLAGGED_ROW_UNREVIEWED,
+    ROW_STATUS_DELETED,
     ROW_STATUS_PENDING,
     STATEMENT_STATUS_FAILED,
     STATEMENT_STATUS_SKIPPED,
     STATEMENT_STATUS_STAGED,
     compute_pdf_content_hash,
+    has_unreviewed_flags,
     next_status_after_dismiss_failed,
     normalize_row_description,
     retained_source_pdf_paths,
-    session_needs_source_pdf,
+    section_total_matches,
+    session_pdf_still_needed,
     validate_bulk_candidate_row,
     validate_bulk_commit_eligible,
     validate_pdf_upload,
@@ -87,6 +97,46 @@ class DetectedStatement:
     card_id: UUID | None = None  # Story 4.8.3: card identification at upload time
     original_filename: str | None = None
     parse_evidence: ParseEvidence | None = None
+    # Promerica partial import (spec 001): empty for every other adapter.
+    flagged_rows: list[FlaggedRowRecord] = field(default_factory=list)
+    statement_notes: list[StatementNoteRecord] = field(default_factory=list)
+    section_totals: list[SectionTotalRecord] = field(default_factory=list)
+
+
+@dataclass(frozen=True, slots=True)
+class FlaggedRowRecord:
+    """A row the import could not read (spec 001, FR-009). Not a CanonicalLine.
+
+    `review_status` is `unreviewed` until fixed (re-imported as a transaction)
+    or dismissed (not a transaction). The row's position in the statement's
+    list is its identity for review actions.
+    """
+
+    raw_text: str
+    section: str
+    page: int
+    reason: str
+    review_status: str = FLAGGED_ROW_UNREVIEWED
+
+
+@dataclass(frozen=True, slots=True)
+class StatementNoteRecord:
+    """A printed amount that is not a transaction, e.g. a points transfer (FR-013)."""
+
+    label: str
+    section: str
+    currency: str
+    amount: Decimal
+
+
+@dataclass(frozen=True, slots=True)
+class SectionTotalRecord:
+    """The total printed at the end of a transaction section (FR-012)."""
+
+    section: str
+    line_type: str | None
+    crc: Decimal
+    usd: Decimal
 
 
 def run_import_pipeline(
@@ -145,8 +195,44 @@ def run_import_pipeline(
                 hasattr(adapter, "extract_iban"),
             )
 
+        flagged_rows: list[FlaggedRowRecord] = []
+        statement_notes: list[StatementNoteRecord] = []
+        section_totals: list[SectionTotalRecord] = []
         try:
-            rows = adapter.parse(chunk)
+            if hasattr(adapter, "parse_statement"):
+                # Adapters with partial import return flagged rows, notes and totals too.
+                result = adapter.parse_statement(chunk)
+                rows = result.rows
+                flagged_rows = [
+                    FlaggedRowRecord(
+                        raw_text=item.raw_text,
+                        section=item.section,
+                        page=item.page,
+                        reason=item.reason,
+                        review_status=item.review_status,
+                    )
+                    for item in result.flagged
+                ]
+                statement_notes = [
+                    StatementNoteRecord(
+                        label=note.label,
+                        section=note.section,
+                        currency=note.currency,
+                        amount=note.amount,
+                    )
+                    for note in result.notes
+                ]
+                section_totals = [
+                    SectionTotalRecord(
+                        section=total.section,
+                        line_type=total.line_type,
+                        crc=total.crc,
+                        usd=total.usd,
+                    )
+                    for total in result.section_totals
+                ]
+            else:
+                rows = adapter.parse(chunk)
         except InvalidCanonicalLineError as exc:
             evidence = exc.evidence if isinstance(exc.evidence, ParseEvidence) else None
             if evidence is None or not evidence.items:
@@ -167,6 +253,9 @@ def run_import_pipeline(
                 status=STATEMENT_STATUS_STAGED,
                 candidate_rows=rows,
                 iban=iban_normalized,
+                flagged_rows=flagged_rows,
+                statement_notes=statement_notes,
+                section_totals=section_totals,
             )
         )
     return detected
@@ -203,6 +292,9 @@ class StagedStatementRecord:
     original_filename: str | None = None
     candidate_rows: list[CandidateRowRecord] = field(default_factory=list)
     parse_evidence: ParseEvidence | None = None
+    flagged_rows: list[FlaggedRowRecord] = field(default_factory=list)
+    statement_notes: list[StatementNoteRecord] = field(default_factory=list)
+    section_totals: list[SectionTotalRecord] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -446,6 +538,20 @@ class ImportSessionRepository(Protocol):
         """Null one statement's pdf_path (Story 5.2) — not every sibling."""
         ...
 
+    def resolve_flagged_row(
+        self,
+        *,
+        session_id: UUID,
+        user_id: UUID,
+        statement_id: UUID,
+        flagged_index: int,
+        review_status: str,
+        corrected_line: CanonicalLine | None,
+    ) -> ImportSessionRecord:
+        """Set a flagged row's review_status. When `corrected_line` is given (fix),
+        also add it as a pending candidate row and reopen a committed statement."""
+        ...
+
     def unassign_candidate_row(
         self, *, session_id: UUID, user_id: UUID, row_id: UUID
     ) -> ImportSessionRecord:
@@ -654,8 +760,14 @@ def _release_source_pdf_if_idle(
     session_repo: ImportSessionRepository,
     pdf_storage: PdfStorage,
 ) -> None:
-    """Delete the source PDF and clear path refs after a clean commit (AD-3)."""
-    if session_needs_source_pdf([statement.status for statement in session.statements]):
+    """Delete the source PDF and clear path refs after a clean commit (AD-3).
+
+    Also kept while any flagged row is unreviewed (spec 001, FR-014).
+    """
+    if session_pdf_still_needed(
+        [statement.status for statement in session.statements],
+        [flag.review_status for statement in session.statements for flag in statement.flagged_rows],
+    ):
         return
     paths = {statement.pdf_path for statement in session.statements if statement.pdf_path}
     _delete_pdf_paths(session=session, pdf_storage=pdf_storage, paths=paths)
@@ -1237,6 +1349,16 @@ class FinalizeImportSessionService:
         ):
             raise ImportSessionHasPendingRowsError()
 
+        # Spec 001, FR-009: every flagged row must be fixed or dismissed first.
+        if has_unreviewed_flags(
+            [
+                flag.review_status
+                for statement in session.statements
+                for flag in statement.flagged_rows
+            ]
+        ):
+            raise ImportSessionHasUnreviewedFlagsError()
+
         # Retention while a statement is staged or failed stays exactly today's
         # `session_needs_source_pdf` rule — unresolved-quarantine retention is
         # Epic 5's (5.2-5.3), not this story's.
@@ -1247,6 +1369,120 @@ class FinalizeImportSessionService:
         )
         return self._session_repo.mark_session_finalized(
             session_id=command.session_id, user_id=command.actor_user_id
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class SectionReconciliation:
+    """One section's printed total checked against imported rows + notes (FR-012)."""
+
+    section: str
+    currency: str
+    printed: Decimal
+    imported: Decimal
+    notes: Decimal
+    matches: bool
+    # Unreviewed flagged rows in this section: the reason a mismatch is shown.
+    open_flags: tuple[FlaggedRowRecord, ...] = ()
+
+
+def reconcile_section_totals(statement: StagedStatementRecord) -> list[SectionReconciliation]:
+    """FR-012. Imported rows exclude deleted rows; notes are added back (FR-013).
+
+    A mismatch is shown with the section's unreviewed flagged rows as its reason.
+    Once a section's flagged rows are all reviewed, the check passes.
+    """
+    results: list[SectionReconciliation] = []
+    for total in statement.section_totals:
+        flags = [flag for flag in statement.flagged_rows if flag.section == total.section]
+        open_flags = tuple(flag for flag in flags if flag.review_status == FLAGGED_ROW_UNREVIEWED)
+        for currency, printed in (("CRC", total.crc), ("USD", total.usd)):
+            imported = sum(
+                (
+                    candidate.line.amount
+                    for candidate in statement.candidate_rows
+                    if candidate.status != ROW_STATUS_DELETED
+                    and candidate.line.line_type == total.line_type
+                    and candidate.line.currency == currency
+                ),
+                Decimal("0"),
+            )
+            notes = sum(
+                (
+                    note.amount
+                    for note in statement.statement_notes
+                    if note.section == total.section and note.currency == currency
+                ),
+                Decimal("0"),
+            )
+            matches = section_total_matches(printed, imported, notes)
+            if not matches and flags and not open_flags:
+                matches = True  # every flagged row in this section has been reviewed
+            results.append(
+                SectionReconciliation(
+                    section=total.section,
+                    currency=currency,
+                    printed=printed,
+                    imported=imported,
+                    notes=notes,
+                    matches=matches,
+                    open_flags=() if matches else open_flags,
+                )
+            )
+    return results
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewFlaggedRowCommand:
+    actor_user_id: UUID
+    session_id: UUID
+    statement_id: UUID
+    flagged_index: int
+    review_status: str  # FLAGGED_ROW_FIXED or FLAGGED_ROW_DISMISSED
+    corrected_line: CanonicalLine | None = None
+
+
+class ReviewFlaggedRowService:
+    """Fix (re-import as a transaction) or dismiss (not a transaction) a flagged row.
+
+    Dismissed rows stay in the statement record (spec 001, FR-009 clarification).
+    """
+
+    def __init__(self, session_repo: ImportSessionRepository) -> None:
+        self._session_repo = session_repo
+
+    def execute(self, command: ReviewFlaggedRowCommand) -> ImportSessionRecord:
+        session = self._session_repo.get_session(command.session_id, command.actor_user_id)
+        if session is None:
+            raise ImportSessionNotFoundError()
+        if session.discarded_at is not None:
+            raise ImportSessionDiscardedError()
+        if session.finalized_at is not None:
+            raise ImportRowNotAvailableError()
+
+        statement = _find_statement(session, command.statement_id)
+        if not 0 <= command.flagged_index < len(statement.flagged_rows):
+            raise ImportFlaggedRowNotFoundError()
+        if statement.flagged_rows[command.flagged_index].review_status != FLAGGED_ROW_UNREVIEWED:
+            raise ImportFlaggedRowAlreadyReviewedError()
+
+        if command.review_status == FLAGGED_ROW_FIXED:
+            if command.corrected_line is None:
+                raise InvalidCanonicalLineError("A fixed flagged row needs a corrected row.")
+            validate_canonical_line(command.corrected_line)
+        elif command.review_status == FLAGGED_ROW_DISMISSED:
+            if command.corrected_line is not None:
+                raise InvalidCanonicalLineError("A dismissed flagged row has no corrected row.")
+        else:
+            raise InvalidCanonicalLineError(f"Unknown review action: {command.review_status!r}.")
+
+        return self._session_repo.resolve_flagged_row(
+            session_id=command.session_id,
+            user_id=command.actor_user_id,
+            statement_id=command.statement_id,
+            flagged_index=command.flagged_index,
+            review_status=command.review_status,
+            corrected_line=command.corrected_line,
         )
 
 

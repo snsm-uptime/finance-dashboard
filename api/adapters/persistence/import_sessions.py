@@ -15,13 +15,17 @@ from application.import_session import (
     CommittedByListRecord,
     DetectedStatement,
     FailedStatementRecord,
+    FlaggedRowRecord,
     ImportBatchRecord,
     ImportSessionRecord,
+    SectionTotalRecord,
     StagedStatementRecord,
+    StatementNoteRecord,
 )
 from domain.canonical_line import CanonicalLine
 from domain.errors import (
     ImportBatchNotFoundError,
+    ImportFlaggedRowNotFoundError,
     ImportNothingToUndoError,
     ImportRowNotAvailableError,
     ImportRowNotDiscardableError,
@@ -39,6 +43,7 @@ from domain.import_session import (
     STATEMENT_STATUS_STAGED,
     UNDO_ACTION_ASSIGN,
     UNDO_ACTION_DELETE,
+    has_unreviewed_flags,
     row_is_zero_amount,
     select_landing_list_id,
     statement_has_pending_rows,
@@ -142,10 +147,93 @@ def _session_record(
                     _candidate_row(candidate, statement) for candidate in statement.candidate_rows
                 ],
                 parse_evidence=ParseEvidence.from_json(statement.parse_evidence),
+                flagged_rows=_flagged_rows_from_json(statement.flagged_rows),
+                statement_notes=_statement_notes_from_json(statement.statement_notes),
+                section_totals=_section_totals_from_json(statement.section_totals),
             )
             for statement in row.statements
         ],
     )
+
+
+def _flagged_rows_to_json(rows: Sequence[FlaggedRowRecord]) -> list[dict] | None:
+    if not rows:
+        return None
+    return [
+        {
+            "raw_text": flag.raw_text,
+            "section": flag.section,
+            "page": flag.page,
+            "reason": flag.reason,
+            "review_status": flag.review_status,
+        }
+        for flag in rows
+    ]
+
+
+def _flagged_rows_from_json(payload: list | None) -> list[FlaggedRowRecord]:
+    return [
+        FlaggedRowRecord(
+            raw_text=item["raw_text"],
+            section=item["section"],
+            page=item["page"],
+            reason=item["reason"],
+            review_status=item["review_status"],
+        )
+        for item in payload or []
+    ]
+
+
+def _statement_notes_to_json(notes: Sequence[StatementNoteRecord]) -> list[dict] | None:
+    if not notes:
+        return None
+    return [
+        {
+            "label": note.label,
+            "section": note.section,
+            "currency": note.currency,
+            "amount": str(note.amount),
+        }
+        for note in notes
+    ]
+
+
+def _statement_notes_from_json(payload: list | None) -> list[StatementNoteRecord]:
+    return [
+        StatementNoteRecord(
+            label=item["label"],
+            section=item["section"],
+            currency=item["currency"],
+            amount=Decimal(item["amount"]),
+        )
+        for item in payload or []
+    ]
+
+
+def _section_totals_to_json(totals: Sequence[SectionTotalRecord]) -> list[dict] | None:
+    if not totals:
+        return None
+    return [
+        {
+            "section": total.section,
+            "line_type": total.line_type,
+            "crc": str(total.crc),
+            "usd": str(total.usd),
+        }
+        for total in totals
+    ]
+
+
+def _section_totals_from_json(payload: list | None) -> list[SectionTotalRecord]:
+    return [
+        SectionTotalRecord(
+            section=item["section"],
+            line_type=item["line_type"],
+            crc=Decimal(item["crc"]),
+            usd=Decimal(item["usd"]),
+        )
+        for item in payload or []
+    ]
 
 
 def _candidate_row(
@@ -234,6 +322,9 @@ class SqlAlchemyImportSessionRepository:
                     if detected.parse_evidence is not None
                     else None
                 ),
+                flagged_rows=_flagged_rows_to_json(detected.flagged_rows),
+                statement_notes=_statement_notes_to_json(detected.statement_notes),
+                section_totals=_section_totals_to_json(detected.section_totals),
             )
             self._session.add(statement_row)
             session_row.statements.append(statement_row)
@@ -267,7 +358,13 @@ class SqlAlchemyImportSessionRepository:
                     )
                     self._session.add(row)
                     statement_row.candidate_rows.append(row)
-                if statement_is_fully_resolved([c.status for c in statement_row.candidate_rows]):
+                # A statement with unreviewed flagged rows stays staged, so it keeps its
+                # PDF and the review list (spec 001, FR-009/FR-014).
+                if statement_is_fully_resolved(
+                    [c.status for c in statement_row.candidate_rows]
+                ) and not has_unreviewed_flags(
+                    [flag.review_status for flag in detected.flagged_rows]
+                ):
                     statement_row.status = STATEMENT_STATUS_COMMITTED
 
         self._session.flush()
@@ -720,6 +817,73 @@ class SqlAlchemyImportSessionRepository:
         self._clear_pointer_on(row)
         self._session.flush()
         self._reload_statement(statement_row)
+        return self._to_record(row)
+
+    def resolve_flagged_row(
+        self,
+        *,
+        session_id: UUID,
+        user_id: UUID,
+        statement_id: UUID,
+        flagged_index: int,
+        review_status: str,
+        corrected_line: CanonicalLine | None,
+    ) -> ImportSessionRecord:
+        row = self._load_session(session_id, user_id)
+        if row is None:
+            raise ImportSessionNotFoundError()
+        statement_row = next((s for s in row.statements if s.id == statement_id), None)
+        if statement_row is None:
+            raise ImportStatementNotFoundError()
+
+        flags = list(statement_row.flagged_rows or [])
+        if not 0 <= flagged_index < len(flags):
+            raise ImportFlaggedRowNotFoundError()
+        flags[flagged_index] = {**flags[flagged_index], "review_status": review_status}
+        statement_row.flagged_rows = flags
+
+        if corrected_line is not None:
+            try:
+                posted_date = date.fromisoformat(corrected_line.posted_date)
+            except ValueError as exc:
+                raise InvalidCanonicalLineError(
+                    f"Malformed posted_date: {corrected_line.posted_date!r}."
+                ) from exc
+            sequence = max((c.sequence for c in statement_row.candidate_rows), default=-1) + 1
+            candidate = ImportCandidateRowModel(
+                id=uuid4(),
+                statement_id=statement_row.id,
+                posted_date=posted_date,
+                amount=corrected_line.amount,
+                currency=corrected_line.currency,
+                line_type=corrected_line.line_type,
+                normalized_description=corrected_line.normalized_description,
+                external_ref=corrected_line.external_ref,
+                ref_quality=corrected_line.ref_quality,
+                provenance=corrected_line.provenance,
+                status=(
+                    ROW_STATUS_EXCLUDED_ZERO_AMOUNT
+                    if row_is_zero_amount(corrected_line.amount)
+                    else ROW_STATUS_PENDING
+                ),
+                sequence=sequence,
+            )
+            self._session.add(candidate)
+            statement_row.candidate_rows.append(candidate)
+            if statement_row.status == STATEMENT_STATUS_COMMITTED and statement_has_pending_rows(
+                [c.status for c in statement_row.candidate_rows]
+            ):
+                statement_row.status = STATEMENT_STATUS_STAGED
+
+        # Last review of a statement with no pending rows completes it, releasing its PDF.
+        if (
+            statement_row.status == STATEMENT_STATUS_STAGED
+            and statement_is_fully_resolved([c.status for c in statement_row.candidate_rows])
+            and not has_unreviewed_flags([flag["review_status"] for flag in flags])
+        ):
+            statement_row.status = STATEMENT_STATUS_COMMITTED
+
+        self._session.flush()
         return self._to_record(row)
 
     def unassign_candidate_row(

@@ -64,7 +64,7 @@ Backend API lives under `api/`. Tests live under `api/tests/`. The adapter packa
 - [X] T011 [US1] Set the section titles in `_SECTIONS` in `api/adapters/bank/promerica/adapter.py` to the exact printed strings confirmed in T001
 - [X] T012 [US1] Add a points-transfer rule in `api/adapters/bank/promerica/adapter.py`: detect rows whose description starts with "Traslado de puntos", skip them before amount parsing, and extract their signed amount for the statement note (per R1 and R3)
 - [X] T013 [US1] Update the amount token pattern in `api/adapters/bank/promerica/adapter.py` so a leading minus followed by a space ("- 80,133.00") parses as a negative amount (the existing `_AMOUNT_TOKEN_RE` only matches a minus with no space)
-- [ ] T014 [US1] Return the statement notes from `parse()` in `api/adapters/bank/promerica/adapter.py` using the shape chosen in T002, without adding them to the transaction rows
+- [X] T014 [US1] Return the statement notes from `parse()` in `api/adapters/bank/promerica/adapter.py` using the shape chosen in T002, without adding them to the transaction rows
 - [X] T015 [US1] Confirm in `api/adapters/bank/promerica/adapter.py` that the purchases total line and the "Cargos por gestión" total line are skipped by `_TOTAL_LINE_RE` (update the regex only if T007 shows a total line leaking through)
 
 **Checkpoint**: User Story 1 works on its own. Run `uv run pytest tests/test_promerica_adapter.py -q` from `api/`.
@@ -81,27 +81,27 @@ Backend API lives under `api/`. Tests live under `api/tests/`. The adapter packa
 
 - [X] T016 [P] [US2] Add tests in `api/tests/test_promerica_adapter.py` for interest pairing: a concept line followed by its amount line becomes one interest row; the reversal with `-3,564.56 0.00` is negative; an amount line with no concept line is flagged, not dropped (FR-007, US2 scenario 4)
 - [X] T017 [P] [US2] Add a test in `api/tests/test_promerica_adapter.py` that a statement with one unreadable row returns its readable rows plus one flagged row carrying raw text, section, and reason (FR-009, SC-006)
-- [ ] T018 [P] [US2] Add a test in `api/tests/test_bac_adapter.py` that a BAC credit statement with an unreadable row still fails the whole statement (other banks unchanged, spec assumption)
-- [ ] T019 [P] [US2] Add a test in `api/tests/test_import_session_application.py` that a statement with flagged rows stores its readable rows and its flagged rows as review items
-- [ ] T020 [P] [US2] Add a test in `api/tests/test_import_session_application.py` that the stored PDF is kept while flagged rows exist and removed once they are cleared, and removed right away when there are no flagged rows (FR-014)
+- [X] T018 [P] [US2] Add a test in `api/tests/test_bac_adapter.py` that a BAC credit statement with an unreadable row still fails the whole statement (other banks unchanged, spec assumption)
+- [X] T019 [P] [US2] Add a test in `api/tests/test_import_session_application.py` that a statement with flagged rows stores its readable rows and its flagged rows as review items
+- [X] T020 [P] [US2] Add a test in `api/tests/test_import_session_application.py` that the stored PDF is kept while flagged rows exist and removed once they are cleared, and removed right away when there are no flagged rows (FR-014)
 
 ### Implementation for User Story 2
 
-- [ ] T021 [US2] Add a flagged-row shape (raw text, section, page, reason) to the parse result in `api/application/bank_adapters.py`, scoped so BAC adapters keep raising on the first unreadable row (R2)
+- [X] T021 [US2] Add a flagged-row shape (raw text, section, page, reason) to the parse result in `api/application/bank_adapters.py`, scoped so BAC adapters keep raising on the first unreadable row (R2)
 - [X] T022 [US2] Replace the `fail_parse` path for unreadable rows in `api/adapters/bank/promerica/adapter.py` with a flagged-row entry and continue parsing; keep the interest-pairing rule that an amount line with no concept line is flagged (T016)
-- [ ] T023 [US2] Consume flagged rows and statement notes in `api/application/import_session.py`: store readable rows, store flagged rows as review items, store notes with the statement
-- [ ] T024 [US2] Implement the PDF retention rule in `api/application/import_session.py`: remove the stored PDF right after import when there are no flagged rows; keep it while flagged rows are open and remove it when the last flagged row is cleared (FR-014, R4)
-- [ ] T025 [US2] Add a way to clear a flagged row in the import session so the PDF retention rule can run (the review action itself is a UI decision; this task only adds the application-layer operation in `api/application/import_session.py`)
+- [X] T023 [US2] Consume flagged rows and statement notes in `api/application/import_session.py`: store readable rows, store flagged rows as review items, store notes with the statement
+- [X] T024 [US2] Implement the PDF retention rule in `api/application/import_session.py`: remove the stored PDF right after import when there are no flagged rows; keep it while flagged rows are open and remove it when the last flagged row is cleared (FR-014, R4)
+- [X] T025 [US2] Add a way to clear a flagged row in the import session so the PDF retention rule can run (the review action itself is a UI decision; this task only adds the application-layer operation in `api/application/import_session.py`)
 
 ### Added after the 2026-11-09 clarifications (finalize gate, review outcomes, mismatch reason)
 
-- [ ] T033 [P] [US2] Add tests in `api/tests/test_import_session_application.py` that finalizing a statement is refused while any flagged row is `unreviewed`, and succeeds once every flagged row is `fixed` or `dismissed` (FR-009 clarification)
-- [ ] T034 [P] [US2] Add a test in `api/tests/test_import_session_application.py` that a `dismissed` flagged row stays in the statement record with its review status and is not returned as a transaction (FR-009 clarification)
-- [ ] T035 [P] [US2] Add a test in `api/tests/test_import_session_application.py` that a section with a flagged row and a total mismatch reports the mismatch with those flagged rows as its reason, and the check passes once they are reviewed (FR-012)
-- [ ] T036 [US2] Add `review_status` (`unreviewed` default, `fixed`, `dismissed`) to the flagged-row shape in `api/application/bank_adapters.py`, extending T021 (data-model.md FlaggedRow)
-- [ ] T037 [US2] Add the finalize gate in `api/application/import_session.py`: refuse finalizing while any flagged row is `unreviewed` (FR-009)
-- [ ] T038 [US2] Add the dismiss operation in `api/application/import_session.py`: mark a flagged row `dismissed` and keep it in the statement record, and mark a flagged row `fixed` when it is re-imported as a transaction (FR-009)
-- [ ] T039 [US2] Add the section-total reconciliation in `api/application/import_session.py` (or the module that computes section totals, to confirm in T002): when a section has flagged rows and its total does not match, report the mismatch with those rows as the reason (FR-012)
+- [X] T033 [P] [US2] Add tests in `api/tests/test_import_session_application.py` that finalizing a statement is refused while any flagged row is `unreviewed`, and succeeds once every flagged row is `fixed` or `dismissed` (FR-009 clarification)
+- [X] T034 [P] [US2] Add a test in `api/tests/test_import_session_application.py` that a `dismissed` flagged row stays in the statement record with its review status and is not returned as a transaction (FR-009 clarification)
+- [X] T035 [P] [US2] Add a test in `api/tests/test_import_session_application.py` that a section with a flagged row and a total mismatch reports the mismatch with those flagged rows as its reason, and the check passes once they are reviewed (FR-012)
+- [X] T036 [US2] Add `review_status` (`unreviewed` default, `fixed`, `dismissed`) to the flagged-row shape in `api/application/bank_adapters.py`, extending T021 (data-model.md FlaggedRow)
+- [X] T037 [US2] Add the finalize gate in `api/application/import_session.py`: refuse finalizing while any flagged row is `unreviewed` (FR-009)
+- [X] T038 [US2] Add the dismiss operation in `api/application/import_session.py`: mark a flagged row `dismissed` and keep it in the statement record, and mark a flagged row `fixed` when it is re-imported as a transaction (FR-009)
+- [X] T039 [US2] Add the section-total reconciliation in `api/application/import_session.py` (or the module that computes section totals, to confirm in T002): when a section has flagged rows and its total does not match, report the mismatch with those rows as the reason (FR-012)
 
 **Checkpoint**: User Story 2 works on its own. Run `uv run pytest tests/test_promerica_adapter.py tests/test_import_session_application.py tests/test_bac_adapter.py -q` from `api/`.
 

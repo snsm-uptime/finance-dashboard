@@ -67,8 +67,8 @@ This check is computed in tests (the golden file), not stored, unless the UI lat
 | State | Meaning | PDF kept? |
 |---|---|---|
 | Parsing | Upload received, adapter running | Yes |
-| Imported, no flagged rows | All readable rows stored | No (discarded right after import) |
-| Imported, with flagged rows | Readable rows stored; flagged rows listed for review | Yes, until the review list is cleared, then discarded |
-| Failed | Adapter could not produce any rows (for example, detection failed on the content) | Kept for the Story 5.1 comparison (per R4) |
+| Imported, no flagged rows | All readable rows stored | Yes while under review; released at finalize (AD-3) |
+| Imported, with flagged rows | Readable rows stored; flagged rows listed for review | Yes until every flagged row is fixed or dismissed and the import is finalized (AD-3 plus FR-014) |
+| Failed | Adapter could not produce any rows (for example, detection failed on the content) | Kept while staged or failed, per AD-3 and the Story 5.1 comparison |
 
-The "Failed" row is a judgment call: R4 records the decision only for flagged-row statements, so a failed statement keeps its PDF so the comparison view still works. Confirm this with the user if it matters.
+Decision (2026-11-09): AD-3 applies. The PDF is released at finalize, not at import (see spec FR-014).

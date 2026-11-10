@@ -40,6 +40,8 @@ from application.import_session import (
     ImportSessionRecord,
     MatchStatementCardCommand,
     MatchStatementCardService,
+    ReviewFlaggedRowCommand,
+    ReviewFlaggedRowService,
     StagedStatementRecord,
     UnassignCandidateRowCommand,
     UnassignCandidateRowService,
@@ -50,6 +52,7 @@ from application.import_session import (
     _find_statement,
 )
 from application.ports import PdfStorage
+from domain.canonical_line import CanonicalLine
 from domain.errors import (
     AmbiguousBankAdapterError,
     CardIbanAlreadyRegisteredError,
@@ -59,12 +62,15 @@ from domain.errors import (
     FxFutureDateError,
     FxRateNotAvailableError,
     FxServiceUnavailableError,
+    ImportFlaggedRowAlreadyReviewedError,
+    ImportFlaggedRowNotFoundError,
     ImportNothingToUndoError,
     ImportRowNotAvailableError,
     ImportRowNotDiscardableError,
     ImportRowNotFoundError,
     ImportSessionDiscardedError,
     ImportSessionHasPendingRowsError,
+    ImportSessionHasUnreviewedFlagsError,
     ImportSessionNotFoundError,
     ImportStatementNotFailedError,
     ImportStatementNotFoundError,
@@ -77,6 +83,8 @@ from domain.errors import (
     UnsupportedFileTypeError,
 )
 from domain.import_session import (
+    FLAGGED_ROW_DISMISSED,
+    FLAGGED_ROW_FIXED,
     ROW_STATUS_COMMITTED,
     ROW_STATUS_EXCLUDED_ZERO_AMOUNT,
     ROW_STATUS_PENDING,
@@ -101,12 +109,15 @@ from api.schemas.import_sessions import (
     CommittedByListResponse,
     EditRowBody,
     FailedStatementResponse,
+    FlaggedRowResponse,
     IdentifyCardBody,
     ImportBatchResponse,
     ImportSessionResponse,
     ParseEvidenceItemResponse,
     ParseEvidenceResponse,
+    ReviewFlaggedRowBody,
     StagedStatementResponse,
+    StatementNoteResponse,
     UndoPointerResponse,
 )
 
@@ -170,6 +181,26 @@ def _statement_response(statement: StagedStatementRecord) -> StagedStatementResp
             for row in assigned
         ],
         parse_evidence=_parse_evidence_response(statement),
+        flagged_rows=[
+            FlaggedRowResponse(
+                index=index,
+                raw_text=flag.raw_text,
+                section=flag.section,
+                page=flag.page,
+                reason=flag.reason,
+                review_status=flag.review_status,
+            )
+            for index, flag in enumerate(statement.flagged_rows)
+        ],
+        statement_notes=[
+            StatementNoteResponse(
+                label=note.label,
+                section=note.section,
+                currency=note.currency,
+                amount=str(note.amount),
+            )
+            for note in statement.statement_notes
+        ],
     )
 
 
@@ -536,6 +567,17 @@ _ROW_ERROR_MAP: tuple[tuple[type[Exception], int, str | None], ...] = (
     (ImportRowNotDiscardableError, status.HTTP_409_CONFLICT, "import_row_not_discardable"),
     (ImportNothingToUndoError, status.HTTP_409_CONFLICT, "import_nothing_to_undo"),
     (
+        ImportSessionHasUnreviewedFlagsError,
+        status.HTTP_409_CONFLICT,
+        "import_session_has_unreviewed_flags",
+    ),
+    (ImportFlaggedRowNotFoundError, status.HTTP_404_NOT_FOUND, "import_flagged_row_not_found"),
+    (
+        ImportFlaggedRowAlreadyReviewedError,
+        status.HTTP_409_CONFLICT,
+        "import_flagged_row_already_reviewed",
+    ),
+    (
         ImportSessionHasPendingRowsError,
         status.HTTP_409_CONFLICT,
         "import_session_has_pending_rows",
@@ -720,6 +762,77 @@ def finalize_import_session(
         user_id,
         result.imported_new_count,
         result.skipped_duplicate_count,
+    )
+    return _session_response(result)
+
+
+@router.post(
+    "/{session_id}/statements/{statement_id}/flagged-rows/{flagged_index}/review",
+    response_model=ImportSessionResponse,
+)
+def review_flagged_row(
+    session_id: uuid.UUID,
+    statement_id: uuid.UUID,
+    flagged_index: int,
+    body: ReviewFlaggedRowBody,
+    user_id: uuid.UUID = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+) -> ImportSessionResponse | JSONResponse:
+    """Fix a flagged row into a transaction, or dismiss it as not a transaction
+    (spec 001, FR-009). Finalizing is blocked until every flagged row is reviewed.
+
+    No description in the log line: statement text is PII.
+    """
+    session_repo = SqlAlchemyImportSessionRepository(db)
+    try:
+        corrected_line: CanonicalLine | None = None
+        review_status = FLAGGED_ROW_DISMISSED
+        if body.action == "fix":
+            review_status = FLAGGED_ROW_FIXED
+            session = session_repo.get_session(session_id, user_id)
+            if session is None:
+                raise ImportSessionNotFoundError()
+            statement = next((s for s in session.statements if s.id == statement_id), None)
+            if statement is None:
+                raise ImportStatementNotFoundError()
+            if None in (
+                body.posted_date,
+                body.amount,
+                body.currency,
+                body.line_type,
+                body.description,
+            ):
+                raise InvalidCanonicalLineError(
+                    "A fixed flagged row needs posted_date, amount, currency, line_type "
+                    "and description."
+                )
+            corrected_line = CanonicalLine(
+                posted_date=body.posted_date,
+                amount=body.amount,
+                currency=body.currency,
+                product_id=statement.product_id,
+                line_type=body.line_type,
+                normalized_description=body.description,
+            )
+        result = ReviewFlaggedRowService(session_repo).execute(
+            ReviewFlaggedRowCommand(
+                actor_user_id=user_id,
+                session_id=session_id,
+                statement_id=statement_id,
+                flagged_index=flagged_index,
+                review_status=review_status,
+                corrected_line=corrected_line,
+            )
+        )
+    except _ROW_ERROR_TYPES as exc:
+        db.rollback()
+        return _row_error_response(exc)
+    logger.info(
+        "import_flagged_row_reviewed session_id=%s statement_id=%s review_status=%s user_id=%s",
+        session_id,
+        statement_id,
+        review_status,
+        user_id,
     )
     return _session_response(result)
 

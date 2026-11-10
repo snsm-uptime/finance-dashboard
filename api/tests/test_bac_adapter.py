@@ -231,6 +231,23 @@ def test_parse_malformed_date_raises_invalid_canonical_line_error_not_raw_except
     assert any(item.kind == "gap" for item in evidence.items)
 
 
+def test_parse_statement_with_unreadable_row_still_fails_whole_statement(
+    adapter: BacCreditAdapter,
+) -> None:
+    # Partial import with flagged rows is Promerica-only (spec: other banks unchanged).
+    # A BAC statement with one unreadable row must still raise, not return readable rows.
+    pdf_bytes = _one_page_statement_pdf(
+        [
+            "ESTADO DE CUENTA BAC CREDITO",
+            "B) Detalle de compras del periodo",
+            "05-01-26 TIENDA SAN JOSE CRC 10,500.00",
+            "06-XXX-26 TIENDA SIN MONTO CRC",
+        ]
+    )
+    with pytest.raises(InvalidCanonicalLineError):
+        adapter.parse(pdf_bytes)
+
+
 def test_parse_real_shaped_purchase_after_column_headers(adapter: BacCreditAdapter) -> None:
     pdf_bytes = _one_page_statement_pdf(
         [
